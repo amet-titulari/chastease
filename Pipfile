@@ -6,13 +6,8 @@ name = "pypi"
 [packages]
 flask = "*"
 flask-login = "*"
-authlib = "*"
-flask-wtf = "*"
-email-validator = "*"
-flask-migrate = "*"
-flask-script = "*"
-python-dotenv = "*"
 flask-sqlalchemy = "*"
+python-dotenv = "*"
 
 [dev-packages]
 

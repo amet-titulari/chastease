@@ -1,0 +1,33 @@
+<!-- templates/signup.html -->
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="container">
+        <h2>Registrierung</h2>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul class="alert alert-danger">
+            {% for message in messages %}
+                <li>{{ message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+        {% endwith %}
+
+        <form action="{{ url_for('auth.signup') }}" method="post">
+            <div class="form-group">
+                <label for="username">Benutzername:</label>
+                <input type="text" class="form-control" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Passwort:</label>
+                <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+            <div class="form-group">
+                <label for="password2">Passwort bestätigen:</label>
+                <input type="password" class="form-control" id="password2" name="password2" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Registrieren</button>
+        </form>
+    </div>
+{% endblock %}
