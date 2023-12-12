@@ -1,24 +1,27 @@
 <nav class="navbar navbar-expand-sm bg-secondary navbar-dark">
     <div class="container-fluid">
-      <ul class="navbar-nav">
-        <li class="nav-item">
-          <a class="nav-link active" href="/">Home</a>
-        </li>
+        <ul class="navbar-nav">
+            <li class="nav-item">
+                <a class="nav-link active" href="/">Home</a>
+            </li>
+        </ul>
         
-        {% if not current_user.is_authenticated %}
-        <!-- Zeige nur, wenn kein Benutzer angemeldet ist -->
-        <li class="nav-item">
-          <a class="nav-link" href="/login">Login</a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link" href="/signup">Sign-Up</a>
-        </li>
-        {% else %}
-        <!-- Zeige nur, wenn Benutzer angemeldet ist -->
-        <li class="nav-item">
-            <a class="nav-link" href="/logout">Logout</a>
-        </li>
-        {% endif %}
-      </ul>
+        <!-- Rechtsbündige Links in einem neuen <ul> -->
+        <ul class="navbar-nav ms-auto">
+            {% if not current_user.is_authenticated %}
+            <!-- Zeige nur, wenn kein Benutzer angemeldet ist -->
+            <li class="nav-item">
+                <a class="nav-link" href="/login">Login</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/signup">Sign-Up</a>
+            </li>
+            {% else %}
+            <!-- Zeige nur, wenn Benutzer angemeldet ist -->
+            <li class="nav-item">
+                <a class="nav-link" href="/logout">Logout</a>
+            </li>
+            {% endif %}
+        </ul>
     </div>
-  </nav>
+</nav>
