@@ -1,4 +1,5 @@
 # benutzer/models.py
+import os
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 
@@ -13,17 +14,13 @@ class BenutzerConfig(db.Model):
     benutzer = db.relationship('Benutzer', backref=db.backref('config', lazy=True))
 
 
-
-    # Konfigurationsfelder
-    CA_client_id = db.Column(db.String(128))
-    CA_client_secret = db.Column(db.String(128))
+    # Konfigurationsfelder Chaster.app
     CA_username = db.Column(db.String(128))
     CA_keyholdername = db.Column(db.String(128))
     CA_user_id = db.Column(db.String(128))
     CA_lock_id = db.Column(db.String(128))
 
-    TTL_client_id = db.Column(db.String(128))
-    TTL_client_secret = db.Column(db.String(128))
+    #Konfiguration TTLock
     TTL_username = db.Column(db.String(128))
     TTL_password_md5 = db.Column(db.String(128))
     TTL_lock_id = db.Column(db.String(128))
