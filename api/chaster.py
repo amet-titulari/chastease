@@ -1,13 +1,14 @@
-
 import requests
 
-class API_Chaster:
-    def __init__(self, client_id, client_secret):
-        self.base_url = 'https://api1.example.com'
-        self.client_id = client_id
-        self.client_secret = client_secret
+def get_user_profile(ca_username, client_id, client_secret):
 
-    def get_data(self, endpoint):
-        url = f"{self.base_url}/{endpoint}"
-        response = requests.get(url, auth=(self.client_id, self.client_secret))
-        return response.json()
+    print(ca_username, client_id, client_secret)
+
+    url = f'https://api.chaster.app/users/profile/{ca_username}'
+    headers = {
+        'X-Chaster-Client-Id': client_id,
+        'X-Chaster-Client-Secret': client_secret
+    }
+    response = requests.get(url, headers=headers)
+    print(response.json())
+    return response.json()

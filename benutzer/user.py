@@ -6,8 +6,8 @@ from .models import db, Benutzer, BenutzerConfig
 from .forms import BenutzerConfigForm
 
 import os
-import time
 import api.ttlock
+import api.chaster
 
 auth = Blueprint('auth', __name__)
 
@@ -75,6 +75,27 @@ def config():
             user_config = BenutzerConfig(benutzer_id=current_user.id)
             form.populate_obj(user_config)
             db.session.add(user_config)
+
+        db.session.commit()
+
+        # Chaster API Aufruf zum erhalt der User_ID:
+        if user_config.CA_username:
+            CA_client_id = os.environ.get('CA_CLIENT_ID')
+            CA_client_secret = os.environ.get('CA_CLIENT_SECRET')
+
+            # API-Aufruf für Chaster
+            profile_data = api.chaster.get_user_profile(user_config.CA_username, CA_client_id, CA_client_secret)
+
+
+            if profile_data and '_id' in profile_data:
+                user_config.CA_user_id = profile_data['_id']
+                db.session.commit()
+
+        else:
+            user_config.CA_user_id = ''
+            db.session.commit()
+        
+        
 
         db.session.commit()
 
