@@ -2,7 +2,8 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, logout_user, login_required, current_user
-from .models import Benutzer, db
+from .models import db, Benutzer, BenutzerConfig
+from .forms import BenutzerConfigForm
 
 auth = Blueprint('auth', __name__)
 
@@ -51,3 +52,32 @@ def signup():
 def logout():
     logout_user()
     return redirect(url_for('home'))  # Rückkehr zur Hauptseite
+
+@auth.route('/config', methods=['GET', 'POST'])
+@login_required
+def config():
+    form = BenutzerConfigForm()
+    if form.validate_on_submit():
+        # Beispiel für das Speichern der Konfiguration
+        config = BenutzerConfig(
+            benutzer_id=current_user.id,
+            CA_client_id=form.CA_client_id.data,
+            CA_client_secret=form.CA_client_secret.data,
+            CA_username=form.CA_username.data,
+            CA_user_id=form.CA_user_id.data,
+            CA_lock_id=form.CA_lock_id.data,
+            TTL_client_id=form.TTL_client_id.data,
+            TTL_client_secret=form.TTL_client_secret.data,
+            TTL_username=form.TTL_username.data,
+            TTL_password_md5=form.TTL_password_md5.data,
+            TTL_lock_id=form.TTL_lock_id.data,
+            TTL_access_token=form.TTL_access_token.data,
+            TTL_refresh_token=form.TTL_refresh_token.data
+        )
+
+        db.session.add(config)
+        db.session.commit()
+        flash('Konfiguration gespeichert!')
+        return redirect(url_for('auth.config'))  # Stellen Sie sicher, dass 'auth.home' existiert
+
+    return render_template('benutzerconfig.html', form=form)

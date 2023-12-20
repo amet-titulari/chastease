@@ -1,0 +1,76 @@
+<!-- templates/benutzerconfig.html -->
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>Konfiguration</h2>
+    <form action="" method="post">
+        {{ form.hidden_tag() }}
+
+        <table>
+            <tr>
+                <td>{{ form.CA_client_id.label }}</td>
+                <td>{{ form.CA_client_id }}</td>
+            </tr>
+
+            <tr>
+                <td>{{ form.CA_client_secret.label }}</td>
+                <td>{{ form.CA_client_secret }}</td>
+            </tr>
+
+            <tr>
+                <td>{{ form.CA_username.label }}</td>
+                <td>{{ form.CA_username }}</td>
+            </tr>
+
+            <tr>
+                <td>{{ form.CA_user_id.label }}</td>
+                <td>{{ form.CA_user_id }}</td>
+            </tr>
+
+            <tr>
+                <td>{{ form.CA_lock_id.label }}</td>
+                <td>{{ form.CA_lock_id }}</td>
+            </tr>
+
+            <tr>
+                <td>{{ form.TTL_client_id.label }}</td>
+                <td>{{ form.TTL_client_id }}</td>
+            </tr>
+
+            <tr>
+                <td>{{ form.TTL_client_secret.label }}</td>
+                <td>{{ form.TTL_client_secret }}</td>
+            </tr>
+
+            <tr>
+                <td>{{ form.TTL_username.label }}</td>
+                <td>{{ form.TTL_username }}</td>
+            </tr>
+
+            <tr>
+                <td>{{ form.TTL_password_md5.label }}</td>
+                <td>{{ form.TTL_password_md5 }}</td>
+            </tr>
+
+            <tr>
+                <td>{{ form.TTL_lock_id.label }}</td>
+                <td>{{ form.TTL_lock_id }}</td>
+            </tr>
+
+            <tr>
+                <td>{{ form.TTL_access_token.label }}</td>
+                <td>{{ form.TTL_access_token }}</td>
+            </tr>
+
+            <tr>
+                <td>{{ form.TTL_refresh_token.label }}</td>
+                <td>{{ form.TTL_refresh_token }}</td>
+            </tr>
+
+            <tr>
+                <td></td>
+                <td>{{ form.submit }}</td>
+            </tr>
+        </table>
+    </form>
+{% endblock %}
