@@ -116,8 +116,7 @@ def config():
             user_config.TTL_access_token = ''
             user_config.TTL_refresh_token = ''
             db.session.commit()
-            flash('TTL-Benutzername oder Passwort fehlen', 'danger')
-
+            
         return redirect(url_for('auth.config'))
 
     return render_template('benutzerconfig.html', form=form)
