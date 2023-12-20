@@ -5,6 +5,10 @@ from flask_login import login_user, logout_user, login_required, current_user
 from .models import db, Benutzer, BenutzerConfig
 from .forms import BenutzerConfigForm
 
+import os
+import time
+import api.ttlock
+
 auth = Blueprint('auth', __name__)
 
 @auth.route('/login', methods=['GET', 'POST'])
@@ -66,16 +70,33 @@ def config():
 
     if form.validate_on_submit():
         if user_config:
-            # Aktualisieren der vorhandenen Konfiguration
             form.populate_obj(user_config)
         else:
-            # Erstellen einer neuen Konfiguration
-            config = BenutzerConfig(benutzer_id=current_user.id)
-            form.populate_obj(config)
-            db.session.add(config)
+            user_config = BenutzerConfig(benutzer_id=current_user.id)
+            form.populate_obj(user_config)
+            db.session.add(user_config)
 
         db.session.commit()
-        flash('Konfiguration gespeichert!', 'success')
+
+        # Prüfen, ob Benutzername und Passwort vorhanden sind
+        if user_config.TTL_username and user_config.TTL_password_md5:
+            TTL_client_ID = os.environ.get('TTL_CLIENT_ID')
+            TTL_client_secret = os.environ.get('TTL_CLIENT_SECRET')
+            tokens = api.ttlock.get_ttlock_tokens(TTL_client_ID, TTL_client_secret, user_config.TTL_username, user_config.TTL_password_md5)
+
+            if 'access_token' in tokens:
+                user_config.TTL_access_token = tokens['access_token']
+                user_config.TTL_refresh_token = tokens['refresh_token']
+                db.session.commit()
+                flash('Konfiguration aktualisiert!', 'success')
+            else:
+                flash('Fehler beim Abrufen der Tokens', 'danger')
+        else:
+            user_config.TTL_access_token = ''
+            user_config.TTL_refresh_token = ''
+            db.session.commit()
+            flash('TTL-Benutzername oder Passwort fehlen', 'danger')
+
         return redirect(url_for('auth.config'))
 
     return render_template('benutzerconfig.html', form=form)
