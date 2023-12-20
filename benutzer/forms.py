@@ -14,7 +14,7 @@ class BenutzerConfigForm(FlaskForm):
 
     TTL_username = StringField('Username')
     TTL_password_md5 = StringField('Password MD5')
-    TTL_lock_id = StringField('Lock ID', render_kw={'disabled': True})
+    TTL_lock_alias = StringField('Lock Alias')
     TTL_access_token = StringField('Access Token', render_kw={'disabled': True})
     TTL_refresh_token = StringField('Refresh Token', render_kw={'disabled': True})
 
