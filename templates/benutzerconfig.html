@@ -2,75 +2,109 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h2>Konfiguration</h2>
-    <form action="" method="post">
-        {{ form.hidden_tag() }}
+    <div class="container">
+        <h2>Konfiguration</h2>
 
-        <table>
-            <tr>
-                <td>{{ form.CA_client_id.label }}</td>
-                <td>{{ form.CA_client_id }}</td>
-            </tr>
+        <form action="{{ url_for('auth.config') }}" method="post">
+            {{ form.hidden_tag() }}
 
-            <tr>
-                <td>{{ form.CA_client_secret.label }}</td>
-                <td>{{ form.CA_client_secret }}</td>
-            </tr>
+            <div class="form-group">
+                {{ form.CA_client_id.label(class="form-control-label") }}
+                {{ form.CA_client_id(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
 
-            <tr>
-                <td>{{ form.CA_username.label }}</td>
-                <td>{{ form.CA_username }}</td>
-            </tr>
+            <div class="form-group">
+                {{ form.CA_client_secret.label(class="form-control-label") }}
+                {{ form.CA_client_secret(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
 
-            <tr>
-                <td>{{ form.CA_user_id.label }}</td>
-                <td>{{ form.CA_user_id }}</td>
-            </tr>
+            <div class="form-group">
+                {{ form.CA_username.label(class="form-control-label") }}
+                {{ form.CA_username(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
 
-            <tr>
-                <td>{{ form.CA_lock_id.label }}</td>
-                <td>{{ form.CA_lock_id }}</td>
-            </tr>
+            <div class="form-group">
+                {{ form.CA_user_id.label(class="form-control-label") }}
+                {{ form.CA_user_id(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
 
-            <tr>
-                <td>{{ form.TTL_client_id.label }}</td>
-                <td>{{ form.TTL_client_id }}</td>
-            </tr>
+            <div class="form-group">
+                {{ form.CA_lock_id.label(class="form-control-label") }}
+                {{ form.CA_lock_id(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
 
-            <tr>
-                <td>{{ form.TTL_client_secret.label }}</td>
-                <td>{{ form.TTL_client_secret }}</td>
-            </tr>
+            <div class="form-group">
+                {{ form.TTL_client_id.label(class="form-control-label") }}
+                {{ form.TTL_client_id(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
 
-            <tr>
-                <td>{{ form.TTL_username.label }}</td>
-                <td>{{ form.TTL_username }}</td>
-            </tr>
+            <div class="form-group">
+                {{ form.TTL_client_secret.label(class="form-control-label") }}
+                {{ form.TTL_client_secret(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
 
-            <tr>
-                <td>{{ form.TTL_password_md5.label }}</td>
-                <td>{{ form.TTL_password_md5 }}</td>
-            </tr>
+            <div class="form-group">
+                {{ form.TTL_username.label(class="form-control-label") }}
+                {{ form.TTL_username(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
 
-            <tr>
-                <td>{{ form.TTL_lock_id.label }}</td>
-                <td>{{ form.TTL_lock_id }}</td>
-            </tr>
+            <div class="form-group">
+                {{ form.TTL_password_md5.label(class="form-control-label") }}
+                {{ form.TTL_password_md5(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
 
-            <tr>
-                <td>{{ form.TTL_access_token.label }}</td>
-                <td>{{ form.TTL_access_token }}</td>
-            </tr>
+            <div class="form-group">
+                {{ form.TTL_lock_id.label(class="form-control-label") }}
+                {{ form.TTL_lock_id(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
 
-            <tr>
-                <td>{{ form.TTL_refresh_token.label }}</td>
-                <td>{{ form.TTL_refresh_token }}</td>
-            </tr>
+            <div class="form-group">
+                {{ form.TTL_access_token.label(class="form-control-label") }}
+                {{ form.TTL_access_token(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
 
-            <tr>
-                <td></td>
-                <td>{{ form.submit }}</td>
-            </tr>
-        </table>
-    </form>
+            <div class="form-group">
+                {{ form.TTL_refresh_token.label(class="form-control-label") }}
+                {{ form.TTL_refresh_token(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Speichern</button>
+        </form>
+    </div>
 {% endblock %}

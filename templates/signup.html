@@ -4,15 +4,6 @@
 {% block content %}
     <div class="container">
         <h2>Registrierung</h2>
-        {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <ul class="alert alert-danger">
-            {% for message in messages %}
-                <li>{{ message }}</li>
-            {% endfor %}
-            </ul>
-        {% endif %}
-        {% endwith %}
 
         <form action="{{ url_for('auth.signup') }}" method="post">
             <div class="form-group">

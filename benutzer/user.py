@@ -19,7 +19,7 @@ def login():
             login_user(user)
             return redirect(url_for('home'))  # Angenommen, es gibt eine 'index'-Route in Ihrer Hauptanwendung
         else:
-            flash('Login fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.')
+            flash('Login fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.','danger')
 
     return render_template('login.html')
 
@@ -33,9 +33,9 @@ def signup():
         user = Benutzer.query.filter_by(username=username).first()
 
         if user:
-            flash('Benutzername existiert bereits.')
+            flash('Benutzername existiert bereits.','danger')
         elif password != password2:
-            flash('Passwörter stimmen nicht überein.')
+            flash('Passwörter stimmen nicht überein.','danger')
         else:
             # Hier wird das Passwort gehasht
             hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
@@ -56,28 +56,26 @@ def logout():
 @auth.route('/config', methods=['GET', 'POST'])
 @login_required
 def config():
-    form = BenutzerConfigForm()
-    if form.validate_on_submit():
-        # Beispiel für das Speichern der Konfiguration
-        config = BenutzerConfig(
-            benutzer_id=current_user.id,
-            CA_client_id=form.CA_client_id.data,
-            CA_client_secret=form.CA_client_secret.data,
-            CA_username=form.CA_username.data,
-            CA_user_id=form.CA_user_id.data,
-            CA_lock_id=form.CA_lock_id.data,
-            TTL_client_id=form.TTL_client_id.data,
-            TTL_client_secret=form.TTL_client_secret.data,
-            TTL_username=form.TTL_username.data,
-            TTL_password_md5=form.TTL_password_md5.data,
-            TTL_lock_id=form.TTL_lock_id.data,
-            TTL_access_token=form.TTL_access_token.data,
-            TTL_refresh_token=form.TTL_refresh_token.data
-        )
+    # Vorhandene Konfiguration abrufen
+    user_config = BenutzerConfig.query.filter_by(benutzer_id=current_user.id).first()
 
-        db.session.add(config)
+    if user_config:
+        form = BenutzerConfigForm(obj=user_config)
+    else:
+        form = BenutzerConfigForm()
+
+    if form.validate_on_submit():
+        if user_config:
+            # Aktualisieren der vorhandenen Konfiguration
+            form.populate_obj(user_config)
+        else:
+            # Erstellen einer neuen Konfiguration
+            config = BenutzerConfig(benutzer_id=current_user.id)
+            form.populate_obj(config)
+            db.session.add(config)
+
         db.session.commit()
-        flash('Konfiguration gespeichert!')
-        return redirect(url_for('auth.config'))  # Stellen Sie sicher, dass 'auth.home' existiert
+        flash('Konfiguration gespeichert!', 'success')
+        return redirect(url_for('auth.config'))
 
     return render_template('benutzerconfig.html', form=form)
