@@ -9,6 +9,11 @@
             {{ form.hidden_tag() }}
 
             <div class="form-group">
+                <p></p>
+                <h3>Chaster.app Konfigurationen</h3>
+            </div>
+
+            <div class="form-group">
                 {{ form.CA_client_id.label(class="form-control-label") }}
                 {{ form.CA_client_id(class="form-control") }}
                 <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
@@ -33,6 +38,14 @@
             </div>
 
             <div class="form-group">
+                {{ form.CA_keyholdername.label(class="form-control-label") }}
+                {{ form.CA_keyholdername(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
+
+            <div class="form-group">
                 {{ form.CA_user_id.label(class="form-control-label") }}
                 {{ form.CA_user_id(class="form-control") }}
                 <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
@@ -46,6 +59,11 @@
                 <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Info über Client ID">
                     <i class="fa-solid fa-circle-info"></i>
                 </span>
+            </div>
+
+            <div class="form-group">
+                <p></p>
+                <h3>TTLock Konfigurationen</h3>
             </div>
 
             <div class="form-group">

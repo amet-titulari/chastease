@@ -12,10 +12,13 @@ class BenutzerConfig(db.Model):
     benutzer_id = db.Column(db.Integer, db.ForeignKey('benutzer.id'))  # Verknüpfung mit der Benutzer-Tabelle
     benutzer = db.relationship('Benutzer', backref=db.backref('config', lazy=True))
 
+
+
     # Konfigurationsfelder
     CA_client_id = db.Column(db.String(128))
     CA_client_secret = db.Column(db.String(128))
     CA_username = db.Column(db.String(128))
+    CA_keyholdername = db.Column(db.String(128))
     CA_user_id = db.Column(db.String(128))
     CA_lock_id = db.Column(db.String(128))
 
