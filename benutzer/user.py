@@ -4,10 +4,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, logout_user, login_required, current_user
 from .models import db, Benutzer, BenutzerConfig
 from .forms import BenutzerConfigForm
+from api.chaster import get_user_profile, get_user_lockid
+from api.ttlock import get_ttlock_tokens
 
 import os
 import api.ttlock
-import api.chaster
+#import api.chaster
 
 auth = Blueprint('auth', __name__)
 
@@ -84,7 +86,7 @@ def config():
             CA_client_secret = os.environ.get('CA_CLIENT_SECRET')
 
             # API-Aufruf für Chaster
-            profile_data = api.chaster.get_user_profile(user_config.CA_username, CA_client_id, CA_client_secret)
+            profile_data = get_user_profile(user_config.CA_username, CA_client_id, CA_client_secret)
 
 
             if profile_data and '_id' in profile_data:
@@ -95,6 +97,24 @@ def config():
             user_config.CA_user_id = ''
             db.session.commit()
         
+        # Chaster API Aufruf zum erhalt der LOCK_ID:
+        if user_config.CA_username:
+            CA_client_id = os.environ.get('CA_CLIENT_ID')
+            CA_client_secret = os.environ.get('CA_CLIENT_SECRET')
+
+            # API-Aufruf für Chaster
+            lock_data = get_user_lockid(user_config.CA_user_id, CA_client_id, CA_client_secret)
+
+            print(lock_data[0]['_id'])
+
+
+            if lock_data:
+                user_config.CA_lock_id = lock_data[0]['_id']
+                db.session.commit()
+
+        else:
+            user_config.CA_lock_id = ''
+            db.session.commit()
         
 
         db.session.commit()
@@ -103,7 +123,7 @@ def config():
         if user_config.TTL_username and user_config.TTL_password_md5:
             TTL_client_ID = os.environ.get('TTL_CLIENT_ID')
             TTL_client_secret = os.environ.get('TTL_CLIENT_SECRET')
-            tokens = api.ttlock.get_ttlock_tokens(TTL_client_ID, TTL_client_secret, user_config.TTL_username, user_config.TTL_password_md5)
+            tokens = get_ttlock_tokens(TTL_client_ID, TTL_client_secret, user_config.TTL_username, user_config.TTL_password_md5)
 
             if 'access_token' in tokens:
                 user_config.TTL_access_token = tokens['access_token']
