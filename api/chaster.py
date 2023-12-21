@@ -9,6 +9,7 @@ def get_user_profile(ca_username, client_id, client_secret):
     }
     response = requests.get(url, headers=headers)
 
+    #print(response.json())
     return response.json()
 
 def get_user_lockid(ca_username, client_id, client_secret):
@@ -20,4 +21,5 @@ def get_user_lockid(ca_username, client_id, client_secret):
     }
     response = requests.get(url, headers=headers)
 
+    #print(response.json())
     return response.json()

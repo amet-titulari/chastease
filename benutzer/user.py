@@ -8,8 +8,7 @@ from api.chaster import get_user_profile, get_user_lockid
 from api.ttlock import get_ttlock_tokens
 
 import os
-import api.ttlock
-#import api.chaster
+
 
 auth = Blueprint('auth', __name__)
 
@@ -92,26 +91,33 @@ def config():
             if profile_data and '_id' in profile_data:
                 user_config.CA_user_id = profile_data['_id']
                 db.session.commit()
+                flash('Konfiguration aktualisiert!', 'success')
 
-        else:
-            user_config.CA_user_id = ''
-            db.session.commit()
+            else:
+                user_config.CA_user_id = ''
+                user_config.CA_lock_id = ''
+                db.session.commit()
+                flash('Fehler bei Benutzerprüfung!', 'danger')
         
         # Chaster API Aufruf zum erhalt der LOCK_ID:
-        if user_config.CA_username:
+        if user_config.CA_user_id:
             CA_client_id = os.environ.get('CA_CLIENT_ID')
             CA_client_secret = os.environ.get('CA_CLIENT_SECRET')
 
             # API-Aufruf für Chaster
             lock_data = get_user_lockid(user_config.CA_user_id, CA_client_id, CA_client_secret)
 
-            if lock_data:
+
+
+            if lock_data[0]['_id']:
                 user_config.CA_lock_id = lock_data[0]['_id']
                 db.session.commit()
+                flash('Konfiguration aktualisiert!', 'success')
 
-        else:
-            user_config.CA_lock_id = ''
-            db.session.commit()
+            else:
+                user_config.CA_lock_id = ''
+                db.session.commit()
+                flash('Konfiguration nicht aktualisiert!', 'danger')
         
 
         db.session.commit()
@@ -128,6 +134,9 @@ def config():
                 db.session.commit()
                 flash('Konfiguration aktualisiert!', 'success')
             else:
+                user_config.TTL_access_token = ''
+                user_config.TTL_refresh_token = ''
+                db.session.commit()
                 flash('Fehler beim Abrufen der Tokens', 'danger')
         else:
             user_config.TTL_access_token = ''
