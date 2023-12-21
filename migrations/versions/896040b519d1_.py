@@ -1,8 +1,8 @@
 """empty message
 
-Revision ID: e379c3179bf9
+Revision ID: 896040b519d1
 Revises: 
-Create Date: 2023-12-20 21:39:59.335892
+Create Date: 2023-12-21 07:53:30.425179
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'e379c3179bf9'
+revision = '896040b519d1'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -34,7 +34,7 @@ def upgrade():
     sa.Column('CA_lock_id', sa.String(length=128), nullable=True),
     sa.Column('TTL_username', sa.String(length=128), nullable=True),
     sa.Column('TTL_password_md5', sa.String(length=128), nullable=True),
-    sa.Column('TTL_lock_id', sa.String(length=128), nullable=True),
+    sa.Column('TTL_lock_alias', sa.String(length=128), nullable=True),
     sa.Column('TTL_access_token', sa.String(length=256), nullable=True),
     sa.Column('TTL_refresh_token', sa.String(length=256), nullable=True),
     sa.ForeignKeyConstraint(['benutzer_id'], ['benutzer.id'], ),

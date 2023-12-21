@@ -105,9 +105,6 @@ def config():
             # API-Aufruf für Chaster
             lock_data = get_user_lockid(user_config.CA_user_id, CA_client_id, CA_client_secret)
 
-            print(lock_data[0]['_id'])
-
-
             if lock_data:
                 user_config.CA_lock_id = lock_data[0]['_id']
                 db.session.commit()
