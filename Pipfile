@@ -11,6 +11,8 @@ python-dotenv = "*"
 flask-wtf = "*"
 flask-migrate = "*"
 requests = "*"
+werkzeug = "*"
+authlib = "*"
 
 [dev-packages]
 
