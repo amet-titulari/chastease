@@ -1,7 +1,7 @@
 import requests
 import os
 from flask import Flask, redirect, request, render_template, url_for
-from flask_login import LoginManager, login_user
+from flask_login import LoginManager, login_user, logout_user
 from flask_migrate import Migrate
 from dotenv import load_dotenv
 from benutzer.models import db, Benutzer
@@ -45,11 +45,14 @@ def login():
     authorization_url = f"{app.config['CA_AUTHORIZATION_ENDPOINT']}?response_type=code&client_id={app.config['CA_CLIENT_ID']}&redirect_uri={app.config['CA_REDIRECT_URI']}"
     return redirect(authorization_url)
 
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('home'))
+
 @app.route('/callback')
 def callback():
     code = request.args.get('code')
-
-    print("Erhaltener Code:", code)  # Loggen des Codes
 
     token_response = requests.post(
         app.config['CA_TOKEN_ENDPOINT'],
@@ -73,10 +76,12 @@ def callback():
 
     user_info = user_info_response.json()
     username = user_info.get('username')  # oder ein anderes relevantes Feld
+    role = user_info.get('role')  # oder ein anderes relevantes Feld
+
 
     benutzer = Benutzer.query.filter_by(username=username).first()
     if not benutzer:
-        benutzer = Benutzer(username=username, oauth2_token=access_token, oauth2_refresh_token=refresh_token)
+        benutzer = Benutzer(username=username, role=role, oauth2_token=access_token, oauth2_refresh_token=refresh_token)
         db.session.add(benutzer)
     else:
         benutzer.oauth2_token = access_token

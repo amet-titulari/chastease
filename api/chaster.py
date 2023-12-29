@@ -12,9 +12,9 @@ def get_user_profile(ca_username, client_id, client_secret):
     #print(response.json())
     return response.json()
 
-def get_user_lockid(ca_username, client_id, client_secret):
+def get_user_lockid(ca_userid, client_id, client_secret):
 
-    url = f'https://api.chaster.app/locks/user/{ca_username}'
+    url = f'https://api.chaster.app/locks/user/{ca_userid}'
     headers = {
         'X-Chaster-Client-Id': client_id,
         'X-Chaster-Client-Secret': client_secret
