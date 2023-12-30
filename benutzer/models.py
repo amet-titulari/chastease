@@ -9,8 +9,7 @@ class Benutzer(UserMixin, db.Model):
     role                = db.Column(db.String(100), unique=False)
 
     # OAuth2-bezogene Felder
-    oauth2_token        = db.Column(db.String(256))     # Access-Token vom OAuth2-Anbieter
-    oauth2_refresh_token = db.Column(db.String(256))  # Refresh-Token vom OAuth2-Anbieter
+    CA_access_token        = db.Column(db.String(256))     # Access-Token vom OAuth2-Anbieter
 
     # Beziehung zu BenutzerConfig
     config = db.relationship('BenutzerConfig', backref='benutzer', lazy=True)

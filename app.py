@@ -15,6 +15,7 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['CA_CLIENT_ID'] = os.getenv('CA_CLIENT_ID')
 app.config['CA_CLIENT_SECRET'] = os.getenv('CA_CLIENT_SECRET')
 app.config['CA_BASE_ENDPOINT'] = os.getenv('CA_BASE_ENDPOINT')
+app.config['CA_AUTHORIZATION_SCOPE'] = os.getenv('CA_AUTHORIZATION_SCOPE')
 app.config['CA_AUTHORIZATION_ENDPOINT'] = os.getenv('CA_AUTHORIZATION_ENDPOINT')
 app.config['CA_TOKEN_ENDPOINT'] = os.getenv('CA_TOKEN_ENDPOINT')
 app.config['CA_REDIRECT_URI'] = os.getenv('CA_REDIRECT_URI')
@@ -41,8 +42,8 @@ def home():
 
 @app.route('/login')
 def login():
-    print(app.config['CA_REDIRECT_URI'])
-    authorization_url = f"{app.config['CA_AUTHORIZATION_ENDPOINT']}?response_type=code&client_id={app.config['CA_CLIENT_ID']}&redirect_uri={app.config['CA_REDIRECT_URI']}"
+    print(app.config['CA_REDIRECT_URI'], app.config['CA_AUTHORIZATION_SCOPE'])
+    authorization_url = f"{app.config['CA_AUTHORIZATION_ENDPOINT']}?response_type=code&scope={app.config['CA_AUTHORIZATION_SCOPE']}&client_id={app.config['CA_CLIENT_ID']}&redirect_uri={app.config['CA_REDIRECT_URI']}"
     return redirect(authorization_url)
 
 @app.route('/logout')
@@ -81,11 +82,10 @@ def callback():
 
     benutzer = Benutzer.query.filter_by(username=username).first()
     if not benutzer:
-        benutzer = Benutzer(username=username, role=role, oauth2_token=access_token, oauth2_refresh_token=refresh_token)
+        benutzer = Benutzer(username=username, role=role, CA_access_token=access_token)
         db.session.add(benutzer)
     else:
-        benutzer.oauth2_token = access_token
-        benutzer.oauth2_refresh_token = refresh_token
+        benutzer.CA_access_token = access_token
 
     db.session.commit()
     login_user(benutzer)
