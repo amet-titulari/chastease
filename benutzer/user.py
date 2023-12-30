@@ -1,5 +1,6 @@
 # benutzer/user.py
 import json
+import hashlib
 from flask import Blueprint, current_app, render_template, request, flash
 from flask_login import login_required, current_user
 from .models import db, Benutzer, BenutzerConfig
@@ -17,6 +18,19 @@ benutzer = Blueprint('benutzer', __name__)
 @login_required
 def config():
     user_config = BenutzerConfig.query.filter_by(benutzer_id=current_user.id).first()
+    
+    form = BenutzerConfigForm(obj=user_config)
+    
+    if form.validate_on_submit():
+        if form.TTL_username:
+            user_config.TTL_password_md5 = form.TTL_username
+
+        if form.TTL_password_md5.data:
+            # MD5-Hash des Passworts erzeugen
+            hashed_password = hashlib.md5(form.TTL_password_md5.data.encode()).hexdigest()
+            user_config.TTL_password_md5 = hashed_password
+        
+     
 
     if not user_config:
         user_config = BenutzerConfig(benutzer_id=current_user.id)
@@ -65,7 +79,8 @@ def config():
     
     
     #print(user_config.__dict__)
-    form = BenutzerConfigForm(obj=user_config)
+   
+    # bestehender Code für das Rendern des Templates
     return render_template('benutzerconfig.html', form=form)
 
 
