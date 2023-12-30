@@ -55,7 +55,7 @@ def config():
         user_config.CA_keyholder_id = lock_info['keyholder']['_id']
         user_config.CA_keyholdername = lock_info['keyholder']['username']
 
-        print(user_config.CA_keyholdername,user_config.CA_keyholder_id)
+        #print(user_config.CA_keyholdername,user_config.CA_keyholder_id)
 
         db.session.commit()
         flash('Keyholder Profil ermittelt!', 'success')
@@ -64,7 +64,7 @@ def config():
 
     
     
-    print(user_config.__dict__)
+    #print(user_config.__dict__)
     form = BenutzerConfigForm(obj=user_config)
     return render_template('benutzerconfig.html', form=form)
 

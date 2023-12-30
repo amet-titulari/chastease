@@ -42,7 +42,7 @@ def home():
 
 @app.route('/login')
 def login():
-    print(app.config['CA_REDIRECT_URI'], app.config['CA_AUTHORIZATION_SCOPE'])
+    #print(app.config['CA_REDIRECT_URI'], app.config['CA_AUTHORIZATION_SCOPE'])
     authorization_url = f"{app.config['CA_AUTHORIZATION_ENDPOINT']}?response_type=code&scope={app.config['CA_AUTHORIZATION_SCOPE']}&client_id={app.config['CA_CLIENT_ID']}&redirect_uri={app.config['CA_REDIRECT_URI']}"
     return redirect(authorization_url)
 
@@ -82,7 +82,7 @@ def callback():
 
     benutzer = Benutzer.query.filter_by(username=username).first()
     if not benutzer:
-        benutzer = Benutzer(username=username, role=role, CA_access_token=access_token)
+        benutzer = Benutzer(username=username, role=role, CA_access_token=access_token, CA_refresh_token=refresh_token)
         db.session.add(benutzer)
     else:
         benutzer.CA_access_token = access_token
