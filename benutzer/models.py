@@ -21,6 +21,7 @@ class BenutzerConfig(db.Model):
     # Konfigurationsfelder für Chaster.app
     CA_username         = db.Column(db.String(128))
     CA_keyholdername    = db.Column(db.String(128))
+    CA_keyholder_id     = db.Column(db.String(128))
     CA_user_id          = db.Column(db.String(128))
     CA_lock_id          = db.Column(db.String(128))
     CA_lock_status      = db.Column(db.String(16))

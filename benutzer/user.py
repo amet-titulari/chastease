@@ -40,7 +40,7 @@ def config():
         user_config.CA_lock_status      = lock_data[0]['combination']
 
         # Dritter API-Aufruf für Lock-Daten
-        print(user_config.__dict__)
+        #print(user_config.__dict__)
 
 
         db.session.commit()
@@ -49,10 +49,22 @@ def config():
         flash('Fehler beim Abrufen der Benutzerdaten (Profildaten)!', 'danger')
 
     lock_info = get_user_lockinfo(user_config.CA_lock_id, current_user.CA_access_token)
-    #print(lock_info)
+    #print(f'\n\n\n{lock_info}\n\n\n')
+
+    if lock_info and 'keyholder' in lock_info:
+        user_config.CA_keyholder_id = lock_info['keyholder']['_id']
+        user_config.CA_keyholdername = lock_info['keyholder']['username']
+
+        print(user_config.CA_keyholdername,user_config.CA_keyholder_id)
+
+        db.session.commit()
+        flash('Keyholder Profil ermittelt!', 'success')
+    else:
+        flash('Keine Keyholderinformationen!', 'info')
+
     
     
-    
+    print(user_config.__dict__)
     form = BenutzerConfigForm(obj=user_config)
     return render_template('benutzerconfig.html', form=form)
 

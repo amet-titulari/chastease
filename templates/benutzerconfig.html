@@ -23,14 +23,6 @@
             </div>
 
             <div class="form-group">
-                {{ form.CA_keyholdername.label(class="form-control-label") }}
-                {{ form.CA_keyholdername(class="form-control") }}
-                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="The Username of your chaster.app KEYHOLDER">
-                    <i class="fa-solid fa-circle-info"></i>
-                </span>
-            </div>
-
-            <div class="form-group">
                 {{ form.CA_user_id.label(class="form-control-label") }}
                 {{ form.CA_user_id(class="form-control") }}
                 <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Your Chaster User ID">
@@ -45,6 +37,23 @@
                     <i class="fa-solid fa-circle-info"></i>
                 </span>
             </div>
+            
+            <div class="form-group">
+                {{ form.CA_keyholdername.label(class="form-control-label") }}
+                {{ form.CA_keyholdername(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="The Username of your chaster.app KEYHOLDER">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
+
+            <div class="form-group">
+                {{ form.CA_keyholder_id.label(class="form-control-label") }}
+                {{ form.CA_keyholder_id(class="form-control") }}
+                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="The ID of your chaster.app KEYHOLDER">
+                    <i class="fa-solid fa-circle-info"></i>
+                </span>
+            </div>
+
 
             <!-- TTLock Konfiguration -->
             <div class="form-group">
