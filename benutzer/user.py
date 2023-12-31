@@ -1,5 +1,6 @@
 # benutzer/user.py
 import json
+import re
 import hashlib
 from flask import Blueprint, current_app, render_template, request, flash
 from flask_login import login_required, current_user
@@ -13,6 +14,8 @@ import os
 
 benutzer = Blueprint('benutzer', __name__)
 
+def is_md5(s):
+    return bool(re.match(r'^[a-fA-F0-9]{32}$', s))
 
 @benutzer.route('/config', methods=['GET', 'POST'])
 @login_required
@@ -22,13 +25,17 @@ def config():
     form = BenutzerConfigForm(obj=user_config)
     
     if form.validate_on_submit():
-        if form.TTL_username:
-            user_config.TTL_password_md5 = form.TTL_username
+        if form.TTL_username.data:
+            user_config.TTL_username = form.TTL_username.data
 
         if form.TTL_password_md5.data:
-            # MD5-Hash des Passworts erzeugen
-            hashed_password = hashlib.md5(form.TTL_password_md5.data.encode()).hexdigest()
-            user_config.TTL_password_md5 = hashed_password
+            if not is_md5(form.TTL_password_md5.data):
+                # MD5-Hash des Passworts erzeugen, wenn es kein MD5-Hash ist
+                hashed_password = hashlib.md5(form.TTL_password_md5.data.encode()).hexdigest()
+                user_config.TTL_password_md5 = hashed_password
+            else:
+                # Direkt zuweisen, wenn es bereits ein MD5-Hash ist
+                user_config.TTL_password_md5 = form.TTL_password_md5.data
         
      
 
@@ -76,10 +83,18 @@ def config():
     else:
         flash('Keine Keyholderinformationen!', 'info')
 
+    #TT Lockinfo
+    if user_config.TTL_username and user_config.TTL_password_md5:
+        TT_lock_info = get_ttlock_tokens(current_app.config['TTL_CLIENT_ID'], current_app.config['TTL_CLIENT_SECRET'], user_config.TTL_username, user_config.TTL_password_md5)
     
-    
-    #print(user_config.__dict__)
-   
+        print(TT_lock_info)
+        user_config.TTL_access_token    = TT_lock_info['access_token']
+        user_config.TTL_refresh_token   = TT_lock_info['refresh_token']
+
+        db.session.commit()
+        flash('TTLOCK', 'success')
+    else:
+        flash('TTLOCK!', 'info')  
     # bestehender Code für das Rendern des Templates
     return render_template('benutzerconfig.html', form=form)
 

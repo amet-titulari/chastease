@@ -28,6 +28,9 @@ def get_lock_detail(self, page_no=1, page_size=20, date=None):
 
 # OAUTH
 def get_ttlock_tokens(client_id, client_secret, username, password):
+
+    print(f'ClientID: {client_id} \t ClientSec: {client_secret} \t User: {username} \t Pass: {password}')
+
     url = 'https://euapi.ttlock.com/oauth2/token'
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     data = {

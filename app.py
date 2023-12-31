@@ -19,7 +19,8 @@ app.config['CA_AUTHORIZATION_SCOPE'] = os.getenv('CA_AUTHORIZATION_SCOPE')
 app.config['CA_AUTHORIZATION_ENDPOINT'] = os.getenv('CA_AUTHORIZATION_ENDPOINT')
 app.config['CA_TOKEN_ENDPOINT'] = os.getenv('CA_TOKEN_ENDPOINT')
 app.config['CA_REDIRECT_URI'] = os.getenv('CA_REDIRECT_URI')
-
+app.config['TTL_CLIENT_ID'] = os.getenv('TTL_CLIENT_ID')
+app.config['TTL_CLIENT_SECRET'] = os.getenv('TTL_CLIENT_SECRET')
 
 
 db.init_app(app)
