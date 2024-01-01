@@ -6,8 +6,9 @@ from wtforms.validators import DataRequired
 
 class BenutzerConfigForm(FlaskForm):
 
-    CA_username = StringField('Username')
-    CA_keyholdername = StringField('Keyholder')
+    CA_username = StringField('Username', render_kw={'disabled': True})
+    CA_keyholdername = StringField('Keyholder' , render_kw={'disabled': True})
+    CA_keyholder_id = StringField('Keyholder ID' ,render_kw={'disabled': True})
     CA_user_id = StringField('User ID', render_kw={'disabled': True})
     CA_lock_id = StringField('Lock ID', render_kw={'disabled': True})
 

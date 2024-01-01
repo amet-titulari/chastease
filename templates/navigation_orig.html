@@ -13,16 +13,19 @@
             <li class="nav-item">
                 <a class="nav-link" href="/login">Login</a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/signup">Sign-Up</a>
+            </li>
             {% else %}
             <!-- Zeige nur, wenn Benutzer angemeldet ist -->
             <li class="nav-item">
                 <a class="nav-link" href="/logout">Logout</a>
             </li>
             <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">{{ current_user.username }}</a>
+                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Settings</a>
                 <ul class="dropdown-menu">
-                    <li><a class="dropdown-item" href="/user/config">Config</a></li>
-                    <li><a class="dropdown-item" href="https://chaster.app/locks">Chaster App</a></li>
+                  <li><a class="dropdown-item" href="#">Profile</a></li>
+                  <li><a class="dropdown-item" href="/config">Config</a></li>
                 </ul>
               </li>
             {% endif %}

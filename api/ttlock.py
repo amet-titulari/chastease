@@ -26,8 +26,11 @@ def get_lock_detail(self, page_no=1, page_size=20, date=None):
     response = requests.get(url, params=params)
     return response.json()
 
-# OAUTH
+import requests
+
 def get_ttlock_tokens(client_id, client_secret, username, password):
+    print(f'ClientID: {client_id} \t ClientSec: {client_secret} \t User: {username} \t Pass: {password}')
+
     url = 'https://euapi.ttlock.com/oauth2/token'
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     data = {
@@ -36,8 +39,22 @@ def get_ttlock_tokens(client_id, client_secret, username, password):
         'username': username,
         'password': password
     }
-    response = requests.post(url, headers=headers, data=data)
-    return response.json()
+
+    try:
+        response = requests.post(url, headers=headers, data=data)
+        response.raise_for_status()  # Löst eine Ausnahme aus, wenn der HTTP-Statuscode 4xx oder 5xx ist
+
+        # Hier könnte zusätzlich geprüft werden, ob die Antwort einen spezifischen Fehlercode enthält
+        result = response.json()
+        if 'errcode' in result and result['errcode'] != 0:
+            return {'success': False, 'error': result.get('errmsg', 'Unbekannter Fehler')}
+
+        return {'success': True, 'data': result}
+
+    except requests.exceptions.RequestException as e:
+        # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
+        return {'success': False, 'error': f'Netzwerk- oder HTTP-Fehler: {str(e)}'}
+
 
 def refresh_ttlock_tokens(client_id, client_secret, refresh_tocken):
     url = 'https://euapi.ttlock.com/oauth2/token'

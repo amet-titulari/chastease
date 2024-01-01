@@ -1,8 +1,8 @@
 """empty message
 
-Revision ID: 896040b519d1
+Revision ID: 630ec186021a
 Revises: 
-Create Date: 2023-12-21 07:53:30.425179
+Create Date: 2023-12-30 20:08:15.685776
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '896040b519d1'
+revision = '630ec186021a'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -21,7 +21,9 @@ def upgrade():
     op.create_table('benutzer',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('username', sa.String(length=100), nullable=True),
-    sa.Column('password', sa.String(length=100), nullable=True),
+    sa.Column('role', sa.String(length=100), nullable=True),
+    sa.Column('CA_access_token', sa.String(length=128), nullable=True),
+    sa.Column('CA_refresh_token', sa.String(length=128), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('username')
     )
@@ -30,8 +32,11 @@ def upgrade():
     sa.Column('benutzer_id', sa.Integer(), nullable=True),
     sa.Column('CA_username', sa.String(length=128), nullable=True),
     sa.Column('CA_keyholdername', sa.String(length=128), nullable=True),
+    sa.Column('CA_keyholder_id', sa.String(length=128), nullable=True),
     sa.Column('CA_user_id', sa.String(length=128), nullable=True),
     sa.Column('CA_lock_id', sa.String(length=128), nullable=True),
+    sa.Column('CA_lock_status', sa.String(length=16), nullable=True),
+    sa.Column('CA_combination_id', sa.String(length=128), nullable=True),
     sa.Column('TTL_username', sa.String(length=128), nullable=True),
     sa.Column('TTL_password_md5', sa.String(length=128), nullable=True),
     sa.Column('TTL_lock_alias', sa.String(length=128), nullable=True),
