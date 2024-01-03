@@ -7,8 +7,8 @@ from flask_login import login_required, current_user
 from .models import db, Benutzer, BenutzerConfig
 from .forms import BenutzerConfigForm
 from .qrcode import generate_qr
-from api.chaster import get_user_profile, get_user_lockid, get_user_lockinfo
-from api.ttlock import get_ttlock_tokens
+from api.chaster import get_user_profile, get_user_lockid, get_user_lockinfo, upload_lock_image, update_combination_relock
+from api.ttlock import get_ttlock_tokens,get_lock_list,get_lock_detail, open_ttlock
 
 import os
 
@@ -26,13 +26,12 @@ def config():
     form = BenutzerConfigForm(obj=benutzer_config)
 
     if request.method == 'POST' and form.validate_on_submit():
-        # Hier fügen Sie den Code ein, der ausgeführt wird, wenn das Formular gesendet wird.
-        # Dies beinhaltet die Aktualisierung der Benutzerkonfigurationen und das Speichern in der Datenbank.
-        # ...
-
-        # Nach dem Speichern der Daten könnten Sie eine Bestätigungsnachricht anzeigen oder zu einer anderen Seite umleiten.
-
+        
         if form.validate_on_submit():
+
+            if form.TTL_lock_alias.data:
+                benutzer_config.TTL_lock_alias = form.TTL_lock_alias.data
+
             if form.TTL_username.data:
                 benutzer_config.TTL_username = form.TTL_username.data
 
@@ -116,22 +115,33 @@ def config():
 
     # TT Lockinfo
     if benutzer_config.TTL_username and benutzer_config.TTL_password_md5:
-        TT_lock_info = get_ttlock_tokens(current_app.config['TTL_CLIENT_ID'], 
+        TT_lock_tokens = get_ttlock_tokens(current_app.config['TTL_CLIENT_ID'], 
                                         current_app.config['TTL_CLIENT_SECRET'], 
                                         benutzer_config.TTL_username, 
                                         benutzer_config.TTL_password_md5)
 
-        if TT_lock_info['success']:
+        if TT_lock_tokens['success']:
             # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
-            benutzer_config.TTL_access_token = TT_lock_info['data']['access_token']
-            benutzer_config.TTL_refresh_token = TT_lock_info['data']['refresh_token']
+            #benutzer_config.TTL_lock_id         = TT_lock_tokens['data']['lockId']
+            benutzer_config.TTL_access_token    = TT_lock_tokens['data']['access_token']
+            benutzer_config.TTL_refresh_token   = TT_lock_tokens['data']['refresh_token']
+
+            TT_lock_list = get_lock_list(current_app.config['TTL_CLIENT_ID'], benutzer_config.TTL_access_token)
+            # Durchsuchen der Liste und Auslesen der lockId, wenn der lockAlias gefunden wird
+            lock_id = None
+            for item in TT_lock_list['data']['list']:
+                if item.get('lockAlias') == benutzer_config.TTL_lock_alias:
+                    lock_id = item.get('lockId')
+                    break
+
+            # Überprüfen und Zuweisen der lockId
+            if lock_id is not None:
+                benutzer_config.TTL_lock_id = lock_id
 
             db.session.commit()
-            #flash('TTLOCK Konfiguration erfolgreich aufgerufen', 'success')
         else:
-            # Fehlerfall: Zeigen Sie eine Fehlermeldung an
-            flash(f'TTLOCK Konfigurationsfehler: {TT_lock_info["error"]}', 'danger')
-    
+            pass
+        
     # Formulardaten aktualisieren
     form = BenutzerConfigForm(obj=benutzer_config)
     return render_template('benutzerconfig.html', form=form)
@@ -149,12 +159,50 @@ def relock():
         benutzer_config.lock_uuid = qrcode['qr_uuid']
         db.session.commit()
 
-        flash(f'QR Code erstellt! ', 'success')
-        return redirect(url_for('home'))
-    else:
-        flash(f'QR Code NICHT ERSTELLT! ', 'danger')
-        return redirect(url_for('home'))
+        lock_info = get_user_lockinfo(benutzer_config.CA_lock_id, current_user.CA_access_token)
 
+        #print(lock_info)
+
+        if lock_info['success']:
+            # Zugriff auf das 'data'-Feld
+            data = lock_info['data']
+
+            # Zugriff auf das 'extensions'-Feld innerhalb von 'data'
+            extensions = data.get('extensions', [])
+
+            # Durchsuchen der Extensions
+            for extension in extensions:
+                if extension.get("slug") == "temporary-opening":
+                    # Zugriff auf das 'userData'-Feld
+                    user_data = extension.get("userData", {})
+                    # Auslesen des 'openedAt'-Wertes
+                    opened_at = user_data.get("openedAt")
+                    if opened_at is not None:
+                        filepath = f'qrcodes/{benutzer_config.lock_uuid}.png'
+
+                        lockupload = upload_lock_image(current_user.CA_access_token,filepath )
+                        if lockupload['success']:  
+                            combination_id = lockupload['data']['combinationId']
+                            print(combination_id)
+                            
+                            udt = update_combination_relock(benutzer_config.CA_lock_id, current_user.CA_access_token, combination_id)
+                            if udt['success']:
+                                flash(f'Dein Chaster-Lock ist wieder verschlossen', 'success')
+
+
+                        else:
+                            print("Upload nicht ok!")
+
+
+
+                        return redirect(url_for('home'))
+                    else:
+                        flash(f'Dein Chaster-Lock ist VERSCHLOSSEN', 'danger')
+                        return redirect(url_for('home'))
+            else:
+                print("Keine Extension mit dem Slug 'temporary-opening' gefunden.")
+        else:
+            print("Die Antwort war nicht erfolgreich.")
 
 
 @benutzer.route('/ttl_open/<uid>')
@@ -162,6 +210,8 @@ def ttl_open(uid):
     benutzer_config = BenutzerConfig.query.filter_by(benutzer_id=current_user.id).first()
 
     if benutzer_config.lock_uuid == uid:
+        open_ttlock(current_app.config['TTL_CLIENT_ID'], benutzer_config.TTL_access_token,benutzer_config.TTL_lock_id)
+
         flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')
     else:
         flash(f'Die UID {uid} ist nicht korrekt das TTLock bleibt verschlossen!', 'danger')

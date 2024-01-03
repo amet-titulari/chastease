@@ -1,4 +1,5 @@
 import requests
+import json
 
 def get_user_profile(ca_username, client_id, client_secret):
     url = f'https://api.chaster.app/users/profile/{ca_username}'
@@ -67,3 +68,63 @@ def get_user_lockinfo(ca_lockid, ca_access_token):
     except requests.exceptions.RequestException as e:
         # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
         return {'success': False, 'error': f'Netzwerk- oder HTTP-Fehler: {str(e)}'}
+    
+import requests
+
+def upload_lock_image(ca_access_token, file_path):
+    url = "https://api.chaster.app/combinations/image"
+
+    # Header festlegen (ohne Content-Type)
+    headers = {
+        "accept": "application/json",
+        "Authorization": f'Bearer {ca_access_token}'
+    }
+
+    # Erstellen des 'files'-Dictionary für den Upload
+    with open(file_path, 'rb') as file_to_upload:
+        files = {
+            'file': (file_path, file_to_upload, 'image/png')
+        }
+
+        # Zusätzliche Daten
+        data = {
+            'enableManualCheck': 'false'
+        }
+
+        try:
+            # POST-Anfrage senden
+            response = requests.post(url, headers=headers, files=files, data=data)
+            response.raise_for_status()  # Löst eine Exception aus, wenn der HTTP-Statuscode kein 200 ist
+            result = response.json()
+            return {'success': True, 'data': result}
+        except requests.RequestException as e:
+            # Detaillierte Fehlermeldung
+            return {'success': False, 'error': f'Upload fehlgeschlagen: {str(e)}'}
+        
+def update_combination_relock(ca_lock_id, ca_access_token, ca_combination):
+    url = f"https://api.chaster.app/extensions/temporary-opening/{ca_lock_id}/combination"
+
+    # Header festlegen
+    headers = {
+        "accept": "*/*",
+        "Authorization": f"Bearer {ca_access_token}",
+        "Content-Type": "application/json"
+    }
+
+    # Daten für die Anfrage
+    data = {
+        "combinationId": ca_combination
+    }
+
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        print(response.status_code)
+        print(response.text)
+    
+        response.raise_for_status()  # Löst eine Exception aus, wenn der HTTP-Statuscode kein 200 ist
+        result = response.json()
+        return {'success': True, 'data': result}
+    except requests.RequestException as e:
+            # Detaillierte Fehlermeldung
+        return {'success': False, 'error': f'Upload fehlgeschlagen: {str(e)}'}

@@ -1,30 +1,51 @@
 import os
+import time
 import requests
 
 # LockAPI
-def get_lock_list(self, page_no=1, page_size=20, date=None):
-    url = f'{self.base_url}/lock/list'
+def get_lock_list(client_id, access_token):
+    timestampMS = int(time.time() * 1000)
+    url = "https://euapi.ttlock.com/v3/lock/list"
     params = {
-        'clientId': self.client_id,
-        'accessToken': self.access_token,
-        'pageNo': page_no,
-        'pageSize': page_size,
-        'date': date
+        'clientId': client_id,
+        'accessToken': access_token,
+        'pageNo': 1,
+        'pageSize': 20,
+        'date': timestampMS
     }
     response = requests.get(url, params=params)
-    return response.json()
 
-def get_lock_detail(self, page_no=1, page_size=20, date=None):
-    url = f'{self.base_url}/lock/list'
+    if response.status_code == 200:
+        # Versuchen, die Antwort als JSON zu interpretieren
+        result = response.json()
+    else:
+        print(f"Fehler: HTTP-Status {response.status_code}")
+        print(response.text)  # Gibt den Text der Antwort aus, der hilfreich sein kann
+        return {'success': False, 'data': response.text}
+
+    return {'success': True, 'data': result}
+
+def get_lock_detail(client_id, access_token):
+    timestampMS = int(time.time() * 1000)
+    url = 'https://euapi.ttlock.com/v3/lock/detail'
     params = {
-        'clientId': self.client_id,
-        'accessToken': self.access_token,
-        'pageNo': page_no,
-        'pageSize': page_size,
-        'date': date
+        'clientId': client_id,
+        'accessToken': access_token,
+        'pageNo': 1,
+        'pageSize': 20,
+        'date': timestampMS
     }
     response = requests.get(url, params=params)
-    return response.json()
+
+    if response.status_code == 200:
+        # Versuchen, die Antwort als JSON zu interpretieren
+        result = response.json()
+    else:
+        print(f"Fehler: HTTP-Status {response.status_code}")
+        print(response.text)  # Gibt den Text der Antwort aus, der hilfreich sein kann
+        return {'success': False, 'data': response.text}
+
+    return {'success': True, 'data': result}
 
 import requests
 
@@ -66,4 +87,27 @@ def refresh_ttlock_tokens(client_id, client_secret, refresh_tocken):
         'refresh_token': refresh_tocken
     }
     response = requests.post(url, headers=headers, data=data)
+    return response.json()
+
+
+def open_ttlock(TTL_client_id, TTL_access_token, TTL_lock_id):
+
+    timestampMS = int(time.time() * 1000)
+
+    # Erstellen der URL
+    url = f"https://euapi.ttlock.com/v3/lock/unlock"
+
+    # Parameter für die Anfrage
+    params = {
+        "clientId": TTL_client_id,
+        "accessToken": TTL_access_token,
+        "lockId": TTL_lock_id,
+        "date": timestampMS
+    }
+
+    # HTTP GET Anfrage senden
+    response = requests.get(url, params=params)
+
+    # Antwort ausgeben
+    print(response.text)
     return response.json()
