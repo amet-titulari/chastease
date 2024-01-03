@@ -18,6 +18,7 @@ class Benutzer(UserMixin, db.Model):
 class BenutzerConfig(db.Model):
     id                  = db.Column(db.Integer, primary_key=True)
     benutzer_id         = db.Column(db.Integer, db.ForeignKey('benutzer.id'))  # Verknüpfung mit der Benutzer-Tabelle
+    lock_uuid           = db.Column(db.String(128))
 
     # Konfigurationsfelder für Chaster.app
     CA_username         = db.Column(db.String(128))

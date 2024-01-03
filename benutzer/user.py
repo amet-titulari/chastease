@@ -6,6 +6,7 @@ from flask import Blueprint, current_app, render_template, redirect, request, fl
 from flask_login import login_required, current_user
 from .models import db, Benutzer, BenutzerConfig
 from .forms import BenutzerConfigForm
+from .qrcode import generate_qr
 from api.chaster import get_user_profile, get_user_lockid, get_user_lockinfo
 from api.ttlock import get_ttlock_tokens
 
@@ -135,4 +136,34 @@ def config():
     form = BenutzerConfigForm(obj=benutzer_config)
     return render_template('benutzerconfig.html', form=form)
 
+@benutzer.route('/relock')
+@login_required
+def relock():
 
+    benutzer_config = BenutzerConfig.query.filter_by(benutzer_id=current_user.id).first()
+
+
+    qrcode = generate_qr()
+    if qrcode['success']:
+
+        benutzer_config.lock_uuid = qrcode['qr_uuid']
+        db.session.commit()
+
+        flash(f'QR Code erstellt! ', 'success')
+        return redirect(url_for('home'))
+    else:
+        flash(f'QR Code NICHT ERSTELLT! ', 'danger')
+        return redirect(url_for('home'))
+
+
+
+@benutzer.route('/ttl_open/<uid>')
+def ttl_open(uid):
+    benutzer_config = BenutzerConfig.query.filter_by(benutzer_id=current_user.id).first()
+
+    if benutzer_config.lock_uuid == uid:
+        flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')
+    else:
+        flash(f'Die UID {uid} ist nicht korrekt das TTLock bleibt verschlossen!', 'danger')
+    
+    return redirect(url_for('home'))

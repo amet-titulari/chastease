@@ -10,6 +10,7 @@ from benutzer.user import benutzer
 app = Flask(__name__)
 load_dotenv()
 
+app.config['BASE_URL'] = os.getenv('BASE_URL')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['CA_CLIENT_ID'] = os.getenv('CA_CLIENT_ID')
@@ -18,7 +19,7 @@ app.config['CA_BASE_ENDPOINT'] = os.getenv('CA_BASE_ENDPOINT')
 app.config['CA_AUTHORIZATION_SCOPE'] = os.getenv('CA_AUTHORIZATION_SCOPE')
 app.config['CA_AUTHORIZATION_ENDPOINT'] = os.getenv('CA_AUTHORIZATION_ENDPOINT')
 app.config['CA_TOKEN_ENDPOINT'] = os.getenv('CA_TOKEN_ENDPOINT')
-app.config['CA_REDIRECT_URI'] = os.getenv('CA_REDIRECT_URI')
+app.config['CA_REDIRECT_URI'] = app.config['BASE_URL'] + '/callback'
 app.config['TTL_CLIENT_ID'] = os.getenv('TTL_CLIENT_ID')
 app.config['TTL_CLIENT_SECRET'] = os.getenv('TTL_CLIENT_SECRET')
 
