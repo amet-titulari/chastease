@@ -1,9 +1,12 @@
 import requests
 import os
-from flask import Flask, redirect, request, render_template, url_for
+
+from flask import Flask, redirect, request, render_template, url_for, session
 from flask_login import LoginManager, login_user, logout_user
 from flask_migrate import Migrate
+
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
 from benutzer.models import db, Benutzer
 from benutzer.user import benutzer
 
@@ -81,13 +84,19 @@ def callback():
     username = user_info.get('username')  # oder ein anderes relevantes Feld
     role = user_info.get('role')  # oder ein anderes relevantes Feld
 
+    # Tokens in der Session statt in der Datenbank speichern
+    session['access_token'] = access_token
+    session['refresh_token'] = refresh_token
+    session['token_expiration_time'] = datetime.now() + timedelta(seconds=token_data['expires_in'])
+    print(session['token_expiration_time'])
 
     benutzer = Benutzer.query.filter_by(username=username).first()
     if not benutzer:
-        benutzer = Benutzer(username=username, role=role, CA_access_token=access_token, CA_refresh_token=refresh_token)
+        benutzer = Benutzer(username=username, role=role)
         db.session.add(benutzer)
-    else:
-        benutzer.CA_access_token = access_token
+        #return redirect(url_for('benutzer.config'))
+    
+
 
     db.session.commit()
     login_user(benutzer)

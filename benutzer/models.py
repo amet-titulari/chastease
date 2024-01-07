@@ -7,17 +7,6 @@ class Benutzer(UserMixin, db.Model):
     id                  = db.Column(db.Integer, primary_key=True)
     username            = db.Column(db.String(100), unique=True)
     role                = db.Column(db.String(100), unique=False)
-
-    # OAuth2-bezogene Felder
-    CA_access_token      = db.Column(db.String(128))     # Access-Token vom OAuth2-Anbieter
-    CA_refresh_token     = db.Column(db.String(128))     # Refresh-Token vom OAuth2-Anbieter
-
-    # Beziehung zu BenutzerConfig
-    config = db.relationship('BenutzerConfig', backref='benutzer', lazy=True)
-
-class BenutzerConfig(db.Model):
-    id                  = db.Column(db.Integer, primary_key=True)
-    benutzer_id         = db.Column(db.Integer, db.ForeignKey('benutzer.id'))  # Verknüpfung mit der Benutzer-Tabelle
     lock_uuid           = db.Column(db.String(128))
 
     # Konfigurationsfelder für Chaster.app
