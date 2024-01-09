@@ -5,6 +5,8 @@ import uuid
 from flask import current_app
 from flask_login import current_user
 
+from helper.log_config import logger
+
 
 def generate_qr():
 
@@ -12,11 +14,9 @@ def generate_qr():
     qr_uuid    = str(uuid.uuid4())
     qr_base    = current_app.config['BASE_URL']
 
-    print(qr_uuid,qr_base)
-
     data    = qr_base + '/user/ttl_open/' + qr_uuid
 
-    print(data)
+    print(f'\n\n{data}\n')
     
 
     try:
@@ -37,8 +37,10 @@ def generate_qr():
         # QR-Code speichern
         img.save(f"qrcodes/{qr_uuid}.png")
 
+        logger.info('QRCode generated!')
+
         return {'success': True, 'qr_uuid': qr_uuid}
     
     except:
         # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
-        return {'success': False, 'error': f'QR Nicht erstellt: {str(e)}'}
+        return {'success': False, 'error': f'QR Nicht erstellt:'}

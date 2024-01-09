@@ -5,7 +5,7 @@ from flask import Flask, redirect, request, render_template, url_for, session
 from flask_login import LoginManager, login_user, logout_user
 from flask_migrate import Migrate
 
-from log_config import logger
+from helper.log_config import logger
 
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
@@ -120,7 +120,7 @@ def callback():
             session['ttl_refresh_token'] = refresh_token
             session['ttl_token_expiration_time'] = datetime.now() + timedelta(seconds=token_data['expires_in'])
 
-            print(f'Chaster Token Expiration: {session["ca_token_expiration_time"]}, TTL Token Expiration: {session["ttl_token_expiration_time"]}')
+            print(f'CA Token Expiration: \t\t{session["ca_token_expiration_time"]} \nTTL Token Expiration: \t\t{session["ttl_token_expiration_time"]}')
 
 
 

@@ -6,7 +6,7 @@ import hashlib
 from flask import Blueprint, current_app, session, redirect, request, flash, url_for,render_template
 from flask_login import login_required, current_user
 
-from log_config import logger
+from helper.log_config import logger
 
 from .models import db, Benutzer
 from .forms import BenutzerConfigForm
@@ -14,7 +14,7 @@ from .qrcode import generate_qr
 from .token_refresh import is_ca_token_valid, is_ttl_token_valid
 
 from api.chaster import get_user_profile, get_user_lockid, get_user_lockinfo, upload_lock_image, update_combination_relock
-from api.ttlock import get_ttlock_tokens,get_lock_list,refresh_ttlock_tokens, open_ttlock
+from api.ttlock import get_ttlock_tokens,get_lock_list, open_ttlock
 
 import os
 
@@ -53,78 +53,83 @@ def config():
         flash('Konfiguration aktualisiert!', 'success')
         return redirect(url_for('benutzer.config'))
 
+    ca_token_is_valid = is_ca_token_valid()
 
-    profile_data = get_user_profile(current_user.username, current_app.config['CA_CLIENT_ID'], current_app.config['CA_CLIENT_SECRET'])
+    if ca_token_is_valid:
 
-    if profile_data['success']:
-        # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
-        benutzer.CA_user_id = profile_data['data'].get('_id')
-        benutzer.CA_username = profile_data['data'].get('username')
-        db.session.commit()
-    else:
-        # Fehlerfall: Zeigen Sie eine Fehlermeldung an
-        flash(f'Fehler beim Abrufen des Benutzerprofils: {profile_data["error"]}', 'danger')
+        profile_data = get_user_profile(current_user.username, current_app.config['CA_CLIENT_ID'], current_app.config['CA_CLIENT_SECRET'])
 
-
-    # Zweiter API-Aufruf für Lock-Daten 
-    lock_data = get_user_lockid(benutzer.CA_user_id, current_app.config['CA_CLIENT_ID'], current_app.config['CA_CLIENT_SECRET'])
-
-    if lock_data['success']:
-        # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
-        # Stellen Sie sicher, dass die Antwort die erwarteten Daten enthält
-        if lock_data['data']:
-            benutzer.CA_lock_id = lock_data['data'][0].get('_id')
-            benutzer.CA_lock_status = lock_data['data'][0].get('status')
-            benutzer.CA_lock_combination = lock_data['data'][0].get('combination')
-
+        if profile_data['success']:
+            # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
+            benutzer.CA_user_id = profile_data['data'].get('_id')
+            benutzer.CA_username = profile_data['data'].get('username')
             db.session.commit()
         else:
-            # Falls die Antwort leer ist oder die erwarteten Daten nicht enthält
-            flash('Die Antwort enthält keine Lock-Daten.', 'warning')
-    else:
-        # Fehlerfall: Zeigen Sie eine Fehlermeldung an
-        flash(f'Fehler beim Abrufen der Lock-Daten: {lock_data["error"]}', 'danger')
+            # Fehlerfall: Zeigen Sie eine Fehlermeldung an
+            flash(f'Fehler beim Abrufen des Benutzerprofils: {profile_data["error"]}', 'danger')
 
-    lock_info = get_user_lockinfo(benutzer.CA_lock_id, session['ca_access_token'])
 
-    if lock_info['success']:
-        # Überprüfen, ob die Antwort die notwendigen 'keyholder' Informationen enthält
-        if 'keyholder' in lock_info['data']:
-            benutzer.CA_keyholder_id = lock_info['data']['keyholder']['_id']
-            benutzer.CA_keyholdername = lock_info['data']['keyholder']['username']
+        # Zweiter API-Aufruf für Lock-Daten 
+        lock_data = get_user_lockid(benutzer.CA_user_id, current_app.config['CA_CLIENT_ID'], current_app.config['CA_CLIENT_SECRET'])
 
-            db.session.commit()
+        if lock_data['success']:
+            # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
+            # Stellen Sie sicher, dass die Antwort die erwarteten Daten enthält
+            if lock_data['data']:
+                benutzer.CA_lock_id = lock_data['data'][0].get('_id')
+                benutzer.CA_lock_status = lock_data['data'][0].get('status')
+                benutzer.CA_lock_combination = lock_data['data'][0].get('combination')
+
+                db.session.commit()
+            else:
+                # Falls die Antwort leer ist oder die erwarteten Daten nicht enthält
+                flash('Die Antwort enthält keine Lock-Daten.', 'warning')
         else:
-            # Falls die 'keyholder' Informationen nicht in der Antwort vorhanden sind
-            flash('Keine Keyholderinformationen vorhanden.', 'info')
-    else:
-        # Fehlerfall: Zeigen Sie eine Fehlermeldung an
-        flash(f'Fehler beim Abrufen der Lock-Informationen: {lock_info["error"]}', 'danger')
+            # Fehlerfall: Zeigen Sie eine Fehlermeldung an
+            logger.error(f'Fehler beim Abrufen der Lock-Daten: {lock_data["error"]}', 'danger')
+            flash(f'Fehler beim Abrufen der Lock-Daten: {lock_data["error"]}', 'danger')
+
+        lock_info = get_user_lockinfo(benutzer.CA_lock_id, session['ca_access_token'])
+
+        if lock_info['success']:
+            # Überprüfen, ob die Antwort die notwendigen 'keyholder' Informationen enthält
+            if 'keyholder' in lock_info['data']:
+                benutzer.CA_keyholder_id = lock_info['data']['keyholder']['_id']
+                benutzer.CA_keyholdername = lock_info['data']['keyholder']['username']
+
+                db.session.commit()
+            else:
+                # Falls die 'keyholder' Informationen nicht in der Antwort vorhanden sind
+                flash('Keine Keyholderinformationen vorhanden.', 'info')
+        else:
+            # Fehlerfall: Zeigen Sie eine Fehlermeldung an
+            flash(f'Fehler beim Abrufen der Lock-Informationen: {lock_info["error"]}', 'danger')
 
 
     # TT Lockinfo
     
     if benutzer.TTL_username and benutzer.TTL_password_md5:
 
-        ttl_token_is_valid = is_ttl_token_valid()
+        get_ttlock_tokens(current_app.config['TTL_CLIENT_ID'], 
+                          current_app.config['TTL_CLIENT_SECRET'], 
+                          benutzer.TTL_username, 
+                          benutzer.TTL_password_md5)
 
-        if ttl_token_is_valid:
-            
-            print('Token noch gültig')
-            TT_lock_list = get_lock_list(current_app.config['TTL_CLIENT_ID'], benutzer.TTL_access_token)
-            # Durchsuchen der Liste und Auslesen der lockId, wenn der lockAlias gefunden wird
-            lock_id = None
-            for item in TT_lock_list['data']['list']:
-                if item.get('lockAlias') == benutzer.TTL_lock_alias:
-                    lock_id = item.get('lockId')
-                    break
-
-            # Überprüfen und Zuweisen der lockId
-            if lock_id is not None:
-                benutzer.TTL_lock_id = lock_id
-
-            db.session.commit()
         
+        TT_lock_list = get_lock_list(current_app.config['TTL_CLIENT_ID'], session['ttl_access_token'])
+        # Durchsuchen der Liste und Auslesen der lockId, wenn der lockAlias gefunden wird
+        lock_id = None
+        for item in TT_lock_list['data']['list']:
+            if item.get('lockAlias') == benutzer.TTL_lock_alias:
+                lock_id = item.get('lockId')
+                break
+
+        # Überprüfen und Zuweisen der lockId
+        if lock_id is not None:
+            benutzer.TTL_lock_id = lock_id
+
+        db.session.commit()
+    
     # Formulardaten aktualisieren
     form = BenutzerConfigForm(obj=benutzer)
     return render_template('benutzerconfig.html', form=form)
@@ -195,10 +200,19 @@ def ttl_open(uid):
 
 
     if benutzer.lock_uuid == uid:
-        refresh_ttlock_tokens(client_id, client_secret, refresh_tocken)
-        open_ttlock(current_app.config['TTL_CLIENT_ID'], benutzer.TTL_access_token,benutzer.TTL_lock_id)
+        
+        response = get_ttlock_tokens(current_app.config['TTL_CLIENT_ID'], 
+                                        current_app.config['TTL_CLIENT_SECRET'], 
+                                        benutzer.TTL_username, 
+                                        benutzer.TTL_password_md5)
 
+        open_ttlock()
         flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')
+
+        #Nach Gebrauch UUID löschen um eine zweite Öffnung zu verhindern
+        #benutzer.lock_uuid = ''
+        #db.session.commit()
+
     else:
         flash(f'Die UID {uid} ist nicht korrekt das TTLock bleibt verschlossen!', 'danger')
     

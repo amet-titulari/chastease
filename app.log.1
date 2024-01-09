@@ -1,0 +1,132 @@
+2024-01-09 20:34:28,033 ERROR: Exception on /user/config [GET]
+Traceback (most recent call last):
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 869, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 867, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 852, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask_login\utils.py", line 290, in decorated_view
+    return current_app.ensure_sync(func)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\benutzer\user.py", line 122, in config
+    TT_lock_list = get_lock_list(current_app.config['TTL_CLIENT_ID'], benutzer.TTL_access_token)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\api\ttlock.py", line 51, in get_lock_list
+    timestampMS = int(time.time() * 1000)
+                      ^^^^^^^^^
+AttributeError: type object 'datetime.time' has no attribute 'time'
+2024-01-09 20:37:01,633 INFO: CA Tocken valid till:		 2024-01-09 20:51:57+00:00
+2024-01-09 20:37:01,633 INFO: Time in 5 Minutes   :		 2024-01-09 20:42:01.633381+01:00
+2024-01-09 20:37:01,634 INFO: Token <= Time in 5Min:		 True
+2024-01-09 20:37:04,174 INFO: TTL Tocken valid till:		 2024-04-08 20:34:27.172881
+2024-01-09 20:37:04,174 INFO: Time in 5 Minutes   :		 2024-01-09 20:42:04.174892
+2024-01-09 20:37:04,916 ERROR: Exception on /user/config [GET]
+Traceback (most recent call last):
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 869, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 867, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 852, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask_login\utils.py", line 290, in decorated_view
+    return current_app.ensure_sync(func)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\benutzer\user.py", line 125, in config
+    for item in TT_lock_list['data']['list']:
+                ~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+KeyError: 'list'
+2024-01-09 20:39:04,724 INFO: CA Tocken valid till:		 2024-01-09 20:54:01+00:00
+2024-01-09 20:39:04,725 INFO: Time in 5 Minutes   :		 2024-01-09 20:44:04.724903+01:00
+2024-01-09 20:39:04,726 INFO: Token <= Time in 5Min:		 True
+2024-01-09 20:39:07,878 INFO: TTL Tocken valid till:		 2024-04-08 20:37:03.877064
+2024-01-09 20:39:07,878 INFO: Time in 5 Minutes   :		 2024-01-09 20:44:07.878117
+2024-01-09 21:56:37,000 INFO: QRCode generated!
+2024-01-09 21:56:56,419 ERROR: Exception on /user/ttl_open/d4ff0e02-de73-4101-b5fc-dc607e4bd04f [GET]
+Traceback (most recent call last):
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 869, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 867, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 852, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask_login\utils.py", line 290, in decorated_view
+    return current_app.ensure_sync(func)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\benutzer\user.py", line 207, in ttl_open
+    ttl_token_is_valid = is_ttl_token_valid()
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\benutzer\token_refresh.py", line 41, in is_ttl_token_valid
+    if session['ttl_token_expiration_time'] >= time_in_5_minutes:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: can't compare offset-naive and offset-aware datetimes
+2024-01-09 22:02:52,732 INFO: QRCode generated!
+2024-01-09 22:04:38,422 INFO: QRCode generated!
+2024-01-09 22:06:29,949 ERROR: Exception on /user/ttl_open/c95dbbf8-f56e-4920-86c9-66b7167359ec [GET]
+Traceback (most recent call last):
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 869, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 867, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 852, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask_login\utils.py", line 290, in decorated_view
+    return current_app.ensure_sync(func)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\benutzer\user.py", line 207, in ttl_open
+    ttl_token_is_valid = is_ttl_token_valid()
+                         ^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\benutzer\token_refresh.py", line 41, in is_ttl_token_valid
+    if session['ttl_token_expiration_time'] >=datetime.now():
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: can't compare offset-naive and offset-aware datetimes
+2024-01-09 22:17:27,211 INFO: QRCode generated!
+2024-01-09 22:17:37,250 INFO: QRCode generated!
+2024-01-09 22:27:27,930 INFO: QRCode generated!
+2024-01-09 22:47:22,755 ERROR: Exception on /user/ttl_open/553c02d0-266f-49c6-a4ce-4a12644c8836 [GET]
+Traceback (most recent call last):
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 869, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 867, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 852, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask_login\utils.py", line 290, in decorated_view
+    return current_app.ensure_sync(func)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\benutzer\user.py", line 214, in ttl_open
+    open_ttlock(current_app.config['TTL_CLIENT_ID'], session['ttl_access_token'], benutzer.TTL_lock_id)
+  File "C:\repos\amet\chastease\api\ttlock.py", line 92, in open_ttlock
+    "clientId": current_app.config['TTé_CLIENT_ID'],
+                ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+KeyError: 'TTé_CLIENT_ID'
