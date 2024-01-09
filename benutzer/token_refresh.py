@@ -1,39 +1,38 @@
+import datetime
 import requests
+
 from flask import session, current_app
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo  # Python 3.9 und später
 
-def is_token_expiring_soon():
-    expiration_time = session.get('token_expiration_time')
-    if expiration_time is None:
-        return False
+def is_ca_token_valid():
+    # Aktuelle UTC-Zeit als zeitzone-bewusstes Objekt
+    current_time = datetime.now(ZoneInfo("UTC"))
 
-    # Überprüfen, ob das Token innerhalb der nächsten 5 Minuten abläuft
-    return datetime.now() >= (expiration_time - timedelta(minutes=5))
+    # Zeitpunkt in 5 Minuten
+    time_in_5_minutes = current_time + datetime.timedelta(minutes=5)
 
-def refresh_token():
-    # Setzen Sie Ihre Client-ID und das Client-Secret hier
+    # Prüfen, ob das Token in den nächsten 5 Minuten abläuft
+    if session['ca_token_expiration_time'] <= time_in_5_minutes:
+        response = refresh_ca_token()
+        if response:
+            return True
+        else:
+            return False
+    else:
+        return True
 
 
-    client_id = current_app.config['CA_CLIENT_ID']
-    client_secret = current_app.config['CA_CLIENT_SECRET']
+def refresh_ca_token():
 
     # URL des Token-Endpunkts des OAuth2-Anbieters
     token_url = 'https://sso.chaster.app/auth/realms/app/protocol/openid-connect/token'
 
-    # Holen Sie sich das Refresh Token aus der Session (oder einer anderen Quelle)
-    refresh_token = session.get('refresh_token')
-
-    # Stellen Sie sicher, dass das Refresh Token vorhanden ist
-    if refresh_token is None:
-        # Behandeln Sie den Fall, dass kein Refresh Token vorhanden ist
-        return False
-
-    # Daten für die POST-Anfrage
     data = {
-        'client_id': client_id,
-        'client_secret': client_secret,
+        'client_id': current_app.config['CA_CLIENT_ID'],
+        'client_secret': current_app.config['CA_CLIENT_SECRET'],
         'grant_type': 'refresh_token',
-        'refresh_token': refresh_token
+        'refresh_token': session['ca_refresh_token']
     }
 
     # Senden der Anfrage
@@ -42,15 +41,59 @@ def refresh_token():
     # Überprüfen der Antwort
     if response.status_code == 200:
         new_tokens = response.json()
-        session['access_token'] = new_tokens['access_token']
-        session['refresh_token'] = new_tokens.get('refresh_token', refresh_token)
-        session['token_expiration_time'] = datetime.now() + timedelta(seconds=new_tokens['expires_in'])
+        session['ca_access_token'] = new_tokens['access_token']
+        session['ca_refresh_token'] = new_tokens['refresh_token']
+        session['ca_token_expiration_time'] = datetime.now() + timedelta(seconds=new_tokens['expires_in'])
         return True
     else:
         # Fehlerbehandlung
         return False
 
-def check_and_refresh_token():
-    if is_token_expiring_soon():
-        return refresh_token()
-    return False
+def is_ttl_token_valid():
+    # Aktuelle UTC-Zeit als zeitzone-bewusstes Objekt
+    current_time = datetime.now(ZoneInfo("UTC"))
+
+    # Zeitpunkt in 5 Minuten
+    time_in_5_minutes = current_time + timedelta(minutes=5)
+
+    # Prüfen, ob das Token in den nächsten 5 Minuten abläuft
+    if session['ttl_token_expiration_time'] <= time_in_5_minutes:
+        response = refresh_ttl_token()
+        if response:
+            return True
+        else:
+            return False
+    else:
+        return True
+    
+
+def refresh_ttl_token():
+
+
+    url = "https://euapi.ttlock.com/oauth2/token"
+
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+
+    data = {
+        'client_id': current_app.config['CA_CLIENT_ID'],
+        'client_secret': current_app.config['CA_CLIENT_SECRET'],
+        "grant_type": "refresh_token",
+        "refresh_token": session['ca_refresh_token']
+    }
+
+    response = requests.post(url, headers=headers, data=data)
+
+    # Überprüfen der Antwort
+    if response.status_code == 200:
+        new_tokens = response.json()
+        session['ttl_access_token'] = new_tokens['access_token']
+        session['ttl_refresh_token'] = new_tokens['refresh_token']
+        session['ttl_token_expiration_time'] = datetime.now() + timedelta(seconds=new_tokens['expires_in'])
+        return True
+    else:
+        # Fehlerbehandlung
+        return False
+
+

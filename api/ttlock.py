@@ -1,6 +1,9 @@
 import os
 import time
 import requests
+import logging
+
+from flask import session
 
 # LockAPI
 def get_lock_list(client_id, access_token):
@@ -50,7 +53,6 @@ def get_lock_detail(client_id, access_token):
 import requests
 
 def get_ttlock_tokens(client_id, client_secret, username, password):
-    print(f'ClientID: {client_id} \t ClientSec: {client_secret} \t User: {username} \t Pass: {password}')
 
     url = 'https://euapi.ttlock.com/oauth2/token'
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
@@ -92,22 +94,27 @@ def refresh_ttlock_tokens(client_id, client_secret, refresh_tocken):
 
 def open_ttlock(TTL_client_id, TTL_access_token, TTL_lock_id):
 
-    timestampMS = int(time.time() * 1000)
+    try:
+        timestampMS = int(time.time() * 1000)
+        url = f"https://euapi.ttlock.com/v3/lock/unlock"
+        params = {
+            "clientId": TTL_client_id,
+            "accessToken": TTL_access_token,
+            "lockId": TTL_lock_id,
+            "date": timestampMS
+        }
 
-    # Erstellen der URL
-    url = f"https://euapi.ttlock.com/v3/lock/unlock"
+        response = requests.get(url, params=params)
 
-    # Parameter für die Anfrage
-    params = {
-        "clientId": TTL_client_id,
-        "accessToken": TTL_access_token,
-        "lockId": TTL_lock_id,
-        "date": timestampMS
-    }
-
-    # HTTP GET Anfrage senden
-    response = requests.get(url, params=params)
-
-    # Antwort ausgeben
-    print(response.text)
-    return response.json()
+        print(f'Debug Info: {response.status_code}')
+        
+        if response.status_code == 200:
+            return response.json()
+        elif response.status_code == 401:  # Oder welcher Statuscode auch immer für ungültige Tokens steht
+            return "Token ungültig"
+        else:
+            logging.error(f"Fehler beim Öffnen des Schlosses: {response.text}")
+            return None
+    except requests.RequestException as e:
+        logging.error(f"Netzwerk- oder HTTP-Fehler: {e}")
+        return None

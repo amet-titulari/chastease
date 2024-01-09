@@ -2,13 +2,19 @@
 
 import re
 import hashlib
+
 from flask import Blueprint, current_app, session, redirect, request, flash, url_for,render_template
 from flask_login import login_required, current_user
+
+from log_config import logger
+
 from .models import db, Benutzer
 from .forms import BenutzerConfigForm
 from .qrcode import generate_qr
+from .token_refresh import is_ca_token_valid, is_ttl_token_valid
+
 from api.chaster import get_user_profile, get_user_lockid, get_user_lockinfo, upload_lock_image, update_combination_relock
-from api.ttlock import get_ttlock_tokens,get_lock_list,get_lock_detail, open_ttlock
+from api.ttlock import get_ttlock_tokens,get_lock_list,refresh_ttlock_tokens, open_ttlock
 
 import os
 
@@ -17,7 +23,6 @@ benutzer = Blueprint('benutzer', __name__)
 
 def is_md5(s):
     return bool(re.match(r'^[a-fA-F0-9]{32}$', s))
-
 
 @benutzer.route('/config', methods=['GET', 'POST'])
 @login_required
@@ -28,9 +33,6 @@ def config():
     if request.method == 'POST' and form.validate_on_submit():
         
         if form.validate_on_submit():
-
-            if form.TTL_lock_alias.data:
-                benutzer.TTL_lock_alias = form.TTL_lock_alias.data
 
             if form.TTL_username.data:
                 benutzer.TTL_username = form.TTL_username.data
@@ -43,6 +45,9 @@ def config():
                 else:
                     # Direkt zuweisen, wenn es bereits ein MD5-Hash ist
                     benutzer.TTL_password_md5 = form.TTL_password_md5.data
+
+            if form.TTL_lock_alias.data:
+                benutzer.TTL_lock_alias = form.TTL_lock_alias.data
 
         db.session.commit()
         flash('Konfiguration aktualisiert!', 'success')
@@ -80,7 +85,7 @@ def config():
         # Fehlerfall: Zeigen Sie eine Fehlermeldung an
         flash(f'Fehler beim Abrufen der Lock-Daten: {lock_data["error"]}', 'danger')
 
-    lock_info = get_user_lockinfo(benutzer.CA_lock_id, session['access_token'])
+    lock_info = get_user_lockinfo(benutzer.CA_lock_id, session['ca_access_token'])
 
     if lock_info['success']:
         # Überprüfen, ob die Antwort die notwendigen 'keyholder' Informationen enthält
@@ -98,18 +103,14 @@ def config():
 
 
     # TT Lockinfo
+    
     if benutzer.TTL_username and benutzer.TTL_password_md5:
-        TT_lock_tokens = get_ttlock_tokens(current_app.config['TTL_CLIENT_ID'], 
-                                        current_app.config['TTL_CLIENT_SECRET'], 
-                                        benutzer.TTL_username, 
-                                        benutzer.TTL_password_md5)
 
-        if TT_lock_tokens['success']:
-            # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
-            #benutzer.TTL_lock_id         = TT_lock_tokens['data']['lockId']
-            benutzer.TTL_access_token    = TT_lock_tokens['data']['access_token']
-            benutzer.TTL_refresh_token   = TT_lock_tokens['data']['refresh_token']
+        ttl_token_is_valid = is_ttl_token_valid()
 
+        if ttl_token_is_valid:
+            
+            print('Token noch gültig')
             TT_lock_list = get_lock_list(current_app.config['TTL_CLIENT_ID'], benutzer.TTL_access_token)
             # Durchsuchen der Liste und Auslesen der lockId, wenn der lockAlias gefunden wird
             lock_id = None
@@ -123,8 +124,6 @@ def config():
                 benutzer.TTL_lock_id = lock_id
 
             db.session.commit()
-        else:
-            pass
         
     # Formulardaten aktualisieren
     form = BenutzerConfigForm(obj=benutzer)
@@ -143,7 +142,7 @@ def relock():
         benutzer.lock_uuid = qrcode['qr_uuid']
         db.session.commit()
 
-        lock_info = get_user_lockinfo(benutzer.CA_lock_id, session['access_token'])
+        lock_info = get_user_lockinfo(benutzer.CA_lock_id, session['ca_access_token'])
 
         #print(lock_info)
 
@@ -164,12 +163,12 @@ def relock():
                     if opened_at is not None:
                         filepath = f'qrcodes/{benutzer.lock_uuid}.png'
 
-                        lockupload = upload_lock_image(session['access_token'],filepath )
+                        lockupload = upload_lock_image(session['ca_access_token'],filepath )
                         if lockupload['success']:  
                             combination_id = lockupload['data']['combinationId']
                             print(combination_id)
                             
-                            udt = update_combination_relock(benutzer.CA_lock_id, session['access_token'], combination_id)
+                            udt = update_combination_relock(benutzer.CA_lock_id, session['ca_access_token'], combination_id)
                             if udt['success']:
                                 flash(f'Dein Chaster-Lock ist wieder verschlossen', 'success')
 
@@ -190,10 +189,13 @@ def relock():
 
 
 @benutzer.route('/ttl_open/<uid>')
+@login_required
 def ttl_open(uid):
     benutzer = Benutzer.query.filter_by(id=current_user.id).first()
 
+
     if benutzer.lock_uuid == uid:
+        refresh_ttlock_tokens(client_id, client_secret, refresh_tocken)
         open_ttlock(current_app.config['TTL_CLIENT_ID'], benutzer.TTL_access_token,benutzer.TTL_lock_id)
 
         flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')

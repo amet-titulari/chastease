@@ -14,8 +14,9 @@ requests = "*"
 werkzeug = "*"
 authlib = "*"
 qrcode = "*"
-
-[dev-packages]
+gunicorn = "*"
+tzdata = "*"
+pytz = "*"
 
 [requires]
 python_version = "3.12"

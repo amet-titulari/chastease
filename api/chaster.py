@@ -119,9 +119,7 @@ def update_combination_relock(ca_lock_id, ca_access_token, ca_combination):
 
     try:
         response = requests.post(url, headers=headers, json=data)
-        print(response.status_code)
-        print(response.text)
-    
+  
         response.raise_for_status()  # Löst eine Exception aus, wenn der HTTP-Statuscode kein 200 ist
         result = response.json()
         return {'success': True, 'data': result}
