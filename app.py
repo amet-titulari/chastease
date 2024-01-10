@@ -1,8 +1,8 @@
 import requests
 import os
 
-from flask import Flask, redirect, request, render_template, url_for, session
-from flask_login import LoginManager, login_user, logout_user
+from flask import Flask, redirect, request, render_template, url_for, session, flash
+from flask_login import LoginManager, login_user, logout_user, current_user
 from flask_migrate import Migrate
 
 from helper.log_config import logger
@@ -51,6 +51,7 @@ def load_user(user_id):
 @app.route('/')
 def home():
     #logger.info('Homepage aufgerufen!')
+    flash(f'Benutzerinfo {current_user.__dict__}','info')
     return render_template('index.html')
 
 @app.route('/login')
@@ -97,9 +98,13 @@ def callback():
     session['ca_token_expiration_time'] = datetime.now() + timedelta(seconds=token_data['expires_in'])
 
     benutzer = Benutzer.query.filter_by(username=username).first()
+    
     if not benutzer:
         benutzer = Benutzer(username=username, role=role)
         db.session.add(benutzer)
+        flash(f'Benutzer {username} erstellt','success')
+        db.session.commit()
+        login_user(benutzer)    
         return redirect(url_for('benutzer.config'))
     
 

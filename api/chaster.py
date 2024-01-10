@@ -1,5 +1,9 @@
 import requests
-import json
+
+from helper.log_config import logger
+
+from flask_login import current_user
+
 
 def get_user_profile(ca_username, client_id, client_secret):
     url = f'https://api.chaster.app/users/profile/{ca_username}'
@@ -46,7 +50,6 @@ def get_user_lockid(ca_userid, client_id, client_secret):
         # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
         return {'success': False, 'error': f'Netzwerk- oder HTTP-Fehler: {str(e)}'}
 
-
 def get_user_lockinfo(ca_lockid, ca_access_token):
     url = f'https://api.chaster.app/locks/{ca_lockid}'
     headers = {
@@ -68,8 +71,6 @@ def get_user_lockinfo(ca_lockid, ca_access_token):
     except requests.exceptions.RequestException as e:
         # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
         return {'success': False, 'error': f'Netzwerk- oder HTTP-Fehler: {str(e)}'}
-    
-import requests
 
 def upload_lock_image(ca_access_token, file_path):
     url = "https://api.chaster.app/combinations/image"

@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Kopieren Sie den restlichen Code in das Arbeitsverzeichnis im Container
 COPY . .
+COPY .env_prod .env
 
 # Setzen Sie Umgebungsvariablen
 ENV FLASK_APP=app.py
