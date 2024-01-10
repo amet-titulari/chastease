@@ -31,7 +31,7 @@ def is_ca_token_valid():
 
 def is_ttl_token_valid():
     # Aktuelle UTC-Zeit als zeitzone-bewusstes Objekt
-    current_time = datetime.now()
+    current_time = datetime.now(ZoneInfo("CET"))
 
     # Zeitpunkt in 5 Minuten
     time_in_5_minutes = current_time + timedelta(minutes=5)
@@ -100,7 +100,6 @@ def refresh_ttl_token():
             session['ttl_token_expiration_time'] = datetime.now() + timedelta(seconds=new_tokens['expires_in'])
             return True
     except:
-        print(f'ERROR: {response.json()}')
         return False
 
 

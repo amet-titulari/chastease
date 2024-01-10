@@ -51,7 +51,6 @@ def load_user(user_id):
 @app.route('/')
 def home():
     #logger.info('Homepage aufgerufen!')
-    flash(f'Benutzerinfo {current_user.__dict__}','info')
     return render_template('index.html')
 
 @app.route('/login')
@@ -112,11 +111,17 @@ def callback():
     db.session.commit()
     login_user(benutzer)
 
-    if benutzer.TTL_username and benutzer.TTL_password_md5:
-        TT_lock_tokens = get_ttlock_tokens(app.config['TTL_CLIENT_ID'], 
-                                           app.config['TTL_CLIENT_SECRET'], 
-                                           benutzer.TTL_username, 
-                                           benutzer.TTL_password_md5)
+    if not benutzer.TTL_username or not benutzer.TTL_password_md5:
+        flash('Benutzername oder Passwort für TTLock fehlt. Bitte aktualisieren Sie Ihre Konfiguration.', 'warning')
+        return redirect(url_for('benutzer.config'))
+    else:
+        
+        TT_lock_tokens = get_ttlock_tokens()
+
+        if 'errcode' in TT_lock_tokens:
+                error_message = TT_lock_tokens.get('errmsg', 'Ein unbekannter Fehler ist aufgetreten.')
+                flash(f'TTLock Config: {error_message}', 'danger') 
+                return redirect(url_for('benutzer.config')) 
         
         if TT_lock_tokens['success']:
             # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
@@ -124,10 +129,6 @@ def callback():
             session['ttl_access_token'] = token_data.get('access_token')
             session['ttl_refresh_token'] = refresh_token
             session['ttl_token_expiration_time'] = datetime.now() + timedelta(seconds=token_data['expires_in'])
-
-            print(f'CA Token Expiration: \t\t{session["ca_token_expiration_time"]} \nTTL Token Expiration: \t\t{session["ttl_token_expiration_time"]}')
-
-
 
     return redirect(url_for('home'))
 

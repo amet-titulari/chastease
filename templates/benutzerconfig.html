@@ -2,16 +2,21 @@
 {% extends 'base.html' %}
 
 {% block content %}
+
+
+
     <div class="container">
-        <h2>Konfiguration</h2>
+        <h1>Konfiguration</h1>
+        <br/>
 
         <form action="{{ url_for('benutzer.config') }}" method="post">
             {{ form.hidden_tag() }}
 
             <!-- Chaster App -->
+            <div id="data-container-ca">Lade Daten von Chaster.app ...
             <div class="form-group">
                 <p></p>
-                <h3>Chaster.app Konfigurationen</h3>
+                <h4>Chaster.app Konfigurationen</h4>
             </div>
 
             <div class="form-group">
@@ -53,12 +58,15 @@
                     <i class="fa-solid fa-circle-info"></i>
                 </span>
             </div>
+            </div>
 
 
             <!-- TTLock Konfiguration -->
+            <div id="data-container-ttl">Lade Daten von TTLock ...
+
             <div class="form-group">
-                <p></p>
-                <h3>TTLock Konfigurationen</h3>
+                <br/><br/>
+                <h4>TTLock Konfigurationen</h4>
             </div>
 
             <div class="form-group">
@@ -84,24 +92,15 @@
                     <i class="fa-solid fa-circle-info"></i>
                 </span>
             </div>
-
-            <div class="form-group">
-                {{ form.TTL_access_token.label(class="form-control-label") }}
-                {{ form.TTL_access_token(class="form-control") }}
-                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="TTLock Acces Token">
-                    <i class="fa-solid fa-circle-info"></i>
-                </span>
             </div>
 
-            <div class="form-group">
-                {{ form.TTL_refresh_token.label(class="form-control-label") }}
-                {{ form.TTL_refresh_token(class="form-control") }}
-                <span class="info-btn" data-toggle="tooltip" data-placement="top" title="TTLock Refresh Token">
-                    <i class="fa-solid fa-circle-info"></i>
-                </span>
-            </div>
+
 
             <button type="submit" class="btn btn-primary">SAVE</button>
         </form>
     </div>
 {% endblock %}
+
+
+    
+    

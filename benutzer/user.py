@@ -27,6 +27,7 @@ def is_md5(s):
 @benutzer.route('/config', methods=['GET', 'POST'])
 @login_required
 def config():
+
     benutzer = Benutzer.query.filter_by(id=current_user.id).first()
     form = BenutzerConfigForm(obj=benutzer)
 
@@ -110,37 +111,41 @@ def config():
         
         if benutzer.TTL_username and benutzer.TTL_password_md5:
 
-            get_ttlock_tokens(current_app.config['TTL_CLIENT_ID'], 
-                              current_app.config['TTL_CLIENT_SECRET'], 
-                              benutzer.TTL_username, 
-                              benutzer.TTL_password_md5)
-
-            TT_lock_list = get_lock_list(current_app.config['TTL_CLIENT_ID'], session['ttl_access_token'])
+            gettoken = get_ttlock_tokens()
             
-            lock_id = None
-
-            if benutzer.TTL_lock_alias:
-                for item in TT_lock_list['data']['list']:
-                    if item.get('lockAlias') == benutzer.TTL_lock_alias:
-                        lock_id = item.get('lockId')
-                        lock_alias = benutzer.TTL_lock_alias
+            if not gettoken.get('success'):
+                benutzer.TTL_username       = None
+                benutzer.TTL_password_md5   = None
+                benutzer.TTL_lock_alias     = None
             else:
-                lock_id = TT_lock_list["data"]["list"][0]['lockId']
-                lock_alias = TT_lock_list["data"]["list"][0]['lockAlias']
-                flash(f'Das erstge TTLock mit dem Alias {lock_alias} wurde ausgewählt!','warning')
-           
+
+                TT_lock_list = get_lock_list(current_app.config['TTL_CLIENT_ID'], session['ttl_access_token'])
+
+                lock_id = None
+
+                if benutzer.TTL_lock_alias:
+                    for item in TT_lock_list['data']['list']:
+                        if item.get('lockAlias') == benutzer.TTL_lock_alias:
+                            lock_id = item.get('lockId')
+                            lock_alias = benutzer.TTL_lock_alias
+                else:
+                    lock_id = TT_lock_list["data"]["list"][0]['lockId']
+                    lock_alias = TT_lock_list["data"]["list"][0]['lockAlias']
+                    flash(f'Das erstge TTLock mit dem Alias {lock_alias} wurde ausgewählt!','warning')
+            
 
 
-            # Überprüfen und Zuweisen der lockId
-            if lock_id is not None:
-                benutzer.TTL_lock_id = lock_id
-                benutzer.TTL_lock_alias = lock_alias
+                # Überprüfen und Zuweisen der lockId
+                if lock_id is not None:
+                    benutzer.TTL_lock_id = lock_id
+                    benutzer.TTL_lock_alias = lock_alias
 
-            db.session.commit()
-        
+                db.session.commit()
+            
         # Formulardaten aktualisieren
         form = BenutzerConfigForm(obj=benutzer)
         return render_template('benutzerconfig.html', form=form)
+
 
 @benutzer.route('/relock')
 @login_required
@@ -179,13 +184,10 @@ def relock():
                         lockupload = upload_lock_image(session['ca_access_token'],filepath )
                         if lockupload['success']:  
                             combination_id = lockupload['data']['combinationId']
-                            print(combination_id)
                             
                             udt = update_combination_relock(benutzer.CA_lock_id, session['ca_access_token'], combination_id)
                             if udt['success']:
                                 flash(f'Dein Chaster-Lock ist wieder verschlossen', 'success')
-
-
                         else:
                             print("Upload nicht ok!")
 

@@ -23,5 +23,3 @@ class Benutzer(UserMixin, db.Model):
     TTL_password_md5    = db.Column(db.String(128))
     TTL_lock_alias      = db.Column(db.String(128))
     TTL_lock_id         = db.Column(db.String(128))
-    TTL_access_token    = db.Column(db.String(256))
-    TTL_refresh_token   = db.Column(db.String(256))
