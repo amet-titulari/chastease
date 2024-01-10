@@ -211,19 +211,16 @@ def ttl_open(uid):
 
     if benutzer.lock_uuid == uid:
         
-        response = get_ttlock_tokens(current_app.config['TTL_CLIENT_ID'], 
-                                        current_app.config['TTL_CLIENT_SECRET'], 
-                                        benutzer.TTL_username, 
-                                        benutzer.TTL_password_md5)
+        if is_ca_token_valid():
 
-        open_ttlock()
-        flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')
+            open_ttlock()
+            flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')
 
-        #Nach Gebrauch UUID löschen um eine zweite Öffnung zu verhindern
-        #benutzer.lock_uuid = ''
-        #db.session.commit()
+            #Nach Gebrauch UUID löschen um eine zweite Öffnung zu verhindern
+            #benutzer.lock_uuid = ''
+            #db.session.commit()
 
-    else:
-        flash(f'Die UID {uid} ist nicht korrekt das TTLock bleibt verschlossen!', 'danger')
-    
+        else:
+            flash(f'Die UID {uid} ist nicht korrekt das TTLock bleibt verschlossen!', 'danger')
+        
     return redirect(url_for('home'))
