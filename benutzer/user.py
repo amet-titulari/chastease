@@ -8,12 +8,13 @@ from flask_login import login_required, current_user
 
 from helper.log_config import logger
 
-from .models import db, Benutzer
+from .models import db, Benutzer, CA_Lock_History
 from .forms import BenutzerConfigForm
 from .qrcode import generate_qr
 from .token_refresh import is_ca_token_valid, is_ttl_token_valid
 
-from api.chaster import get_user_profile, get_user_lockid, get_user_lockinfo, upload_lock_image, update_combination_relock
+from api.chaster import *
+
 from api.ttlock import get_ttlock_tokens,get_lock_list, open_ttlock
 
 import os
@@ -206,6 +207,7 @@ def relock():
 @benutzer.route('/ttl_open/<uid>')
 @login_required
 def ttl_open(uid):
+
     benutzer = Benutzer.query.filter_by(id=current_user.id).first()
 
 
@@ -224,3 +226,47 @@ def ttl_open(uid):
             flash(f'Die UID {uid} ist nicht korrekt das TTLock bleibt verschlossen!', 'danger')
         
     return redirect(url_for('home'))
+
+@benutzer.route('/history')
+@login_required
+def get_ca_lockhistory():
+    benutzer = Benutzer.query.filter_by(id=current_user.id).first()
+
+    if benutzer.CA_lasthist_id:
+        lastid = benutzer.CA_lasthist_id
+    else:
+        lastid = None
+
+    history = get_lock_history(lastid)
+
+    if history['success']:
+        for result in history['data']:
+            print(f'ID: {result.get('_id')} Ext: {result.get('extension')}')
+
+            # Erstelle eine neue Instanz von CA_Lock_History
+            new_history_entry = CA_Lock_History(
+                benutzer_id=benutzer.id,
+                hist_id=result.get('_id'),
+                lock_id=result.get('lock'),
+                type=result.get('type'),
+                created_at=result.get('createdAt'),
+                extension=result.get('extension'),
+                title=result.get('title'),
+                description=result.get('description'),
+                icon=result.get('icon')
+            )
+
+            # Füge den neuen Eintrag zur Datenbanksession hinzu
+            db.session.add(new_history_entry)
+
+            # Aktualisiere CA_lasthist_id für den Benutzer
+            benutzer.CA_lasthist_id = result.get('_id')
+
+        # Speichere alle Änderungen in der Datenbank
+        db.session.commit()
+
+        flash('Hat prima geklappt', 'info')
+    else:
+        flash(f'Fehler beim Abrufen der Lock-History', 'danger')
+
+    return render_template('index.html')

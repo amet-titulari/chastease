@@ -1,4 +1,4 @@
-2024-01-10 22:15:39,052 ERROR: Exception on /user/config [GET]
+2024-01-11 11:49:00,377 ERROR: Exception on /user/history [GET]
 Traceback (most recent call last):
   File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
     response = self.full_dispatch_request()
@@ -15,11 +15,14 @@ Traceback (most recent call last):
   File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask_login\utils.py", line 290, in decorated_view
     return current_app.ensure_sync(func)(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\benutzer\user.py", line 130, in config
-    lock_id = TT_lock_list["data"]["list"][0]['lockId']
-              ~~~~~~~~~~~~~~~~~~~~^^^^^^^^
-KeyError: 'list'
-2024-01-10 22:16:59,628 ERROR: Exception on /user/config [GET]
+  File "C:\repos\amet\chastease\benutzer\user.py", line 234, in get_ca_lockhistory
+    history = get_lock_history()
+              ^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\api\chaster.py", line 137, in get_lock_history
+    'Authorization': f'Bearer {current_user.ca_access_token}',
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'Benutzer' object has no attribute 'ca_access_token'
+2024-01-11 12:31:15,934 ERROR: Exception on /user/history [GET]
 Traceback (most recent call last):
   File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
     response = self.full_dispatch_request()
@@ -36,11 +39,14 @@ Traceback (most recent call last):
   File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask_login\utils.py", line 290, in decorated_view
     return current_app.ensure_sync(func)(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\benutzer\user.py", line 131, in config
-    lock_id = TT_lock_list["data"]["list"][0]['lockId']
-              ~~~~~~~~~~~~~~~~~~~~^^^^^^^^
-KeyError: 'list'
-2024-01-10 22:24:24,757 ERROR: Exception on /user/config [GET]
+  File "C:\repos\amet\chastease\benutzer\user.py", line 243, in get_ca_lockhistory
+    history = get_lock_history(lastid)
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\api\chaster.py", line 160, in get_lock_history
+    current_results = response_data['data']['results']
+                      ~~~~~~~~~~~~~^^^^^^^^
+KeyError: 'data'
+2024-01-11 12:32:14,160 ERROR: Exception on /user/history [GET]
 Traceback (most recent call last):
   File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
     response = self.full_dispatch_request()
@@ -57,14 +63,14 @@ Traceback (most recent call last):
   File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask_login\utils.py", line 290, in decorated_view
     return current_app.ensure_sync(func)(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\benutzer\user.py", line 121, in config
-    tt_token = is_ttl_token_valid()
-               ^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\benutzer\token_refresh.py", line 40, in is_ttl_token_valid
-    if session['ttl_token_expiration_time'] >= time_in_5_minutes:
-       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-TypeError: can't compare offset-naive and offset-aware datetimes
-2024-01-10 22:27:57,897 ERROR: Exception on /user/config [GET]
+  File "C:\repos\amet\chastease\benutzer\user.py", line 243, in get_ca_lockhistory
+    history = get_lock_history(lastid)
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\api\chaster.py", line 164, in get_lock_history
+    if not response_data['results']['hasMore']:
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+TypeError: list indices must be integers or slices, not str
+2024-01-11 12:33:25,374 ERROR: Exception on /user/history [GET]
 Traceback (most recent call last):
   File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
     response = self.full_dispatch_request()
@@ -81,14 +87,14 @@ Traceback (most recent call last):
   File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask_login\utils.py", line 290, in decorated_view
     return current_app.ensure_sync(func)(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\benutzer\user.py", line 121, in config
-    tt_token = is_ttl_token_valid()
-               ^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\benutzer\token_refresh.py", line 40, in is_ttl_token_valid
-    if session['ttl_token_expiration_time'] >= time_in_5_minutes:
-       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-TypeError: can't compare offset-naive and offset-aware datetimes
-2024-01-10 22:29:14,911 ERROR: Exception on /user/config [GET]
+  File "C:\repos\amet\chastease\benutzer\user.py", line 243, in get_ca_lockhistory
+    history = get_lock_history(lastid)
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\api\chaster.py", line 167, in get_lock_history
+    if not response_data['results']['hasMore']:
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+TypeError: list indices must be integers or slices, not str
+2024-01-11 12:36:09,101 ERROR: Exception on /user/history [GET]
 Traceback (most recent call last):
   File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
     response = self.full_dispatch_request()
@@ -105,11 +111,14 @@ Traceback (most recent call last):
   File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask_login\utils.py", line 290, in decorated_view
     return current_app.ensure_sync(func)(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\benutzer\user.py", line 135, in config
-    lock_id = TT_lock_list["data"]["list"][0]['lockId']
-              ~~~~~~~~~~~~~~~~~~~~^^^^^^^^
-KeyError: 'list'
-2024-01-10 22:31:26,603 ERROR: Exception on /user/config [GET]
+  File "C:\repos\amet\chastease\benutzer\user.py", line 243, in get_ca_lockhistory
+    history = get_lock_history(lastid)
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\repos\amet\chastease\api\chaster.py", line 167, in get_lock_history
+    if not response_data['results']['hasMore']:
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+TypeError: list indices must be integers or slices, not str
+2024-01-11 12:39:41,591 ERROR: Exception on /user/history [GET]
 Traceback (most recent call last):
   File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
     response = self.full_dispatch_request()
@@ -126,28 +135,7 @@ Traceback (most recent call last):
   File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask_login\utils.py", line 290, in decorated_view
     return current_app.ensure_sync(func)(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\benutzer\user.py", line 136, in config
-    lock_id = TT_lock_list["data"]["list"][0]['lockId']
-              ~~~~~~~~~~~~~~~~~~~~^^^^^^^^
-KeyError: 'list'
-2024-01-10 22:34:34,321 ERROR: Exception on /user/config [GET]
-Traceback (most recent call last):
-  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 1455, in wsgi_app
-    response = self.full_dispatch_request()
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 869, in full_dispatch_request
-    rv = self.handle_user_exception(e)
-         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 867, in full_dispatch_request
-    rv = self.dispatch_request()
-         ^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask\app.py", line 852, in dispatch_request
-    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\.venv\Lib\site-packages\flask_login\utils.py", line 290, in decorated_view
-    return current_app.ensure_sync(func)(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\repos\amet\chastease\benutzer\user.py", line 136, in config
-    lock_id = TT_lock_list["data"]["list"][0]['lockId']
-              ~~~~~~~~~~~~~~~~~~~~^^^^^^^^
-KeyError: 'list'
+  File "C:\repos\amet\chastease\benutzer\user.py", line 245, in get_ca_lockhistory
+    if history['success']:
+       ~~~~~~~^^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
