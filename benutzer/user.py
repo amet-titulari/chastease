@@ -58,7 +58,6 @@ def config():
     if request.method == 'GET':
             
         ca_token_is_valid = is_ca_token_valid()
-
         if ca_token_is_valid:
 
             profile_data = get_user_profile(current_user.username, current_app.config['CA_CLIENT_ID'], current_app.config['CA_CLIENT_SECRET'])
@@ -230,43 +229,18 @@ def ttl_open(uid):
 @benutzer.route('/history')
 @login_required
 def get_ca_lockhistory():
-    benutzer = Benutzer.query.filter_by(id=current_user.id).first()
 
-    if benutzer.CA_lasthist_id:
-        lastid = benutzer.CA_lasthist_id
+    ca_token_is_valid = is_ca_token_valid()
+    if ca_token_is_valid:
+
+        history = get_lock_history()
+
+        if history['success']:
+            flash('Hat prima geklappt', 'info')
+        else:
+            flash(f'Fehler beim Abrufen der Lock-History', 'danger')
+
+        return render_template('index.html')
     else:
-        lastid = None
-
-    history = get_lock_history(lastid)
-
-    if history['success']:
-        for result in history['data']:
-            print(f'ID: {result.get('_id')} Ext: {result.get('extension')}')
-
-            # Erstelle eine neue Instanz von CA_Lock_History
-            new_history_entry = CA_Lock_History(
-                benutzer_id=benutzer.id,
-                hist_id=result.get('_id'),
-                lock_id=result.get('lock'),
-                type=result.get('type'),
-                created_at=result.get('createdAt'),
-                extension=result.get('extension'),
-                title=result.get('title'),
-                description=result.get('description'),
-                icon=result.get('icon')
-            )
-
-            # Füge den neuen Eintrag zur Datenbanksession hinzu
-            db.session.add(new_history_entry)
-
-            # Aktualisiere CA_lasthist_id für den Benutzer
-            benutzer.CA_lasthist_id = result.get('_id')
-
-        # Speichere alle Änderungen in der Datenbank
-        db.session.commit()
-
-        flash('Hat prima geklappt', 'info')
-    else:
-        flash(f'Fehler beim Abrufen der Lock-History', 'danger')
-
-    return render_template('index.html')
+        flash(f'Fehler:{history['error']}', 'danger')
+        return render_template('index.html')

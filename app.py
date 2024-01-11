@@ -4,15 +4,21 @@ import os
 from flask import Flask, redirect, request, render_template, url_for, session, flash
 from flask_login import LoginManager, login_user, logout_user, current_user
 from flask_migrate import Migrate
+from flask_sqlalchemy import SQLAlchemy
 
 from helper.log_config import logger
 
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from benutzer.models import db, Benutzer
+
+from database import db
+from benutzer.models import Benutzer
 from benutzer.user import benutzer
 
+from api.chaster import get_lock_history
 from api.ttlock import get_ttlock_tokens
+
+from benutzer.token_refresh import is_ca_token_valid, is_ttl_token_valid
 
 app = Flask(__name__)
 
@@ -50,8 +56,14 @@ def load_user(user_id):
 
 @app.route('/')
 def home():
-    #logger.info('Homepage aufgerufen!')
-    return render_template('index.html')
+    ca_token_is_valid = is_ca_token_valid()
+    if ca_token_is_valid:
+        history = get_lock_history()
+        if not history['success']:
+            flash(f'Fehler beim Abrufen der Lock-History', 'danger')
+    else:
+        flash(f'Fehler:{history['error']}', 'danger')
+    return render_template('index.html') 
 
 @app.route('/login')
 def login():
