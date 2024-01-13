@@ -6,6 +6,7 @@ class Benutzer(UserMixin, db.Model):
     id                  = db.Column(db.Integer, primary_key=True)
     username            = db.Column(db.String(100), unique=True)
     role                = db.Column(db.String(100), unique=False)
+    avatarUrl           = db.Column(db.String(100), unique=False)
     lock_uuid           = db.Column(db.String(128))
 
     # Konfigurationsfelder für Chaster.app

@@ -8,7 +8,7 @@ from flask_login import current_user
 
 
 from benutzer.models import CA_Lock_History
-from benutzer.token_refresh import is_ca_token_valid
+from benutzer.token_handling import is_ca_token_valid
 
 
 def get_user_profile(ca_username, client_id, client_secret):

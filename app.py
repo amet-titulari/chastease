@@ -1,25 +1,23 @@
 import requests
 import os
+import time
 
 from flask import Flask, redirect, request, render_template, url_for, session, flash
 from flask_login import LoginManager, login_user, logout_user, current_user
 from flask_migrate import Migrate
-from flask_sqlalchemy import SQLAlchemy
 
 from helper.log_config import logger
 
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo  # Python 3.9 und später
 
 from database import db
 from benutzer.models import Benutzer
 from benutzer.user import benutzer
+from benutzer.token_handling import get_ttlock_tokens
 
 from api.chaster import get_lock_history
-from api.ttlock import get_ttlock_tokens
 
-from benutzer.token_refresh import is_ca_token_valid, is_ttl_token_valid
+from benutzer.token_handling import is_ca_token_valid, is_ttl_token_valid
 
 app = Flask(__name__)
 
@@ -100,23 +98,27 @@ def callback():
     user_info = user_info_response.json()
     username = user_info.get('username')  # oder ein anderes relevantes Feld
     role = user_info.get('role')  # oder ein anderes relevantes Feld
+    avatarUrl = user_info.get('avatarUrl')
 
     # Tokens in der Session statt in der Datenbank speichern
     session['ca_access_token'] = access_token
     session['ca_refresh_token'] = refresh_token
-    session['ca_token_expiration_time'] = datetime.now() + timedelta(seconds=token_data['expires_in'])
+    session['ca_token_expiration_time'] = time.time() + token_data['expires_in']
     print(f'Ablauf in Sekunden: {token_data['expires_in']} ')
 
     benutzer = Benutzer.query.filter_by(username=username).first()
     
     if not benutzer:
-        benutzer = Benutzer(username=username, role=role)
+        benutzer = Benutzer(username=username, role=role, avatarUrl=avatarUrl)
         db.session.add(benutzer)
         flash(f'Benutzer {username} erstellt','success')
         db.session.commit()
         login_user(benutzer)    
         return redirect(url_for('benutzer.config'))
-    
+    else: 
+        benutzer.username = username
+        benutzer.role = role
+        benutzer.avatarUrl = avatarUrl    
 
 
     db.session.commit()
@@ -126,20 +128,20 @@ def callback():
         flash('Benutzername oder Passwort für TTLock fehlt. Bitte aktualisieren Sie Ihre Konfiguration.', 'warning')
         return redirect(url_for('benutzer.config'))
     else:
-        if is_ttl_token_valid:
-            TT_lock_tokens = get_ttlock_tokens()
 
-            if 'errcode' in TT_lock_tokens:
-                    error_message = TT_lock_tokens.get('errmsg', 'Ein unbekannter Fehler ist aufgetreten.')
-                    flash(f'TTLock Config: {error_message}', 'danger') 
-                    return redirect(url_for('benutzer.config')) 
+        TT_lock_tokens = get_ttlock_tokens()
+
+        if 'errcode' in TT_lock_tokens:
+                error_message = TT_lock_tokens.get('errmsg', 'Ein unbekannter Fehler ist aufgetreten.')
+                flash(f'TTLock Config: {error_message}', 'danger') 
+                return redirect(url_for('benutzer.config')) 
+        
+        if TT_lock_tokens['success']:
+            # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
             
-            if TT_lock_tokens['success']:
-                # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
-                
-                session['ttl_access_token'] = token_data.get('access_token')
-                session['ttl_refresh_token'] = refresh_token
-                session['ttl_token_expiration_time'] = datetime.now() + timedelta(seconds=token_data['expires_in'])
+            session['ttl_access_token'] = token_data.get('access_token')
+            session['ttl_refresh_token'] = refresh_token
+            session['ttl_token_expiration_time'] = time.time() + token_data['expires_in']
                 
 
     return redirect(url_for('home'))
