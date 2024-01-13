@@ -56,58 +56,55 @@ def config():
         return redirect(url_for('benutzer.config'))
 
     if request.method == 'GET':
-            
-        ca_token_is_valid = is_ca_token_valid()
-        if ca_token_is_valid:
+        
+        profile_data = get_user_profile(current_user.username, current_app.config['CA_CLIENT_ID'], current_app.config['CA_CLIENT_SECRET'])
 
-            profile_data = get_user_profile(current_user.username, current_app.config['CA_CLIENT_ID'], current_app.config['CA_CLIENT_SECRET'])
+        if profile_data['success']:
+            # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
+            benutzer.CA_user_id = profile_data['data'].get('_id')
+            benutzer.CA_username = profile_data['data'].get('username')
+            db.session.commit()
+        else:
+            # Fehlerfall: Zeigen Sie eine Fehlermeldung an
+            flash(f'Fehler beim Abrufen des Benutzerprofils: {profile_data["error"]}', 'danger')
 
-            if profile_data['success']:
-                # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
-                benutzer.CA_user_id = profile_data['data'].get('_id')
-                benutzer.CA_username = profile_data['data'].get('username')
+        # Zweiter API-Aufruf für Lock-Daten 
+        lock_data = get_user_lockid(benutzer.CA_user_id, current_app.config['CA_CLIENT_ID'], current_app.config['CA_CLIENT_SECRET'])
+
+        if lock_data['success']:
+            # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
+            # Stellen Sie sicher, dass die Antwort die erwarteten Daten enthält
+            if lock_data['data']:
+                benutzer.CA_lock_id = lock_data['data'][0].get('_id')
+                benutzer.CA_lock_status = lock_data['data'][0].get('status')
+                benutzer.CA_lock_combination = lock_data['data'][0].get('combination')
                 db.session.commit()
             else:
-                # Fehlerfall: Zeigen Sie eine Fehlermeldung an
-                flash(f'Fehler beim Abrufen des Benutzerprofils: {profile_data["error"]}', 'danger')
+                # Falls die Antwort leer ist oder die erwarteten Daten nicht enthält
+                flash('Die Antwort enthält keine Lock-Daten.', 'warning')
+        else:
+            # Fehlerfall: Zeigen Sie eine Fehlermeldung an
+            logger.error(f'Fehler beim Abrufen der Lock-Daten: {lock_data["error"]}', 'danger')
+            flash(f'Fehler beim Abrufen der Lock-Daten: {lock_data["error"]}', 'danger')
 
-            # Zweiter API-Aufruf für Lock-Daten 
-            lock_data = get_user_lockid(benutzer.CA_user_id, current_app.config['CA_CLIENT_ID'], current_app.config['CA_CLIENT_SECRET'])
+        lock_info = get_user_lockinfo(benutzer.CA_lock_id, session['ca_access_token'])
 
-            if lock_data['success']:
-                # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
-                # Stellen Sie sicher, dass die Antwort die erwarteten Daten enthält
-                if lock_data['data']:
-                    benutzer.CA_lock_id = lock_data['data'][0].get('_id')
-                    benutzer.CA_lock_status = lock_data['data'][0].get('status')
-                    benutzer.CA_lock_combination = lock_data['data'][0].get('combination')
-                    db.session.commit()
-                else:
-                    # Falls die Antwort leer ist oder die erwarteten Daten nicht enthält
-                    flash('Die Antwort enthält keine Lock-Daten.', 'warning')
+        if lock_info['success']:
+            # Überprüfen, ob die Antwort die notwendigen 'keyholder' Informationen enthält
+            if 'keyholder' in lock_info['data']:
+                benutzer.CA_keyholder_id = lock_info['data']['keyholder']['_id']
+                benutzer.CA_keyholdername = lock_info['data']['keyholder']['username']
+
+                db.session.commit()
             else:
-                # Fehlerfall: Zeigen Sie eine Fehlermeldung an
-                logger.error(f'Fehler beim Abrufen der Lock-Daten: {lock_data["error"]}', 'danger')
-                flash(f'Fehler beim Abrufen der Lock-Daten: {lock_data["error"]}', 'danger')
-
-            lock_info = get_user_lockinfo(benutzer.CA_lock_id, session['ca_access_token'])
-
-            if lock_info['success']:
-                # Überprüfen, ob die Antwort die notwendigen 'keyholder' Informationen enthält
-                if 'keyholder' in lock_info['data']:
-                    benutzer.CA_keyholder_id = lock_info['data']['keyholder']['_id']
-                    benutzer.CA_keyholdername = lock_info['data']['keyholder']['username']
-
-                    db.session.commit()
-                else:
-                    # Falls die 'keyholder' Informationen nicht in der Antwort vorhanden sind
-                    flash('Keine Keyholderinformationen vorhanden.', 'info')
-            else:
-                # Fehlerfall: Zeigen Sie eine Fehlermeldung an
-                flash(f'Fehler beim Abrufen der Lock-Informationen: {lock_info["error"]}', 'danger')
+                # Falls die 'keyholder' Informationen nicht in der Antwort vorhanden sind
+                flash('Keine Keyholderinformationen vorhanden.', 'info')
+        else:
+            # Fehlerfall: Zeigen Sie eine Fehlermeldung an
+            flash(f'Fehler beim Abrufen der Lock-Informationen: {lock_info["error"]}', 'danger')
 
 
-        # TT Lockinfo
+    # TT Lockinfo
         
         if benutzer.TTL_username and benutzer.TTL_password_md5:
 
@@ -212,8 +209,6 @@ def ttl_open(uid):
 
     if benutzer.lock_uuid == uid:
         
-        if is_ca_token_valid():
-
             open_ttlock()
             flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')
 
@@ -221,7 +216,7 @@ def ttl_open(uid):
             #benutzer.lock_uuid = ''
             #db.session.commit()
 
-        else:
+    else:
             flash(f'Die UID {uid} ist nicht korrekt das TTLock bleibt verschlossen!', 'danger')
         
     return redirect(url_for('home'))
@@ -230,9 +225,6 @@ def ttl_open(uid):
 @login_required
 def get_ca_lockhistory():
 
-    ca_token_is_valid = is_ca_token_valid()
-    if ca_token_is_valid:
-
         history = get_lock_history()
 
         if history['success']:
@@ -240,7 +232,4 @@ def get_ca_lockhistory():
         else:
             flash(f'Fehler beim Abrufen der Lock-History', 'danger')
 
-        return render_template('index.html')
-    else:
-        flash(f'Fehler:{history['error']}', 'danger')
         return render_template('index.html')

@@ -10,6 +10,7 @@ from helper.log_config import logger
 
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo  # Python 3.9 und später
 
 from database import db
 from benutzer.models import Benutzer
@@ -56,13 +57,10 @@ def load_user(user_id):
 
 @app.route('/')
 def home():
-    ca_token_is_valid = is_ca_token_valid()
-    if ca_token_is_valid:
+    if current_user.is_authenticated:
         history = get_lock_history()
         if not history['success']:
             flash(f'Fehler beim Abrufen der Lock-History', 'danger')
-    else:
-        flash(f'Fehler:{history['error']}', 'danger')
     return render_template('index.html') 
 
 @app.route('/login')
@@ -107,6 +105,7 @@ def callback():
     session['ca_access_token'] = access_token
     session['ca_refresh_token'] = refresh_token
     session['ca_token_expiration_time'] = datetime.now() + timedelta(seconds=token_data['expires_in'])
+    print(f'Ablauf in Sekunden: {token_data['expires_in']} ')
 
     benutzer = Benutzer.query.filter_by(username=username).first()
     
@@ -127,20 +126,21 @@ def callback():
         flash('Benutzername oder Passwort für TTLock fehlt. Bitte aktualisieren Sie Ihre Konfiguration.', 'warning')
         return redirect(url_for('benutzer.config'))
     else:
-        
-        TT_lock_tokens = get_ttlock_tokens()
+        if is_ttl_token_valid:
+            TT_lock_tokens = get_ttlock_tokens()
 
-        if 'errcode' in TT_lock_tokens:
-                error_message = TT_lock_tokens.get('errmsg', 'Ein unbekannter Fehler ist aufgetreten.')
-                flash(f'TTLock Config: {error_message}', 'danger') 
-                return redirect(url_for('benutzer.config')) 
-        
-        if TT_lock_tokens['success']:
-            # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
+            if 'errcode' in TT_lock_tokens:
+                    error_message = TT_lock_tokens.get('errmsg', 'Ein unbekannter Fehler ist aufgetreten.')
+                    flash(f'TTLock Config: {error_message}', 'danger') 
+                    return redirect(url_for('benutzer.config')) 
             
-            session['ttl_access_token'] = token_data.get('access_token')
-            session['ttl_refresh_token'] = refresh_token
-            session['ttl_token_expiration_time'] = datetime.now() + timedelta(seconds=token_data['expires_in'])
+            if TT_lock_tokens['success']:
+                # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
+                
+                session['ttl_access_token'] = token_data.get('access_token')
+                session['ttl_refresh_token'] = refresh_token
+                session['ttl_token_expiration_time'] = datetime.now() + timedelta(seconds=token_data['expires_in'])
+                
 
     return redirect(url_for('home'))
 
