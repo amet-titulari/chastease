@@ -2,97 +2,52 @@
 {% extends 'base.html' %}
 
 {% block content %}
-
-
-            <!-- Form Start -->
-            <div class="container-fluid pt-4 px-4">
-                <div class="row">
-                    <div class="col-sm-12 col-xl-6">
-                        <div class="bg-secondary rounded h-100 p-4">
-                            <h6 class="mb-4">Basic Form</h6>
-                            <form action="{{ url_for('benutzer.config') }}" method="post">
-                                {{ form.hidden_tag() }}
-                                <div class="form-group">
-                                    {{ form.CA_username.label(class="form-control-label") }}
-                                    {{ form.CA_username(class="form-control") }}
-                                    <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Your Username you use in chaster.app">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                    </span>
-                                </div>
-
-                                <div class="form-group">
-                                    {{ form.CA_user_id.label(class="form-control-label") }}
-                                    {{ form.CA_user_id(class="form-control") }}
-                                    <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Your Chaster User ID">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                    </span>
-                                </div>
-
-                                <div class="form-group">
-                                    {{ form.CA_lock_id.label(class="form-control-label") }}
-                                    {{ form.CA_lock_id(class="form-control") }}
-                                    <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Your Chaster Lock ID">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                    </span>
-                                </div>
-                                
-                                <div class="form-group">
-                                    {{ form.CA_keyholdername.label(class="form-control-label") }}
-                                    {{ form.CA_keyholdername(class="form-control") }}
-                                    <span class="info-btn" data-toggle="tooltip" data-placement="top" title="The Username of your chaster.app KEYHOLDER">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                    </span>
-                                </div>
-
-                                <div class="form-group">
-                                    {{ form.CA_keyholder_id.label(class="form-control-label") }}
-                                    {{ form.CA_keyholder_id(class="form-control") }}
-                                    <span class="info-btn" data-toggle="tooltip" data-placement="top" title="The ID of your chaster.app KEYHOLDER">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                    </span>
-                              </div>
-
-
-                                <!-- TTLock Konfiguration -->
-
-                                <div class="form-group">
-                                    <br/><br/>
-                                    <h4>TTLock Konfigurationen</h4>
-                                </div>
-
-                                <div class="form-group">
-                                    {{ form.TTL_username.label(class="form-control-label") }}
-                                    {{ form.TTL_username(class="form-control") }}
-                                    <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Your TTLock Username">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                    </span>
-                                </div>
-
-                                <div class="form-group">
-                                    {{ form.TTL_password_md5.label(class="form-control-label") }}
-                                    {{ form.TTL_password_md5(type="password", class="form-control") }}
-                                    <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Your TTLock Password as MD5 Hash">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                    </span>
-                                </div>
-
-                                <div class="form-group">
-                                    {{ form.TTL_lock_alias.label(class="form-control-label") }}
-                                    {{ form.TTL_lock_alias(class="form-control") }}
-                                    <span class="info-btn" data-toggle="tooltip" data-placement="top" title="Your TTLock Alias">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                    </span>
-                                </div>
-
-
-                                <button type="submit" class="btn btn-primary">SAVE</button>
-                            </form>
+    <!-- Form Start -->
+    <div class="container-fluid pt-4 px-4">
+        <div class="row w-100">
+            <div class="col-12">
+                <div class="bg-secondary rounded h-100 w-100 p-4">
+                    <form action="{{ url_for('benutzer.config') }}" method="post">
+                        {{ form.hidden_tag() }}
+                        
+                        <h6 class="mb-4 text-start">Chaster.app Benutzer</h6>
+                        <!-- Chaster App Konfiguration -->
+                        <div class="form-floating mb-3 w-100">
+                            {{ form.CA_username(class="form-control", id="floatingCAUsername", placeholder="CA Username") }}
+                            {{ form.CA_username.label(class="form-label", for="floatingCAUsername") }}
                         </div>
-                    </div>
+
+                        <div class="form-floating mb-3 w100">
+                            {{ form.CA_keyholdername(class="form-control", id="floatingCAKeyholdername", placeholder="CA Keyholder Name") }}
+                            {{ form.CA_keyholdername.label(class="form-label", for="floatingCAKeyholdername") }}
+                        </div>
+
+                        <!-- TTLock Konfigurationen -->
+                        <h6 class="mb-4 text-start">TTLock Konfiguration</h6>
+
+                        <div class="form-floating mb-3 w-100">
+                            {{ form.TTL_username(class="form-control", id="floatingTTLUsername", placeholder="TTL Username") }}
+                            {{ form.TTL_username.label(class="form-label", for="floatingTTLUsername") }}
+                        </div>
+
+                        <div class="form-floating mb-3 w-100">
+                            {{ form.TTL_password_md5(type="password", class="form-control", id="floatingTTLPasswordMD5", placeholder="TTL Password MD5") }}
+                            {{ form.TTL_password_md5.label(class="form-label", for="floatingTTLPasswordMD5") }}
+                        </div>
+
+                        <div class="form-floating mb-3 w-100">
+                            {{ form.TTL_lock_alias(class="form-control", id="floatingTTLLockAlias", placeholder="TTL Lock Alias") }}
+                            {{ form.TTL_lock_alias.label(class="form-label", for="floatingTTLLockAlias") }}
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">SAVE</button>
+                    </form>
                 </div>
             </div>
+        </div>
+    </div>
 
-                    {% endblock %}
+    {% endblock %}
 
 
                         

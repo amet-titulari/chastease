@@ -21,7 +21,19 @@
                 {% endif %}
 
                 <div class="navbar-nav w-100">
-                    <a href="/static/index.html" class="nav-item nav-link active"><i class="fa fa-tachometer-alt me-2"></i>Dashboard</a>
+                    <a href="/" class="nav-item nav-link"><i class="fa fa-home me-2"></i>home</a>
+                    <hr>
+                    <div class="nav-item dropdown">
+                        <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown"><i class="fa fa-user me-2"></i>User</a>
+                        <div class="dropdown-menu bg-transparent border-0">
+                            <a href="/user/config" class="dropdown-item">Konfiguration</a>
+                            <a href="/user/relock" class="dropdown-item">Typography</a>
+                            <a href="/static/element.html" class="dropdown-item">Other Elements</a>
+                        </div>
+                    </div>
+
+                    <hr>
+
                     <div class="nav-item dropdown">
                         <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown"><i class="fa fa-laptop me-2"></i>Elements</a>
                         <div class="dropdown-menu bg-transparent border-0">

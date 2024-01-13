@@ -187,7 +187,6 @@ def get_lock_history():
                 lastId = current_results[-1]['_id']
 
             except requests.exceptions.RequestException as e:
-                print(f'Fehler bei der HTTP-Anfrage: {e}')
                 return {'success': False, 'error': str(e)}
 
         # Reihenfolge der gesammelten Ergebnisse umkehren
@@ -212,8 +211,6 @@ def get_lock_history():
                         icon=result.get('icon')
                     )
                 
-                print(f'Neuer Eintrag: {new_history_entry.hist_id}\t{new_history_entry.extension}')
-
                 db.session.add(new_history_entry)
 
         # Commit der Änderungen an der Datenbank

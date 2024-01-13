@@ -29,7 +29,6 @@ def get_lock_list(client_id, access_token):
             # Versuchen, die Antwort als JSON zu interpretieren
             result = response.json()
         else:
-            print(f"Fehler: HTTP-Status {response.status_code}")
             return {'success': False, 'data': response.text}
 
         return {'success': True, 'data': result}
@@ -53,7 +52,6 @@ def get_lock_detail(client_id, access_token):
             # Versuchen, die Antwort als JSON zu interpretieren
             result = response.json()
         else:
-            print(f"Fehler: HTTP-Status {response.status_code}")
             return {'success': False, 'data': response.text}
 
         return {'success': True, 'data': result}

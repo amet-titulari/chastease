@@ -127,8 +127,6 @@ def relock():
 
         lock_info = get_user_lockinfo(benutzer.CA_lock_id, session['ca_access_token'])
 
-        #print(lock_info)
-
         if lock_info['success']:
             # Zugriff auf das 'data'-Feld
             data = lock_info['data']
@@ -154,7 +152,7 @@ def relock():
                             if udt['success']:
                                 flash(f'Dein Chaster-Lock ist wieder verschlossen', 'success')
                         else:
-                            print("Upload nicht ok!")
+                            flash('Upload nicht ok!', 'success')
 
 
 

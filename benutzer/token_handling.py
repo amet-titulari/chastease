@@ -21,7 +21,6 @@ def is_ca_token_valid():
         time_in_5_minutes = time.time() + (5 * 60)
 
         # Prüfen, ob das Token in den nächsten 5 Minuten abläuft
-        print(f'\nSession\t\t: {expiration_time} \nPrüfung 5min\t: {time_in_5_minutes}\n\n')
         
         if expiration_time < time_in_5_minutes:
             response = refresh_ca_token()
@@ -68,7 +67,6 @@ def is_ttl_token_valid():
         time_in_5_minutes = time.time() + (5 * 60)
 
         # Prüfen, ob das Token in den nächsten 5 Minuten abläuft
-        print(f'\nSession\t\t: {expiration_time} \nPrüfung 5min\t: {time_in_5_minutes}\n\n')
         if expiration_time < time_in_5_minutes:
             response = refresh_ttl_token()
             return bool(response)

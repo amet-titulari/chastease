@@ -16,9 +16,6 @@ def generate_qr():
 
     data    = qr_base + '/user/ttl_open/' + qr_uuid
 
-    print(f'\n\n{data}\n')
-    
-
     try:
 
         # QR-Code erstellen

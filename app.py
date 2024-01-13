@@ -104,7 +104,6 @@ def callback():
     session['ca_access_token'] = access_token
     session['ca_refresh_token'] = refresh_token
     session['ca_token_expiration_time'] = time.time() + token_data['expires_in']
-    print(f'Ablauf in Sekunden: {token_data['expires_in']} ')
 
     benutzer = Benutzer.query.filter_by(username=username).first()
     
