@@ -39,20 +39,21 @@
 
 
         <!-- Sidebar Start -->
-        {% include 'sidebar.html' %}
+        {% include 'ca_extension/sidebar.html' %}
+        
+        
         <!-- Sidebar End -->
 
 
         <!-- Content Start -->
         <div class="content">
-            <!-- Navbar Start -->
-            {% include 'navbar.html' %}
-            <!-- Navbar End -->
+
+            
 
             <!-- Inner Content -->
 
-            <div class="container-fluid pt-4 px-4">
-                <div class="row vh-20 bg-secondary rounded align-items-center justify-content-center mx-0">
+            <div class="container-fluid pt-4 px-4 " >
+                <div class="row h-20 bg-secondary rounded align-items-center justify-content-center mx-0 LockCard">
                     <div class="col-md-6 text-center p-4">
                         
                         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -71,8 +72,8 @@
             </div>
 
 
-            <div class="container-fluid pt-4 px-4 full-height">
-                <div class="row vh-80 bg-secondary rounded align-items-center justify-content-center mx-0">
+            <div class="container-fluid pt-4 px-4 full-height ">
+                <div class="row h-80 bg-secondary rounded align-items-center justify-content-center mx-0 LockCard">
                     <div class="col-md-6 text-center p-4">
                         
                         {% block content %}{% endblock %}

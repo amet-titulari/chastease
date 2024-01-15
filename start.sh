@@ -7,8 +7,8 @@ set -e
 if [ ! -f ./instance/database.sqlite ]; then
     echo "database.sqlite existiert nicht, führe Initialisierungen aus..."
     python init_db.py
-    #flask db init
-    #flask db migrate
+    flask db init
+    flask db migrate
     flask db upgrade
 else
     echo "database.sqlite existiert bereits, führe nur Upgrade aus..."

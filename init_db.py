@@ -1,2 +1,6 @@
-from app import db  # Ersetzen Sie "IhrerApp" durch den Namen Ihrer Flask-App
-db.create_all()
+from app import app
+from database import db
+
+# Erstellen eines Anwendungskontextes
+with app.app_context():
+    db.create_all()

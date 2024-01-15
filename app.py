@@ -11,13 +11,21 @@ from helper.log_config import logger
 from dotenv import load_dotenv
 
 from database import db
+
+from benutzer import benutzer
 from benutzer.models import Benutzer
-from benutzer.user import benutzer
+from benutzer.routes import benutzer
 from benutzer.token_handling import get_ttlock_tokens
+
+from ca_extension import ca_extension
+
+app = Flask(__name__)
+# Weitere Konfigurationen und Initialisierungen...
+
+
 
 from api.chaster import get_lock_history
 
-from benutzer.token_handling import is_ca_token_valid, is_ttl_token_valid
 
 app = Flask(__name__)
 
@@ -27,12 +35,15 @@ app.config['BASE_URL'] = os.getenv('BASE_URL')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['LOG_LEVEL'] = os.getenv('LOG_LEVEL')
+
 app.config['CA_CLIENT_ID'] = os.getenv('CA_CLIENT_ID')
 app.config['CA_CLIENT_SECRET'] = os.getenv('CA_CLIENT_SECRET')
 app.config['CA_BASE_ENDPOINT'] = os.getenv('CA_BASE_ENDPOINT')
 app.config['CA_AUTHORIZATION_SCOPE'] = os.getenv('CA_AUTHORIZATION_SCOPE')
 app.config['CA_AUTHORIZATION_ENDPOINT'] = os.getenv('CA_AUTHORIZATION_ENDPOINT')
 app.config['CA_TOKEN_ENDPOINT'] = os.getenv('CA_TOKEN_ENDPOINT')
+app.config['CA_DEV_TOKEN'] = os.getenv('CA_DEV_TOKEN')
+
 app.config['TTL_CLIENT_ID'] = os.getenv('TTL_CLIENT_ID')
 app.config['TTL_CLIENT_SECRET'] = os.getenv('TTL_CLIENT_SECRET')
 
@@ -46,8 +57,9 @@ login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
 
-# Registrierung des benutzer-Blueprints
+# Registrierung der Blueprints
 app.register_blueprint(benutzer, url_prefix='/user')
+app.register_blueprint(ca_extension, url_prefix='/extension')
 
 @login_manager.user_loader
 def load_user(user_id):

@@ -1,10 +1,26 @@
 /********** Template CSS **********/
 
+body {
+    background-color: #272533;
+    color: #fff;
+    margin: 0;
+    text-align: left
+}
+
+.LockCard {
+    background-color: #343241;
+    border-radius: 30px;
+    box-shadow: 0 4px 8px rgba(0,0,0,.2);
+    padding: 10px 15px;
+    position: relative
+}
+
+
 :root {
     --primary: #a197a7;
     --secondary: #191C24;
     --light: #e5fdff;
-    --dark: #000000;
+    --dark: ##272533;
 }
 
 .back-to-top {
