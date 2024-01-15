@@ -103,6 +103,7 @@ def callback():
     else:
 
         TT_lock_tokens = get_ttlock_tokens()
+        print(TT_lock_tokens)
 
         if 'errcode' in TT_lock_tokens:
                 error_message = TT_lock_tokens.get('errmsg', 'Ein unbekannter Fehler ist aufgetreten.')
@@ -111,10 +112,8 @@ def callback():
         
         if TT_lock_tokens['success']:
             # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
-            
-            session['ttl_access_token'] = TT_lock_tokens.get('access_token')
-            session['ttl_refresh_token'] = TT_lock_tokens.get('refresh_token')
-            session['ttl_token_expiration_time'] = time.time() + TT_lock_tokens['expires_in']
+            pass            
+
                 
 
     return redirect(url_for('home'))
