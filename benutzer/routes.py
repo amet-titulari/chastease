@@ -11,11 +11,9 @@ from helper.log_config import logger
 from .models import db, Benutzer, CA_Lock_History
 from .forms import BenutzerConfigForm
 from .qrcode import generate_qr
-from .token_handling import is_ca_token_valid, is_ttl_token_valid
-
-from api.chaster import *
 
 from api.ttlock import get_lock_list, open_ttlock
+
 from benutzer.token_handling import get_ttlock_tokens
 
 benutzer = Blueprint('benutzer', __name__)
@@ -26,6 +24,9 @@ def is_md5(s):
 @benutzer.route('/config', methods=['GET', 'POST'])
 @login_required
 def config():
+
+    from api.chaster import get_user_profile, get_user_lockid, get_user_lockinfo
+
     benutzer = Benutzer.query.filter_by(id=current_user.id).first()
     form = BenutzerConfigForm(obj=benutzer)
 
@@ -39,8 +40,9 @@ def config():
                                          else form.TTL_password_md5.data)
 
         benutzer.TTL_lock_alias = form.TTL_lock_alias.data or benutzer.TTL_lock_alias
-
         db.session.commit()
+        form = BenutzerConfigForm(obj=benutzer)
+
         flash('Konfiguration aktualisiert!', 'success')
 
     # GET-Anfrage oder POST-Anfrage mit ungültigem Formular
@@ -116,6 +118,8 @@ def config():
 @login_required
 def relock():
 
+    from api.chaster import get_user_lockinfo, update_combination_relock, upload_lock_image
+
     benutzer = Benutzer.query.filter_by(id=current_user.id).first()
 
 
@@ -190,6 +194,8 @@ def ttl_open(uid):
 @benutzer.route('/history')
 @login_required
 def get_ca_lockhistory():
+        
+        from api.chaster import get_lock_history
 
         history = get_lock_history()
 

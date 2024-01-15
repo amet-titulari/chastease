@@ -1,4 +1,4 @@
-import requests
+
 import os
 import time
 
@@ -11,6 +11,8 @@ from helper.log_config import logger
 from dotenv import load_dotenv
 
 from database import db
+
+from api.chaster import handler_callback, get_auth_userinfo
 
 from benutzer import benutzer
 from benutzer.models import Benutzer
@@ -51,8 +53,6 @@ app.config['TTL_CLIENT_SECRET'] = os.getenv('TTL_CLIENT_SECRET')
 db.init_app(app)
 migrate = Migrate(app, db)
 
-CA_REDIRECT_URI = app.config['BASE_URL'] + 'callback'
-
 login_manager = LoginManager()
 login_manager.login_view = 'login'
 login_manager.init_app(app)
@@ -75,7 +75,7 @@ def home():
 
 @app.route('/login')
 def login():
-    authorization_url = f"{app.config['CA_AUTHORIZATION_ENDPOINT']}?response_type=code&scope={app.config['CA_AUTHORIZATION_SCOPE']}&client_id={app.config['CA_CLIENT_ID']}&redirect_uri={CA_REDIRECT_URI}"
+    authorization_url = f"{app.config['CA_AUTHORIZATION_ENDPOINT']}?response_type=code&scope={app.config['CA_AUTHORIZATION_SCOPE']}&client_id={app.config['CA_CLIENT_ID']}&redirect_uri={app.config['BASE_URL'] + 'callback'}"
     return redirect(authorization_url)
 
 @app.route('/logout')
@@ -87,54 +87,16 @@ def logout():
 def callback():
     code = request.args.get('code')
 
-    token_response = requests.post(
-        app.config['CA_TOKEN_ENDPOINT'],
-        data={
-            'grant_type': 'authorization_code',
-            'code': code,
-            'redirect_uri': CA_REDIRECT_URI,
-            'client_id': app.config['CA_CLIENT_ID'],
-            'client_secret': app.config['CA_CLIENT_SECRET']
-        }
-    )
-    token_data = token_response.json()
-    access_token = token_data.get('access_token')
-    refresh_token = token_data.get('refresh_token')
+    res_handler_calback = handler_callback(code)
+    if res_handler_calback['success']:
+        res_auth_info = get_auth_userinfo()
+        print(res_auth_info)
+        if not res_auth_info['success']:
+            flash(f'Benutzeranmeldung fehlgeschlagen','danger')
+    else:
+        flash(f'Error: Callback Handler!')
 
-    user_info_url = f"{app.config['CA_BASE_ENDPOINT']}/auth/profile"
-    user_info_response = requests.get(
-        user_info_url, 
-        headers={'Authorization': f'Bearer {access_token}'}
-    )
-
-    user_info = user_info_response.json()
-    username = user_info.get('username')  # oder ein anderes relevantes Feld
-    role = user_info.get('role')  # oder ein anderes relevantes Feld
-    avatarUrl = user_info.get('avatarUrl')
-
-    # Tokens in der Session statt in der Datenbank speichern
-    session['ca_access_token'] = access_token
-    session['ca_refresh_token'] = refresh_token
-    session['ca_token_expiration_time'] = time.time() + token_data['expires_in']
-
-    benutzer = Benutzer.query.filter_by(username=username).first()
-    
-    if not benutzer:
-        benutzer = Benutzer(username=username, role=role, avatarUrl=avatarUrl)
-        db.session.add(benutzer)
-        flash(f'Benutzer {username} erstellt','success')
-        db.session.commit()
-        login_user(benutzer)    
-        return redirect(url_for('benutzer.config'))
-    else: 
-        benutzer.username = username
-        benutzer.role = role
-        benutzer.avatarUrl = avatarUrl    
-
-
-    db.session.commit()
-    login_user(benutzer)
-
+    benutzer = Benutzer.query.filter_by(username=session['username']).first()
     if not benutzer.TTL_username or not benutzer.TTL_password_md5:
         flash('Benutzername oder Passwort für TTLock fehlt. Bitte aktualisieren Sie Ihre Konfiguration.', 'warning')
         return redirect(url_for('benutzer.config'))
@@ -150,9 +112,9 @@ def callback():
         if TT_lock_tokens['success']:
             # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
             
-            session['ttl_access_token'] = token_data.get('access_token')
-            session['ttl_refresh_token'] = refresh_token
-            session['ttl_token_expiration_time'] = time.time() + token_data['expires_in']
+            session['ttl_access_token'] = TT_lock_tokens.get('access_token')
+            session['ttl_refresh_token'] = TT_lock_tokens.get('refresh_token')
+            session['ttl_token_expiration_time'] = time.time() + TT_lock_tokens['expires_in']
                 
 
     return redirect(url_for('home'))

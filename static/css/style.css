@@ -117,6 +117,13 @@ body {
         width: 100%;
         margin-left: 0;
     }
+    .nav-link .fa {
+        display: block; /* Icons anzeigen */
+    }
+    .nav-link span {
+        display: none; /* Text in Links ausblenden */
+    }
+    /* Weitere Stile für kleine Bildschirme */
 }
 
 @media (max-width: 991.98px) {
@@ -137,12 +144,13 @@ body {
 
 /*** Navbar ***/
 .sidebar .navbar .navbar-nav .nav-link {
-    padding: 7px 20px;
+    padding: 7px 7px; 
     color: var(--light);
     font-weight: 500;
     border-left: 3px solid var(--secondary);
     border-radius: 0 30px 30px 0;
     outline: none;
+    width: 100%;
 }
 
 .sidebar .navbar .navbar-nav .nav-link:hover,

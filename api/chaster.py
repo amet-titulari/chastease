@@ -1,15 +1,84 @@
 import requests
+import time
 
-from app import db
+from database import db
 from helper.log_config import logger
 
 from flask import current_app, session
-from flask_login import current_user
+from flask_login import current_user, login_user
 
-
-from benutzer.models import CA_Lock_History
+from benutzer.models import Benutzer,CA_Lock_History
 from benutzer.token_handling import is_ca_token_valid
 
+
+def handler_callback(code):
+
+    try:
+        
+        token_response = requests.post(
+            current_app.config['CA_TOKEN_ENDPOINT'],
+            data={
+                'grant_type': 'authorization_code',
+                'code': code,
+                'redirect_uri': current_app.config['BASE_URL'] + 'callback',
+                'client_id': current_app.config['CA_CLIENT_ID'],
+                'client_secret': current_app.config['CA_CLIENT_SECRET']
+            }
+        )
+
+        token_data = token_response.json()
+
+        session['ca_access_token'] = token_data.get('access_token')
+        session['ca_refresh_token'] = token_data.get('refresh_token')
+        session['ca_token_expiration_time'] = time.time() + token_data['expires_in']
+
+        return {'success': True}        
+
+    except requests.exceptions.RequestException as e:
+        # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
+
+        return {'success': False, 'error': f'ERROR: {str(e)}'} 
+
+def get_auth_userinfo():
+    check = is_ca_token_valid()
+    if check:
+
+        try:
+        
+            user_info_url = f"{current_app.config['CA_BASE_ENDPOINT']}/auth/profile"
+
+            user_info_response = requests.get(
+                user_info_url, 
+                headers={'Authorization': f'Bearer {session['ca_access_token']}'}
+            )
+
+            user_info = user_info_response.json()
+
+            username = user_info.get('username')  # oder ein anderes relevantes Feld
+            session['username'] = username
+            role = user_info.get('role')  # oder ein anderes relevantes Feld
+            avatarUrl = user_info.get('avatarUrl')
+
+            benutzer = Benutzer.query.filter_by(username=username).first()
+            
+            if not benutzer:
+                benutzer = Benutzer(username=username, role=role, avatarUrl=avatarUrl)
+                db.session.add(benutzer)
+                db.session.commit()
+                login_user(benutzer)    
+                return {'success': True, 'message': f'Benutzer {username} erstellt'}
+            else: 
+                benutzer.username = username
+                benutzer.role = role
+                benutzer.avatarUrl = avatarUrl    
+                db.session.commit()
+                login_user(benutzer)  
+                return {'success': True, 'Message': f'Benutzer {username} angemeldetet'}
+
+        except requests.exceptions.RequestException as e:
+            # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
+
+            return {'success': False, 'error': f'ERROR: {str(e)}'} 
 
 def get_user_profile(ca_username, client_id, client_secret):
 
@@ -61,7 +130,7 @@ def get_user_lockid(ca_userid, client_id, client_secret):
 
         except requests.exceptions.RequestException as e:
             # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
-            return {'success': False, 'error': f'Netzwerk- oder HTTP-Fehler: {str(e)}'}
+            return {'success': False, 'error': f'ERROR: {str(e)}'}
 
 def get_user_lockinfo(ca_lockid, ca_access_token):
 
