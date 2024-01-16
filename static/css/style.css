@@ -31,7 +31,6 @@ body {
     z-index: 99;
 }
 
-
 /*** Spinner ***/
 #spinner {
     opacity: 0;
@@ -80,37 +79,21 @@ body {
 
 
 /*** Layout ***/
-.sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: 250px;
-    height: 100vh;
-    overflow-y: auto;
-    background: var(--secondary);
-    transition: 0.5s;
-    z-index: 999;
-}
+
 
 .content {
-    margin-left: 250px;
+    margin-left: 25px;
+    margin-right: 25px;
     min-height: 100%;
     background: var(--dark);
     transition: 0.5s;
 }
 
 @media (min-width: 992px) {
-    .sidebar {
-        margin-left: 0;
-    }
 
-    .sidebar.open {
-        margin-left: -250px;
-    }
 
     .content {
-        width: calc(100% - 250px);
+        width: calc(100%);
     }
 
     .content.open {
@@ -127,14 +110,6 @@ body {
 }
 
 @media (max-width: 991.98px) {
-    .sidebar {
-        margin-left: -250px;
-    }
-
-    .sidebar.open {
-        margin-left: 0;
-    }
-
     .content {
         width: 100%;
         margin-left: 0;
@@ -153,14 +128,14 @@ body {
     width: 100%;
 }
 
-.sidebar .navbar .navbar-nav .nav-link:hover,
-.sidebar .navbar .navbar-nav .nav-link.active {
+.navbar .navbar-nav .nav-link:hover,
+.navbar .navbar-nav .nav-link.active {
     color: var(--primary);
     background: var(--dark);
     border-color: var(--primary);
 }
 
-.sidebar .navbar .navbar-nav .nav-link i {
+.navbar .navbar-nav .nav-link i {
     width: 40px;
     height: 40px;
     display: inline-flex;
@@ -170,12 +145,12 @@ body {
     border-radius: 40px;
 }
 
-.sidebar .navbar .navbar-nav .nav-link:hover i,
-.sidebar .navbar .navbar-nav .nav-link.active i {
+.navbar .navbar-nav .nav-link:hover i,
+.navbar .navbar-nav .nav-link.active i {
     background: var(--secondary);
 }
 
-.sidebar .navbar .dropdown-toggle::after {
+.navbar .dropdown-toggle::after {
     position: absolute;
     top: 15px;
     right: 15px;
@@ -186,18 +161,18 @@ body {
     transition: .5s;
 }
 
-.sidebar .navbar .dropdown-toggle[aria-expanded=true]::after {
+.navbar .dropdown-toggle[aria-expanded=true]::after {
     transform: rotate(-180deg);
 }
 
-.sidebar .navbar .dropdown-item {
+.navbar .dropdown-item {
     padding-left: 25px;
     border-radius: 0 30px 30px 0;
     color: var(--light);
 }
 
-.sidebar .navbar .dropdown-item:hover,
-.sidebar .navbar .dropdown-item.active {
+.navbar .dropdown-item:hover,
+.navbar .dropdown-item.active {
     background: var(--dark);
 }
 

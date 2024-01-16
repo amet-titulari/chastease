@@ -37,12 +37,7 @@
         </div>
         <!-- Spinner End -->
 
-
-        <!-- Sidebar Start -->
-        {% include 'sidebar.html' %}
-        <!-- Sidebar End -->
-
-
+        
         <!-- Content Start -->
         <div class="content">
             <!-- Navbar Start -->
@@ -51,9 +46,9 @@
 
             <!-- Inner Content -->
 
-            <div class="container-fluid pt-4 px-4">
+            <div class="container-fluid pt-4 px-0">
                 <div class="row vh-20 bg-secondary rounded align-items-center justify-content-center mx-0">
-                    <div class="col-md-6 text-center p-4">
+                    <div class="col-md-6 text-center p-0">
                         
                         {% with messages = get_flashed_messages(with_categories=true) %}
                             {% if messages %}
@@ -71,9 +66,13 @@
             </div>
 
 
+<<<<<<< HEAD
             <div class="container-fluid pt-4 px-4 full-height">
+=======
+            <div class="container-fluid pt-4 px-0">
+>>>>>>> a06a8c0 (Umbau Seite)
                 <div class="row vh-80 bg-secondary rounded align-items-center justify-content-center mx-0">
-                    <div class="col-md-6 text-center p-4">
+                    <div class="col-md-6 text-center p-0">
                         
                         {% block content %}{% endblock %}
 
