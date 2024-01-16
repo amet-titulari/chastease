@@ -1,12 +1,10 @@
 <!-- templates/index.html -->
-{% extends 'extension/base_extension.html' %}
+{% extends 'extension/base.html' %}
 
 {% block content %}
-    <div class="container">
-        <h1>Willkommen bei TTLock!</h1>
-        <h3>Diese Extension zu Chaster.app steuert deinen Schlüsseltresors mit TTLock.</h3>
-    </div>
-  
+
+    {{ content|safe }}
+
     <script type="text/javascript">
         window.onload = function() {
             if (window.location.hash) {
@@ -32,5 +30,5 @@
             }
         };
     </script>
-    
+
 {% endblock %}
