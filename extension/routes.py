@@ -9,7 +9,15 @@ from api.cahaster_extension import get_session_auth_info, get_session_info
 @extension.route('/')
 def index():
 
-    return render_template('extension/index.html')
+    content = f'    <div class="container">\
+                        <h1>Das ist die Erweiterung!!</h1>\
+                        <h3></h3>\
+                        <p></p>\
+                    </div>'
+
+    return render_template('index.html', content=content) 
+
+
 
 
 @extension.route('/handle_token', methods=['POST'])

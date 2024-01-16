@@ -2,6 +2,6 @@
 
 from . import db
 
-class extension(db.Model):
+class journal(db.Model):
     # Ihre Modelldefinitionen hier
     pass
