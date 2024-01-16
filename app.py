@@ -19,7 +19,7 @@ from benutzer.models import Benutzer
 from benutzer.routes import benutzer
 from benutzer.token_handling import get_ttlock_tokens
 
-from ca_extension import ca_extension
+from extension import extension
 
 app = Flask(__name__)
 # Weitere Konfigurationen und Initialisierungen...
@@ -59,7 +59,7 @@ login_manager.init_app(app)
 
 # Registrierung der Blueprints
 app.register_blueprint(benutzer, url_prefix='/user')
-app.register_blueprint(ca_extension, url_prefix='/extension')
+app.register_blueprint(extension, url_prefix='/extension')
 
 @login_manager.user_loader
 def load_user(user_id):

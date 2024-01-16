@@ -3,16 +3,16 @@ from flask import  request, jsonify, current_app, session
 
 from flask import render_template
 
-from . import ca_extension
+from . import extension
 from api.cahaster_extension import get_session_auth_info, get_session_info
 
-@ca_extension.route('/')
+@extension.route('/')
 def index():
 
-    return render_template('ca_extension/index.html')
+    return render_template('extension/index.html')
 
 
-@ca_extension.route('/handle_token', methods=['POST'])
+@extension.route('/handle_token', methods=['POST'])
 def handle_token():
 
     data = request.json
@@ -57,11 +57,11 @@ def handle_token():
     return jsonify({'status': 'Erfolg', 'message': 'Token empfangen'})
 
 
-@ca_extension.route('/config', methods=['POST'])
+@extension.route('/config', methods=['POST'])
 def config():
     pass
 
 
-@ca_extension.route('/hooks', methods=['POST'])
+@extension.route('/hooks', methods=['POST'])
 def hooks():
     pass
