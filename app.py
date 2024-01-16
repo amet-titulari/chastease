@@ -71,7 +71,14 @@ def home():
         history = get_lock_history()
         if not history['success']:
             flash(f'Fehler beim Abrufen der Lock-History', 'danger')
-    return render_template('index.html') 
+
+    content = f'    <div class="container">\
+                        <h1>Willkommen bei Chastease!</h1>\
+                        <h3>Diese Anwendung ist zur automatischen Steuerung des Schlüsseltresors mit TTLock.</h3>\
+                        <p>Bitte melde dich an deinem Chaster Account an und erteile die notwendigen Berechtigungen.</p>\
+                    </div>'
+
+    return render_template('index.html', content=content) 
 
 @app.route('/login')
 def login():

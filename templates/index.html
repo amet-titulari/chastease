@@ -2,9 +2,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <div class="container">
-        <h1>Willkommen bei Chastease!</h1>
-        <h3>Diese Anwendung ist zur automatischen Steuerung des Schlüsseltresors mit TTLock.</h3>
-        <p>Bitte melde dich an deinem Chaster Account an und erteile die notwendigen Berechtigungen.</p>
-    </div>
+
+    {{ content|safe }}
+
 {% endblock %}
