@@ -1,18 +1,26 @@
 from flask import  request, jsonify, current_app, session
 
 
-from flask import render_template
+from flask import render_template, flash
 
-from . import ca_extension
+from . import extension
 from api.cahaster_extension import get_session_auth_info, get_session_info
 
-@ca_extension.route('/')
+@extension.route('/')
 def index():
 
-    return render_template('ca_extension/index.html')
+    content = f'    <div class="container">\
+                        <h1>Das ist die Erweiterung!!</h1>\
+                        <h3></h3>\
+                        <p></p>\
+                    </div>'
+
+    return render_template('extension/index.html', content=content) 
 
 
-@ca_extension.route('/handle_token', methods=['POST'])
+
+
+@extension.route('/handle_token', methods=['POST'])
 def handle_token():
 
     data = request.json
@@ -25,6 +33,7 @@ def handle_token():
     #print(sessionauth)
 
     if sessionauth['success']:
+        
         sessionId               = sessionauth['data']['session']['sessionId']
         benutzername            = sessionauth['data']['session']['lock']['user']['username']
         benutzerId              = sessionauth['data']['session']['lock']['user']['_id']
@@ -40,28 +49,32 @@ def handle_token():
         for reasonNoUnlock in reasonsPreventingUnlocking:
             print(reasonNoUnlock)
             if reasonNoUnlock['reason'] == 'temporary_opening':
-                print(f'Das Schloss der {sessionId} ist Temporär geöffnet!')
+                flash(f'Das Schloss der {sessionId} ist Temporär geöffnet!')
             else:
-                print(f'Das Schloss der {sessionId} ist VERSCHLOSSEN!')
+                flash(f'Das Schloss der {sessionId} ist VERSCHLOSSEN!')
 
+    print("Weiterleitung")
 
+    content = f'''
+        <div class="container">
+            <h1>Das ist die Erweiterung!!</h1>
+            <h3>Benutzer: {benutzername}</h3>
+            <p>Benutzerid: {benutzerId}</p>
+            <p>Lock Status: {lock_status}</p>
+            <p>SessionId: {sessionId}</p>
+        </div>
+        '''
 
-    else:
-        pass
+    return render_template('extension/session.html', content=content)
+
     
-    
+  
 
-    # Verarbeiten Sie hier den Token, z.B. speichern in der Datenbank, Authentifizierung, usw.
-    # ...
-
-    return jsonify({'status': 'Erfolg', 'message': 'Token empfangen'})
-
-
-@ca_extension.route('/config', methods=['POST'])
+@extension.route('/config', methods=['POST'])
 def config():
     pass
 
 
-@ca_extension.route('/hooks', methods=['POST'])
+@extension.route('/hooks', methods=['POST'])
 def hooks():
     pass

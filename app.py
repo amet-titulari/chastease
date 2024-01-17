@@ -15,11 +15,13 @@ from database import db
 from api.chaster import handler_callback, get_auth_userinfo
 
 from benutzer import benutzer
+from extension import extension
+from journal import journal
+
 from benutzer.models import Benutzer
 from benutzer.routes import benutzer
 from benutzer.token_handling import get_ttlock_tokens
 
-from ca_extension import ca_extension
 
 app = Flask(__name__)
 # Weitere Konfigurationen und Initialisierungen...
@@ -59,7 +61,8 @@ login_manager.init_app(app)
 
 # Registrierung der Blueprints
 app.register_blueprint(benutzer, url_prefix='/user')
-app.register_blueprint(ca_extension, url_prefix='/extension')
+app.register_blueprint(extension, url_prefix='/extension')
+app.register_blueprint(journal, url_prefix='/journal')
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -71,7 +74,14 @@ def home():
         history = get_lock_history()
         if not history['success']:
             flash(f'Fehler beim Abrufen der Lock-History', 'danger')
-    return render_template('index.html') 
+
+    content = f'    <div class="container">\
+                        <h1>Willkommen bei Chastease!</h1>\
+                        <h3>Diese Anwendung ist zur automatischen Steuerung des Schlüsseltresors mit TTLock.</h3>\
+                        <p>Bitte melde dich an deinem Chaster Account an und erteile die notwendigen Berechtigungen.</p>\
+                    </div>'
+
+    return render_template('index.html', content=content) 
 
 @app.route('/login')
 def login():
