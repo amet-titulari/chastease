@@ -24,7 +24,7 @@ class Benutzer(UserMixin, db.Model):
     TTL_lock_alias      = db.Column(db.String(128))
     TTL_lock_id         = db.Column(db.String(128))
 
-class CA_Lock_History(db.Model):
+class LockHistory(db.Model):
     hist_id              = db.Column(db.String(128), primary_key=True)
     benutzer_id = db.Column(db.Integer, db.ForeignKey('benutzer.id'), nullable=False)
 

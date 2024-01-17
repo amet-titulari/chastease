@@ -8,7 +8,8 @@ from flask_login import login_required, current_user
 
 from helper.log_config import logger
 
-from .models import db, Benutzer, CA_Lock_History
+from . import benutzer
+from .models import db, Benutzer
 from .forms import BenutzerConfigForm
 from .qrcode import generate_qr
 
@@ -16,7 +17,6 @@ from api.ttlock import get_lock_list, open_ttlock
 
 from benutzer.token_handling import get_ttlock_tokens
 
-benutzer = Blueprint('benutzer', __name__)
 
 def is_md5(s):
     return bool(re.match(r'^[a-fA-F0-9]{32}$', s))

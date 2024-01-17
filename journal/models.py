@@ -1,16 +1,15 @@
 #ca_extgension/models.py
 
-from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-from . import db
+from database import db
 
-class journal(db.Model):
+class Journal(db.Model):
     journal_id = db.Column(db.Integer, primary_key=True)
-    boolesches_feld1 = db.Column(db.Boolean, default=False)
-    boolesches_feld2 = db.Column(db.Boolean, default=False)
-    boolesches_feld3 = db.Column(db.Boolean, default=False)
-    boolesches_feld4 = db.Column(db.Boolean, default=False)
-    freitextfeld = db.Column(db.String, nullable=True)
+    shave            = db.Column(db.Boolean, default=False)
+    edge             = db.Column(db.Boolean, default=False)
+    ruined           = db.Column(db.Boolean, default=False)
+    orgasm           = db.Column(db.Boolean, default=False)
+    journal          = db.Column(db.String, nullable=True)
 
     # Hinzufügen des createdate-Feldes
     createdate = db.Column(db.DateTime, default=datetime.utcnow)
@@ -18,6 +17,3 @@ class journal(db.Model):
     # Fremdschlüsselbeziehung zur Benutzertabelle
     benutzer_id = db.Column(db.Integer, db.ForeignKey('benutzer.id'), nullable=False)
     benutzer = db.relationship('Benutzer', backref=db.backref('lock_history', lazy=True))
-
-# Erstellen der Tabellen in der Datenbank
-db.create_all()
