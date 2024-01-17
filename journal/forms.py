@@ -8,5 +8,5 @@ class JournalForm(FlaskForm):
     ruined = BooleanField('Ruined')
     orgasm = BooleanField('Orgasm')
     journal = TextAreaField('Journal')
-    benutzer_id = HiddenField('Benutzer ID', validators=[DataRequired()])  # Annehmen, dass Benutzer-ID versteckt übergeben wird
+    benutzer_id = HiddenField('Benutzer ID', validators=[DataRequired()])  
     submit = SubmitField('Speichern')

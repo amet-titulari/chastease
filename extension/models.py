@@ -2,7 +2,7 @@
 
 from database import db
 
-class ExtSession(db.Model):
+class Session(db.Model):
         extension_id                  = db.Column(db.Integer, primary_key=True)
 
 

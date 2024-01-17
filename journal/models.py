@@ -16,4 +16,4 @@ class Journal(db.Model):
 
     # Fremdschlüsselbeziehung zur Benutzertabelle
     benutzer_id = db.Column(db.Integer, db.ForeignKey('benutzer.id'), nullable=False)
-    benutzer = db.relationship('Benutzer', backref=db.backref('lock_history', lazy=True))
+    benutzer = db.relationship('Benutzer', backref=db.backref('journal_id', lazy=True))
