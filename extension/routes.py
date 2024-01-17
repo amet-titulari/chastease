@@ -20,52 +20,59 @@ def index():
 
 
 
-@extension.route('/handle_token', methods=['POST'])
+@extension.route('/handle_token', methods=['GET','POST'])
 def handle_token():
+    if request.method == 'POST':
+        data = request.json
+        main_token = data.get('mainToken')
 
-    data = request.json
-    main_token = data.get('mainToken')
+        print(f'MainToken : {main_token}')
 
-    print(f'MainToken : {main_token}')
+        sessionauth = get_session_auth_info(main_token)
 
-    sessionauth = get_session_auth_info(main_token)
+        #print(sessionauth)
 
-    #print(sessionauth)
+        if sessionauth['success']:
+            
+            sessionId               = sessionauth['data']['session']['sessionId']
+            benutzername            = sessionauth['data']['session']['lock']['user']['username']
+            benutzerId              = sessionauth['data']['session']['lock']['user']['_id']
+            lock_status             = sessionauth['data']['session']['lock']['status']
 
-    if sessionauth['success']:
+            print(f'SessionId: {sessionId} \nName: {benutzername} \nID {benutzerId} \nLock Status: {lock_status}')
+
+            sessioninfo = get_session_info(sessionId)
+            #sprint(sessioninfo)
+
+            reasonsPreventingUnlocking = sessioninfo['data']['session']['lock']['reasonsPreventingUnlocking'] 
+
+            for reasonNoUnlock in reasonsPreventingUnlocking:
+                print(reasonNoUnlock)
+                if reasonNoUnlock['reason'] == 'temporary_opening':
+                    flash(f'Das Schloss der {sessionId} ist Temporär geöffnet!')
+                else:
+                    flash(f'Das Schloss der {sessionId} ist VERSCHLOSSEN!')
+
+            content = {
+                'benutzername': 'MaxMustermann',
+                'benutzerId': 12345,
+                'lock_status': 'gesperrt',
+                'sessionId': 'abc123'
+            }
+
+            print("Weiterleitung")      
+            return render_template('extension/session.html', content=content)
+    
+    if request.method == 'GET':
         
-        sessionId               = sessionauth['data']['session']['sessionId']
-        benutzername            = sessionauth['data']['session']['lock']['user']['username']
-        benutzerId              = sessionauth['data']['session']['lock']['user']['_id']
-        lock_status             = sessionauth['data']['session']['lock']['status']
+        content = {
+            'benutzername': 'MaxMustermann',
+            'benutzerId': 12345,
+            'lock_status': 'gesperrt',
+            'sessionId': 'abc123'
+        }
 
-        print(f'SessionId: {sessionId} \nName: {benutzername} \nID {benutzerId} \nLock Status: {lock_status}')
-
-        sessioninfo = get_session_info(sessionId)
-        #sprint(sessioninfo)
-
-        reasonsPreventingUnlocking = sessioninfo['data']['session']['lock']['reasonsPreventingUnlocking'] 
-
-        for reasonNoUnlock in reasonsPreventingUnlocking:
-            print(reasonNoUnlock)
-            if reasonNoUnlock['reason'] == 'temporary_opening':
-                flash(f'Das Schloss der {sessionId} ist Temporär geöffnet!')
-            else:
-                flash(f'Das Schloss der {sessionId} ist VERSCHLOSSEN!')
-
-    print("Weiterleitung")
-
-    content = f'''
-        <div class="container">
-            <h1>Das ist die Erweiterung!!</h1>
-            <h3>Benutzer: {benutzername}</h3>
-            <p>Benutzerid: {benutzerId}</p>
-            <p>Lock Status: {lock_status}</p>
-            <p>SessionId: {sessionId}</p>
-        </div>
-        '''
-
-    return render_template('extension/session.html', content=content)
+        return render_template('extension/session.html', content=content)
 
     
   
