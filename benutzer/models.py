@@ -1,5 +1,9 @@
 from database import db
 
+from datetime import datetime
+import pytz
+from sqlalchemy.sql import func
+
 from flask_login import UserMixin
 
 class Benutzer(UserMixin, db.Model):
@@ -39,5 +43,20 @@ class CA_Lock_History(db.Model):
     # Weitere Felder für Ihre Historie...
     benutzer = db.relationship('Benutzer', backref=db.backref('lock_history', lazy=True))
 
+
+class Journal(db.Model):
+    journal_id          = db.Column(db.Integer, primary_key=True)
+    benutzer_id         = db.Column(db.Integer, db.ForeignKey('benutzer.id'), nullable=False)
+    
+    shave               = db.Column(db.Boolean, default=False)
+    edge                = db.Column(db.Boolean, default=False)
+    ruined              = db.Column(db.Boolean, default=False)
+    orgasm              = db.Column(db.Boolean, default=False)
+    horny               = db.Column(db.Integer, default=6)
+    note                = db.Column(db.String, nullable=True)
+    created_at          = db.Column(db.DateTime(timezone=True), server_default=func.now())
+    
+    # Weitere Felder für Ihre Historie...
+    benutzer = db.relationship('Benutzer', backref=db.backref('journal', lazy=True))
 
 

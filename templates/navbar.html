@@ -13,10 +13,15 @@
             <i class="fas fa-external-link-alt"></i>Extension
           </a>
         </li>
-        <li class="nav-item">
-          <a class="nav-link" href="/journal">
+        <!-- Journal Dropdown Menü -->
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
             <i class="fas fa-book me-2"></i>Journal
           </a>
+          <div class="dropdown-menu bg-secondary border-0 rounded-0 rounded-bottom m-0">
+            <a href="/user/journal_add" class="dropdown-item">Journal Hinzufügen</a>
+            <a href="/user/journal_view" class="dropdown-item">Journal Anzeigen</a>
+          </div>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="#">
@@ -34,7 +39,7 @@
             <hr class="dropdown-divider">
             <a href="#" class="dropdown-item">Link</a>
           </div>
-        </div>
+        </li>
       </ul>
       <div class="navbar-nav align-items-center ms-auto">
         {% if not current_user.is_authenticated %}
@@ -58,6 +63,7 @@
             </div>
           </div>
         {% endif %}
+      </div>
     </div>
   </div>
 </nav>

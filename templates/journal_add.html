@@ -1,0 +1,53 @@
+<!-- templates/add_journal.html -->
+{% extends 'base.html' %}
+
+{% block content %}
+    <!-- Form Start -->
+    <div class="container-fluid pt-4 px-4">
+        <div class="row w-100">
+            <div class="col-12">
+                <div class="bg-secondary rounded h-100 w-100 p-4">
+                    <form action="{{ url_for('benutzer.journal_add') }}" method="post">
+                        {{ form.hidden_tag() }}
+                        
+                        <h6 class="mb-4 text-start">Journal Eintrag</h6>
+
+                        <!-- Journal Felder -->
+                        <div class="form-check form-switch mb-3">
+                            {{ form.shave(class="form-check-input", id="switchShave") }}
+                            {{ form.shave.label(class="form-check-label", for="switchShave") }}
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            {{ form.edge(class="form-check-input", id="switchEdge") }}
+                            {{ form.edge.label(class="form-check-label", for="switchEdge") }}
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            {{ form.ruined(class="form-check-input", id="switchRuined") }}
+                            {{ form.ruined.label(class="form-check-label", for="switchRuined") }}
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            {{ form.orgasm(class="form-check-input", id="switchOrgasm") }}
+                            {{ form.orgasm.label(class="form-check-label", for="switchOrgasm") }}
+                        </div>
+
+                        <div class="form-floating mb-3">
+                            {{ form.horny(class="form-control", id="floatingHorny", placeholder="Horny Level") }}
+                            {{ form.horny.label(class="form-label", for="floatingHorny") }}
+                        </div>
+
+                        <div class="form-floating mb-3">
+                            {{ form.note(class="form-control", id="floatingNote", placeholder="Note") }}
+                            {{ form.note.label(class="form-label", for="floatingNote") }}
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">Eintrag hinzufügen</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
