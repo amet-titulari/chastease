@@ -1,7 +1,12 @@
-#ca_extgension/models.py
+#extgension/models.py
 
-from . import db
+from database import db
 
-class extension(db.Model):
-    # Ihre Modelldefinitionen hier
-    pass
+class Session(db.Model):
+        extension_id                  = db.Column(db.Integer, primary_key=True)
+
+
+        benutzer_id = db.Column(db.Integer, db.ForeignKey('benutzer.id'), nullable=False)
+        benutzer = db.relationship('Benutzer', backref=db.backref('benutzer', lazy=True))
+
+

@@ -7,7 +7,7 @@ from helper.log_config import logger
 from flask import current_app, session
 from flask_login import current_user, login_user
 
-from benutzer.models import Benutzer,CA_Lock_History
+from benutzer.models import Benutzer, LockHistory
 from benutzer.token_handling import is_ca_token_valid
 
 
@@ -264,11 +264,11 @@ def get_lock_history():
         # Verarbeitung der Ergebnisse
         for result in all_results:
             hist_id = result.get('_id')
-            existing_entry = CA_Lock_History.query.filter_by(hist_id=hist_id).first()
+            existing_entry = LockHistory.query.filter_by(hist_id=hist_id).first()
             
             if not existing_entry:
                 # Fügen Sie den Datensatz nur hinzu, wenn er noch nicht existiert
-                new_history_entry = CA_Lock_History(
+                new_history_entry = LockHistory(
                         benutzer_id=current_user.id,
                         hist_id=hist_id,
                         lock_id=result.get('lock'),

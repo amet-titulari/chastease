@@ -23,6 +23,7 @@ def get_session_auth_info(main_token):
             response.raise_for_status()  # Löst eine Ausnahme aus, wenn der HTTP-Statuscode 4xx oder 5xx ist
 
             result = response.json()
+
             # Überprüfen Sie hier, ob die Antwort einen spezifischen Fehlercode enthält
             if 'errcode' in result and result['errcode'] != 0:
                 return {'success': False, 'error': result.get('errmsg', 'Unbekannter Fehler')}

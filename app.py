@@ -18,7 +18,11 @@ from benutzer import benutzer
 from extension import extension
 from journal import journal
 
-from benutzer.models import Benutzer
+from benutzer.models import *
+from extension.models import *
+from journal.models import *
+
+
 from benutzer.routes import benutzer
 from benutzer.token_handling import get_ttlock_tokens
 
@@ -31,7 +35,6 @@ app = Flask(__name__)
 from api.chaster import get_lock_history
 
 
-app = Flask(__name__)
 
 load_dotenv()
 

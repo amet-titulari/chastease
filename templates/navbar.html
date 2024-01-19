@@ -8,21 +8,30 @@
     </button>
     <div class="collapse navbar-collapse" id="collapsibleNavbar">
       <ul class="navbar-nav">
-        <li class="nav-item">
-          <a class="nav-link" href="/extension">
-            <i class="fas fa-external-link-alt"></i>Extension
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+            Extension
+            <i class="fas fa-caret-down ms-2"></i>
           </a>
+          <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
+            <a href="/extension" class="dropdown-item">Extension Home</a>
+            <a href="/extension/handle_token" class="dropdown-item">Session Info</a>
+            <hr class="dropdown-divider">
+            <a href="#" class="dropdown-item">Link</a>
+          </div>
         </li>
+        {% if not current_user.is_authenticated %}
         <li class="nav-item">
           <a class="nav-link" href="/journal">
             <i class="fas fa-book me-2"></i>Journal
           </a>
         </li>
+        {% endif %}
         <li class="nav-item">
           <a class="nav-link" href="#">
             <i class="fas fa-lock me-2"></i>Link
           </a>
-        </li>  
+        </li>
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
             Dropdown
@@ -34,30 +43,32 @@
             <hr class="dropdown-divider">
             <a href="#" class="dropdown-item">Link</a>
           </div>
-        </div>
+        </li>
       </ul>
       <div class="navbar-nav align-items-center ms-auto">
-        {% if not current_user.is_authenticated %}
-          <div class="nav-item">
-            <a href="/login" class="nav-link">
-              <i class="fa fa-user me-lg-2"></i>
-              <span class="d-none d-lg-inline-flex">Login</span>
-            </a>
-          </div>
+        <!-- Ihr serverseitiger Template-Code -->
+        {% if current_user.is_authenticated %}
+        <div class="nav-item">
+          <a href="/login" class="nav-link">
+            <i class="fa fa-user me-lg-2"></i>
+            <span class="d-none d-lg-inline-flex">Login</span>
+          </a>
+        </div>
         {% else %}
-          <div class="nav-item dropdown">
-            <a href="#" class="nav-link dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
-              <img class="rounded-circle me-2" src="{{ current_user.avatarUrl }}" alt="" style="width: 40px; height: 40px;">
-              <span class="d-none d-lg-inline-flex">{{ current_user.username }}</span>
-            </a>
-            <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
-              <a href="/user/profile" class="dropdown-item">My Profile</a>
-              <a href="/user/config" class="dropdown-item">Configuration</a>
-              <hr class="dropdown-divider">
-              <a href="/logout" class="dropdown-item">Log Out</a>
-            </div>
+        <div class="nav-item dropdown">
+          <a href="#" class="nav-link dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
+            <img class="rounded-circle me-2" src="{{ current_user.avatarUrl }}" alt="" style="width: 40px; height: 40px;">
+            <span class="d-none d-lg-inline-flex">{{ current_user.username }}</span>
+          </a>
+          <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
+            <a href="/user/profile" class="dropdown-item">My Profile</a>
+            <a href="/user/config" class="dropdown-item">Configuration</a>
+            <hr class="dropdown-divider">
+            <a href="/logout" class="dropdown-item">Log Out</a>
           </div>
+        </div>
         {% endif %}
+      </div>
     </div>
   </div>
 </nav>
