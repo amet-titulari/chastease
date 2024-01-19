@@ -10,6 +10,7 @@ from flask_sqlalchemy import SQLAlchemy
 from helper.log_config import logger
 
 from dotenv import load_dotenv
+from database import db
 
 from api.chaster import handler_callback, get_auth_userinfo
 
@@ -54,7 +55,7 @@ app.config['TTL_CLIENT_SECRET'] = os.getenv('TTL_CLIENT_SECRET')
 
 
 # Initialisierung von Erweiterungen
-db = SQLAlchemy(app)
+db.init_app(app)
 migrate = Migrate(app, db)
 login_manager = LoginManager()
 login_manager.init_app(app)
