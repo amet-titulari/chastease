@@ -17,7 +17,6 @@ from api.ttlock import get_lock_list, open_ttlock
 
 from benutzer.token_handling import get_ttlock_tokens
 
-benutzer = Blueprint('benutzer', __name__)
 
 def is_md5(s):
     return bool(re.match(r'^[a-fA-F0-9]{32}$', s))
