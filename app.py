@@ -17,9 +17,8 @@ from api.chaster import handler_callback, get_auth_userinfo
 from benutzer import benutzer
 from extension import extension
 
-from benutzer.models import *
-from extension.models import *
-from journal.models import *
+from benutzer.models import Benutzer, LockHistory, Journal
+from extension.models import Session
 
 
 from benutzer.routes import benutzer

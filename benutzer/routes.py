@@ -9,7 +9,9 @@ from flask_login import login_required, current_user
 
 from helper.log_config import logger
 
-from .models import db, Benutzer, Lock_History, Journal
+from . import benutzer
+
+from .models import db, Benutzer, LockHistory, Journal
 from .forms import BenutzerConfigForm, JournalForm
 from .qrcode import generate_qr
 
