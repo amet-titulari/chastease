@@ -2,6 +2,7 @@ import requests
 import time
 
 from database import db
+
 from helper.log_config import logger
 
 from flask import current_app, session
@@ -12,7 +13,7 @@ from benutzer.token_handling import is_ca_token_valid
 
 
 def handler_callback(code):
-
+    
     try:
         
         token_response = requests.post(
@@ -223,7 +224,6 @@ def update_combination_relock(ca_lock_id, ca_access_token, ca_combination):
             return {'success': False, 'error': f'Upload fehlgeschlagen: {str(e)}'}
 
 def get_lock_history():
-
     check = is_ca_token_valid()
     if check:
 

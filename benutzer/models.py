@@ -30,7 +30,7 @@ class Benutzer(UserMixin, db.Model):
 
 class LockHistory(db.Model):
     hist_id              = db.Column(db.String(128), primary_key=True)
-    benutzer_id = db.Column(db.Integer, db.ForeignKey('benutzer.id'), nullable=False)
+    benutzer_id          = db.Column(db.Integer, db.ForeignKey('benutzer.id'), nullable=False)
 
     lock_id              = db.Column(db.String(128))
     type                 = db.Column(db.String(128))

@@ -1,6 +1,6 @@
 import requests
 
-from app import db
+from database import db
 from helper.log_config import logger
 
 from flask import current_app, session

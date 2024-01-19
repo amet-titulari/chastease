@@ -1,5 +1,5 @@
 # Basis-Image
-FROM python:3.12.1-slim-bullseye
+FROM python:3.12.1-bullseye
 
 # Arbeitsverzeichnis im Container festlegen
 WORKDIR /app
@@ -22,4 +22,4 @@ ENV FLASK_RUN_HOST=0.0.0.0
 EXPOSE 5000
 
 # Starten Sie die Anwendung mit dem Startup-Skript
-CMD ["./start.sh"]
+CMD ["./init.sh"]

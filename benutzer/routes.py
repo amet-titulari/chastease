@@ -4,6 +4,8 @@ import re
 import hashlib
 from pytz import timezone
 
+from database import db
+
 from flask import Blueprint, current_app, session, redirect, request, flash, url_for,render_template
 from flask_login import login_required, current_user
 
@@ -11,7 +13,7 @@ from helper.log_config import logger
 
 from . import benutzer
 
-from .models import db, Benutzer, LockHistory, Journal
+from .models import Benutzer, LockHistory, Journal
 from .forms import BenutzerConfigForm, JournalForm
 from .qrcode import generate_qr
 
@@ -26,7 +28,7 @@ def is_md5(s):
 @benutzer.route('/config', methods=['GET', 'POST'])
 @login_required
 def config():
-
+    
     from api.chaster import get_user_profile, get_user_lockid, get_user_lockinfo
 
     benutzer = Benutzer.query.filter_by(id=current_user.id).first()
@@ -120,6 +122,7 @@ def config():
 @login_required
 def relock():
 
+    
     from api.chaster import get_user_lockinfo, update_combination_relock, upload_lock_image
 
     benutzer = Benutzer.query.filter_by(id=current_user.id).first()
@@ -211,6 +214,7 @@ def get_ca_lockhistory():
 @benutzer.route('/journal_add', methods=['GET', 'POST'])
 @login_required
 def journal_add():
+    
     form = JournalForm()
     if form.validate_on_submit():
         # Erstellen eines neuen Journal-Objekts mit den Daten aus dem Formular

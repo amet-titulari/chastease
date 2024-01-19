@@ -1,6 +1,4 @@
 #!/bin/bash
-
-# Beendet das Skript bei Fehlern
 set -e
 
 # Überprüfen, ob database.sqlite im Verzeichnis ./instance existiert

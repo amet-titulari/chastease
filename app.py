@@ -4,13 +4,12 @@ import time
 
 from flask import Flask, redirect, request, render_template, url_for, session, flash
 from flask_login import LoginManager, login_user, logout_user, current_user
-from flask_migrate import Migrate
+from flask_migrate import Migrate, upgrade
+from flask_sqlalchemy import SQLAlchemy
 
 from helper.log_config import logger
 
 from dotenv import load_dotenv
-
-from database import db
 
 from api.chaster import handler_callback, get_auth_userinfo
 
@@ -35,6 +34,7 @@ from api.chaster import get_lock_history
 
 
 load_dotenv()
+app = Flask(__name__)
 
 app.config['BASE_URL'] = os.getenv('BASE_URL')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
@@ -53,16 +53,26 @@ app.config['TTL_CLIENT_ID'] = os.getenv('TTL_CLIENT_ID')
 app.config['TTL_CLIENT_SECRET'] = os.getenv('TTL_CLIENT_SECRET')
 
 
-db.init_app(app)
+# Initialisierung von Erweiterungen
+db = SQLAlchemy(app)
 migrate = Migrate(app, db)
-
 login_manager = LoginManager()
-login_manager.login_view = 'login'
 login_manager.init_app(app)
 
 # Registrierung der Blueprints
 app.register_blueprint(benutzer, url_prefix='/user')
 app.register_blueprint(extension, url_prefix='/extension')
+
+# Datenbankinitialisierung und -migration
+def initialize_database():
+    with app.app_context():
+        database_path = './instance/database.sqlite'
+        if not os.path.exists(database_path):
+            db.create_all()
+            print("Datenbank erstellt.")
+        else:
+            upgrade()
+            print("Datenbank-Migrationen und Upgrades durchgeführt.")
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -129,4 +139,5 @@ def callback():
     return redirect(url_for('home'))
 
 if __name__ == '__main__':
+    initialize_database()
     app.run(debug=True)

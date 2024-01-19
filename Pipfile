@@ -17,6 +17,7 @@ qrcode = "*"
 gunicorn = "*"
 tzdata = "*"
 pytz = "*"
+colorama = "*"
 
 [requires]
 python_version = "3"
