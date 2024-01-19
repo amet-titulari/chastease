@@ -1,0 +1,39 @@
+<!-- templates/view_journal.html -->
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="container-fluid pt-4 px-4">
+        <div class="row w-100">
+            <div class="col-12">
+                <div class="bg-secondary rounded h-100 w-100 p-4">
+                    <h6 class="mb-4 text-start">Journal Einträge</h6>
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th scope="col">Shave</th>
+                                <th scope="col">Edge</th>
+                                <th scope="col">Ruined</th>
+                                <th scope="col">Orgasm</th>
+                                <th scope="col">Horny</th>
+                                <th scope="col" style="width: 50%;">Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for journal in journals %}
+                                <tr>
+                                    <td>{{ 'Yes' if journal.shave else 'No' }}</td>
+                                    <td>{{ 'Yes' if journal.edge else 'No' }}</td>
+                                    <td>{{ 'Yes' if journal.ruined else 'No' }}</td>
+                                    <td>{{ 'Yes' if journal.orgasm else 'No' }}</td>
+                                    <td>{{ journal.horny }}</td>
+                                    <td>{{ journal.note }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}

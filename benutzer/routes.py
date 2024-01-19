@@ -2,6 +2,7 @@
 
 import re
 import hashlib
+from pytz import timezone
 
 from flask import Blueprint, current_app, session, redirect, request, flash, url_for,render_template
 from flask_login import login_required, current_user
@@ -9,8 +10,9 @@ from flask_login import login_required, current_user
 from helper.log_config import logger
 
 from . import benutzer
-from .models import db, Benutzer
-from .forms import BenutzerConfigForm
+
+from .models import db, Benutzer, LockHistory, Journal
+from .forms import BenutzerConfigForm, JournalForm
 from .qrcode import generate_qr
 
 from api.ttlock import get_lock_list, open_ttlock
@@ -169,7 +171,6 @@ def relock():
         else:
             print("Die Antwort war nicht erfolgreich.")
 
-
 @benutzer.route('/ttl_open/<uid>')
 @login_required
 def ttl_open(uid):
@@ -205,3 +206,38 @@ def get_ca_lockhistory():
             flash(f'Fehler beim Abrufen der Lock-History', 'danger')
 
         return render_template('index.html')
+
+
+@benutzer.route('/journal_add', methods=['GET', 'POST'])
+@login_required
+def journal_add():
+    form = JournalForm()
+    if form.validate_on_submit():
+        # Erstellen eines neuen Journal-Objekts mit den Daten aus dem Formular
+        new_journal = Journal(
+            benutzer_id=current_user.id,
+            shave=form.shave.data,
+            edge=form.edge.data,
+            ruined=form.ruined.data,
+            orgasm=form.orgasm.data,
+            horny=form.horny.data,
+            note=form.note.data
+        )
+
+        # Hinzufügen des neuen Objekts zur Datenbanksitzung und Speichern in der Datenbank
+        db.session.add(new_journal)
+        db.session.commit()
+
+        flash('Journal-Eintrag erfolgreich hinzugefügt!', 'success')
+        return redirect(url_for('benutzer.journal_view'))
+
+    return render_template('journal_add.html', form=form)
+
+@benutzer.route('/journal_view')
+@login_required
+def journal_view():
+    journals = Journal.query.all()
+    for journal in journals:
+        if journal.created_at:
+            journal.created_at = journal.created_at.astimezone(timezone('Europe/Zurich'))
+    return render_template('journal_view.html', journals=journals)

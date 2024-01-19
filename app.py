@@ -16,11 +16,9 @@ from api.chaster import handler_callback, get_auth_userinfo
 
 from benutzer import benutzer
 from extension import extension
-from journal import journal
 
-from benutzer.models import *
-from extension.models import *
-from journal.models import *
+from benutzer.models import Benutzer, LockHistory, Journal
+from extension.models import Session
 
 
 from benutzer.routes import benutzer
@@ -65,7 +63,6 @@ login_manager.init_app(app)
 # Registrierung der Blueprints
 app.register_blueprint(benutzer, url_prefix='/user')
 app.register_blueprint(extension, url_prefix='/extension')
-app.register_blueprint(journal, url_prefix='/journal')
 
 @login_manager.user_loader
 def load_user(user_id):
