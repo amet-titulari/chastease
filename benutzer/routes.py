@@ -5,6 +5,7 @@ import hashlib
 from pytz import timezone
 
 from database import db
+import datetime
 
 from flask import Blueprint, current_app, session, redirect, request, flash, url_for,render_template
 from flask_login import login_required, current_user
@@ -245,3 +246,36 @@ def journal_view():
         if journal.created_at:
             journal.created_at = journal.created_at.astimezone(timezone('Europe/Zurich'))
     return render_template('journal_view.html', journals=journals)
+
+
+@benutzer.route('/journal_edit/<int:journal_id>', methods=['GET', 'POST'])
+@login_required
+def journal_edit(journal_id):
+    journal = Journal.query.get(journal_id)  # Ersetzen Sie dies mit Ihrer Methode, um einen Journal-Eintrag zu finden
+
+    if journal is None:
+        # Hier könnten Sie eine Fehlermeldung anzeigen oder auf eine andere Seite umleiten
+        return redirect(url_for('index'))  # Beispiel-Umleitung zur Startseite
+
+    if request.method == 'POST':
+        # Formulardaten aktualisieren
+        journal.shave = request.form.get('shave') == 'on'
+        journal.edge = request.form.get('edge') == 'on'
+        journal.ruined = request.form.get('ruined') == 'on'
+        journal.orgasm = request.form.get('orgasm') == 'on'
+        journal.horny = request.form.get('horny')
+        journal.note = request.form.get('note')
+        
+        # Erstellungsdatum aktualisieren
+        created_at_str = request.form.get('created_at')
+        if created_at_str:
+            journal.created_at = datetime.strptime(created_at_str, '%Y-%m-%d')  # Passen Sie das Format an Ihr Formular an
+
+        db.session.commit()  # Aktualisieren Sie den Eintrag in der Datenbank
+
+        # Umleitung nach erfolgreichem Update
+        return redirect(url_for('journal_view'))  # Beispiel: Umleitung zur Liste der Journal-Einträge
+
+    # Für GET-Anfragen, das Bearbeitungsformular mit vorhandenen Daten anzeigen
+    return render_template('journal_edit.html', journal=journal)
+

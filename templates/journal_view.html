@@ -1,7 +1,9 @@
-<!-- templates/view_journal.html -->
 {% extends 'base.html' %}
 
 {% block content %}
+    <!-- FontAwesome CDN Link einfügen (ersetzen Sie VERSION mit der aktuellen FontAwesome-Version) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/VERSION/css/all.min.css">
+
     <div class="container-fluid pt-4 px-4">
         <div class="row w-100">
             <div class="col-12">
@@ -16,7 +18,8 @@
                                 <th scope="col">Ruined</th>
                                 <th scope="col">Orgasm</th>
                                 <th scope="col">Horny</th>
-                                <th scope="col" style="width: 50%;">Note</th>
+                                <th scope="col">Note</th>
+                                <th scope="col">Aktion</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -24,18 +27,19 @@
                                 <tr>
                                     <td>
                                         <script>
-                                          var createdAt = new Date('{{ journal.created_at }}');
-                                          var formattedDate = createdAt.toLocaleDateString('de-DE'); // 'de-DE' für das deutsche Datumsformat
-                                          var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); // 'de-DE' für die deutsche Zeitformatierung
-                                          document.write(formattedDate + ' ' + formattedTime);
-                                        </script>
-                                      </td>
-                                    <td>{{ 'Yes' if journal.shave else 'No' }}</td>
-                                    <td>{{ 'Yes' if journal.edge else 'No' }}</td>
-                                    <td>{{ 'Yes' if journal.ruined else 'No' }}</td>
-                                    <td>{{ 'Yes' if journal.orgasm else 'No' }}</td>
+                                            var createdAt = new Date('{{ journal.created_at }}');
+                                            var formattedDate = createdAt.toLocaleDateString('de-DE'); 
+                                            var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
+                                            document.write(formattedDate + ' ' + formattedTime);
+                                          </script>
+                                    </td>
+                                    <td>{% if journal.shave %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
+                                    <td>{% if journal.edge %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
+                                    <td>{% if journal.ruined %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
+                                    <td>{% if journal.orgasm %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
                                     <td>{{ journal.horny }}</td>
                                     <td>{{ journal.note }}</td>
+                                    <td><i class="fas fa-pencil-alt edit-pencil" data-journal-id="{{ journal.id }}"></i></td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -44,5 +48,18 @@
             </div>
         </div>
     </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+    $(document).ready(function(){
+        $('.edit-pencil').click(function(){
+            var journalId = $(this).data('journal-id');
+            // Leiten Sie den Benutzer zur Bearbeitungsseite mit der entsprechenden Journal-ID um
+            window.location.href = '/user/journal_edit/' + journalId;
+        });
+    });
+    </script>
+    
+
 
 {% endblock %}

@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <!-- Form Start -->
+    <div class="container-fluid pt-4 px-4">
+        <div class="row w-100">
+            <div class="col-12">
+                <div class="bg-secondary rounded h-100 w-100 p-4">
+                    <!-- Achten Sie darauf, die URL für den Bearbeitungs-Endpunkt einzufügen -->
+                    <form action="{{ url_for('benutzer.journal_edit', journal_id=journal.id) }}" method="post">
+                        {{ form.hidden_tag() }}
+
+                        <h6 class="mb-4 text-start">Journal Eintrag bearbeiten</h6>
+
+                        <!-- Datumsfeld (falls benötigt) -->
+                        <div class="form-floating mb-3">
+                            {{ form.date(class="form-control", id="floatingDate", placeholder="Datum", value=journal.created_at) }}
+                            {{ form.date.label(class="form-label", for="floatingDate") }}
+                        </div>
+
+                        <!-- Shave Feld -->
+                        <div class="form-check form-switch mb-3">
+                            {{ form.shave(class="form-check-input", id="switchShave", checked=journal.shave) }}
+                            {{ form.shave.label(class="form-check-label", for="switchShave") }}
+                        </div>
+
+                        <!-- Edge Feld -->
+                        <div class="form-check form-switch mb-3">
+                            {{ form.edge(class="form-check-input", id="switchEdge", checked=journal.edge) }}
+                            {{ form.edge.label(class="form-check-label", for="switchEdge") }}
+                        </div>
+
+                        <!-- Ruined Feld -->
+                        <div class="form-check form-switch mb-3">
+                            {{ form.ruined(class="form-check-input", id="switchRuined", checked=journal.ruined) }}
+                            {{ form.ruined.label(class="form-check-label", for="switchRuined") }}
+                        </div>
+
+                        <!-- Orgasm Feld -->
+                        <div class="form-check form-switch mb-3">
+                            {{ form.orgasm(class="form-check-input", id="switchOrgasm", checked=journal.orgasm) }}
+                            {{ form.orgasm.label(class="form-check-label", for="switchOrgasm") }}
+                        </div>
+
+                        <!-- Horny Feld -->
+                        <div class="form-floating mb-3">
+                            {{ form.horny(class="form-control", id="floatingHorny", placeholder="Horny Level", value=journal.horny) }}
+                            {{ form.horny.label(class="form-label", for="floatingHorny") }}
+                        </div>
+
+                        <!-- Note Feld -->
+                        <div class="form-floating mb-3">
+                            {{ form.note(class="form-control", id="floatingNote", placeholder="Note", value=journal.note) }}
+                            {{ form.note.label(class="form-label", for="floatingNote") }}
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">Eintrag aktualisieren</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
