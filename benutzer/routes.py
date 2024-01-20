@@ -3,18 +3,18 @@
 import re
 import hashlib
 from pytz import timezone
+from sqlalchemy import desc
 
 from database import db
-import datetime
 
-from flask import Blueprint, current_app, session, redirect, request, flash, url_for,render_template
+from flask import  current_app, session, redirect, request, flash, url_for,render_template
 from flask_login import login_required, current_user
 
 from helper.log_config import logger
 
 from . import benutzer
 
-from .models import Benutzer, LockHistory, Journal
+from .models import Benutzer,  Journal
 from .forms import BenutzerConfigForm, JournalAddForm, JournalEditForm
 from .qrcode import generate_qr
 
@@ -241,7 +241,7 @@ def journal_add():
 @benutzer.route('/journal_view')
 @login_required
 def journal_view():
-    journals = Journal.query.all()
+    journals = Journal.query.order_by(desc(Journal.created_at)).all()
     for journal in journals:
         if journal.created_at:
             journal.created_at = journal.created_at.astimezone(timezone('Europe/Zurich'))
