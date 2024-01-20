@@ -15,7 +15,7 @@ from helper.log_config import logger
 from . import benutzer
 
 from .models import Benutzer, LockHistory, Journal
-from .forms import BenutzerConfigForm, JournalForm
+from .forms import BenutzerConfigForm, JournalAddForm, JournalEditForm
 from .qrcode import generate_qr
 
 from api.ttlock import get_lock_list, open_ttlock
@@ -216,7 +216,7 @@ def get_ca_lockhistory():
 @login_required
 def journal_add():
     
-    form = JournalForm()
+    form = JournalAddForm()
     if form.validate_on_submit():
         # Erstellen eines neuen Journal-Objekts mit den Daten aus dem Formular
         new_journal = Journal(
@@ -251,31 +251,19 @@ def journal_view():
 @benutzer.route('/journal_edit/<int:journal_id>', methods=['GET', 'POST'])
 @login_required
 def journal_edit(journal_id):
-    journal = Journal.query.get(journal_id)  # Ersetzen Sie dies mit Ihrer Methode, um einen Journal-Eintrag zu finden
+    journal = Journal.query.get_or_404(journal_id) 
+    form = JournalEditForm(obj=journal)
+    form.journal_id.data = journal_id
+    if form.validate_on_submit():
+        # Formulardaten in das Journal-Objekt übertragen
+        form.populate_obj(journal)
 
-    if journal is None:
-        # Hier könnten Sie eine Fehlermeldung anzeigen oder auf eine andere Seite umleiten
-        return redirect(url_for('index'))  # Beispiel-Umleitung zur Startseite
-
-    if request.method == 'POST':
-        # Formulardaten aktualisieren
-        journal.shave = request.form.get('shave') == 'on'
-        journal.edge = request.form.get('edge') == 'on'
-        journal.ruined = request.form.get('ruined') == 'on'
-        journal.orgasm = request.form.get('orgasm') == 'on'
-        journal.horny = request.form.get('horny')
-        journal.note = request.form.get('note')
-        
-        # Erstellungsdatum aktualisieren
-        created_at_str = request.form.get('created_at')
-        if created_at_str:
-            journal.created_at = datetime.strptime(created_at_str, '%Y-%m-%d')  # Passen Sie das Format an Ihr Formular an
+        if form.created_at.data:
+            journal.created_at = form.created_at.data
 
         db.session.commit()  # Aktualisieren Sie den Eintrag in der Datenbank
+        flash('Journal-Eintrag aktualisiert.', 'success')  # Optional: Erfolgsmeldung anzeigen
+        return redirect(url_for('benutzer.journal_view'))  # Umleitung zur Journal-Übersicht
 
-        # Umleitung nach erfolgreichem Update
-        return redirect(url_for('journal_view'))  # Beispiel: Umleitung zur Liste der Journal-Einträge
-
-    # Für GET-Anfragen, das Bearbeitungsformular mit vorhandenen Daten anzeigen
-    return render_template('journal_edit.html', journal=journal)
-
+    # Wenn die Anfrage eine GET-Anfrage ist, rendern Sie das Formular mit den Daten des Journals
+    return render_template('journal_edit.html', form=form)

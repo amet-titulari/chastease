@@ -1,7 +1,7 @@
 # benutzer/forms.py
 
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, BooleanField, IntegerField
+from wtforms import StringField, SubmitField, BooleanField, IntegerField, DateTimeField, HiddenField
 from wtforms.validators import DataRequired
 
 class BenutzerConfigForm(FlaskForm):
@@ -20,11 +20,23 @@ class BenutzerConfigForm(FlaskForm):
     submit = SubmitField('Submit')
 
 
-class JournalForm(FlaskForm):
+class JournalAddForm(FlaskForm):
     shave = BooleanField('Shave')
     edge = BooleanField('Edge')
     ruined = BooleanField('Ruined')
     orgasm = BooleanField('Orgasm')
     horny = IntegerField('Horny', validators=[DataRequired()])
     note = StringField('Note')
+    submit = SubmitField('Submit')
+
+
+class JournalEditForm(FlaskForm):
+    journal_id = HiddenField()
+    shave = BooleanField('Shave')
+    edge = BooleanField('Edge')
+    ruined = BooleanField('Ruined')
+    orgasm = BooleanField('Orgasm')
+    horny = IntegerField('Horny', )
+    note = StringField('Note')
+    created_at = DateTimeField('created_at',validators=[DataRequired()])
     submit = SubmitField('Submit')
