@@ -1,6 +1,6 @@
 
 import os
-import time
+import shutil
 
 from flask import Flask, redirect, request, render_template, url_for, session, flash
 from flask_login import LoginManager, login_user, logout_user, current_user
@@ -55,6 +55,11 @@ app.config['TTL_CLIENT_SECRET'] = os.getenv('TTL_CLIENT_SECRET')
 
 
 # Initialisierung von Erweiterungen
+# Pfad zur Datei, die Sie überprüfen möchten
+
+
+
+
 db.init_app(app)
 migrate = Migrate(app, db)
 login_manager = LoginManager()
@@ -64,16 +69,6 @@ login_manager.init_app(app)
 app.register_blueprint(benutzer, url_prefix='/user')
 app.register_blueprint(extension, url_prefix='/extension')
 
-# Datenbankinitialisierung und -migration
-def initialize_database():
-    with app.app_context():
-        database_path = './instance/database.sqlite'
-        if not os.path.exists(database_path):
-            db.create_all()
-            print("Datenbank erstellt.")
-        else:
-            upgrade()
-            print("Datenbank-Migrationen und Upgrades durchgeführt.")
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -140,5 +135,8 @@ def callback():
     return redirect(url_for('home'))
 
 if __name__ == '__main__':
-    initialize_database()
+    if os.path.isfile('./instance/database.sqlite'):
+        print("Die Datei existiert.")
+    else:
+        print("Die Datei existiert nicht.")
     app.run(debug=True)
