@@ -8,6 +8,9 @@
     </button>
     <div class="collapse navbar-collapse" id="collapsibleNavbar">
       <ul class="navbar-nav">
+        {% if current_user.is_authenticated %}
+        <!-- Extension Dropdown Menü -->
+        <!---
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
             Extension
@@ -20,16 +23,20 @@
             <a href="#" class="dropdown-item">Link</a>
           </div>
         </li>
+        -->
         <!-- Journal Dropdown Menü -->
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
             <i class="fas fa-book me-2"></i>Journal
+            <i class="fas fa-caret-down ms-2"></i>
           </a>
-          <div class="dropdown-menu bg-secondary border-0 rounded-0 rounded-bottom m-0">
+          <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
             <a href="/user/journal_add" class="dropdown-item">Journal Hinzufügen</a>
             <a href="/user/journal_view" class="dropdown-item">Journal Anzeigen</a>
           </div>
         </li>
+        
+        {% endif %}
         <li class="nav-item">
           <a class="nav-link" href="#">
             <i class="fas fa-lock me-2"></i>Link

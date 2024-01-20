@@ -21,5 +21,5 @@ ENV FLASK_RUN_HOST=0.0.0.0
 # Port, auf dem der Container lauscht, freigeben
 EXPOSE 5000
 
-# Starten Sie die Anwendung mit dem Startup-Skript
-CMD ["./init.sh"]
+# Starten Sie die Anwendung mit Gunicorn
+CMD flask db upgrade && gunicorn -w 4 -b 0.0.0.0:5000 app:app
