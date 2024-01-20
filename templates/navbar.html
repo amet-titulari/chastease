@@ -25,6 +25,7 @@
         </li>
         -->
         <!-- Journal Dropdown Menü -->
+        
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
             <i class="fas fa-book me-2"></i>Journal
@@ -35,26 +36,27 @@
             <a href="/user/journal_view" class="dropdown-item">Journal Anzeigen</a>
           </div>
         </li>
-        
-        {% endif %}
-        <li class="nav-item">
-          <a class="nav-link" href="#">
-            <i class="fas fa-lock me-2"></i>Link
-          </a>
-        </li>
+
+        <!-- Journal Usefull Links -->
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-            Dropdown
+            <i class="fas fa-lock me-2"></i>Usefull Links
             <i class="fas fa-caret-down ms-2"></i>
           </a>
           <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
-            <a href="#" class="dropdown-item">Link</a>
-            <a href="#" class="dropdown-item">Link</a>
+            <a href="https://chaster.app" class="dropdown-item">Chaster.app</a>
+            <a href="https://chaster.app/developers/applications" class="dropdown-item">Develper Doku Chaster</a>
             <hr class="dropdown-divider">
-            <a href="#" class="dropdown-item">Link</a>
+            <a href="https://api.chaster.app/api#/" class="dropdown-item">API Chaster.app</a>
+            <a href="https://euopen.ttlock.com/doc/api" class="dropdown-item">API TTLock</a>
+            <hr class="dropdown-divider">
+            <a href="https://teamlocked.men/" class="dropdown-item">TeamLocked.man</a>
+            <a href="https://www.chastitymansion.com/" class="dropdown-item">Chastity Mansion</a>
           </div>
         </li>
+        {% endif %}
       </ul>
+
       <div class="navbar-nav align-items-center ms-auto">
         <!-- Ihr serverseitiger Template-Code -->
         {% if not current_user.is_authenticated %}
