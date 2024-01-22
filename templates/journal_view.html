@@ -45,7 +45,12 @@
                                         <a href="/user/journal_edit/{{ journal.journal_id }}" class="btn btn-primary">
                                             <i class="fas fa-pencil-alt"></i>
                                         </a>
+                                        <a href="/user/journal_delete/{{ journal.journal_id }}" class="btn btn-danger" 
+                                                                                                onclick="return confirm('Sind Sie sicher, dass Sie diesen Eintrag löschen möchten?');">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
                                     </td>
+                                    
                                 </tr>
                             {% endfor %}
                         </tbody>
