@@ -1,65 +1,63 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <!-- FontAwesome CDN Link einfügen (ersetzen Sie VERSION mit der aktuellen FontAwesome-Version) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/VERSION/css/all.min.css">
-
-    <div class="container-fluid pt-4 px-4">
+    <div class="container-fluid pt-4">
         <div class="row w-100">
             <div class="col-12">
-                <div class="bg-secondary rounded h-100 w-100 p-4">
+                <div class="bg-secondary rounded">
                     <h6 class="mb-4 text-start">Journal Einträge</h6>
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th scope="col">ID</th>
-                                <th scope="col">Date</th>
-                                <th scope="col">Shave</th>
-                                <th scope="col">Edge</th>
-                                <th scope="col">Ruined</th>
-                                <th scope="col">Orgasm</th>
-                                <th scope="col">Horny</th>
-                                <th scope="col">Note</th>
-                                <th scope="col">Aktion</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for journal in journals %}
+                    <!-- Responsive Table Wrapper Start -->
+                    <div class="table-responsive">
+                        <table class="table table-striped w-100">
+                            <thead>
                                 <tr>
-                                    <td>{{ journal.journal_id }}</td>
-                                    <td>
-                                        <script>
-                                            var createdAt = new Date('{{ journal.created_at }}');
-                                            var formattedDate = createdAt.toLocaleDateString('de-DE'); 
-                                            var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
-                                            document.write(formattedDate + ' ' + formattedTime);
-                                          </script>
-                                    </td>
-                                    <td>{% if journal.shave %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
-                                    <td>{% if journal.edge %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
-                                    <td>{% if journal.ruined %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
-                                    <td>{% if journal.orgasm %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
-                                    <td>{{ journal.horny }}</td>
-                                    <td>{{ journal.note }}</td>
-                                    <td>
-                                        <a href="/user/journal_edit/{{ journal.journal_id }}" class="btn btn-primary">
-                                            <i class="fas fa-pencil-alt"></i>
-                                        </a>
-                                        <a href="/user/journal_delete/{{ journal.journal_id }}" class="btn btn-danger" 
-                                                                                                onclick="return confirm('Sind Sie sicher, dass Sie diesen Eintrag löschen möchten?');">
-                                            <i class="fas fa-trash"></i>
-                                        </a>
-                                    </td>
-                                    
+                                    <th scope="col">ID</th>
+                                    <th scope="col">Date</th>
+                                    <th scope="col">Shave</th>
+                                    <th scope="col">Edge</th>
+                                    <th scope="col">Ruined</th>
+                                    <th scope="col">Orgasm</th>
+                                    <th scope="col">Horny</th>
+                                    <th scope="col">Note</th>
+                                    <th scope="col">Aktion</th>
                                 </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {% for journal in journals %}
+                                    <tr>
+                                        <td>{{ journal.journal_id }}</td>
+                                        <td>
+                                            <script>
+                                                var createdAt = new Date('{{ journal.created_at }}');
+                                                var formattedDate = createdAt.toLocaleDateString('de-DE'); 
+                                                var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
+                                                document.write(formattedDate + ' ' + formattedTime);
+                                            </script>
+                                        </td>
+                                        <td>{% if journal.shave %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
+                                        <td>{% if journal.edge %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
+                                        <td>{% if journal.ruined %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
+                                        <td>{% if journal.orgasm %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
+                                        <td>{{ journal.horny }}</td>
+                                        <td>{{ journal.note }}</td>
+                                        <td>
+                                            <a href="/user/journal_edit/{{ journal.journal_id }}" class="btn btn-primary">
+                                                <i class="fas fa-pencil-alt"></i>
+                                            </a>
+                                            <a href="/user/journal_delete/{{ journal.journal_id }}" class="btn btn-danger" 
+                                                onclick="return confirm('Sind Sie sicher, dass Sie diesen Eintrag löschen möchten?');">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Responsive Table Wrapper End -->
                 </div>
             </div>
         </div>
     </div>
-
-
 
 {% endblock %}

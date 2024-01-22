@@ -267,16 +267,16 @@ def journal_edit(journal_id):
     # Wenn die Anfrage eine GET-Anfrage ist, rendern Sie das Formular mit den Daten des Journals
     return render_template('journal_edit.html', form=form)
 
-@benutzer.route('/user/journal_delete/<int:journal_id>', methods=['GET', 'POST'])
+@benutzer.route('/journal_delete/<int:journal_id>', methods=['GET', 'POST'])
 def delete_journal(journal_id):
 
     journal = Journal.query.get(journal_id)
     if journal:
         db.session.delete(journal)
         db.session.commit()
-        flash("Eintrag gelöscht","succsess")
+        flash("Eintrag gelöscht",'success')
     else:
         flash("Eintrag konnte nicht gelöscht werden!",'danger')
 
     # Weiterleitung zurück zur Hauptseite oder zu einer anderen relevanten Seite
-    return redirect(url_for('index'))
+    return redirect(url_for('benutzer.journal_view'))
