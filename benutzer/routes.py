@@ -198,16 +198,26 @@ def ttl_open(uid):
 
 @benutzer.route('/history')
 @login_required
-def get_ca_lockhistory():
+def get_lockhistory():
         
         from api.chaster import get_lock_history
+        from api.ttlock import get_ttlock_records
 
         history = get_lock_history()
 
         if history['success']:
-            flash('Hat prima geklappt', 'info')
+            pass
         else:
             flash(f'Fehler beim Abrufen der Lock-History', 'danger')
+
+        tthistory = get_ttlock_records()
+        if tthistory['success']:
+            pass
+        else:
+            flash(f'Fehler beim Abrufen der Lock-History', 'danger')
+
+        print(tthistory['data'])
+
 
         return render_template('index.html')
 

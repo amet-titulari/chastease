@@ -18,6 +18,7 @@ gunicorn = "*"
 tzdata = "*"
 pytz = "*"
 colorama = "*"
+python-dateutil = "*"
 
 [requires]
 python_version = "3"
