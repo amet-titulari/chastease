@@ -1,5 +1,5 @@
 <nav class="navbar navbar-expand-sm bg-secondary navbar-dark">
-  <div class="container-fluid pt-4 px-4">
+  <div class="container-fluid rounded">
     <a class="navbar-brand" href="#">
       <i class="fas fa-lock me-2"></i>Chastease
     </a>
@@ -9,21 +9,7 @@
     <div class="collapse navbar-collapse" id="collapsibleNavbar">
       <ul class="navbar-nav">
         {% if current_user.is_authenticated %}
-        <!-- Extension Dropdown Menü -->
-        <!---
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-            Extension
-            <i class="fas fa-caret-down ms-2"></i>
-          </a>
-          <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
-            <a href="/extension" class="dropdown-item">Extension Home</a>
-            <a href="/extension/handle_token" class="dropdown-item">Session Info</a>
-            <hr class="dropdown-divider">
-            <a href="#" class="dropdown-item">Link</a>
-          </div>
-        </li>
-        -->
+
         <!-- Journal Dropdown Menü -->
         
         <li class="nav-item dropdown">

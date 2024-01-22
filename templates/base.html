@@ -28,29 +28,32 @@
 </head>
 
 <body>
-    <div class="container-fluid position-relative d-flex p-0">
-        <!-- Spinner Start -->
+    <div class="container-fluid position-relative d-flex p-3">
+        <!-- Spinner Start
         <div id="spinner" class="show bg-dark position-fixed translate-middle w-100 vh-100 top-50 start-50 d-flex align-items-center justify-content-center">
             <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
                 <span class="sr-only">Loading...</span>
             </div>
         </div>
+         -->
         <!-- Spinner End -->
 
         
         <!-- Content Start -->
         <div class="content">
-            <!-- Navbar Start -->
-            <div class="container-fluid ">
-                {% include 'navbar.html' %}
-            </div>
-            <!-- Navbar End -->
 
+            <div class="container-fluid rounded pt-3" >
+                <div class="row bg-secondary rounded LockCard">
+                <!-- Navbar Start -->
+                {% include 'navbar.html' %}
+                <!-- Navbar End -->
+                </div>
+            </div>
             <!-- Inner Content -->
 
-            <div class="container-fluid pt-4 px-4 " >
-                <div class="row bg-secondary rounded align-items-center justify-content-center mx-0 LockCard">
-                    <div class="col text-center pt-4">
+            <div class="container-fluid rounded pt-3" >
+                <div class="row bg-secondary rounded align-items-center justify-content-center p-4 LockCard">
+                    <div class="col text-center pt-2">
                         
                         {% with messages = get_flashed_messages(with_categories=true) %}
                             {% if messages %}
@@ -68,9 +71,9 @@
             </div>
 
 
-            <div class="container-fluid pt-4 px-4 full-height ">
-                <div class="row bg-secondary rounded align-items-center justify-content-center mx-0 LockCard">
-                    <div class="col text-center p-4">
+            <div class="container-fluid rounded pt-3">
+                <div class="row bg-secondary rounded align-items-center justify-content-center p-4 LockCard">
+                    <div class="col text-center p-0">
                         
                         {% block content %}{% endblock %}
 
