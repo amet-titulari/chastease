@@ -14,10 +14,8 @@ RUN apt-get update && apt-get install -y \
     lsb-release
 
 # Fügen Sie das Docker-Repository hinzu und installieren Sie Docker
-RUN curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add - \
-    && add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable" \
-    && apt-get update \
-    && apt-get install -y docker-ce docker-ce-cli containerd.io
+RUN curl -fsSL https://get.docker.com -o get-docker.sh
+RUN sudo sh ./get-docker.sh
 
 # Installieren Sie Python 3 und Pip
 RUN apt-get install -y python3 python3-pip \
