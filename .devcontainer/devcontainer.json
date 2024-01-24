@@ -1,38 +1,21 @@
-// For format details, see https://aka.ms/devcontainer.json. For config options, see the
-// README at: https://github.com/devcontainers/templates/tree/main/src/python
 {
-	"name": "Python 3",
-	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/python:dev-bookworm",
-	"features": {
-		"ghcr.io/devcontainers-contrib/features/pipenv:2": {},
-		"ghcr.io/devcontainers-contrib/features/coverage-py:2": {},
-		"docker-in-docker": "latest"
-	},
-
-	// Configure tool-specific properties.
-"customizations": {
-	// Configure properties specific to VS Code.
-	"vscode": {
-	  // Add the IDs of extensions you want installed when the container is created.
-	  "extensions": [
-		//"streetsidesoftware.code-spell-checker",
-		"qwtel.sqlite-viewer",
-		"DavidAnson.vscode-markdownlint",
-		"ms-azuretools.vscode-docker"
-	  ]
-	}
-  },
-
-	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	//"forwardPorts": ["80:5000"],
-
-	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "pipenv requirements > requirements.txt && pip3 install --user -r requirements.txt",
-
-	// Configure tool-specific properties.
-	//"customizations": {},
-
-	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	"remoteUser": "root"
+    "name": "Python 3",
+    "dockerComposeFile": "docker-compose.yml",
+    "image": "mcr.microsoft.com/devcontainers/python:dev-bookworm",
+    "features": {
+        "ghcr.io/devcontainers-contrib/features/pipenv:2": {},
+        "ghcr.io/devcontainers-contrib/features/coverage-py:2": {},
+        "docker-in-docker": "latest"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "qwtel.sqlite-viewer",
+                "DavidAnson.vscode-markdownlint",
+                "ms-azuretools.vscode-docker"
+            ]
+        }
+    },
+    "postCreateCommand": "pipenv requirements > requirements.txt && pip3 install --user -r requirements.txt",
+    "remoteUser": "root"
 }
