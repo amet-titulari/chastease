@@ -16,6 +16,7 @@
             ]
         }
     },
+    "forwardPorts": [5000], // Fügen Sie hier die benötigten Ports hinzu
     "postCreateCommand": "pipenv requirements > requirements.txt && pip3 install --user -r requirements.txt",
     "remoteUser": "root"
 }
