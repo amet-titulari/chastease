@@ -6,7 +6,8 @@
 	"image": "mcr.microsoft.com/devcontainers/python:dev-bookworm",
 	"features": {
 		"ghcr.io/devcontainers-contrib/features/pipenv:2": {},
-		"ghcr.io/devcontainers-contrib/features/coverage-py:2": {}
+		"ghcr.io/devcontainers-contrib/features/coverage-py:2": {},
+		"docker-in-docker": "latest"
 	},
 
 	// Configure tool-specific properties.
