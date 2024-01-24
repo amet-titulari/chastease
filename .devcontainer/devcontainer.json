@@ -27,7 +27,12 @@
 	//"forwardPorts": ["80:5000"],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "pipenv requirements > requirements.txt && pip3 install --user -r requirements.txt",
+	"postCreateCommand": [
+        "pipenv requirements > requirements.txt",
+        "pip3 install --user -r requirements.txt",
+        "./start-redis.sh" // Fügen Sie diesen Befehl hinzu
+    ],
+	
 
 	// Configure tool-specific properties.
 	//"customizations": {},
