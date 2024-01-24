@@ -211,12 +211,12 @@ def get_lockhistory():
             flash(f'Fehler beim Abrufen der Lock-History', 'danger')
 
         tthistory = get_ttlock_records()
-        if tthistory['success']:
+        if tthistory['success']:              
             pass
         else:
             flash(f'Fehler beim Abrufen der Lock-History', 'danger')
 
-        print(tthistory['data'])
+        #print(tthistory['data'])
 
 
         return render_template('index.html')

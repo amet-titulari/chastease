@@ -39,7 +39,12 @@ class LockHistory(db.Model):
     title                = db.Column(db.String(128))
     description          = db.Column(db.String(128))
     icon                 = db.Column(db.String(128))
-    
+    recordtyp            = db.Column(db.Integer)
+    recordtypstr         = db.Column(db.String(128))
+    recordtypefromlock   = db.Column(db.Integer)  
+    recordtypefromlockstr= db.Column(db.String(128))
+    openSuccess          = db.Column(db.Integer)   
+
     # Weitere Felder für Ihre Historie...
     benutzer = db.relationship('Benutzer', backref=db.backref('lock_history', lazy=True))
 
