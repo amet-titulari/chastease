@@ -7,10 +7,9 @@
 	"features": {
 		"ghcr.io/devcontainers-contrib/features/pipenv:2": {},
 		"ghcr.io/devcontainers-contrib/features/coverage-py:2": {},
-        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+		"ghcr.io/itsmechlark/features/redis-server:1": {}
 	},
 
-	// Configure tool-specific properties.
 "customizations": {
 	// Configure properties specific to VS Code.
 	"vscode": {
