@@ -1,7 +1,10 @@
 {
     "name": "Python 3",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
     "dockerComposeFile": "docker-compose.yml",
-    "image": "mcr.microsoft.com/devcontainers/python:dev-bookworm",
     "features": {
         "ghcr.io/devcontainers-contrib/features/pipenv:2": {},
         "ghcr.io/devcontainers-contrib/features/coverage-py:2": {},
@@ -16,7 +19,7 @@
             ]
         }
     },
-    "forwardPorts": [5000], // Fügen Sie hier die benötigten Ports hinzu
+    "forwardPorts": [5000],
     "postCreateCommand": "pipenv requirements > requirements.txt && pip3 install --user -r requirements.txt",
     "remoteUser": "root"
 }
