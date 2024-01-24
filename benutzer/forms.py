@@ -21,6 +21,7 @@ class BenutzerConfigForm(FlaskForm):
 
 
 class JournalAddForm(FlaskForm):
+    hygiene = BooleanField('Hygiene')
     shave = BooleanField('Shave')
     edge = BooleanField('Edge')
     ruined = BooleanField('Ruined')

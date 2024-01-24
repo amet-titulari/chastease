@@ -14,6 +14,11 @@
 
                         <!-- Journal Felder -->
                         <div class="form-check form-switch mb-3">
+                            {{ form.hygiene(class="form-check-input", id="switchHygiene") }}
+                            {{ form.hygiene.label(class="form-check-label", for="switchHygiene") }}
+                        </div>
+                        
+                        <div class="form-check form-switch mb-3">
                             {{ form.shave(class="form-check-input", id="switchShave") }}
                             {{ form.shave.label(class="form-check-label", for="switchShave") }}
                         </div>
