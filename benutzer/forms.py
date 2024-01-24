@@ -32,6 +32,7 @@ class JournalAddForm(FlaskForm):
 
 class JournalEditForm(FlaskForm):
     journal_id = HiddenField()
+    hygiene = BooleanField('Hygiene')
     shave = BooleanField('Shave')
     edge = BooleanField('Edge')
     ruined = BooleanField('Ruined')

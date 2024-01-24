@@ -53,6 +53,7 @@ class Journal(db.Model):
     journal_id          = db.Column(db.Integer, primary_key=True)
     benutzer_id         = db.Column(db.Integer, db.ForeignKey('benutzer.id'), nullable=False)
     
+    hygiene             = db.Column(db.Boolean, default=False)
     shave               = db.Column(db.Boolean, default=False)
     edge                = db.Column(db.Boolean, default=False)
     ruined              = db.Column(db.Boolean, default=False)

@@ -13,6 +13,7 @@
                                 <tr>
                                     <th scope="col">ID</th>
                                     <th scope="col">Date</th>
+                                    <th scope="col">Hygiene</th>
                                     <th scope="col">Shave</th>
                                     <th scope="col">Edge</th>
                                     <th scope="col">Ruined</th>
@@ -34,6 +35,7 @@
                                                 document.write(formattedDate + ' ' + formattedTime);
                                             </script>
                                         </td>
+                                        <td>{% if journal.hygien %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
                                         <td>{% if journal.shave %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
                                         <td>{% if journal.edge %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
                                         <td>{% if journal.ruined %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
