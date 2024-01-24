@@ -113,7 +113,21 @@ def get_ttlock_records():
     start_date              = int(timestamp_start_seconds * 1000)
     end_date                = int(time.time() * 1000)
 
+    recordtype_mapping = {
+        1: "Unlock by App",
+        12: "Unlock by Gateway",
+        # Fügen Sie weitere Zuordnungen nach Bedarf hinzu
+    }
+    recordtypelock_mapping = {
+        1: "Unlock by Bluetooth",
+        28: "Unlock by Gateway",
+        # Fügen Sie weitere Zuordnungen nach Bedarf hinzu
+    }
+
     url = "https://euapi.ttlock.com/v3/lockRecord/list"
+
+    current_page = 1
+    total_pages  = 999
 
     params = {
         "clientId": current_app.config['TTL_CLIENT_ID'],
@@ -121,74 +135,68 @@ def get_ttlock_records():
         "lockId": benutzer.TTL_lock_id,
         "startDate": start_date,
         "endDate": end_date,
-        "pageNo": 1,
-        "pageSize": 10,
+        "pageNo": current_page,
+        "pageSize": 25,
         "date": int(time.time() * 1000)  # Aktuelles Datum in Millisekunden
     }
 
-    response = requests.get(url, params=params)
 
-    if response.status_code == 200:
-        
-        history = response.json()
+    while current_page <= total_pages:
 
-        recordtype_mapping = {
-            1: "Unlock by App",
-            12: "Unlock by Gateway",
-            # Fügen Sie weitere Zuordnungen nach Bedarf hinzu
-        }
-        recordtypelock_mapping = {
-            1: "Unlock by Bluetooth",
-            28: "Unlock by Gateway",
-            # Fügen Sie weitere Zuordnungen nach Bedarf hinzu
-        }
-
-        for result in history['list']:
-            hist_id = result.get('recordId')
-
-            existing_entry = LockHistory.query.filter_by(hist_id=hist_id).first()
-
-            if not existing_entry:
-                # Eintragsdatum ermitteln
-                lockDate_milliseconds = result.get('lockDate')
-                lockDate_seconds = lockDate_milliseconds / 1000
-                lockDate_datetime = datetime.fromtimestamp(lockDate_seconds)
-                formatted_lockDate = lockDate_datetime.strftime('%Y-%m-%d %H:%M:%S')
-
-                # Recordtype und RecordTypeFromLock erstellen
-                recordtype = result.get('recordType')
-                recordtypefromlock = result.get('recordTypeFromLock')
-                # Zuordnung der Texte aus dem Wörterbuch
-                recordtypstr = recordtype_mapping.get(recordtype, "Unbekannter Typ")
-                recordtypefromlockstr = recordtypelock_mapping.get(recordtypefromlock, "Unbekannter Typ")
-
-                # Eintrag erstellen
-                new_history_entry = LockHistory(
-                        benutzer_id=current_user.id,
-                        hist_id=hist_id,
-                        lock_id=result.get('lockId'),
-                        type="TTL Lock Protokol",
-                        created_at=formatted_lockDate,
-                        extension=result.get('extension'),
-                        title=result.get('title'),
-                        description=result.get('description'),
-                        icon=result.get('icon'),
-                        recordtyp=recordtype,
-                        recordtypstr=recordtypstr,
-                        recordtypefromlock=recordtypefromlock,
-                        recordtypefromlockstr=recordtypefromlockstr,
-                        openSuccess=result.get('success')
-                    )
-                
-                db.session.add(new_history_entry)
-            else:
-                print("Eintrag existiert")
+               
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
             
-        db.session.commit()
-        return {'success': True, 'data': f'{history}'}
+            history = response.json()
+            total_pages = history['pages']
+            print(f'Seite : {params['pageNo']} von insgesammt {total_pages} Seiten')
 
-    elif history.status_code == 401:
-        return {'success': False, 'data': f'Fehler aufgetgreten'}
-    else:
-        print(f"Fehler beim Abrufen der Schlossaufzeichnungen: {history.text}")
-        return None
+            for result in history['list']:
+                hist_id = result.get('recordId')
+
+                existing_entry = LockHistory.query.filter_by(hist_id=hist_id).first()
+
+                if not existing_entry:
+                    # Eintragsdatum ermitteln
+                    lockDate_milliseconds = result.get('lockDate')
+                    lockDate_seconds = lockDate_milliseconds / 1000
+                    lockDate_datetime = datetime.fromtimestamp(lockDate_seconds)
+                    formatted_lockDate = lockDate_datetime.strftime('%Y-%m-%d %H:%M:%S')
+
+                    # Recordtype und RecordTypeFromLock erstellen
+                    recordtype = result.get('recordType')
+                    recordtypefromlock = result.get('recordTypeFromLock')
+                    # Zuordnung der Texte aus dem Wörterbuch
+                    recordtypstr = recordtype_mapping.get(recordtype, "Unbekannter Typ")
+                    recordtypefromlockstr = recordtypelock_mapping.get(recordtypefromlock, "Unbekannter Typ")
+
+                    # Eintrag erstellen
+                    new_history_entry = LockHistory(
+                            benutzer_id=current_user.id,
+                            hist_id=hist_id,
+                            lock_id=result.get('lockId'),
+                            type="TTL Lock Protokol",
+                            created_at=formatted_lockDate,
+                            extension=result.get('extension'),
+                            title=result.get('title'),
+                            description=result.get('description'),
+                            icon=result.get('icon'),
+                            recordtyp=recordtype,
+                            recordtypstr=recordtypstr,
+                            recordtypefromlock=recordtypefromlock,
+                            recordtypefromlockstr=recordtypefromlockstr,
+                            openSuccess=result.get('success')
+                        )
+                    
+                    db.session.add(new_history_entry)
+                else:
+                    print("Eintrag existiert")
+            
+            db.session.commit()
+            current_page += 1
+
+        else:
+            print(f"Fehler beim Abrufen der Schlossaufzeichnungen: {history.text}")
+            return None
+    
+    return {'success': True}
