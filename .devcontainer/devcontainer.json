@@ -1,25 +1,14 @@
 {
-    "name": "Python 3",
-    "build": {
-        "dockerfile": "Dockerfile",
-        "context": ".."
-    },
-    "dockerComposeFile": "docker-compose.yml",
-    "features": {
-        "ghcr.io/devcontainers-contrib/features/pipenv:2": {},
-        "ghcr.io/devcontainers-contrib/features/coverage-py:2": {},
-        "docker-in-docker": "latest"
-    },
-    "customizations": {
-        "vscode": {
-            "extensions": [
-                "qwtel.sqlite-viewer",
-                "DavidAnson.vscode-markdownlint",
-                "ms-azuretools.vscode-docker"
-            ]
-        }
-    },
-    "forwardPorts": [5000],
-    "postCreateCommand": "pipenv requirements > requirements.txt && pip3 install --user -r requirements.txt",
-    "remoteUser": "root"
+    "name": "Python 3 mit DinD",
+    "dockerFile": "Dockerfile",
+    "service": "app",
+    "workspaceFolder": "/workspace",
+    "extensions": ["ms-python.python"],
+    "runArgs": ["--privileged"],
+    "settings": {
+        "python.autoComplete.addBrackets": false,
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": true,
+        "python.formatting.provider": "autopep8"
+    }
 }
