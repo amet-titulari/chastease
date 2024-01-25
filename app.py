@@ -1,6 +1,6 @@
 
 import os
-import shutil
+import redis
 
 from flask import Flask, redirect, request, render_template, url_for, session, flash
 from flask_login import LoginManager, login_user, logout_user, current_user
@@ -128,7 +128,42 @@ def callback():
         
         if TT_lock_tokens['success']:
             # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
-            pass            
+            pass
+
+    print(benutzer) 
+    # Verbindung zur Redis-Datenbank herstellen
+    redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
+
+    # Beispiel: Benutzerdaten in Redis speichern
+    username = session['username']
+    user_data = {
+        
+            "username": benutzer.username,
+            "id": benutzer.id,
+            "lock_uuid": benutzer.lock_uuid,
+            "role": benutzer.role,
+            "avatarUrl": benutzer.avatarUrl,
+            "CA_user_id": benutzer.CA_user_id,
+            "CA_username": benutzer.CA_username,
+            "CA_lock_id": benutzer.CA_lock_id,
+            "CA_lock_status": benutzer.CA_lock_status,
+            "CA_keyholder_id": benutzer.CA_keyholder_id,
+            "CA_keyholdername": benutzer.CA_keyholdername,
+            "CA_combination_id": benutzer.CA_combination_id,
+            "TTL_username": benutzer.TTL_username,
+            "TTL_password_md5": benutzer.TTL_password_md5,
+            "TTL_lock_alias": benutzer.TTL_lock_alias,
+            "TTL_lock_id": benutzer.TTL_lock_id,
+        
+    }
+
+    # None-Werte in leere Strings umwandeln
+    for key, value in user_data.items():
+        if value is None:
+            user_data[key] = ''
+
+    # Die Benutzerdaten in Redis speichern
+    redis_client.hmset(username, user_data)           
 
                 
 

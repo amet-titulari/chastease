@@ -19,7 +19,7 @@ tzdata = "*"
 pytz = "*"
 colorama = "*"
 python-dateutil = "*"
-aioredis = "*"
+redis = "*"
 
 [requires]
 python_version = "3"
