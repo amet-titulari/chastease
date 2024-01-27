@@ -159,6 +159,41 @@ def get_user_lockinfo(ca_lockid, ca_access_token):
             # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
             return {'success': False, 'error': f'Netzwerk- oder HTTP-Fehler: {str(e)}'}
 
+
+def get_hygiene_opening(ca_lockid, ca_access_token):
+    check = is_ca_token_valid()
+    if check:
+
+        try:
+
+            url = f'https://api.chaster.app/extensions/temporary-opening/{ca_lockid}/combination'
+            headers = {
+                'accept': 'application/json',
+                'Authorization': f'Bearer {ca_access_token}'
+            }
+
+            response = requests.get(url, headers=headers)
+
+            result = response.json()
+            print(result)
+           
+            if response.status_code == 200:
+                # Erfolgreiche Antwort
+                return {'success': True, 'data':result}
+            elif response.status_code == 400:
+                # Fehlerhafte Anfrage
+                return {'success': False, 'data': 'Lock not ready to open!'}
+            else:
+                # Andere Fehler
+               return {'success': False, 'data' : 'An unexpected error occurred {response.status_code}'}
+        
+        except requests.exceptions.RequestException as e:
+            # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
+            return {'success': False, 'error': f'Netzwerk- oder HTTP-Fehler: {str(e)}'}
+
+
+
+
 def upload_lock_image(ca_access_token, file_path):
 
     check = is_ca_token_valid()

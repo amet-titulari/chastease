@@ -12,7 +12,7 @@ from helper.log_config import logger
 from dotenv import load_dotenv
 from database import db
 
-from api.chaster import handler_callback, get_auth_userinfo
+from api.chaster import handler_callback, get_auth_userinfo, get_hygiene_opening
 
 from benutzer import benutzer
 from extension import extension
@@ -77,15 +77,32 @@ def load_user(user_id):
 @app.route('/')
 def home():
     if current_user.is_authenticated:
-        history = get_lock_history()
-        if not history['success']:
-            flash(f'Fehler beim Abrufen der Lock-History', 'danger')
+        result = get_hygiene_opening(current_user.CA_lock_id, session['ca_access_token'])
+        print(result)
 
-    content = f'    <div class="container">\
-                        <h1>Willkommen bei Chastease!</h1>\
-                        <h3>Diese Anwendung ist zur automatischen Steuerung des Schlüsseltresors mit TTLock.</h3>\
-                        <p>Bitte melde dich an deinem Chaster Account an und erteile die notwendigen Berechtigungen.</p>\
+        if result['success']:
+            content = f'<div class="container">\
+                    <h1>Hallo {current_user.username}</h1>\
+                    <h3>Du kannst deine Hygeneöffnung jetzt durchführen</h3>\
+                    <p>Viel Glück</p>\
+                </div>'
+        else:
+        
+            content = f'<div class="container">\
+                        <h1>Hallo {current_user.username}</h1>\
+                        <h3>Sorry du bleibst verschlossen!</h3>\
+                        <p>Viel Glück weiterhin!</p>\
                     </div>'
+
+
+
+    else:
+
+        content = f'    <div class="container">\
+                            <h1>Willkommen bei Chastease!</h1>\
+                            <h3>Diese Anwendung ist zur automatischen Steuerung des Schlüsseltresors mit TTLock.</h3>\
+                            <p>Bitte melde dich an deinem Chaster Account an und erteile die notwendigen Berechtigungen.</p>\
+                        </div>'
 
     return render_template('index.html', content=content) 
 
@@ -106,7 +123,6 @@ def callback():
     res_handler_calback = handler_callback(code)
     if res_handler_calback['success']:
         res_auth_info = get_auth_userinfo()
-        print(res_auth_info)
         if not res_auth_info['success']:
             flash(f'Benutzeranmeldung fehlgeschlagen','danger')
     else:
@@ -119,7 +135,6 @@ def callback():
     else:
 
         TT_lock_tokens = get_ttlock_tokens()
-        print(TT_lock_tokens)
 
         if 'errcode' in TT_lock_tokens:
                 error_message = TT_lock_tokens.get('errmsg', 'Ein unbekannter Fehler ist aufgetreten.')
@@ -129,43 +144,6 @@ def callback():
         if TT_lock_tokens['success']:
             # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
             pass
-
-    print(benutzer) 
-    # Verbindung zur Redis-Datenbank herstellen
-    redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
-
-    # Beispiel: Benutzerdaten in Redis speichern
-    username = session['username']
-    user_data = {
-        
-            "username": benutzer.username,
-            "id": benutzer.id,
-            "lock_uuid": benutzer.lock_uuid,
-            "role": benutzer.role,
-            "avatarUrl": benutzer.avatarUrl,
-            "CA_user_id": benutzer.CA_user_id,
-            "CA_username": benutzer.CA_username,
-            "CA_lock_id": benutzer.CA_lock_id,
-            "CA_lock_status": benutzer.CA_lock_status,
-            "CA_keyholder_id": benutzer.CA_keyholder_id,
-            "CA_keyholdername": benutzer.CA_keyholdername,
-            "CA_combination_id": benutzer.CA_combination_id,
-            "TTL_username": benutzer.TTL_username,
-            "TTL_password_md5": benutzer.TTL_password_md5,
-            "TTL_lock_alias": benutzer.TTL_lock_alias,
-            "TTL_lock_id": benutzer.TTL_lock_id,
-        
-    }
-
-    # None-Werte in leere Strings umwandeln
-    for key, value in user_data.items():
-        if value is None:
-            user_data[key] = ''
-
-    # Die Benutzerdaten in Redis speichern
-    redis_client.hmset(username, user_data)           
-
-                
 
     return redirect(url_for('home'))
 

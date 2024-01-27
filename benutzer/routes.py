@@ -75,6 +75,7 @@ def config():
         flash(f'Fehler beim Abrufen der Lock-Daten: {lock_data["error"]}', 'danger')
 
     lock_info = get_user_lockinfo(benutzer.CA_lock_id, session['ca_access_token'])
+    print(lock_info)
 
     if lock_info['success']:
         if 'keyholder' in lock_info['data']:
