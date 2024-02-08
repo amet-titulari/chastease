@@ -1,0 +1,62 @@
+<nav class="navbar navbar-expand-sm bg-secondary navbar-dark">
+  <div class="container-fluid rounded">
+    <a class="navbar-brand" href="#">
+      <i class="fas fa-lock me-2"></i>Chastease
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#collapsibleNavbar">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="collapsibleNavbar">
+      <ul class="navbar-nav">
+
+        <!-- Journal Dropdown Menü -->
+        
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+            <i class="fas fa-book me-2"></i>Journal
+            <i class="fas fa-caret-down ms-2"></i>
+          </a>
+          <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
+            <a href="/user/journal_add" class="dropdown-item">Journal Hinzufügen</a>
+            <a href="/user/journal_view" class="dropdown-item">Journal Anzeigen</a>
+          </div>
+        </li>
+
+        <!-- Journal Usefull Links -->
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+            <i class="fas fa-lock me-2"></i>Usefull Links
+            <i class="fas fa-caret-down ms-2"></i>
+          </a>
+          <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
+            <a href="https://chaster.app" class="dropdown-item">Chaster.app</a>
+            <a href="https://chaster.app/developers/applications" class="dropdown-item">Develper Doku Chaster</a>
+            <hr class="dropdown-divider">
+            <a href="https://api.chaster.app/api#/" class="dropdown-item">API Chaster.app</a>
+            <a href="https://euopen.ttlock.com/doc/api" class="dropdown-item">API TTLock</a>
+            <hr class="dropdown-divider">
+            <a href="https://teamlocked.men/" class="dropdown-item">TeamLocked.man</a>
+            <a href="https://www.chastitymansion.com/" class="dropdown-item">Chastity Mansion</a>
+          </div>
+        </li>
+
+      </ul>
+
+      <div class="navbar-nav align-items-center ms-auto">
+        <div class="nav-item dropdown">
+          <a href="#" class="nav-link dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
+            <img class="rounded-circle me-2" src="{{ current_user.avatarUrl }}" alt="" style="width: 40px; height: 40px;">
+            <span class="d-none d-lg-inline-flex">{{ current_user.username }}</span>
+          </a>
+          <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
+            <a href="/user/profile" class="dropdown-item">My Profile</a>
+            <a href="/user/config" class="dropdown-item">Configuration</a>
+            <hr class="dropdown-divider">
+            <a href="/logout" class="dropdown-item">Log Out</a>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+  </div>
+</nav>

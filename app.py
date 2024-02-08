@@ -24,12 +24,6 @@ from extension.models import Session
 from benutzer.routes import benutzer
 from benutzer.token_handling import get_ttlock_tokens
 
-
-app = Flask(__name__)
-# Weitere Konfigurationen und Initialisierungen...
-
-
-
 from api.chaster import get_lock_history
 
 
