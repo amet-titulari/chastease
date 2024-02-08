@@ -5,13 +5,17 @@
 
     {{ content|safe }}
 
+    <div id="responseMessage"></div>
+
+
     <script type="text/javascript">
+
         window.onload = function() {
             if (window.location.hash) {
                 const hash = window.location.hash.substring(1);
                 const params = JSON.parse(decodeURIComponent(hash));
                 const mainToken = params.mainToken;
-    
+
                 // Senden Sie den Token an Ihren Server
                 fetch('/extension/handle_token', {
                     method: 'POST',
@@ -23,12 +27,18 @@
                 .then(response => response.json())
                 .then(data => {
                     console.log('Erfolg:', data);
+                    // Aktualisieren Sie das Element mit der Antwort
+                    document.getElementById('responseMessage').innerHTML = 'Erfolg: ' + data.message;
                 })
                 .catch((error) => {
                     console.error('Fehler:', error);
+                    // Aktualisieren Sie das Element mit der Fehlermeldung
+                    document.getElementById('responseMessage').innerHTML = 'Fehler: ' + error.message;
                 });
             }
         };
+
+
     </script>
 
 {% endblock %}

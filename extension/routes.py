@@ -1,4 +1,4 @@
-from flask import  request, session, render_template, redirect, url_for, flash
+from flask import  request, session, render_template, jsonify, flash
 from flask_login import login_user, current_user
 
 from . import extension
@@ -75,20 +75,29 @@ def handle_token():
 
                 # Zusätzliche Logik nach dem Login
                 # Zum Beispiel: Session-Infos abrufen, weitere Daten verarbeiten usw.
+                    
+                
+                returnmsg = {
+                                "success": True,
+                                "message": "Token erfolgreich empfangen."
+                            }
+                
+                return jsonify(returnmsg),200
+
+
 
             except ValueError as e:
-                flash(str(e))
-                return redirect(url_for('login_page'))  # Ändern Sie dies entsprechend
+                return jsonify({"success": False, "message": str(e)}), 400  # Client-seitiger Fehler
+
             except Exception as e:
-                flash("Ein unerwarteter Fehler ist aufgetreten: " + str(e))
-                return redirect(url_for('error_page'))  # Ändern Sie dies entsprechend
+                return jsonify({"success": False, "message": "Ein unerwarteter Fehler ist aufgetreten."}), 500  # Server-seitiger Fehler
 
     elif request.method == 'GET':
-            print("Methode GET")
+        print("Methode GET")
+        # Hier können Sie entscheiden, was bei einem GET-Request passieren soll.
+        # Zum Beispiel: Eine bestimmte Information als JSON zurückgeben oder eine einfache Nachricht.
+        return jsonify({"message": "GET-Request ist für diese Route nicht zulässig."}), 405
 
-        # Weiterleitung oder Anzeige einer Seite nach erfolgreicher Anmeldung
-    print("user: ", current_user)
-    return render_template('extension/home.html') 
   
 
 @extension.route('/config', methods=['POST'])
