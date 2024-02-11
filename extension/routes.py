@@ -9,12 +9,10 @@ from benutzer.models import Benutzer
 
 from benutzer.models import Benutzer
 
-from api.cahaster_extension import get_session_auth_info, get_session_info
+from api.cahaster_extension import get_session_auth_info
 
 @extension.route('/')
 def index():
-
-    print(current_user.is_authenticated)
 
     content = f'    <div class="container">\
                         <h1>Infos zur Erweiterungssession!</h1>\
@@ -37,8 +35,6 @@ def home():
 
 @extension.route('/handle_token', methods=['GET', 'POST'])
 def handle_token():
-    print("Methode : ", request.method)
-
     if request.method == 'POST':
             try:
                 data = request.json
@@ -76,12 +72,15 @@ def handle_token():
                 # Zusätzliche Logik nach dem Login
                 # Zum Beispiel: Session-Infos abrufen, weitere Daten verarbeiten usw.
                     
-                
+                benutzer_info = benutzer.to_dict()
+
                 returnmsg = {
                                 "success": True,
-                                "message": "Token erfolgreich empfangen."
+                                "message": "Token erfolgreich empfangen.",
+                                "user"   : benutzer_info
                             }
                 
+                print(returnmsg)
                 return jsonify(returnmsg),200
 
 

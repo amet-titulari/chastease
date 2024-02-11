@@ -5,17 +5,17 @@
 
     {{ content|safe }}
 
-    <div id="responseMessage"></div>
+    <div id="responseMessage"></div> <!-- Container für die Erfolgsanzeige -->
 
+    <div id="userTableContainer"></div> <!-- Container für die Tabelle -->
 
     <script type="text/javascript">
-
         window.onload = function() {
             if (window.location.hash) {
                 const hash = window.location.hash.substring(1);
                 const params = JSON.parse(decodeURIComponent(hash));
                 const mainToken = params.mainToken;
-
+    
                 // Senden Sie den Token an Ihren Server
                 fetch('/extension/handle_token', {
                     method: 'POST',
@@ -27,8 +27,27 @@
                 .then(response => response.json())
                 .then(data => {
                     console.log('Erfolg:', data);
-                    // Aktualisieren Sie das Element mit der Antwort
+                    //localStorage.setItem('authToken', data.authToken); // Angenommen, data.authToken enthält Ihr Authentifizierungstoken
+    
                     document.getElementById('responseMessage').innerHTML = 'Erfolg: ' + data.message;
+    
+                    // Erstellen Sie eine Tabelle und fügen Sie Daten hinzu
+                    const user = data.user; // Angenommen, die Benutzerdaten sind unter data.user
+                    const table = document.createElement('table');
+                    table.setAttribute('border', '1');
+                    table.style.width = '100%'; // Optional: Tabelle auf volle Breite setzen
+    
+                    // Für jedes Schlüssel-Wert-Paar eine Zeile hinzufügen
+                    Object.entries(user).forEach(([key, value]) => {
+                        const row = table.insertRow();
+                        const cellKey = row.insertCell();
+                        const cellValue = row.insertCell();
+                        cellKey.textContent = key;
+                        cellValue.textContent = value;
+                    });
+    
+                    // Tabelle zum Container hinzufügen
+                    document.getElementById('userTableContainer').appendChild(table);
                 })
                 .catch((error) => {
                     console.error('Fehler:', error);
@@ -37,8 +56,8 @@
                 });
             }
         };
-
-
     </script>
+    
+
 
 {% endblock %}
