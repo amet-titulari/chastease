@@ -1,0 +1,49 @@
+<!-- templates/index.html -->
+{% extends 'extension/base.html' %}
+
+{% block content %}
+
+    {{ content|safe }}
+
+    <div id="responseMessage"></div> <!-- Container für die Erfolgsanzeige -->
+
+    <div id="userTableContainer"></div> <!-- Container für die Tabelle -->
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/iframe-resizer/4.3.9/iframeResizer.contentWindow.js"></script>
+    
+    <script type="text/javascript">
+
+        window.onload = function() {
+            if (window.location.hash) {
+                // Hash-Parameter extrahieren
+                const hash = window.location.hash.substring(1);
+                const params = JSON.parse(decodeURIComponent(hash));
+                const configurationToken = params.partnerConfigurationToken;
+
+                // Token an Ihr Backend senden (Beispielcode)
+                fetch('/extension/fetchconfig', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ configurationToken: configurationToken })
+                })
+                .then(response => response.json())
+                .then(config => {
+                    // Hier würden Sie Ihre Konfigurationsformular befüllen
+                    console.log('Konfiguration geladen:', config);
+                    // Beispiel: document.getElementById('taskList').innerHTML = config.tasks.join(', ');
+                })
+                .catch(error => {
+                    console.error('Fehler beim Laden der Konfiguration:', error);
+                });
+            }
+        };
+
+    </script>
+    
+    
+    
+
+
+{% endblock %}

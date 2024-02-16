@@ -9,7 +9,7 @@ from benutzer.models import Benutzer
 
 from benutzer.models import Benutzer
 
-from api.cahaster_extension import get_session_auth_info
+from api.cahaster_extension import get_session_auth_info, get_config_info
 
 @extension.route('/')
 def index():
@@ -22,15 +22,6 @@ def index():
 
     #return redirect(url_for('extension.handle_token'))
     return render_template('extension/index.html', content=content) 
-
-@extension.route('/home')
-def home():
-
-    print(current_user.is_authenticated)
-
-
-    return render_template('extension/home.html') 
- 
 
 
 @extension.route('/handle_token', methods=['GET', 'POST'])
@@ -99,10 +90,56 @@ def handle_token():
 
   
 
-@extension.route('/config', methods=['POST'])
+@extension.route('/config')
 def config():
-    pass
 
+    content = f'    <div class="container">\
+                        <h1>Konfiguration!</h1>\
+                        <h3></h3>\
+                        <p></p>\
+                    </div>'
+
+    #return redirect(url_for('extension.handle_token'))
+    return render_template('extension/config.html', content=content) 
+
+@extension.route('/fetchconfig', methods=['GET', 'POST'])
+def fetchconfig():
+    print(f'Route /fetchconfig\nMethode: {request.method}')
+    if request.method == 'POST':
+        try:
+            data = request.json
+            print(f'Daten: {data}')
+            configurationToken = data.get('configurationToken')
+            print(f'Token: {configurationToken}')
+
+            if not configurationToken:
+                raise ValueError("Kein Token gefunden.")
+            
+            configinfo = get_config_info(configurationToken)
+            print(f'Configinfo: {configinfo}')
+
+            returnmsg = {
+                            "success": True,
+                            "message": "Config Token OK.",
+                            "data"   : data
+                        }
+            
+            print(returnmsg)
+            return jsonify(returnmsg),200
+
+
+
+        except ValueError as e:
+            return jsonify({"success": False, "message": str(e)}), 400  # Client-seitiger Fehler
+
+
+    elif request.method == 'GET':
+        print("Methode GET")
+        # Hier können Sie entscheiden, was bei einem GET-Request passieren soll.
+        # Zum Beispiel: Eine bestimmte Information als JSON zurückgeben oder eine einfache Nachricht.
+        return jsonify({"message": "GET-Request ist für diese Route nicht zulässig."}), 405
+
+  
 
 @extension.route('/hooks', methods=['POST'])
 def hooks():

@@ -30,25 +30,25 @@ class Benutzer(UserMixin, db.Model):
 
     def to_dict(self):
         return {
-            "id"                : self.id,
-            "username"          : self.username,
-            "role"              : self.role,
-            "avatarUrl"         : self.avatarUrl,
-            #"lock_uuid"         : self.lock_uuid,
-            #"CA_username"       : self.CA_username,
+            #"id"                  : self.id,
+            "Extension User"       : self.username,
+            "Role"                 : self.role,
+            #"avatarUrl"           : self.avatarUrl,
+            #"lock_uuid"           : self.lock_uuid,
+            "Chaster User"         : self.CA_username,
 
-            "CA_keyholdername"    : self.CA_keyholdername ,
+            "Chaster Keyholder"    : self.CA_keyholdername ,
             #"CA_keyholder_id"     : self.CA_keyholder_id ,
             #"CA_user_id"          : self.CA_user_id ,
-            "CA_lock_id"          : self.CA_lock_id ,
-            "CA_lock_status"      : self.CA_lock_status ,
+            #"CA_lock_id"          : self.CA_lock_id ,
+            "Lock Status"          : self.CA_lock_status ,
             #"CA_combination_id"   : self.CA_combination_id , 
 
             # Konfiguration für TTLock
-            "TTL_username"        : self.TTL_username ,
+            "TTL User"             : self.TTL_username ,
             #"TTL_password_md5"    : self.TTL_password_md5 ,
-            "TTL_lock_alias"      : self.TTL_lock_alias ,
-            "TTL_lock_id"         : self.TTL_lock_id ,
+            "TTL Lock Alias"       : self.TTL_lock_alias ,
+            "TTL Lock Id"          : self.TTL_lock_id ,
 
             # Fügen Sie hier weitere Felder hinzu, die zurückgegeben werden sollen
         }

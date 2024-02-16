@@ -40,8 +40,6 @@ def get_session_auth_info(main_token):
         # Andere Arten von Fehlern (Netzwerkfehler, etc.)
         return {'success': False, 'error': f'Netzwerkfehler: {str(e)}'}
 
-
-
 def get_session_info(sessionId):
 
     try:
@@ -93,3 +91,43 @@ def get_session_info(sessionId):
 
         return {'success': False, 'error': f'ERROR: {str(e)}'} 
 
+def get_config_info(token):
+    try:
+        # URL für die API-Anfrage
+        print(f'GET_CONIFG_INFO\nToken:{token}')
+        url = f'https://api.chaster.app/api/extensions/configurations/{token}'
+        print(f'URL: {url}')
+
+        # HTTP-Header setzen, in diesem Fall nur den 'accept'-Header
+        headers = {
+            'accept': 'application/json',
+        }
+
+        # Die GET-Anfrage durchführen
+        response = requests.get(url, headers=headers)
+        print(f'Response: {response.json()}')
+
+        # Prüfen, ob die Anfrage erfolgreich war
+        if response.status_code == 200:
+            # Die Antwort als JSON-Objekt bekommen
+            data = response.json()
+            print(f'Daten: {data}')
+            return {'success': True, 'data': data} 
+            
+        else:
+            try:
+                # Versuchen, die Fehlermeldung aus dem Antwort-Body zu extrahieren
+                error_message = response.json().get('message', 'Keine spezifische Fehlermeldung verfügbar.')
+            except ValueError:
+                # Falls die Antwort keinen JSON-Body hat oder nicht geparst werden kann
+                error_message = response.text or 'Keine spezifische Fehlermeldung verfügbar.'
+            
+            print(f'Fehler bei der Anfrage: {response.status_code}, Nachricht: {error_message}')
+
+
+
+    except requests.exceptions.RequestException as e:
+        # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
+        return {'success': False, 'error': f'ERROR: {str(e)}'} 
+
+    
