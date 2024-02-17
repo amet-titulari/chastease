@@ -59,7 +59,7 @@ def get_session_info(sessionId):
             if 'errcode' in result and result['errcode'] != 0:
                 return {'success': False, 'error': result.get('errmsg', 'Unbekannter Fehler')}
             
-            return {'success': True, 'session': result}
+            return {'success': True, 'session_info': result}
 
         except requests.exceptions.RequestException as e:
             # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
@@ -89,14 +89,16 @@ def get_config_info(token):
         if response.status_code == 200:
             # Die Antwort als JSON-Objekt bekommen
             data = response.json()
+
+            print(f'Get_Config_info: {data}\n')
                         
             # Daten extrahieren
             session_id = data['sessionId']
             sessioninfo = get_session_info(session_id)
-
+            
             if sessioninfo['success']:
-                session = sessioninfo['session']
-                return {'success': True, 'session': session} 
+                session = sessioninfo['session_info']
+                return {'success': True, 'data': session} 
             else:
                 return {'success': False, 'error': f'ERROR: {str(e)}'} 
 

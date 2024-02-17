@@ -9,6 +9,22 @@
 
     <div id="userTableContainer"></div> <!-- Container für die Tabelle -->
 
+    <form method="POST" action="">
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.TTL_username.label }}<br>
+            {{ form.TTL_username(size=20) }}
+        </p>
+        <p>
+            {{ form.TTL_password_md5.label }}<br>
+            {{ form.TTL_password_md5(size=20) }}
+        </p>
+        <p>
+            {{ form.TTL_lock_alias.label }}<br>
+            {{ form.TTL_lock_alias(size=20) }}
+        </p>
+        <p><button type="submit">Submit</button></p>
+    </form>
 
     <script type="text/javascript">
 
@@ -32,6 +48,9 @@
                     // Hier würden Sie Ihre Konfigurationsformular befüllen
                     console.log('Konfiguration geladen:', config);
                     // Beispiel: document.getElementById('taskList').innerHTML = config.tasks.join(', ');
+                    document.querySelector('input[name="TTL_username"]').value = config.TTL_username || '';
+                    document.querySelector('input[name="TTL_password_md5"]').value = config.TTL_password_md5 || '';
+                    document.querySelector('input[name="TTL_lock_alias"]').value = config.TTL_lock_alias || '';
                 })
                 .catch(error => {
                     console.error('Fehler beim Laden der Konfiguration:', error);
@@ -41,36 +60,6 @@
 
     </script>
 
-    <script>
-
-        // Add an event listener to receive events from Chaster
-        addEventListener("message", async (e) => {
-        if (typeof e.data !== "string") return
-
-        const { type, event } = JSON.parse(e.data)
-
-        if (type === "chaster" && event === "partner_configuration_save") {
-            // Show a spinner loader on the modal
-            window.parent.postMessage(
-            JSON.stringify({ type: "partner_configuration", event: "save_loading" }),
-            "*"
-            )
-
-            // Send the configuration to your backend to save it
-            await fetch(`/lock-opener/configuration/${configurationToken}`, {
-            method: "PUT",
-            body: configuration,
-            })
-
-            // Close the modal
-            window.parent.postMessage(
-            JSON.stringify({ type: "partner_configuration", event: "save_success" }),
-            "*"
-            )
-        }
-        })
-
-    </script>
     
     
     

@@ -3,6 +3,7 @@ from flask import  request, session, render_template, jsonify, flash
 from flask_login import login_user, current_user
 
 from . import extension
+from .forms import ExtensionConfigForm
 
 
 from database import db
@@ -91,9 +92,14 @@ def handle_token():
         return jsonify({"message": "GET-Request ist für diese Route nicht zulässig."}), 405
  
 
-@extension.route('/config')
+@extension.route('/config', methods=['GET', 'POST'])
 def config():
 
+    form = ExtensionConfigForm()
+    if form.validate_on_submit():
+        # Hier könnten Sie die Daten verarbeiten, z.B. in einer Datenbank speichern
+        flash('Formular erfolgreich eingereicht!')
+    
     content = f'    <div class="container">\
                         <h1>Konfiguration!</h1>\
                         <h3></h3>\
@@ -101,7 +107,7 @@ def config():
                     </div>'
 
     #return redirect(url_for('extension.handle_token'))
-    return render_template('extension/config.html', content=content) 
+    return render_template('extension/config.html', content=content, form=form) 
 
 
 @extension.route('/fetchconfig', methods=['GET', 'POST'])
@@ -117,19 +123,30 @@ def fetchconfig():
             
             configinfo = get_config_info(configurationToken)
             if configinfo['success']:
-                sessiondata = configinfo['session']
+                print(f'Config_Info{configinfo}\n')
+                
+                sessiondata = configinfo['data']['session']
+                print(f'Session Data: {sessiondata}\n')
+                #print()
+                configdata  = configinfo['data']['session']['config']
+                print(f'Config Data: {configdata}\n')
 
-            print(f'Konigurationsinfo: {sessiondata}')
+                
+
+            #print(f'Konigurationsinfo: {sessiondata}')
             print(f'\n\n')
 
-            session_id = sessiondata["session"]["sessionId"]
-            lock_id = sessiondata["session"]["lock"]["_id"]
-            lock_status = sessiondata["session"]["lock"]["status"]
-            combination_id = sessiondata["session"]["lock"]["combination"]
-            user_id = sessiondata["session"]["lock"]["user"]["_id"]
-            username = sessiondata["session"]["lock"]["user"]["username"]
-            keyholder_id = sessiondata["session"]["lock"]["keyholder"]["_id"]
-            keyholdername = sessiondata["session"]["lock"]["keyholder"]["username"]
+            session_id              = sessiondata["sessionId"]
+            lock_id                 = sessiondata["lock"]["_id"]
+            lock_status             = sessiondata["lock"]["status"]
+            combination_id          = sessiondata["lock"]["combination"]
+            user_id                 = sessiondata["lock"]["user"]["_id"]
+            username                = sessiondata["lock"]["user"]["username"]
+            keyholder_id            = sessiondata["lock"]["keyholder"]["_id"]
+            keyholdername           = sessiondata["lock"]["keyholder"]["username"]
+            ttl_lock                = sessiondata["config"]["ttl_lock"]
+            ttl_pass                = sessiondata["config"]["ttl_pass"]
+            ttl_alias               = sessiondata["config"]["ttl_alias"]
 
             # Ausgabe der extrahierten Daten
             print("Session ID:", session_id)
@@ -140,13 +157,17 @@ def fetchconfig():
             print("Lock ID:", lock_id)
             print("Lock Status:", lock_status)
             print("Combination ID:", combination_id)
-
+            print()
+            print("Config TTL Lock:", ttl_lock)        
+            print("Config TTL Pass:", ttl_pass)
+            print("Config TTL Alias:", ttl_alias)
 
 
             returnmsg = {
                             "success": True,
                             "message": "Config Token OK.",
-                            "data"   : configinfo
+                            "data"   : sessiondata,
+                            "config" : configdata
                         }
             
             
