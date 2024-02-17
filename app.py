@@ -1,6 +1,5 @@
 
 import os
-import redis
 
 from flask import Flask, redirect, request, render_template, url_for, session, flash
 from flask_login import LoginManager, login_user, logout_user, current_user

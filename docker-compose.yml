@@ -11,7 +11,4 @@ services:
       - /root/chastease/instance:/app/instance
     environment:
       - FLASK_ENV=production
-  redis:
-    image: "redis:alpine"
-    ports:
-      - "6379:6379"
+

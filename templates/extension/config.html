@@ -9,8 +9,7 @@
 
     <div id="userTableContainer"></div> <!-- Container für die Tabelle -->
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/iframe-resizer/4.3.9/iframeResizer.contentWindow.js"></script>
-    
+
     <script type="text/javascript">
 
         window.onload = function() {
@@ -39,6 +38,37 @@
                 });
             }
         };
+
+    </script>
+
+    <script>
+
+        // Add an event listener to receive events from Chaster
+        addEventListener("message", async (e) => {
+        if (typeof e.data !== "string") return
+
+        const { type, event } = JSON.parse(e.data)
+
+        if (type === "chaster" && event === "partner_configuration_save") {
+            // Show a spinner loader on the modal
+            window.parent.postMessage(
+            JSON.stringify({ type: "partner_configuration", event: "save_loading" }),
+            "*"
+            )
+
+            // Send the configuration to your backend to save it
+            await fetch(`/lock-opener/configuration/${configurationToken}`, {
+            method: "PUT",
+            body: configuration,
+            })
+
+            // Close the modal
+            window.parent.postMessage(
+            JSON.stringify({ type: "partner_configuration", event: "save_success" }),
+            "*"
+            )
+        }
+        })
 
     </script>
     

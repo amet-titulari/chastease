@@ -58,29 +58,8 @@ def get_session_info(sessionId):
             # Überprüfen Sie hier, ob die Antwort einen spezifischen Fehlercode enthält
             if 'errcode' in result and result['errcode'] != 0:
                 return {'success': False, 'error': result.get('errmsg', 'Unbekannter Fehler')}
-
-            print(result)            
-            return {'success': True, 'data': result}
-
-        
-            token_response = requests.post(
-                current_app.config['CA_TOKEN_ENDPOINT'],
-                data={
-                    'grant_type': 'authorization_code',
-                    'code': code,
-                    'redirect_uri': current_app.config['BASE_URL'] + 'callback',
-                    'client_id': current_app.config['CA_CLIENT_ID'],
-                    'client_secret': current_app.config['CA_CLIENT_SECRET']
-                }
-            )
-
-            token_data = token_response.json()
-
-            session['ca_access_token'] = token_data.get('access_token')
-            session['ca_refresh_token'] = token_data.get('refresh_token')
-            session['ca_token_expiration_time'] = time.time() + token_data['expires_in']
-
-            return {'success': True}        
+            
+            return {'success': True, 'session': result}
 
         except requests.exceptions.RequestException as e:
             # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
@@ -94,26 +73,33 @@ def get_session_info(sessionId):
 def get_config_info(token):
     try:
         # URL für die API-Anfrage
-        print(f'GET_CONIFG_INFO\nToken:{token}')
         url = f'https://api.chaster.app/api/extensions/configurations/{token}'
-        print(f'URL: {url}')
+
 
         # HTTP-Header setzen, in diesem Fall nur den 'accept'-Header
         headers = {
             'accept': 'application/json',
+            'Authorization': f'Bearer {current_app.config['CA_DEV_TOKEN']}'
         }
 
         # Die GET-Anfrage durchführen
         response = requests.get(url, headers=headers)
-        print(f'Response: {response.json()}')
 
         # Prüfen, ob die Anfrage erfolgreich war
         if response.status_code == 200:
             # Die Antwort als JSON-Objekt bekommen
             data = response.json()
-            print(f'Daten: {data}')
-            return {'success': True, 'data': data} 
-            
+                        
+            # Daten extrahieren
+            session_id = data['sessionId']
+            sessioninfo = get_session_info(session_id)
+
+            if sessioninfo['success']:
+                session = sessioninfo['session']
+                return {'success': True, 'session': session} 
+            else:
+                return {'success': False, 'error': f'ERROR: {str(e)}'} 
+
         else:
             try:
                 # Versuchen, die Fehlermeldung aus dem Antwort-Body zu extrahieren

@@ -4,8 +4,9 @@ from wtforms import StringField
 
 
 
-class YourForm(FlaskForm):
-    # Ihre Formularfelder hier
+class ExtensionConfigForm(FlaskForm):
     pass
+
+
 
 
