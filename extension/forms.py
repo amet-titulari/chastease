@@ -6,9 +6,9 @@ from wtforms import StringField
 
 class ExtensionConfigForm(FlaskForm):
   
-    TTL_username = StringField('Username')
-    TTL_password_md5 = StringField('Password MD5')
-    TTL_lock_alias = StringField('Lock Alias')
+    TTL_user = StringField('Username')
+    TTL_pass = StringField('Password MD5')
+    TTL_alias = StringField('Lock Alias')
 
 
 

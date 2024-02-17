@@ -123,10 +123,9 @@ def fetchconfig():
             
             configinfo = get_config_info(configurationToken)
             if configinfo['success']:
-                print(f'Config_Info{configinfo}\n')
-                
+                #print(f'Config_Info{configinfo}\n')
                 sessiondata = configinfo['data']['session']
-                print(f'Session Data: {sessiondata}\n')
+                #print(f'Session Data: {sessiondata}\n')
                 #print()
                 configdata  = configinfo['data']['session']['config']
                 print(f'Config Data: {configdata}\n')
@@ -134,40 +133,40 @@ def fetchconfig():
                 
 
             #print(f'Konigurationsinfo: {sessiondata}')
-            print(f'\n\n')
+            #print(f'\n\n')
 
-            session_id              = sessiondata["sessionId"]
-            lock_id                 = sessiondata["lock"]["_id"]
-            lock_status             = sessiondata["lock"]["status"]
-            combination_id          = sessiondata["lock"]["combination"]
-            user_id                 = sessiondata["lock"]["user"]["_id"]
-            username                = sessiondata["lock"]["user"]["username"]
-            keyholder_id            = sessiondata["lock"]["keyholder"]["_id"]
-            keyholdername           = sessiondata["lock"]["keyholder"]["username"]
-            ttl_lock                = sessiondata["config"]["ttl_lock"]
-            ttl_pass                = sessiondata["config"]["ttl_pass"]
-            ttl_alias               = sessiondata["config"]["ttl_alias"]
+            #session_id              = sessiondata["sessionId"]
+            #lock_id                 = sessiondata["lock"]["_id"]
+            #lock_status             = sessiondata["lock"]["status"]
+            #combination_id          = sessiondata["lock"]["combination"]
+            #user_id                 = sessiondata["lock"]["user"]["_id"]
+            #username                = sessiondata["lock"]["user"]["username"]
+            #keyholder_id            = sessiondata["lock"]["keyholder"]["_id"]
+            #keyholdername           = sessiondata["lock"]["keyholder"]["username"]
+#
+            #ttl_user                = configdata["ttl_user"]
+            #ttl_pass                = configdata["ttl_pass"]
+            #ttl_alias               = configdata["ttl_alias"]
 
             # Ausgabe der extrahierten Daten
-            print("Session ID:", session_id)
-            print("User ID:", user_id)
-            print("Keyholder ID:", keyholder_id)
-            print("Username:", username)
-            print("Keyholdername:", keyholdername)
-            print("Lock ID:", lock_id)
-            print("Lock Status:", lock_status)
-            print("Combination ID:", combination_id)
-            print()
-            print("Config TTL Lock:", ttl_lock)        
-            print("Config TTL Pass:", ttl_pass)
-            print("Config TTL Alias:", ttl_alias)
+            #print("Session ID:", session_id)
+            #print("User ID:", user_id)
+            #print("Keyholder ID:", keyholder_id)
+            #print("Username:", username)
+            #print("Keyholdername:", keyholdername)
+            #print("Lock ID:", lock_id)
+            #print("Lock Status:", lock_status)
+            #print("Combination ID:", combination_id)
+            #print()
+            #print("Config TTL Lock:", ttl_user)        
+            #print("Config TTL Pass:", ttl_pass)
+            #print("Config TTL Alias:", ttl_alias)
 
 
             returnmsg = {
                             "success": True,
                             "message": "Config Token OK.",
-                            "data"   : sessiondata,
-                            "config" : configdata
+                            "data"   : configdata
                         }
             
             

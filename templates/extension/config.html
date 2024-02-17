@@ -9,32 +9,30 @@
 
     <div id="userTableContainer"></div> <!-- Container für die Tabelle -->
 
-    <form method="POST" action="">
-        {{ form.hidden_tag() }}
+    <form id="configForm">
         <p>
-            {{ form.TTL_username.label }}<br>
-            {{ form.TTL_username(size=20) }}
+            <label for="ttl_user">Username:</label><br>
+            <input type="text" id="ttl_user" name="ttl_user">
         </p>
         <p>
-            {{ form.TTL_password_md5.label }}<br>
-            {{ form.TTL_password_md5(size=20) }}
+            <label for="ttl_pass">Password MD5:</label><br>
+            <input type="text" id="ttl_pass" name="ttl_pass">
         </p>
         <p>
-            {{ form.TTL_lock_alias.label }}<br>
-            {{ form.TTL_lock_alias(size=20) }}
+            <label for="ttl_alias">Lock Alias:</label><br>
+            <input type="text" id="ttl_alias" name="ttl_alias">
         </p>
-        <p><button type="submit">Submit</button></p>
+        <button type="button" id="submitBtn">Submit</button>
     </form>
-
+    
     <script type="text/javascript">
-
         window.onload = function() {
             if (window.location.hash) {
                 // Hash-Parameter extrahieren
                 const hash = window.location.hash.substring(1);
                 const params = JSON.parse(decodeURIComponent(hash));
                 const configurationToken = params.partnerConfigurationToken;
-
+    
                 // Token an Ihr Backend senden (Beispielcode)
                 fetch('/extension/fetchconfig', {
                     method: 'POST',
@@ -44,21 +42,23 @@
                     body: JSON.stringify({ configurationToken: configurationToken })
                 })
                 .then(response => response.json())
-                .then(config => {
-                    // Hier würden Sie Ihre Konfigurationsformular befüllen
-                    console.log('Konfiguration geladen:', config);
-                    // Beispiel: document.getElementById('taskList').innerHTML = config.tasks.join(', ');
-                    document.querySelector('input[name="TTL_username"]').value = config.TTL_username || '';
-                    document.querySelector('input[name="TTL_password_md5"]').value = config.TTL_password_md5 || '';
-                    document.querySelector('input[name="TTL_lock_alias"]').value = config.TTL_lock_alias || '';
+                .then(data => {
+                    // Konfigurationsformular mit den Daten aus der Antwort befüllen
+                    console.log('Konfiguration geladen:', data);
+
+                    document.getElementById('responseMessage').innerHTML = 'Erfolg: ' + data.data.ttl_user + " " + data.data.ttl_pass + " " + data.data.ttl_alias + " "  ;
+
+                    document.getElementById('ttl_user').value = data.data.ttl_user || '';
+                    document.getElementById('ttl_pass').value = data.data.ttl_pass || '';
+                    document.getElementById('ttl_alias').value = data.data.ttl_alias || '';
                 })
                 .catch(error => {
                     console.error('Fehler beim Laden der Konfiguration:', error);
                 });
             }
         };
-
     </script>
+    
 
     
     
