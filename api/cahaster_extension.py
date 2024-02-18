@@ -1,4 +1,5 @@
 import requests
+import json
 
 from database import db
 from helper.log_config import logger
@@ -6,11 +7,6 @@ from helper.log_config import logger
 from flask import current_app, session
 from flask_login import current_user
 
-
-
-
-from flask import current_app
-import requests
 
 def get_session_auth_info(main_token):
     # Beachten Sie die Änderung in der Verwendung der Anführungszeichen im Authorization-Header
@@ -118,4 +114,22 @@ def get_config_info(token):
         # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
         return {'success': False, 'error': f'ERROR: {str(e)}'} 
 
-    
+def put_config_update(token, data):
+    url = f'https://api.chaster.app/api/extensions/configurations/{token}'
+    headers = {
+        'accept': 'application/json',
+        'Authorization': f'Bearer {current_app.config['CA_DEV_TOKEN']}'
+    }
+    # Das 'data' Dictionary sollte bereits das korrekte Format haben,
+    # daher brauchen wir es nur im 'json'-Parameter zu übergeben.
+    response = requests.put(url, headers=headers, json={"config": data})
+
+    print(response)
+
+    if response.status_code == 200:
+        print("Erfolgreiche Aktualisierung:", response.json())
+        return {'success': True, 'data': response.json()}
+    else:
+        print("Fehler bei der Anfrage:", response.status_code, response.json())
+        return {'success': False, 'error': response.json()}
+

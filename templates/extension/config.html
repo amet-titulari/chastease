@@ -24,17 +24,34 @@
             <label for="ttl_alias" class="form-label">Lock Alias:</label>
             <input type="text" class="form-control" id="ttl_alias" name="ttl_alias">
         </div>
+        <!-- Buton
         <button type="button" class="btn btn-primary" id="submitBtn">Submit</button>
+        -->
     </form>
+
     
     <script type="text/javascript">
+        window.parent.postMessage(
+        JSON.stringify({
+            type: "partner_configuration",
+            event: "capabilities",
+            payload: { features: { save: true } },
+        }),
+        "*"
+        )
+    </script>
+
+    <script type="text/javascript">
+        // Deklarieren Sie configurationToken im oberen Scope, um es im gesamten Skript verfügbar zu machen
+        let configurationToken;
+
         window.onload = function() {
             if (window.location.hash) {
                 // Hash-Parameter extrahieren
                 const hash = window.location.hash.substring(1);
                 const params = JSON.parse(decodeURIComponent(hash));
-                const configurationToken = params.partnerConfigurationToken;
-    
+                configurationToken = params.partnerConfigurationToken; // Jetzt wird die globale Variable gesetzt
+        
                 // Token an Ihr Backend senden (Beispielcode)
                 fetch('/extension/fetchconfig', {
                     method: 'POST',
@@ -47,13 +64,13 @@
                 .then(data => {
                     // Konfigurationsformular mit den Daten aus der Antwort befüllen
                     console.log('Konfiguration geladen:', data);
-
-                    document.getElementById('responseMessage').innerHTML = 'Success: Data fully loades'  ;
-
+        
+                    document.getElementById('responseMessage').innerHTML = 'Success: Data fully loaded';
+        
                     document.getElementById('ttl_user').value = data.data.ttl_user || '';
                     document.getElementById('ttl_pass').value = data.data.ttl_pass || '';
                     document.getElementById('ttl_alias').value = data.data.ttl_alias || '';
-
+        
                     // Please wait ausblenden
                     document.getElementById('userTableContainer').style.display = 'none';
                     // Formular anzeigen
@@ -64,9 +81,83 @@
                 });
             }
         };
+        
+        // Event-Listener für Konfigurationsspeicherung
+        addEventListener("message", async (e) => {
+            if (typeof e.data !== "string") return;
+        
+            try {
+                const { type, event } = JSON.parse(e.data);
+        
+                if (type === "chaster" && event === "partner_configuration_save") {
+                    // Hier Logik zum Speichern der Konfiguration
+                    const response = await fetch(`/extension/configupdate/${configurationToken}`, {
+                        method: "PUT",
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            ttl_user: document.getElementById('ttl_user').value,
+                            ttl_pass: document.getElementById('ttl_pass').value,
+                            ttl_alias: document.getElementById('ttl_alias').value
+                        })
+                    });
+        
+                    if (!response.ok) throw new Error('Speichern fehlgeschlagen');
+        
+                    // Erfolgsmeldung an das übergeordnete Fenster senden
+                    window.parent.postMessage(JSON.stringify({ type: "partner_configuration", event: "save_success" }), "*");
+                }
+            } catch (err) {
+                // Fehlerbehandlung
+                window.parent.postMessage(JSON.stringify({ type: "partner_configuration", event: "save_failed" }), "*");
+                showToast(err.message); // Stellen Sie sicher, dass Sie eine showToast-Funktion definieren
+            }
+        });
     </script>
-    
 
+
+    
+    <script type="text/javascript">
+        // showToast Funktion, die eine Nachricht anzeigt
+        function showToast(message) {
+            // Erstellen des Toast Containers, wenn noch nicht vorhanden
+            let toastContainer = document.getElementById('toastContainer');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toastContainer';
+                document.body.appendChild(toastContainer);
+            }
+        
+            // Erstellen der Toast Nachricht
+            const toast = document.createElement('div');
+            toast.classList.add('toast');
+            toast.innerText = message;
+        
+            // Styling für den Toast Container und die Toast Nachricht
+            toastContainer.style.position = 'fixed';
+            toastContainer.style.bottom = '20px';
+            toastContainer.style.left = '50%';
+            toastContainer.style.transform = 'translateX(-50%)';
+            toastContainer.style.zIndex = '1000';
+        
+            toast.style.background = 'red';
+            toast.style.color = 'white';
+            toast.style.padding = '10px';
+            toast.style.marginTop = '10px';
+            toast.style.borderRadius = '5px';
+        
+            // Hinzufügen der Toast Nachricht zum Container und Entfernen nach 3 Sekunden
+            toastContainer.appendChild(toast);
+            setTimeout(() => {
+                toastContainer.removeChild(toast);
+                if (!toastContainer.hasChildNodes()) {
+                    document.body.removeChild(toastContainer);
+                }
+            }, 3000);
+        }
+        </script>
+        
     
     
     

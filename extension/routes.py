@@ -12,7 +12,7 @@ from benutzer.models import Benutzer
 
 from benutzer.models import Benutzer
 
-from api.cahaster_extension import get_session_auth_info, get_config_info
+from api.cahaster_extension import get_session_auth_info, get_config_info, put_config_update
 
 @extension.route('/')
 def index():
@@ -39,6 +39,7 @@ def handle_token():
 
                 session['main_token'] = main_token
                 sessionauth = get_session_auth_info(main_token)
+                #print(f'\nSessionauth: {sessionauth}\n')
 
                 if not sessionauth.get('success'):
                     raise ValueError("Fehler bei der Authentifizierung.")
@@ -51,7 +52,10 @@ def handle_token():
                 role = user_data.get('role')
                 avatarUrl = user_data.get('avatarUrl')
 
+                print(f'\nUserinfo: {username}\t{role}\t{avatarUrl}\n')
+
                 benutzer = Benutzer.query.filter_by(username=username).first()
+                print(f'\nBenutzer: {benutzer}')
 
                 if not benutzer:
                     benutzer = Benutzer(username=username, role=role, avatarUrl=avatarUrl)
@@ -68,6 +72,8 @@ def handle_token():
                     
                 benutzer_info = benutzer.to_dict()
 
+                print(f'\nBenutzer Info: {benutzer_info}')
+
                 returnmsg = {
                                 "success": True,
                                 "message": "Token erfolgreich empfangen.",
@@ -83,7 +89,7 @@ def handle_token():
                 return jsonify({"success": False, "message": str(e)}), 400  # Client-seitiger Fehler
 
             except Exception as e:
-                return jsonify({"success": False, "message": "Ein unerwarteter Fehler ist aufgetreten."}), 500  # Server-seitiger Fehler
+                return jsonify({"success": False, "message": str(e)}), 500  # Server-seitiger Fehler
 
     elif request.method == 'GET':
         print("Methode GET")
@@ -109,6 +115,39 @@ def config():
     #return redirect(url_for('extension.handle_token'))
     return render_template('extension/config.html', content=content, form=form) 
 
+@extension.route('/configupdate/<token>', methods=['PUT'])
+def configupdate(token):
+    print(f'Konigupdate gestartet: {token}')
+    if request.method == 'PUT':
+        print(f'PUT ist gestartet')
+        try:
+            data = request.json
+            #print(f'Konfiguration: {data}')
+          
+            update = put_config_update(token,data)
+            print(update)
+
+            returnmsg = {
+                            "success": True,
+                            "message": "Update Running",
+                            "data"   : "DATA"
+                        }
+            
+            
+            return jsonify(returnmsg),200
+
+
+
+        except ValueError as e:
+            return jsonify({"success": False, "message": str(e)}), 400  # Client-seitiger Fehler
+
+
+    elif request.method == 'GET':
+        print("Methode GET")
+        # Hier können Sie entscheiden, was bei einem GET-Request passieren soll.
+        # Zum Beispiel: Eine bestimmte Information als JSON zurückgeben oder eine einfache Nachricht.
+        return jsonify({"message": "GET-Request ist für diese Route nicht zulässig."}), 405
+
 
 @extension.route('/fetchconfig', methods=['GET', 'POST'])
 def fetchconfig():
@@ -129,38 +168,6 @@ def fetchconfig():
                 #print()
                 configdata  = configinfo['data']['session']['config']
                 print(f'Config Data: {configdata}\n')
-
-                
-
-            #print(f'Konigurationsinfo: {sessiondata}')
-            #print(f'\n\n')
-
-            #session_id              = sessiondata["sessionId"]
-            #lock_id                 = sessiondata["lock"]["_id"]
-            #lock_status             = sessiondata["lock"]["status"]
-            #combination_id          = sessiondata["lock"]["combination"]
-            #user_id                 = sessiondata["lock"]["user"]["_id"]
-            #username                = sessiondata["lock"]["user"]["username"]
-            #keyholder_id            = sessiondata["lock"]["keyholder"]["_id"]
-            #keyholdername           = sessiondata["lock"]["keyholder"]["username"]
-#
-            #ttl_user                = configdata["ttl_user"]
-            #ttl_pass                = configdata["ttl_pass"]
-            #ttl_alias               = configdata["ttl_alias"]
-
-            # Ausgabe der extrahierten Daten
-            #print("Session ID:", session_id)
-            #print("User ID:", user_id)
-            #print("Keyholder ID:", keyholder_id)
-            #print("Username:", username)
-            #print("Keyholdername:", keyholdername)
-            #print("Lock ID:", lock_id)
-            #print("Lock Status:", lock_status)
-            #print("Combination ID:", combination_id)
-            #print()
-            #print("Config TTL Lock:", ttl_user)        
-            #print("Config TTL Pass:", ttl_pass)
-            #print("Config TTL Alias:", ttl_alias)
 
 
             returnmsg = {

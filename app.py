@@ -17,7 +17,7 @@ from benutzer import benutzer
 from extension import extension
 
 from benutzer.models import Benutzer, LockHistory, Journal
-from extension.models import Session
+from extension.models import ChasterSession
 
 
 from benutzer.routes import benutzer
