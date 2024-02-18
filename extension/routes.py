@@ -18,7 +18,7 @@ from api.cahaster_extension import get_session_auth_info, get_config_info, put_c
 def index():
 
     content = f'    <div class="container">\
-                        <h1>Infos zur Erweiterungssession!</h1>\
+                        <h1>Erweiterungssession!</h1>\
                         <h3></h3>\
                         <p></p>\
                     </div>'
@@ -51,10 +51,10 @@ def handle_token():
                 role = user_data.get('role')
                 avatarUrl = user_data.get('avatarUrl')
 
-                print(f'\nUserinfo: {username}\t{role}\t{avatarUrl}\n')
+                #print(f'\nUserinfo: {username}\t{role}\t{avatarUrl}\n')
 
                 benutzer = Benutzer.query.filter_by(username=username).first()
-                print(f'\nBenutzer: {benutzer}')
+                #print(f'\nBenutzer: {benutzer}')
 
                 if not benutzer:
                     benutzer = Benutzer(username=username, role=role, avatarUrl=avatarUrl)
@@ -71,7 +71,7 @@ def handle_token():
                     
                 benutzer_info = benutzer.to_dict()
 
-                print(f'\nBenutzer Info: {benutzer_info}')
+                #print(f'\nBenutzer Info: {benutzer_info}')
 
                 returnmsg = {
                                 "success": True,
@@ -79,7 +79,7 @@ def handle_token():
                                 "user"   : benutzer_info
                             }
                 
-                print(returnmsg)
+                #print(returnmsg)
                 return jsonify(returnmsg),200
 
 
