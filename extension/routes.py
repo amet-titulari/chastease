@@ -26,7 +26,6 @@ def index():
     #return redirect(url_for('extension.handle_token'))
     return render_template('extension/index.html', content=content) 
 
-
 @extension.route('/handle_token', methods=['GET', 'POST'])
 def handle_token():
     if request.method == 'POST':
@@ -96,7 +95,6 @@ def handle_token():
         # Hier können Sie entscheiden, was bei einem GET-Request passieren soll.
         # Zum Beispiel: Eine bestimmte Information als JSON zurückgeben oder eine einfache Nachricht.
         return jsonify({"message": "GET-Request ist für diese Route nicht zulässig."}), 405
- 
 
 @extension.route('/config', methods=['GET', 'POST'])
 def config():
@@ -148,7 +146,6 @@ def configupdate(token):
         # Zum Beispiel: Eine bestimmte Information als JSON zurückgeben oder eine einfache Nachricht.
         return jsonify({"message": "GET-Request ist für diese Route nicht zulässig."}), 405
 
-
 @extension.route('/fetchconfig', methods=['GET', 'POST'])
 def fetchconfig():
     
@@ -164,10 +161,10 @@ def fetchconfig():
             if configinfo['success']:
                 #print(f'Config_Info{configinfo}\n')
                 sessiondata = configinfo['data']['session']
-                #print(f'Session Data: {sessiondata}\n')
+                print(f'Session Data: {sessiondata}\n')
                 #print()
                 configdata  = configinfo['data']['session']['config']
-                print(f'Config Data: {configdata}\n')
+                #print(f'Config Data: {configdata}\n')
 
 
             returnmsg = {
@@ -190,8 +187,6 @@ def fetchconfig():
         # Hier können Sie entscheiden, was bei einem GET-Request passieren soll.
         # Zum Beispiel: Eine bestimmte Information als JSON zurückgeben oder eine einfache Nachricht.
         return jsonify({"message": "GET-Request ist für diese Route nicht zulässig."}), 405
-
-  
 
 @extension.route('/hooks', methods=['POST'])
 def hooks():

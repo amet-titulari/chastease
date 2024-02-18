@@ -86,7 +86,7 @@ def get_config_info(token):
             # Die Antwort als JSON-Objekt bekommen
             data = response.json()
 
-            print(f'Get_Config_info: {data}\n')
+            #print(f'Get_Config_info: {data}\n')
                         
             # Daten extrahieren
             session_id = data['sessionId']
