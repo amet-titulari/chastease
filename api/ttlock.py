@@ -1,6 +1,8 @@
+import os
 import requests
 import logging
 import time
+import json
 
 from datetime import datetime
 from dateutil import parser
@@ -115,20 +117,15 @@ def get_ttlock_history():
     start_date              = int(timestamp_start_seconds * 1000)
     end_date                = int(time.time() * 1000)
 
-    recordtype_mapping = {
-        1: "Unlock by App",
-        7: "Unlock by IC card",
-        12: "Unlock by Gateway",
-        48: "System locked"
-        # Fügen Sie weitere Zuordnungen nach Bedarf hinzu
-    }
-    recordtypelock_mapping = {
-        1: "Unlock by Bluetooth",
-        17: "Unlock by Card",
-        28: "Unlock by Gateway",
-        48: "System locked"
-        # Fügen Sie weitere Zuordnungen nach Bedarf hinzu
-    }
+    # Laden der Konfigurationsdaten
+    print(os.getcwd())
+
+    with open('api/ttlock_codes.json', 'r') as file:
+        codes = json.load(file)
+
+    # Zugriff auf die Daten
+    recordtype_mapping = codes['recordtype_mapping']
+    recordtypelock_mapping = codes['recordtypelock_mapping']
 
     url = "https://euapi.ttlock.com/v3/lockRecord/list"
 
