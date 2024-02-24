@@ -1,4 +1,6 @@
 import requests
+import json
+
 from flask import  request, session, render_template, jsonify, flash
 from flask_login import login_user, current_user
 
@@ -32,13 +34,14 @@ def handle_token():
             try:
                 data = request.json
                 main_token = data.get('mainToken')
+                print(f'\nMainToken: {main_token}')
 
                 if not main_token:
                     raise ValueError("Kein Token gefunden.")
 
                 session['main_token'] = main_token
                 sessionauth = get_session_auth_info(main_token)
-                #print(f'\nSessionauth: {sessionauth}\n')
+                print(f'\nSessionauth: {sessionauth}\n')
 
                 if not sessionauth.get('success'):
                     raise ValueError("Fehler bei der Authentifizierung.")
@@ -51,7 +54,7 @@ def handle_token():
                 role = user_data.get('role')
                 avatarUrl = user_data.get('avatarUrl')
 
-                #print(f'\nUserinfo: {username}\t{role}\t{avatarUrl}\n')
+                print(f'\nUserinfo: {username}\t{role}\t{avatarUrl}\n')
 
                 benutzer = Benutzer.query.filter_by(username=username).first()
                 #print(f'\nBenutzer: {benutzer}')
@@ -66,9 +69,9 @@ def handle_token():
                     benutzer.avatarUrl = avatarUrl
                     login_user(benutzer)
 
-                # Zusätzliche Logik nach dem Login
-                # Zum Beispiel: Session-Infos abrufen, weitere Daten verarbeiten usw.
-                    
+                # Konfig abrufen
+                config_data = sessionauth.get('data', {}).get('session', {}).get('config', {})
+                print(f'\nKonfiguration:{config_data}')
                 benutzer_info = benutzer.to_dict()
 
                 #print(f'\nBenutzer Info: {benutzer_info}')
@@ -76,7 +79,8 @@ def handle_token():
                 returnmsg = {
                                 "success": True,
                                 "message": "Token erfolgreich empfangen.",
-                                "user"   : benutzer_info
+                                "user"   : benutzer_info,
+                                "config" : config_data
                             }
                 
                 #print(returnmsg)
@@ -117,18 +121,20 @@ def config():
 def configupdate(token):
     print(f'Konigupdate gestartet: {token}')
     if request.method == 'PUT':
-        print(f'PUT ist gestartet')
+        print(f'PUT Token: {token}')
         try:
-            data = request.json
-            #print(f'Konfiguration: {data}')
-          
+            data = { 'config': request.json }
+            
+            print(f'\nDATA_JSON: {data}')
+
             update = put_config_update(token,data)
-            print(update)
+            print(f'\nUPDATE resp von func: {update}')
+
 
             returnmsg = {
                             "success": True,
                             "message": "Update Running",
-                            "data"   : "DATA"
+                            "data"   : update
                         }
             
             
@@ -152,19 +158,26 @@ def fetchconfig():
     if request.method == 'POST':
         try:
             data = request.json
+            print(f'Fetchkonfig Data: {data}\n')
             configurationToken = data.get('configurationToken')
 
             if not configurationToken:
+
                 raise ValueError("Kein Token gefunden.")
             
             configinfo = get_config_info(configurationToken)
+            print(f'Config Info from get config: {configinfo}\n')
+            
+
             if configinfo['success']:
-                #print(f'Config_Info{configinfo}\n')
-                sessiondata = configinfo['data']['session']
-                print(f'Session Data: {sessiondata}\n')
-                #print()
-                configdata  = configinfo['data']['session']['config']
-                #print(f'Config Data: {configdata}\n')
+                if configinfo['noSession']:
+                    print(f'NO SESSION YET!!!!')
+                    configdata = configinfo['config']
+                    print(f'Configdata: {configdata}')
+                else:
+                    configdata  = configinfo['data']['session']['config']
+                    print(f'Config Data: {configdata}\n')
+                
 
 
             returnmsg = {
@@ -179,7 +192,7 @@ def fetchconfig():
 
 
         except ValueError as e:
-            return jsonify({"success": False, "message": str(e)}), 400  # Client-seitiger Fehler
+            return jsonify({"success": False, "message":""}), 400  # Client-seitiger Fehler
 
 
     elif request.method == 'GET':
@@ -191,6 +204,7 @@ def fetchconfig():
 @extension.route('/hooks', methods=['POST'])
 def hooks():
     # Prüfen, ob es sich um eine JSON-Anfrage handelt
+    print(f"Hook wurde ausgelöst!")
     if request.is_json:
         # Anfragedaten extrahieren
         data = request.get_json()

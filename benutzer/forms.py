@@ -42,3 +42,4 @@ class JournalEditForm(FlaskForm):
     note = StringField('Note')
     created_at = DateTimeField('created_at',validators=[DataRequired()])
     submit = SubmitField('Submit')
+

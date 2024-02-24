@@ -8,7 +8,7 @@ from helper.log_config import logger
 from flask import current_app, session
 from flask_login import current_user, login_user
 
-from benutzer.models import Benutzer, LockHistory
+from benutzer.models import Benutzer, History_Chaster
 from benutzer.token_handling import is_ca_token_valid
 
 
@@ -159,7 +159,6 @@ def get_user_lockinfo(ca_lockid, ca_access_token):
             # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
             return {'success': False, 'error': f'Netzwerk- oder HTTP-Fehler: {str(e)}'}
 
-
 def get_hygiene_opening(ca_lockid, ca_access_token):
     check = is_ca_token_valid()
     if check:
@@ -175,7 +174,7 @@ def get_hygiene_opening(ca_lockid, ca_access_token):
             response = requests.get(url, headers=headers)
 
             result = response.json()
-            print(result)
+            #print(result)
            
             if response.status_code == 200:
                 # Erfolgreiche Antwort
@@ -190,9 +189,6 @@ def get_hygiene_opening(ca_lockid, ca_access_token):
         except requests.exceptions.RequestException as e:
             # Hier könnten Sie detailliertere Fehlermeldungen basierend auf dem spezifischen Fehler hinzufügen
             return {'success': False, 'error': f'Netzwerk- oder HTTP-Fehler: {str(e)}'}
-
-
-
 
 def upload_lock_image(ca_access_token, file_path):
 
@@ -258,7 +254,7 @@ def update_combination_relock(ca_lock_id, ca_access_token, ca_combination):
                 # Detaillierte Fehlermeldung
             return {'success': False, 'error': f'Upload fehlgeschlagen: {str(e)}'}
 
-def get_lock_history():
+def get_chaster_history():
     check = is_ca_token_valid()
     if check:
 
@@ -299,11 +295,11 @@ def get_lock_history():
         # Verarbeitung der Ergebnisse
         for result in all_results:
             hist_id = result.get('_id')
-            existing_entry = LockHistory.query.filter_by(hist_id=hist_id).first()
+            existing_entry = History_Chaster.query.filter_by(hist_id=hist_id).first()
             
             if not existing_entry:
                 # Fügen Sie den Datensatz nur hinzu, wenn er noch nicht existiert
-                new_history_entry = LockHistory(
+                new_history_entry = History_Chaster(
                         benutzer_id=current_user.id,
                         hist_id=hist_id,
                         lock_id=result.get('lock'),

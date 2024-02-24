@@ -6,7 +6,7 @@ from datetime import datetime
 from dateutil import parser
 from database import db
 
-from benutzer.models import Benutzer, LockHistory
+from benutzer.models import Benutzer, History_TTLock, History_Chaster
 from benutzer.token_handling import is_ttl_token_valid
 
 from flask import session, current_app, flash, redirect, url_for
@@ -85,7 +85,7 @@ def open_ttlock():
             logging.error(f"Fehler beim Öffnen des Schlosses: {response.text}")
             return None
 
-def get_ttlock_records():
+def get_ttlock_history():
 
     # Infos zu Lock Records:
     # https://euopen.ttlock.com/document/doc?urlName=cloud%2FlockRecord%2FlistEn.html
@@ -101,10 +101,12 @@ def get_ttlock_records():
         return "Token ungültig oder abgelaufen"
 
     benutzer = Benutzer.query.filter_by(id=current_user.id).first()
-    start_date_lock = LockHistory.query.filter(
-        LockHistory.description == "New lock started", 
-        LockHistory.benutzer_id == current_user.id
-        ).order_by(LockHistory.created_at).first()
+    start_date_lock = History_Chaster.query.filter(
+        History_Chaster.description == "New lock started", 
+        History_Chaster.benutzer_id == current_user.id
+        ).order_by(History_Chaster.created_at).first()
+    
+
 
     start_date_db = start_date_lock.created_at
     start_date_sec = parser.isoparse(start_date_db)
@@ -115,12 +117,16 @@ def get_ttlock_records():
 
     recordtype_mapping = {
         1: "Unlock by App",
+        7: "Unlock by IC card",
         12: "Unlock by Gateway",
+        48: "System locked"
         # Fügen Sie weitere Zuordnungen nach Bedarf hinzu
     }
     recordtypelock_mapping = {
         1: "Unlock by Bluetooth",
+        17: "Unlock by Card",
         28: "Unlock by Gateway",
+        48: "System locked"
         # Fügen Sie weitere Zuordnungen nach Bedarf hinzu
     }
 
@@ -149,12 +155,12 @@ def get_ttlock_records():
             
             history = response.json()
             total_pages = history['pages']
-            print(f'Seite : {params['pageNo']} von insgesammt {total_pages} Seiten')
+            #print(f'Seite : {params['pageNo']} von insgesammt {total_pages} Seiten')
 
             for result in history['list']:
                 hist_id = result.get('recordId')
 
-                existing_entry = LockHistory.query.filter_by(hist_id=hist_id).first()
+                existing_entry = History_TTLock.query.filter_by(hist_id=hist_id).first()
 
                 if not existing_entry:
                     # Eintragsdatum ermitteln
@@ -171,16 +177,12 @@ def get_ttlock_records():
                     recordtypefromlockstr = recordtypelock_mapping.get(recordtypefromlock, "Unbekannter Typ")
 
                     # Eintrag erstellen
-                    new_history_entry = LockHistory(
+                    new_history_entry = History_TTLock(
                             benutzer_id=current_user.id,
                             hist_id=hist_id,
                             lock_id=result.get('lockId'),
                             type="TTL Lock Protokol",
                             created_at=formatted_lockDate,
-                            extension=result.get('extension'),
-                            title=result.get('title'),
-                            description=result.get('description'),
-                            icon=result.get('icon'),
                             recordtyp=recordtype,
                             recordtypstr=recordtypstr,
                             recordtypefromlock=recordtypefromlock,
@@ -190,7 +192,8 @@ def get_ttlock_records():
                     
                     db.session.add(new_history_entry)
                 else:
-                    print("Eintrag existiert")
+                    #print("Eintrag existiert")
+                    pass
             
             db.session.commit()
             current_page += 1

@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="container-fluid">
+        <div class="row w-100">
+            <!-- Erste Tabelle in der ersten Hälfte der Zeile -->
+            <div class="col-6">
+                <div class="bg-secondary rounded">
+                    <h6 class="mb-4 text-start">CHASTER.APP Einträge</h6>
+                    <div class="table-responsive">
+                        <table class="table table-striped w-100">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Date</th>
+                                    <!-- <th scope="col">Type</th> -->
+                                    <th scope="col">Title</th> 
+                                    <th scope="col">Description</th>
+                                    <th scope="col">Ext</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for journal in chaster %}
+                                    <tr>
+                                        <td>
+                                            <script>
+                                                var createdAt = new Date('{{ journal.created_at }}');
+                                                var formattedDate = createdAt.toLocaleDateString('de-DE'); 
+                                                var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
+                                                document.write(formattedDate + ' ' + formattedTime);
+                                            </script>
+                                        </td>
+                                        <!-- <td>{{ journal.type }}</td> -->
+                                        <td>{{ journal.title }}</td>
+                                        <td>{{ journal.description }}</td>
+                                        <td>{{ journal.extension }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- Zweite Tabelle in der zweiten Hälfte der Zeile -->
+            <div class="col-6">
+                <div class="bg-secondary rounded">
+                    <h6 class="mb-4 text-start">TTLock Einträge</h6>
+                    <div class="table-responsive">
+                        <table class="table table-striped w-100">
+                            <thead>
+                               <tr>
+                                   <th scope="col">Date</th>
+                                   <th scope="col"> </th>
+                                    <th scope="col">Type</th>
+                                    <th scope="col"> </th>
+                                    <th scope="col">Kind</th>
+                                    <th scope="col">openSuccess</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for journal in ttlock %}
+                                    <tr>
+                                        <td>
+                                            <script>
+                                                var createdAt = new Date('{{ journal.created_at }}');
+                                                var formattedDate = createdAt.toLocaleDateString('de-DE'); 
+                                                var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
+                                                document.write(formattedDate + ' ' + formattedTime);
+                                            </script>
+                                        </td>
+                                        <td>
+                                            {% if journal.recordtyp != 12 %}
+                                                <i class="fas fa-exclamation-triangle" style="color: red;"></i>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ journal.recordtypstr }}</td>
+                                        <td>
+                                            {% if journal.recordtypefromlock != 28 %}
+                                                <i class="fas fa-exclamation-triangle" style="color: red;"></i>
+                                            {% endif %}
+                                        </td>                                        
+                                        <td>{{ journal.recordtypefromlockstr }}</td>
+                                        <td>{{ journal.openSuccess }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

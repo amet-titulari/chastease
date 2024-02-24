@@ -3,6 +3,7 @@ from sqlalchemy.sql import func
 from flask_login import UserMixin
 
 class Benutzer(UserMixin, db.Model):
+    __tablename__ = 'benutzer'
     id                  = db.Column(db.Integer, primary_key=True)
     username            = db.Column(db.String(100), unique=True)
     role                = db.Column(db.String(100), unique=False)
@@ -48,11 +49,24 @@ class Benutzer(UserMixin, db.Model):
 
             # Fügen Sie hier weitere Felder hinzu, die zurückgegeben werden sollen
         }
+class History_TTLock(db.Model):
+    __tablename__ = 'history_ttlock'
+    hist_id              = db.Column(db.String(128), primary_key=True)
+    benutzer_id          = db.Column(db.Integer, db.ForeignKey('benutzer.id'), nullable=False)
 
+    lock_id              = db.Column(db.String(128))
+    type                 = db.Column(db.String(128))
+    created_at           = db.Column(db.String(128))
+    recordtyp            = db.Column(db.Integer)
+    recordtypstr         = db.Column(db.String(128))
+    recordtypefromlock   = db.Column(db.Integer)  
+    recordtypefromlockstr= db.Column(db.String(128))
+    openSuccess          = db.Column(db.Integer)   
 
-
-
-class LockHistory(db.Model):
+    # Weitere Felder für Ihre Historie...
+    benutzer = db.relationship('Benutzer', backref=db.backref('history_ttlock', lazy=True))
+class History_Chaster(db.Model):
+    __tablename__ = 'history_chaster'
     hist_id              = db.Column(db.String(128), primary_key=True)
     benutzer_id          = db.Column(db.Integer, db.ForeignKey('benutzer.id'), nullable=False)
 
@@ -63,17 +77,11 @@ class LockHistory(db.Model):
     title                = db.Column(db.String(128))
     description          = db.Column(db.String(128))
     icon                 = db.Column(db.String(128))
-    recordtyp            = db.Column(db.Integer)
-    recordtypstr         = db.Column(db.String(128))
-    recordtypefromlock   = db.Column(db.Integer)  
-    recordtypefromlockstr= db.Column(db.String(128))
-    openSuccess          = db.Column(db.Integer)   
 
     # Weitere Felder für Ihre Historie...
-    benutzer = db.relationship('Benutzer', backref=db.backref('lock_history', lazy=True))
-
-
+    benutzer = db.relationship('Benutzer', backref=db.backref('history_chaster', lazy=True))
 class Journal(db.Model):
+    __tablename__ = 'journal'
     journal_id          = db.Column(db.Integer, primary_key=True)
     benutzer_id         = db.Column(db.Integer, db.ForeignKey('benutzer.id'), nullable=False)
     
@@ -88,5 +96,3 @@ class Journal(db.Model):
     
     # Weitere Felder für Ihre Historie...
     benutzer = db.relationship('Benutzer', backref=db.backref('journal', lazy=True))
-
-

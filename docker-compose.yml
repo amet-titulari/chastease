@@ -7,7 +7,7 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - /root/chastease/QRCodes:/app/QRCodes
+      - /root/chastease/QRCodes:/app/qrcodes
       - /root/chastease/instance:/app/instance
     environment:
       - FLASK_ENV=production

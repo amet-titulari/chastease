@@ -14,7 +14,7 @@ from helper.log_config import logger
 
 from . import benutzer
 
-from .models import Benutzer,  Journal
+from .models import Benutzer,  Journal, History_Chaster, History_TTLock
 from .forms import BenutzerConfigForm, JournalAddForm, JournalEditForm
 from .qrcode import generate_qr
 
@@ -75,7 +75,7 @@ def config():
         flash(f'Fehler beim Abrufen der Lock-Daten: {lock_data["error"]}', 'danger')
 
     lock_info = get_user_lockinfo(benutzer.CA_lock_id, session['ca_access_token'])
-    print(lock_info)
+    #print(lock_info)
 
     if lock_info['success']:
         if 'keyholder' in lock_info['data']:
@@ -201,26 +201,26 @@ def ttl_open(uid):
 @login_required
 def get_lockhistory():
         
-        from api.chaster import get_lock_history
-        from api.ttlock import get_ttlock_records
+        from api.chaster import get_chaster_history
+        from api.ttlock import get_ttlock_history
 
-        history = get_lock_history()
+        history = get_chaster_history()
 
         if history['success']:
             pass
         else:
             flash(f'Fehler beim Abrufen der Lock-History', 'danger')
 
-        tthistory = get_ttlock_records()
+        tthistory = get_ttlock_history()
         if tthistory['success']:              
             pass
         else:
             flash(f'Fehler beim Abrufen der Lock-History', 'danger')
 
-        #print(tthistory['data'])
+        chaster = History_Chaster.query.order_by(desc(History_Chaster.created_at)).all()
+        ttlock = History_TTLock.query.order_by(desc(History_TTLock.created_at)).all()
 
-
-        return render_template('index.html')
+        return render_template('history_view.html', chaster=chaster, ttlock=ttlock)
 
 
 @benutzer.route('/journal_add', methods=['GET', 'POST'])

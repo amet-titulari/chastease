@@ -116,6 +116,21 @@
         });
     </script>
 
+    
+    <script type="text/javascript">
+        // Ermöglicht das Speichern aus dem Modal
+        document.addEventListener('DOMContentLoaded', (event) => {
+        window.parent.postMessage(
+            JSON.stringify({
+            type: "partner_configuration",
+            event: "capabilities",
+            payload: { features: { save: true } },
+            }),
+            "*"
+        );
+        });
+    </script>
+  
 
     
     <script type="text/javascript">

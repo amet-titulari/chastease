@@ -1,5 +1,6 @@
 
 import os
+import threading
 
 from flask import Flask, redirect, request, render_template, url_for, session, flash
 from flask_login import LoginManager, login_user, logout_user, current_user
@@ -16,14 +17,12 @@ from api.chaster import handler_callback, get_auth_userinfo, get_hygiene_opening
 from benutzer import benutzer
 from extension import extension
 
-from benutzer.models import Benutzer, LockHistory, Journal
+from benutzer.models import Benutzer
 from extension.models import ChasterSession
-
 
 from benutzer.routes import benutzer
 from benutzer.token_handling import get_ttlock_tokens
 
-from api.chaster import get_lock_history
 
 
 
@@ -71,13 +70,25 @@ def load_user(user_id):
 def home():
     if current_user.is_authenticated:
         result = get_hygiene_opening(current_user.CA_lock_id, session['ca_access_token'])
-        print(result)
+        #print(result)
+
+        from api.chaster import get_chaster_history
+        from api.ttlock import get_ttlock_history
+        
+        thread1 = threading.Thread(target=get_chaster_history)
+        thread2 = threading.Thread(target=get_ttlock_history)
+
+        thread1.start()
+        thread2.start()
+
 
         if result['success']:
             content = f'<div class="container">\
                     <h1>Hallo {current_user.username}</h1>\
                     <h3>Du kannst deine Hygeneöffnung jetzt durchführen</h3>\
                     <p>Viel Glück</p>\
+                    </p>\
+                    <a href="/user/relock" class="btn btn-info" role="button">Relock Session</a>\
                 </div>'
         else:
         
@@ -89,6 +100,7 @@ def home():
 
 
 
+
     else:
 
         content = f'    <div class="container">\
@@ -96,6 +108,9 @@ def home():
                             <h3>Diese Anwendung ist zur automatischen Steuerung des Schlüsseltresors mit TTLock.</h3>\
                             <p>Bitte melde dich an deinem Chaster Account an und erteile die notwendigen Berechtigungen.</p>\
                         </div>'
+
+
+
 
     return render_template('index.html', content=content) 
 
@@ -137,6 +152,9 @@ def callback():
         if TT_lock_tokens['success']:
             # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
             pass
+
+
+
 
     return redirect(url_for('home'))
 

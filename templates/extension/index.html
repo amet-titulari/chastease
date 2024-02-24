@@ -9,6 +9,9 @@
 
     <div id="userTableContainer"></div> <!-- Container für die Tabelle -->
 
+    <div id="cnfTableContainer"></div> <!-- Container für die Tabelle -->
+    
+
     
     <script type="text/javascript">
         window.onload = function() {
@@ -30,14 +33,14 @@
                     document.getElementById('responseMessage').innerHTML = 'Erfolg: ' + data.message;
     
                     const user = data.user;
-                    const table = document.createElement('table');
-                    table.classList.add('table', 'table-striped', 'table-hover', 'text-start');
-                    table.setAttribute('border', '1');
-                    table.style.width = '100%';
+                    const usertable = document.createElement('table');
+                    usertable.classList.add('table', 'table-striped', 'table-hover', 'text-start');
+                    usertable.setAttribute('border', '1');
+                    usertable.style.width = '100%';
     
                     // Umkehren der Reihenfolge der Schlüssel-Wert-Paare
                     Object.entries(user).reverse().forEach(([key, value]) => {
-                        const row = table.insertRow();
+                        const row = usertable.insertRow();
                         const cellKey = row.insertCell();
                         const cellValue = row.insertCell();
                         cellKey.textContent = key;
@@ -46,7 +49,27 @@
                         cellValue.classList.add('text-start');
                     });
     
-                    document.getElementById('userTableContainer').appendChild(table);
+                    document.getElementById('userTableContainer').appendChild(usertable);
+
+                    const cnfd = data.config;
+                    const cnftable = document.createElement('table');
+                    cnftable.classList.add('table', 'table-striped', 'table-hover', 'text-start');
+                    cnftable.setAttribute('border', '1');
+                    cnftable.style.width = '100%';
+    
+                    // Umkehren der Reihenfolge der Schlüssel-Wert-Paare
+                    Object.entries(cnfd).reverse().forEach(([key, value]) => {
+                        const row = cnftable.insertRow();
+                        const cellKey = row.insertCell();
+                        const cellValue = row.insertCell();
+                        cellKey.textContent = key;
+                        cellValue.textContent = value;
+                        cellKey.classList.add('text-start');
+                        cellValue.classList.add('text-start');
+                    });
+    
+                    document.getElementById('cnfTableContainer').appendChild(cnftable);
+
                 })
                 .catch((error) => {
                     console.error('Fehler:', error);

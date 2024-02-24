@@ -1,11 +1,9 @@
 import requests
 import json
 
-from database import db
 from helper.log_config import logger
 
-from flask import current_app, session
-from flask_login import current_user
+from flask import current_app, jsonify
 
 
 def get_session_auth_info(main_token):
@@ -86,17 +84,21 @@ def get_config_info(token):
             # Die Antwort als JSON-Objekt bekommen
             data = response.json()
 
-            #print(f'Get_Config_info: {data}\n')
-                        
-            # Daten extrahieren
-            session_id = data['sessionId']
-            sessioninfo = get_session_info(session_id)
-            
-            if sessioninfo['success']:
-                session = sessioninfo['session_info']
-                return {'success': True, 'data': session} 
+            print(f'Get_Config_info: {data}\n')
+
+            if data['sessionId'] == None:
+                configdata = data['config']
+                config = {'config' : configdata}
+                configreturn = json.dumps(config)
+                return {'success': True, 'noSession': True, 'config': configreturn} 
             else:
-                return {'success': False, 'error': f'ERROR: {str(e)}'} 
+                # Daten extrahieren
+                sessioninfo = get_session_info(data['sessionId'])
+                
+                if sessioninfo['success']:
+                    session = sessioninfo['session_info']
+                    return {'success': True, 'data': session} 
+                    
 
         else:
             try:
@@ -118,13 +120,16 @@ def put_config_update(token, data):
     url = f'https://api.chaster.app/api/extensions/configurations/{token}'
     headers = {
         'accept': 'application/json',
-        'Authorization': f'Bearer {current_app.config['CA_DEV_TOKEN']}'
+        'Authorization': 'Bearer z8MlJJsABtj5m54egjoOAyabvx96uZSR',
+        'Content-Type': 'application/json'
+
     }
     # Das 'data' Dictionary sollte bereits das korrekte Format haben,
     # daher brauchen wir es nur im 'json'-Parameter zu übergeben.
-    response = requests.put(url, headers=headers, json={"config": data})
+    response = requests.put(url, headers=headers, json=data)
 
-    print(response)
+    print(f'\nConfig Json: {data}')
+    print(f'Response: {response}')
 
     if response.status_code == 200:
         print("Erfolgreiche Aktualisierung:", response.json())
