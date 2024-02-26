@@ -4,12 +4,15 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+setuptools = "*"
+python-dotenv = "*"
 flask =  "*"
 flask-login = "*"
 flask-sqlalchemy = "*"
-python-dotenv = "*"
+Flask-Babel = "*"
 flask-wtf = "*"
 flask-migrate = "*"
+Jinja2 = "*"
 requests = "*"
 werkzeug = "*"
 authlib = "*"
@@ -19,7 +22,6 @@ tzdata = "*"
 pytz = "*"
 colorama = "*"
 python-dateutil = "*"
-redis = "*"
 
 [requires]
 python_version = "3"

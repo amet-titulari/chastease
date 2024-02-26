@@ -8,20 +8,20 @@
     <div id="responseMessage"></div> <!-- Container für die Erfolgsanzeige -->
 
     <div id="userTableContainer" style="display:block;">
-        <h3>Please wait!</h3>
+        <h3>{{ _("Bitte warten!") }}</h3>
     </div> <!-- Container für die Tabelle -->
 
     <form id="configForm" style="display:none;"> <!-- Formular zu Beginn verstecken -->
         <div class="mb-3">
-            <label for="ttl_user" class="form-label">Username:</label>
+            <label for="ttl_user" class="form-label">{{ _("Benutzername") }}:</label>
             <input type="text" class="form-control" id="ttl_user" name="ttl_user">
         </div>
         <div class="mb-3">
-            <label for="ttl_pass" class="form-label">Password MD5:</label>
+            <label for="ttl_pass" class="form-label">{{ _("Passwort") }}:</label>
             <input type="text" class="form-control" id="ttl_pass" name="ttl_pass">
         </div>
         <div class="mb-3">
-            <label for="ttl_alias" class="form-label">Lock Alias:</label>
+            <label for="ttl_alias" class="form-label">{{ _("Lock Alias") }}:</label>
             <input type="text" class="form-control" id="ttl_alias" name="ttl_alias">
         </div>
         <!-- Buton

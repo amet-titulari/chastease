@@ -14,19 +14,26 @@
         
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-            <i class="fas fa-book me-2"></i>Journal
+            <i class="fas fa-book me-2"></i>{{ _("Journal") }}
             <i class="fas fa-caret-down ms-2"></i>
           </a>
           <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
-            <a href="/user/journal_add" class="dropdown-item">Journal Hinzufügen</a>
-            <a href="/user/journal_view" class="dropdown-item">Journal Anzeigen</a>
+            <a href="/user/journal_add" class="dropdown-item">{{ _("Journal Hinzufügen") }}</a>
+            <a href="/user/journal_view" class="dropdown-item">{{ _("Journal Anzheigen") }}</a>
           </div>
+        </li>
+
+        <!-- Einfacher Link für History -->
+        <li class="nav-item">
+          <a class="nav-link" href="/user/history">
+            <i class="fas fa-history me-2"></i>{{ _("History") }}
+          </a>
         </li>
 
         <!-- Journal Usefull Links -->
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-            <i class="fas fa-lock me-2"></i>Usefull Links
+            <i class="fas fa-lock me-2"></i>{{ _("Nützliche Links") }}
             <i class="fas fa-caret-down ms-2"></i>
           </a>
           <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
@@ -59,10 +66,10 @@
             <span class="d-none d-lg-inline-flex">{{ current_user.username }}</span>
           </a>
           <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
-            <a href="/user/profile" class="dropdown-item">My Profile</a>
-            <a href="/user/config" class="dropdown-item">Configuration</a>
+            <a href="/user/profile" class="dropdown-item">{{ _("Mein Profil") }}</a>
+            <a href="/user/config" class="dropdown-item">{{ _("Konfiguration") }}</a>
             <hr class="dropdown-divider">
-            <a href="/logout" class="dropdown-item">Log Out</a>
+            <a href="/logout" class="dropdown-item">{{ _("Abmelden") }}</a>
           </div>
         </div>
         {% endif %}

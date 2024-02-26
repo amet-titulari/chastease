@@ -5,22 +5,22 @@
         <div class="row w-100">
             <div class="col-12">
                 <div class="bg-secondary rounded">
-                    <h6 class="mb-4 text-start">Journal Einträge</h6>
+                    <h6 class="mb-4 text-start">{{ _("Journal Einträge") }}</h6>
                     <!-- Responsive Table Wrapper Start -->
                     <div class="table-responsive">
                         <table class="table table-striped w-100">
                             <thead>
                                 <tr>
-                                    <th scope="col">ID</th>
-                                    <th scope="col">Date</th>
-                                    <th scope="col">Hygiene</th>
-                                    <th scope="col">Shave</th>
-                                    <th scope="col">Edge</th>
-                                    <th scope="col">Ruined</th>
-                                    <th scope="col">Orgasm</th>
-                                    <th scope="col">Horny</th>
-                                    <th scope="col">Note</th>
-                                    <th scope="col">Aktion</th>
+                                    <th scope="col">{{ _("ID") }}</th>
+                                    <th scope="col">{{ _("Date") }}</th>
+                                    <th scope="col">{{ _("Hygiene") }}</th>
+                                    <th scope="col">{{ _("Shave") }}</th>
+                                    <th scope="col">{{ _("Edge") }}</th>
+                                    <th scope="col">{{ _("Ruined") }}</th>
+                                    <th scope="col">{{ _("Orgasm") }}</th>
+                                    <th scope="col">{{ _("Horny") }}</th>
+                                    <th scope="col">{{ _("Note") }}</th>
+                                    <th scope="col">{{ _("Aktion") }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -46,10 +46,11 @@
                                             <a href="/user/journal_edit/{{ journal.journal_id }}" class="btn btn-primary">
                                                 <i class="fas fa-pencil-alt"></i>
                                             </a>
-                                            <a href="/user/journal_delete/{{ journal.journal_id }}" class="btn btn-danger" 
-                                                onclick="return confirm('Sind Sie sicher, dass Sie diesen Eintrag löschen möchten?');">
-                                                <i class="fas fa-trash"></i>
-                                            </a>
+                                            <button class="btn btn-danger"
+                                                    data-confirm-msg="{{ _('Sind Sie sicher, dass Sie diesen Eintrag löschen möchten?') }}" 
+                                                    onclick="return confirmDelete(this);">
+                                                {{ _("Löschen") }}
+                                            </button>
                                         </td>
                                     </tr>
                                 {% endfor %}
@@ -61,5 +62,12 @@
             </div>
         </div>
     </div>
+
+    <script>
+        function confirmDelete(element) {
+            var message = element.getAttribute('data-confirm-msg');
+            return confirm(message);
+        }
+    </script>
 
 {% endblock %}

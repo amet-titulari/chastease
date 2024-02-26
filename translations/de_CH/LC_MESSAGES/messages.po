@@ -1,0 +1,132 @@
+# German (Switzerland) translations for PROJECT.
+# Copyright (C) 2024 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2024.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2024-02-26 21:33+0100\n"
+"PO-Revision-Date: 2024-02-26 21:34+0100\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de_CH\n"
+"Language-Team: de_CH <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.14.0\n"
+
+#: templates/journal_add.html:51
+msgid "Eintrag Hinzufügen"
+msgstr ""
+
+#: templates/journal_edit.html:59
+msgid "Eintrag aktualisieren"
+msgstr ""
+
+#: templates/journal_view.html:8
+msgid "Journal Einträge"
+msgstr ""
+
+#: templates/journal_view.html:14
+msgid "ID"
+msgstr ""
+
+#: templates/journal_view.html:15
+msgid "Date"
+msgstr ""
+
+#: templates/journal_view.html:16
+msgid "Hygiene"
+msgstr ""
+
+#: templates/journal_view.html:17
+msgid "Shave"
+msgstr ""
+
+#: templates/journal_view.html:18
+msgid "Edge"
+msgstr ""
+
+#: templates/journal_view.html:19
+msgid "Ruined"
+msgstr ""
+
+#: templates/journal_view.html:20
+msgid "Orgasm"
+msgstr ""
+
+#: templates/journal_view.html:21
+msgid "Horny"
+msgstr ""
+
+#: templates/journal_view.html:22
+msgid "Note"
+msgstr ""
+
+#: templates/journal_view.html:23
+msgid "Aktion"
+msgstr ""
+
+#: templates/journal_view.html:50
+msgid "Sind Sie sicher, dass Sie diesen Eintrag löschen möchten?"
+msgstr ""
+
+#: templates/journal_view.html:52
+msgid "Löschen"
+msgstr ""
+
+#: templates/navbar.html:17
+msgid "Journal"
+msgstr ""
+
+#: templates/navbar.html:21
+msgid "Journal Hinzufügen"
+msgstr ""
+
+#: templates/navbar.html:22
+msgid "Journal Anzheigen"
+msgstr ""
+
+#: templates/navbar.html:29
+msgid "History"
+msgstr ""
+
+#: templates/navbar.html:36
+msgid "Nützliche Links"
+msgstr ""
+
+#: templates/navbar.html:69
+msgid "Mein Profil"
+msgstr ""
+
+#: templates/navbar.html:70
+msgid "Konfiguration"
+msgstr ""
+
+#: templates/navbar.html:72
+msgid "Abmelden"
+msgstr ""
+
+#: templates/extension/config.html:11
+msgid "Bitte warten!"
+msgstr ""
+
+#: templates/extension/config.html:16
+msgid "Benutzername"
+msgstr ""
+
+#: templates/extension/config.html:20
+msgid "Passwort"
+msgstr ""
+
+#: templates/extension/config.html:24
+msgid "Lock Alias"
+msgstr ""
+
+#: templates/journal/new_journal.html:5
+msgid "Neuer Journaleintrag"
+msgstr ""
+

@@ -6,6 +6,7 @@ from flask import Flask, redirect, request, render_template, url_for, session, f
 from flask_login import LoginManager, login_user, logout_user, current_user
 from flask_migrate import Migrate, upgrade
 from flask_sqlalchemy import SQLAlchemy
+from flask_babel import Babel
 
 from helper.log_config import logger
 
@@ -18,7 +19,6 @@ from benutzer import benutzer
 from extension import extension
 
 from benutzer.models import Benutzer
-from extension.models import ChasterSession
 
 from benutzer.routes import benutzer
 from benutzer.token_handling import get_ttlock_tokens
@@ -28,6 +28,9 @@ from benutzer.token_handling import get_ttlock_tokens
 
 load_dotenv()
 app = Flask(__name__)
+
+# Flask-Babel Konfiguration
+babel = Babel(app)
 
 app.config['BASE_URL'] = os.getenv('BASE_URL')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
@@ -45,10 +48,10 @@ app.config['CA_DEV_TOKEN'] = os.getenv('CA_DEV_TOKEN')
 app.config['TTL_CLIENT_ID'] = os.getenv('TTL_CLIENT_ID')
 app.config['TTL_CLIENT_SECRET'] = os.getenv('TTL_CLIENT_SECRET')
 
-
-# Initialisierung von Erweiterungen
-# Pfad zur Datei, die Sie überprüfen möchten
-
+# Flask-Babel Konfiguration
+app.config['BABEL_DEFAULT_LOCALE'] = 'de_CH'
+app.config['BABEL_DEFAULT_TIMEZONE'] = 'Europe/Zurich'
+app.config['BABEL_SUPPORTED_LANGUAGES'] = ['en', 'de_CH']
 
 
 
@@ -65,6 +68,11 @@ app.register_blueprint(extension, url_prefix='/extension')
 @login_manager.user_loader
 def load_user(user_id):
     return Benutzer.query.get(int(user_id))
+
+@babel.localeselector
+def get_locale():
+    # Rückgabe der Benutzerspracheinstellung, falls vorhanden, sonst Standard
+    return request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LANGUAGES']) 
 
 @app.route('/')
 def home():
