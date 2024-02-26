@@ -64,15 +64,18 @@ login_manager.init_app(app)
 app.register_blueprint(benutzer, url_prefix='/user')
 app.register_blueprint(extension, url_prefix='/extension')
 
+def get_locale():
+    # Hier Logik zur Bestimmung der Sprache einfügen, z.B.:
+    return request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LANGUAGES'])
+
+
+babel.init_app(app, locale_selector=get_locale)
+
 
 @login_manager.user_loader
 def load_user(user_id):
     return Benutzer.query.get(int(user_id))
 
-@babel.localeselector
-def get_locale():
-    # Rückgabe der Benutzerspracheinstellung, falls vorhanden, sonst Standard
-    return request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LANGUAGES']) 
 
 @app.route('/')
 def home():

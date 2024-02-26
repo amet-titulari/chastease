@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-02-26 21:33+0100\n"
+"POT-Creation-Date: 2024-02-26 21:43+0100\n"
 "PO-Revision-Date: 2024-02-26 21:34+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de_CH\n"
@@ -20,113 +20,112 @@ msgstr ""
 
 #: templates/journal_add.html:51
 msgid "Eintrag Hinzufügen"
-msgstr ""
+msgstr "Eintrag Hinzufügen"
 
 #: templates/journal_edit.html:59
 msgid "Eintrag aktualisieren"
-msgstr ""
+msgstr "Eintrag aktualisieren"
 
 #: templates/journal_view.html:8
 msgid "Journal Einträge"
-msgstr ""
+msgstr "Journal Einträge"
 
 #: templates/journal_view.html:14
 msgid "ID"
-msgstr ""
+msgstr "ID"
 
 #: templates/journal_view.html:15
 msgid "Date"
-msgstr ""
+msgstr "Date"
 
 #: templates/journal_view.html:16
 msgid "Hygiene"
-msgstr ""
+msgstr "Hygiene"
 
 #: templates/journal_view.html:17
 msgid "Shave"
-msgstr ""
+msgstr "Shave"
 
 #: templates/journal_view.html:18
 msgid "Edge"
-msgstr ""
+msgstr "Edge"
 
 #: templates/journal_view.html:19
 msgid "Ruined"
-msgstr ""
+msgstr "Ruined"
 
 #: templates/journal_view.html:20
 msgid "Orgasm"
-msgstr ""
+msgstr "Orgasm"
 
 #: templates/journal_view.html:21
 msgid "Horny"
-msgstr ""
+msgstr "Horny"
 
 #: templates/journal_view.html:22
 msgid "Note"
-msgstr ""
+msgstr "Note"
 
 #: templates/journal_view.html:23
 msgid "Aktion"
-msgstr ""
+msgstr "Aktion"
 
 #: templates/journal_view.html:50
 msgid "Sind Sie sicher, dass Sie diesen Eintrag löschen möchten?"
-msgstr ""
+msgstr "Sind Sie sicher, dass Sie diesen Eintrag löschen möchten?"
 
 #: templates/journal_view.html:52
 msgid "Löschen"
-msgstr ""
+msgstr "Löschen"
 
 #: templates/navbar.html:17
 msgid "Journal"
-msgstr ""
+msgstr "Journal"
 
 #: templates/navbar.html:21
 msgid "Journal Hinzufügen"
-msgstr ""
+msgstr "Journal Hinzufügen"
 
 #: templates/navbar.html:22
-msgid "Journal Anzheigen"
-msgstr ""
+msgid "Journal Anzeigen"
+msgstr "Journal Anzeigen"
 
 #: templates/navbar.html:29
 msgid "History"
-msgstr ""
+msgstr "History"
 
 #: templates/navbar.html:36
 msgid "Nützliche Links"
-msgstr ""
+msgstr "Nützliche Links"
 
 #: templates/navbar.html:69
 msgid "Mein Profil"
-msgstr ""
+msgstr "Mein Profil"
 
 #: templates/navbar.html:70
 msgid "Konfiguration"
-msgstr ""
+msgstr "Konfiguration"
 
 #: templates/navbar.html:72
 msgid "Abmelden"
-msgstr ""
+msgstr "Abmelden"
 
 #: templates/extension/config.html:11
 msgid "Bitte warten!"
-msgstr ""
+msgstr "Bitte warten!"
 
 #: templates/extension/config.html:16
 msgid "Benutzername"
-msgstr ""
+msgstr "Benutzername"
 
 #: templates/extension/config.html:20
 msgid "Passwort"
-msgstr ""
+msgstr "Passwort"
 
 #: templates/extension/config.html:24
 msgid "Lock Alias"
-msgstr ""
+msgstr "Lock Alias"
 
 #: templates/journal/new_journal.html:5
 msgid "Neuer Journaleintrag"
-msgstr ""
-
+msgstr "Neuer Journaleintrag"
