@@ -120,13 +120,6 @@ def get_ttlock_history():
     # Laden der Konfigurationsdaten
     print(os.getcwd())
 
-    with open('api/ttlock_codes.json', 'r') as file:
-        codes = json.load(file)
-
-    # Zugriff auf die Daten
-    recordtype_mapping = codes['recordtype_mapping']
-    recordtypelock_mapping = codes['recordtypelock_mapping']
-
     url = "https://euapi.ttlock.com/v3/lockRecord/list"
 
     current_page = 1
@@ -142,6 +135,9 @@ def get_ttlock_history():
         "pageSize": 25,
         "date": int(time.time() * 1000)  # Aktuelles Datum in Millisekunden
     }
+
+    with open('api/ttlock_codes.json', 'r') as file:
+        codes = json.load(file)
 
 
     while current_page <= total_pages:
@@ -169,9 +165,9 @@ def get_ttlock_history():
                     # Recordtype und RecordTypeFromLock erstellen
                     recordtype = result.get('recordType')
                     recordtypefromlock = result.get('recordTypeFromLock')
-                    # Zuordnung der Texte aus dem Wörterbuch
-                    recordtypstr = recordtype_mapping.get(recordtype, "Unbekannter Typ")
-                    recordtypefromlockstr = recordtypelock_mapping.get(recordtypefromlock, "Unbekannter Typ")
+                    # Zuordnung der Texte aus dem Wörterbuch und Konvertierung der Integer-Werte zu Strings für den Schlüsselzugriff
+                    recordtype_str = codes['recordtype_mapping'].get(str(recordtype), "Unbekannter Typ")
+                    recordtypefromlock_str = codes['recordtypelock_mapping'].get(str(recordtypefromlock), "Unbekannter Typ")
 
                     # Eintrag erstellen
                     new_history_entry = History_TTLock(
@@ -181,9 +177,9 @@ def get_ttlock_history():
                             type="TTL Lock Protokol",
                             created_at=formatted_lockDate,
                             recordtyp=recordtype,
-                            recordtypstr=recordtypstr,
+                            recordtypstr=recordtype_str,
                             recordtypefromlock=recordtypefromlock,
-                            recordtypefromlockstr=recordtypefromlockstr,
+                            recordtypefromlockstr=recordtypefromlock_str,
                             openSuccess=result.get('success')
                         )
                     

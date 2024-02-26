@@ -83,14 +83,14 @@ def home():
         result = get_hygiene_opening(current_user.CA_lock_id, session['ca_access_token'])
         #print(result)
 
-        from api.chaster import get_chaster_history
-        from api.ttlock import get_ttlock_history
+        #from api.chaster import get_chaster_history
+        #from api.ttlock import get_ttlock_history
         
-        thread1 = threading.Thread(target=get_chaster_history)
-        thread2 = threading.Thread(target=get_ttlock_history)
+        #thread1 = threading.Thread(target=get_chaster_history)
+        #thread2 = threading.Thread(target=get_ttlock_history)
 
-        thread1.start()
-        thread2.start()
+        #thread1.start()
+        #thread2.start()
 
 
         if result['success']:
