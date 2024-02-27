@@ -22,8 +22,8 @@ class Benutzer(UserMixin, db.Model):
     # Konfiguration für TTLock
     TTL_username        = db.Column(db.String(128))
     TTL_password_md5    = db.Column(db.String(128))
-    TTL_lock_alias      = db.Column(db.String(128))
     TTL_lock_id         = db.Column(db.String(128))
+    TTL_gateway_id      = db.Column(db.String(128))
 
     def to_dict(self):
         return {
@@ -44,8 +44,8 @@ class Benutzer(UserMixin, db.Model):
             # Konfiguration für TTLock
             "TTL User"             : self.TTL_username ,
             #"TTL_password_md5"    : self.TTL_password_md5 ,
-            "TTL Lock Alias"       : self.TTL_lock_alias ,
             "TTL Lock Id"          : self.TTL_lock_id ,
+            "TTL Gateway"          : self.TTL_gateway_id ,
 
             # Fügen Sie hier weitere Felder hinzu, die zurückgegeben werden sollen
         }

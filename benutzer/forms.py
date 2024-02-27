@@ -12,17 +12,13 @@ class BenutzerConfigForm(FlaskForm):
     CA_user_id = StringField('User ID', render_kw={'disabled': True})
     CA_lock_id = StringField('Lock ID', render_kw={'disabled': True})
 
-
     TTL_username = StringField('Username')
     TTL_password_md5 = StringField('Password MD5')
-    TTL_lock_alias = StringField('Lock Alias')
 
     submit = SubmitField('Submit')
 
 class BenutzerConfigFormTTL(FlaskForm):
 
-    TTL_username = StringField('Username')
-    TTL_password_md5 = StringField('Password MD5')
     TTL_lock = SelectField('Select your Lock', choices=[])
     TTL_gateway = SelectField('Select your gateway', choices=[])
 

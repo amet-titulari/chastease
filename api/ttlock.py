@@ -38,7 +38,6 @@ def get_lock_list(client_id, access_token):
             return {'success': False, 'data': response.text}
 
         return {'success': True, 'data': result}
-    
 
 def get_gateway_list(client_id, access_token):
     check = is_ttl_token_valid()

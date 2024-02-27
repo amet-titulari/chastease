@@ -44,7 +44,6 @@ def config():
                                          if not is_md5(form.TTL_password_md5.data) 
                                          else form.TTL_password_md5.data)
 
-        benutzer.TTL_lock_alias = form.TTL_lock_alias.data or benutzer.TTL_lock_alias
         db.session.commit()
         form = BenutzerConfigForm(obj=benutzer)
 
@@ -126,33 +125,21 @@ def config_ttl():
     form.TTL_lock.choices = locks
     form.TTL_gateway.choices = gateways
 
+    benutzer = Benutzer.query.filter_by(id=current_user.id).first()
+  
+
+    if form.validate_on_submit():
+        # Formularverarbeitung für POST-Anfrage
+        benutzer.TTL_username = benutzer.TTL_username
+
+        benutzer.TTL_lock_id = form.TTL_lock.data
+        benutzer.TTL_gateway_id = form.TTL_gateway.data
+        db.session.commit()
+        flash('Konfiguration aktualisiert!', 'success')
+
+
+
     return render_template('benutzerconfig_ttl.html', form=form )
-#    
-#    # Zugriff auf die Daten aus der Session
-#
-#    print(f'TTLocks: {TT_lock_list}')
-#    print(f'TTLocks: {TT_gateway_list}')
-#
-#    form = BenutzerConfigFormTTL()
-#
-#    TT_lock_list = session.get('TT_lock_list', [])
-#    TT_gateway_list = session.get('TT_gateway_list', [])
-#
-#
-#    form.TTL_lock.choices = TT_lock_list
-#    form.TTL_gateway.choices = TT_gateway_list
-#   
-#    # Hier können Sie nun mit den Daten arbeiten
-#    # Zum Beispiel könnten Sie sie dem Template übergeben
-#
-#    if form.validate_on_submit():
-#        # Hier Logik nach der Formularübermittlung einfügen,
-#        # z.B. Daten speichern oder weitere Aktionen durchführen.
-#        pass  # Ersetzen Sie dies durch Ihre eigene Logik
-#
-#
-#
-#    return render_template('benutzerconfig_ttl.html', form=form, lock_list=TT_lock_list, gateway_list=TT_gateway_list)
    
 @benutzer.route('/relock')
 @login_required
