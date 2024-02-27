@@ -38,6 +38,30 @@ def get_lock_list(client_id, access_token):
             return {'success': False, 'data': response.text}
 
         return {'success': True, 'data': result}
+    
+
+def get_gateway_list(client_id, access_token):
+    check = is_ttl_token_valid()
+    if check:
+
+        timestampMS = int(time.time() * 1000)
+        url = "https://euapi.ttlock.com/v3/gateway/list"
+        params = {
+            'clientId': client_id,
+            'accessToken': access_token,
+            'pageNo': 1,
+            'pageSize': 20,
+            'date': timestampMS
+        }
+        response = requests.get(url, params=params)
+
+        if response.status_code == 200:
+            # Versuchen, die Antwort als JSON zu interpretieren
+            result = response.json()
+        else:
+            return {'success': False, 'data': response.text}
+
+        return {'success': True, 'data': result}
 
 def get_lock_detail(client_id, access_token):
     check = is_ttl_token_valid()

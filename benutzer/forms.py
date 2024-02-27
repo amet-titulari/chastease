@@ -1,7 +1,7 @@
 # benutzer/forms.py
 
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, BooleanField, IntegerField, DateTimeField, HiddenField
+from wtforms import StringField, SubmitField, SelectField ,BooleanField, IntegerField, DateTimeField, HiddenField
 from wtforms.validators import DataRequired
 
 class BenutzerConfigForm(FlaskForm):
@@ -19,6 +19,14 @@ class BenutzerConfigForm(FlaskForm):
 
     submit = SubmitField('Submit')
 
+class BenutzerConfigFormTTL(FlaskForm):
+
+    TTL_username = StringField('Username')
+    TTL_password_md5 = StringField('Password MD5')
+    TTL_lock = SelectField('Select your Lock', choices=[])
+    TTL_gateway = SelectField('Select your gateway', choices=[])
+
+    submit = SubmitField('Submit')
 
 class JournalAddForm(FlaskForm):
     hygiene = BooleanField('Hygiene')

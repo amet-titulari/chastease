@@ -35,12 +35,15 @@
                             {{ form.TTL_password_md5.label(class="form-label", for="floatingTTLPasswordMD5") }}
                         </div>
 
-                        <div class="form-floating mb-3 w-100">
-                            {{ form.TTL_lock_alias(class="form-control", id="floatingTTLLockAlias", placeholder="TTL Lock Alias") }}
-                            {{ form.TTL_lock_alias.label(class="form-label", for="floatingTTLLockAlias") }}
-                        </div>
+                        {% if form.TTL_username.data and form.TTL_password_md5.data %}
+                            <a href="/user/config_ttl" class="btn btn-primary  w-100">{{ _("Lock Auswahl") }}</a>
+                        {% else %}
+                            <button type="button" class="btn btn-light w-100" disabled>{{ _("Bitte TTLock Benutzername und Passwort eingeben") }}</button>
+                        {% endif %}
+                        <p></p>
+                                        
 
-                        <button type="submit" class="btn btn-primary w-100">SAVE</button>
+                        <button type="submit" class="btn btn-primary w-100">{{ _("Speichern") }}</button>
                     </form>
                 </div>
             </div>

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-02-26 21:43+0100\n"
+"POT-Creation-Date: 2024-02-27 13:46+0100\n"
 "PO-Revision-Date: 2024-02-26 21:34+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de_CH\n"
@@ -17,6 +17,25 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.14.0\n"
+
+#: templates/benutzerconfig.html:39
+#, fuzzy
+msgid "Lock Auswahl"
+msgstr "Lock Auswahl"
+
+#: templates/benutzerconfig.html:41
+msgid "Bitte TTLock Benutzername und Passwort eingeben"
+msgstr "Bitte TTLock Benutzername und Passwort eingeben"
+
+#: templates/benutzerconfig.html:46 templates/benutzerconfig_ttl.html:31
+#, fuzzy
+msgid "Speichern"
+msgstr "Speichern"
+
+#: templates/benutzerconfig_ttl.html:16
+#, fuzzy
+msgid "TTLock Konfiguration"
+msgstr "TTLock Konfiguration"
 
 #: templates/journal_add.html:51
 msgid "Eintrag Hinzufügen"
@@ -129,3 +148,4 @@ msgstr "Lock Alias"
 #: templates/journal/new_journal.html:5
 msgid "Neuer Journaleintrag"
 msgstr "Neuer Journaleintrag"
+

@@ -28,7 +28,7 @@ docker push eritque/chastease:latest
 
 ``` Text
 # Extrahieren der Strings
-pybabel extract -o messages.pot .
+pybabel extract -F babel.cfg -o messages.pot .
 
 # Initialisieren der .po-Dateien für Deutsch
 pybabel init -i messages.pot -d translations -l de_CH
@@ -41,7 +41,7 @@ pybabel init -i messages.pot -d translations -l en
 
 ``` Text
 # Extrahieren der Strings
-pybabel extract -o messages.pot .
+pybabel extract -F babel.cfg -o messages.pot .
 
 # Aktualisieren der .po-Dateien für Deutsch
 pybabel update -i messages.pot -d translations

@@ -1,4 +1,4 @@
-# benutzer/user.py
+# benutzer/routes.py
 
 import re
 import hashlib
@@ -15,10 +15,10 @@ from helper.log_config import logger
 from . import benutzer
 
 from .models import Benutzer,  Journal, History_Chaster, History_TTLock
-from .forms import BenutzerConfigForm, JournalAddForm, JournalEditForm
+from .forms import BenutzerConfigForm, BenutzerConfigFormTTL ,JournalAddForm, JournalEditForm
 from .qrcode import generate_qr
 
-from api.ttlock import get_lock_list, open_ttlock
+from api.ttlock import get_lock_list, get_gateway_list, open_ttlock
 
 from benutzer.token_handling import get_ttlock_tokens
 
@@ -95,31 +95,65 @@ def config():
             benutzer.TTL_username = None
             benutzer.TTL_password_md5 = None
             benutzer.TTL_lock_alias = None
-        else:
-            TT_lock_list = get_lock_list(current_app.config['TTL_CLIENT_ID'], session['ttl_access_token'])
-
-            lock_id = None
-
-            if benutzer.TTL_lock_alias:
-                for item in TT_lock_list['data']['list']:
-                    if item.get('lockAlias') == benutzer.TTL_lock_alias:
-                        lock_id = item.get('lockId')
-                        lock_alias = benutzer.TTL_lock_alias
-            else:
-                lock_id = TT_lock_list["data"]["list"][0]['lockId']
-                lock_alias = TT_lock_list["data"]["list"][0]['lockAlias']
-                flash(f'Das erstge TTLock mit dem Alias {lock_alias} wurde ausgewählt!','warning')
-
-            if lock_id is not None:
-                benutzer.TTL_lock_id = lock_id
-                benutzer.TTL_lock_alias = lock_alias
-
-            db.session.commit()
-        
-    # Formulardaten aktualisieren
+   
     form = BenutzerConfigForm(obj=benutzer)
     return render_template('benutzerconfig.html', form=form)
 
+@benutzer.route('/config_ttl', methods=['GET', 'POST'])
+@login_required
+def config_ttl():
+
+    TTL_lock_list = get_lock_list(current_app.config['TTL_CLIENT_ID'], session['ttl_access_token'])
+    TTL_gateway_list = get_gateway_list(current_app.config['TTL_CLIENT_ID'], session['ttl_access_token'])
+
+    # Alle Schlösser auslesen
+    locks = [
+        ( lock['lockId'], lock['lockAlias'])
+        for lock in TTL_lock_list['data']['list']
+    ]
+
+    # Alle Gateway's auslesen
+    gateways = [
+        (gateway['gatewayId'], gateway['gatewayName'])
+        for gateway in TTL_gateway_list['data']['list']
+    ]
+
+    print(f'Schlösser: {locks}\n')
+    print(f'Gateways: {gateways}\n')
+
+    form = BenutzerConfigFormTTL()
+
+    form.TTL_lock.choices = locks
+    form.TTL_gateway.choices = gateways
+
+    return render_template('benutzerconfig_ttl.html', form=form )
+#    
+#    # Zugriff auf die Daten aus der Session
+#
+#    print(f'TTLocks: {TT_lock_list}')
+#    print(f'TTLocks: {TT_gateway_list}')
+#
+#    form = BenutzerConfigFormTTL()
+#
+#    TT_lock_list = session.get('TT_lock_list', [])
+#    TT_gateway_list = session.get('TT_gateway_list', [])
+#
+#
+#    form.TTL_lock.choices = TT_lock_list
+#    form.TTL_gateway.choices = TT_gateway_list
+#   
+#    # Hier können Sie nun mit den Daten arbeiten
+#    # Zum Beispiel könnten Sie sie dem Template übergeben
+#
+#    if form.validate_on_submit():
+#        # Hier Logik nach der Formularübermittlung einfügen,
+#        # z.B. Daten speichern oder weitere Aktionen durchführen.
+#        pass  # Ersetzen Sie dies durch Ihre eigene Logik
+#
+#
+#
+#    return render_template('benutzerconfig_ttl.html', form=form, lock_list=TT_lock_list, gateway_list=TT_gateway_list)
+   
 @benutzer.route('/relock')
 @login_required
 def relock():
