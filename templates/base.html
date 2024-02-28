@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ session.get('language', 'en') }}">
 
 <head>
     <meta charset="utf-8">
@@ -108,6 +108,17 @@
             $('[data-toggle="tooltip"]').tooltip(); 
         });
     </script>
+
+    <!-- Konsolenausgabe aktuelle Sprache -->
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function(event) { 
+            // Verwende die Sprache aus dem HTML lang-Attribut
+            var currentLang = document.documentElement.lang;
+            console.log("Aktuelle Sprache:", currentLang);
+        });
+    </script>
+
 </body>
 
 </html>

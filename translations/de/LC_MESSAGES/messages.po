@@ -1,4 +1,4 @@
-# German (Switzerland) translations for PROJECT.
+# German translations for PROJECT.
 # Copyright (C) 2024 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2024.
@@ -7,11 +7,11 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-02-27 13:46+0100\n"
-"PO-Revision-Date: 2024-02-26 21:34+0100\n"
+"POT-Creation-Date: 2024-02-28 22:25+0100\n"
+"PO-Revision-Date: 2024-02-28 22:25+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: de_CH\n"
-"Language-Team: de_CH <LL@li.org>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
@@ -19,7 +19,6 @@ msgstr ""
 "Generated-By: Babel 2.14.0\n"
 
 #: templates/benutzerconfig.html:39
-#, fuzzy
 msgid "Lock Auswahl"
 msgstr "Lock Auswahl"
 
@@ -28,12 +27,10 @@ msgid "Bitte TTLock Benutzername und Passwort eingeben"
 msgstr "Bitte TTLock Benutzername und Passwort eingeben"
 
 #: templates/benutzerconfig.html:46 templates/benutzerconfig_ttl.html:31
-#, fuzzy
 msgid "Speichern"
 msgstr "Speichern"
 
 #: templates/benutzerconfig_ttl.html:16
-#, fuzzy
 msgid "TTLock Konfiguration"
 msgstr "TTLock Konfiguration"
 
@@ -51,43 +48,43 @@ msgstr "Journal Einträge"
 
 #: templates/journal_view.html:14
 msgid "ID"
-msgstr "ID"
+msgstr ""
 
 #: templates/journal_view.html:15
 msgid "Date"
-msgstr "Date"
+msgstr ""
 
 #: templates/journal_view.html:16
 msgid "Hygiene"
-msgstr "Hygiene"
+msgstr ""
 
 #: templates/journal_view.html:17
 msgid "Shave"
-msgstr "Shave"
+msgstr ""
 
 #: templates/journal_view.html:18
 msgid "Edge"
-msgstr "Edge"
+msgstr ""
 
 #: templates/journal_view.html:19
 msgid "Ruined"
-msgstr "Ruined"
+msgstr ""
 
 #: templates/journal_view.html:20
 msgid "Orgasm"
-msgstr "Orgasm"
+msgstr ""
 
 #: templates/journal_view.html:21
 msgid "Horny"
-msgstr "Horny"
+msgstr ""
 
 #: templates/journal_view.html:22
 msgid "Note"
-msgstr "Note"
+msgstr ""
 
 #: templates/journal_view.html:23
 msgid "Aktion"
-msgstr "Aktion"
+msgstr ""
 
 #: templates/journal_view.html:50
 msgid "Sind Sie sicher, dass Sie diesen Eintrag löschen möchten?"
@@ -111,21 +108,25 @@ msgstr "Journal Anzeigen"
 
 #: templates/navbar.html:29
 msgid "History"
-msgstr "History"
+msgstr "Verlauf"
 
-#: templates/navbar.html:36
+#: templates/navbar.html:37
 msgid "Nützliche Links"
 msgstr "Nützliche Links"
 
-#: templates/navbar.html:69
+#: templates/navbar.html:62
+msgid "Anmelden"
+msgstr "Anmelden"
+
+#: templates/navbar.html:72
 msgid "Mein Profil"
 msgstr "Mein Profil"
 
-#: templates/navbar.html:70
+#: templates/navbar.html:73
 msgid "Konfiguration"
 msgstr "Konfiguration"
 
-#: templates/navbar.html:72
+#: templates/navbar.html:75
 msgid "Abmelden"
 msgstr "Abmelden"
 

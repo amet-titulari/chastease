@@ -49,9 +49,10 @@ app.config['TTL_CLIENT_ID'] = os.getenv('TTL_CLIENT_ID')
 app.config['TTL_CLIENT_SECRET'] = os.getenv('TTL_CLIENT_SECRET')
 
 # Flask-Babel Konfiguration
-app.config['BABEL_DEFAULT_LOCALE'] = 'de_CH'
+app.config['BABEL_DEFAULT_LOCALE'] = 'de'
 app.config['BABEL_DEFAULT_TIMEZONE'] = 'Europe/Zurich'
-app.config['BABEL_SUPPORTED_LANGUAGES'] = ['en', 'de_CH']
+app.config['BABEL_TRANSLATION_DIRECTORIES'] = '/tranlations'
+app.config['BABEL_SUPPORTED_LANGUAGES'] = [ 'de', 'en']
 
 
 
@@ -59,6 +60,8 @@ db.init_app(app)
 migrate = Migrate(app, db)
 login_manager = LoginManager()
 login_manager.init_app(app)
+login_manager.login_view = 'login' 
+login_manager.login_message_category = 'info'
 
 # Registrierung der Blueprints
 app.register_blueprint(benutzer, url_prefix='/user')
@@ -66,8 +69,7 @@ app.register_blueprint(extension, url_prefix='/extension')
 
 def get_locale():
     # Hier Logik zur Bestimmung der Sprache einfügen, z.B.:
-    return request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LANGUAGES'])
-
+    return session.get('language', request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LANGUAGES']))
 
 babel.init_app(app, locale_selector=get_locale)
 
@@ -76,6 +78,12 @@ babel.init_app(app, locale_selector=get_locale)
 def load_user(user_id):
     return Benutzer.query.get(int(user_id))
 
+@app.route('/language/<language>')
+def set_language(language):
+    session['language'] = language
+    session.modified = True
+    print(session['language'])
+    return redirect(request.referrer or url_for('home'))
 
 @app.route('/')
 def home():

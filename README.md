@@ -31,7 +31,7 @@ docker push eritque/chastease:latest
 pybabel extract -F babel.cfg -o messages.pot .
 
 # Initialisieren der .po-Dateien für Deutsch
-pybabel init -i messages.pot -d translations -l de_CH
+pybabel init -i messages.pot -d translations -l de
 
 # Initialisieren der .po-Dateien für English
 pybabel init -i messages.pot -d translations -l en

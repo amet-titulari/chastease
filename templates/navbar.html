@@ -1,6 +1,6 @@
 <nav class="navbar navbar-expand-sm bg-secondary navbar-dark">
   <div class="container-fluid rounded">
-    <a class="navbar-brand" href="#">
+    <a class="navbar-brand" href="/">
       <i class="fas fa-lock me-2"></i>Chastease
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#collapsibleNavbar">
@@ -27,6 +27,7 @@
         <li class="nav-item">
           <a class="nav-link" href="/user/history">
             <i class="fas fa-history me-2"></i>{{ _("History") }}
+            <i class="fas fa-caret-down ms-2"></i>
           </a>
         </li>
 
@@ -51,12 +52,14 @@
       </ul>
 
       <div class="navbar-nav align-items-center ms-auto">
-        <!-- Ihr serverseitiger Template-Code -->
+   
+        <!-- Login / Userprofile -->
+
         {% if not current_user.is_authenticated %}
+
         <div class="nav-item">
-          <a href="/login" class="nav-link">
-            <i class="fa fa-user me-lg-2"></i>
-            <span class="d-none d-lg-inline-flex">Login</span>
+          
+          <a href="/login" class="nav-link"><i class="fa fa-user me-lg-2"></i>{{ _("Anmelden") }}
           </a>
         </div>
         {% else %}
@@ -73,6 +76,16 @@
           </div>
         </div>
         {% endif %}
+
+        <!-- Sprachauswahl -->
+        
+        <div class="nav-item">
+          <i class="fas fa-globe me-lg-2" style="margin-left: 20px;"></i>
+          <a href="{{ url_for('set_language', language='de') }}">[DE]</a>
+          <a href="{{ url_for('set_language', language='en') }}">[EN]</a>
+          
+        </div>
+
       </div>
     </div>
   </div>
