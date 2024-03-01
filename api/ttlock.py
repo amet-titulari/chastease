@@ -219,3 +219,9 @@ def get_ttlock_history():
             return None
     
     return {'success': True}
+
+def tranfer_ttlock():
+    check = is_ttl_token_valid()
+    if check:
+
+        pass
