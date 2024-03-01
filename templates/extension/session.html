@@ -4,15 +4,15 @@
 {% block content %}
 
 <div class="container mt-4">
-    <h1 class="mb-4">Handle Token</h1>
+    <h1 class="mb-4">{{ _("Handle Token") }</h1>
     <h1>USER: {{ current_user.username }}</h1>
 
 
     <table class="table table-striped table-bordered">
         <thead class="table-dark">
             <tr>
-                <th class="text-start">Attribut</th>
-                <th class="text-start">Wert</th>
+                <th class="text-start">{{ _("Key") }}</th>
+                <th class="text-start">{{ _("Value") }}</th>
             </tr>
         </thead>
         <tbody>

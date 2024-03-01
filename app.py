@@ -49,9 +49,8 @@ app.config['TTL_CLIENT_ID'] = os.getenv('TTL_CLIENT_ID')
 app.config['TTL_CLIENT_SECRET'] = os.getenv('TTL_CLIENT_SECRET')
 
 # Flask-Babel Konfiguration
-app.config['BABEL_DEFAULT_LOCALE'] = 'de'
+app.config['BABEL_DEFAULT_LOCALE'] = 'en'
 app.config['BABEL_DEFAULT_TIMEZONE'] = 'Europe/Zurich'
-app.config['BABEL_TRANSLATION_DIRECTORIES'] = '/tranlations'
 app.config['BABEL_SUPPORTED_LANGUAGES'] = [ 'de', 'en']
 
 
@@ -67,9 +66,14 @@ login_manager.login_message_category = 'info'
 app.register_blueprint(benutzer, url_prefix='/user')
 app.register_blueprint(extension, url_prefix='/extension')
 
+
 def get_locale():
-    # Hier Logik zur Bestimmung der Sprache einfügen, z.B.:
-    return session.get('language', request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LANGUAGES']))
+    print(f'Session Language : {session['language']}')
+
+    if 'language' in session:
+        return session['language']
+    else:
+        return request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LANGUAGES'])
 
 babel.init_app(app, locale_selector=get_locale)
 

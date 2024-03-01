@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-02-28 22:25+0100\n"
-"PO-Revision-Date: 2024-02-28 22:25+0100\n"
+"POT-Creation-Date: 2024-03-01 13:33+0100\n"
+"PO-Revision-Date: 2024-03-01 13:22+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
 "Language-Team: en <LL@li.org>\n"
@@ -18,80 +18,121 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.14.0\n"
 
+#: templates/benutzerconfig.html:13
+msgid "Chaster.app User"
+msgstr "Chaster.app User"
+
 #: templates/benutzerconfig.html:39
-msgid "Lock Auswahl"
+msgid "Lock Selection"
 msgstr "Lock Selection"
 
 #: templates/benutzerconfig.html:41
-msgid "Bitte TTLock Benutzername und Passwort eingeben"
-msgstr "Please enter Username and Password for your TTLock."
+msgid "Please enter TTLock Username and Password"
+msgstr "Please enter TTLock Username and Password"
 
 #: templates/benutzerconfig.html:46 templates/benutzerconfig_ttl.html:31
-msgid "Speichern"
+msgid "Save"
 msgstr "Save"
 
 #: templates/benutzerconfig_ttl.html:16
-msgid "TTLock Konfiguration"
-msgstr "Configuration"
+msgid "TTLock Configuration"
+msgstr "TTLock Configuration"
+
+#: templates/history_view.html:9
+msgid "Log CHASTER.APP"
+msgstr "Log CHASTER.APP"
+
+#: templates/history_view.html:14 templates/history_view.html:51
+#: templates/journal_view.html:15
+msgid "Date"
+msgstr "Date"
+
+#: templates/history_view.html:16
+msgid "Title"
+msgstr "Title"
+
+#: templates/history_view.html:17
+msgid "Description"
+msgstr "Description"
+
+#: templates/history_view.html:18
+msgid "Ext"
+msgstr "Ext"
+
+#: templates/history_view.html:46
+msgid "TTLock Entry"
+msgstr "TTLock Entry"
+
+#: templates/history_view.html:53
+msgid "Type"
+msgstr "Type"
+
+#: templates/history_view.html:55
+msgid "Kind"
+msgstr "Kind"
+
+#: templates/journal_add.html:13
+msgid "Journal Entry"
+msgstr "Journal Entry"
 
 #: templates/journal_add.html:51
-msgid "Eintrag Hinzufügen"
+msgid "Add"
 msgstr "Add"
 
+#: templates/journal_edit.html:9
+msgid "Modify Journal"
+msgstr "Modify Journal"
+
 #: templates/journal_edit.html:59
-msgid "Eintrag aktualisieren"
-msgstr "Update
+msgid "Update"
+msgstr "Update"
 
 #: templates/journal_view.html:8
-msgid "Journal Einträge"
-msgstr "Journal entries"
+msgid "Journal Entries"
+msgstr "Journal Entgries"
 
 #: templates/journal_view.html:14
 msgid "ID"
-msgstr ""
-
-#: templates/journal_view.html:15
-msgid "Date"
-msgstr ""
+msgstr "ID"
 
 #: templates/journal_view.html:16
 msgid "Hygiene"
-msgstr ""
+msgstr "Hygiene"
 
 #: templates/journal_view.html:17
 msgid "Shave"
-msgstr ""
+msgstr "Shave"
 
 #: templates/journal_view.html:18
 msgid "Edge"
-msgstr ""
+msgstr "Edge"
 
 #: templates/journal_view.html:19
 msgid "Ruined"
-msgstr ""
+msgstr "Ruined"
 
 #: templates/journal_view.html:20
 msgid "Orgasm"
-msgstr ""
+msgstr "Orgasm"
 
 #: templates/journal_view.html:21
 msgid "Horny"
-msgstr ""
+msgstr "Horny"
 
 #: templates/journal_view.html:22
 msgid "Note"
-msgstr ""
+msgstr "Note"
 
 #: templates/journal_view.html:23
 msgid "Aktion"
-msgstr ""
+msgstr "Action"
 
 #: templates/journal_view.html:50
-msgid "Sind Sie sicher, dass Sie diesen Eintrag löschen möchten?"
-msgstr "Are you shure you want to delete this entry?"
+msgid "Are you shure you want to delete?"
+msgstr "Are you shure you want to delete?"
 
 #: templates/journal_view.html:52
-msgid "Löschen"
+msgid "Delete"
 msgstr "Delete"
 
 #: templates/navbar.html:17
@@ -99,11 +140,11 @@ msgid "Journal"
 msgstr "Journal"
 
 #: templates/navbar.html:21
-msgid "Journal Hinzufügen"
-msgstr "Add journal entry"
+msgid "Add Journal"
+msgstr "Add Journal"
 
 #: templates/navbar.html:22
-msgid "Journal Anzeigen"
+msgid "Show Journal"
 msgstr "Show Journal"
 
 #: templates/navbar.html:29
@@ -111,35 +152,35 @@ msgid "History"
 msgstr "History"
 
 #: templates/navbar.html:37
-msgid "Nützliche Links"
-msgstr "Usefull Links"
+msgid "Links"
+msgstr "Links"
 
 #: templates/navbar.html:62
-msgid "Anmelden"
+msgid "Login"
 msgstr "Login"
 
 #: templates/navbar.html:72
-msgid "Mein Profil"
-msgstr "My profile"
+msgid "My profile"
+msgstr "My Profile"
 
 #: templates/navbar.html:73
-msgid "Konfiguration"
-msgstr "Configuration"
+msgid "My configuration"
+msgstr "My Configuration"
 
 #: templates/navbar.html:75
-msgid "Abmelden"
+msgid "Logoff"
 msgstr "Logoff"
 
 #: templates/extension/config.html:11
-msgid "Bitte warten!"
+msgid "Please wait!"
 msgstr "Please wait!"
 
 #: templates/extension/config.html:16
-msgid "Benutzername"
+msgid "Username"
 msgstr "Username"
 
 #: templates/extension/config.html:20
-msgid "Passwort"
+msgid "Password"
 msgstr "Password"
 
 #: templates/extension/config.html:24
@@ -147,6 +188,7 @@ msgid "Lock Alias"
 msgstr "Lock Alias"
 
 #: templates/journal/new_journal.html:5
-msgid "Neuer Journaleintrag"
-msgstr "New Joural entry"
+msgid "New Journalentry"
+msgstr "New Journalentry"
+
 

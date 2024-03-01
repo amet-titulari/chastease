@@ -10,7 +10,7 @@
                     <form action="{{ url_for('benutzer.config') }}" method="post">
                         {{ form.hidden_tag() }}
                         
-                        <h6 class="mb-4 text-start">Chaster.app Benutzer</h6>
+                        <h6 class="mb-4 text-start">{{ _("Chaster.app User") }}</h6>
                         <!-- Chaster App Konfiguration -->
                         <div class="form-floating mb-3 w-100">
                             {{ form.CA_username(class="form-control", id="floatingCAUsername", placeholder="CA Username") }}
@@ -36,14 +36,14 @@
                         </div>
 
                         {% if form.TTL_username.data and form.TTL_password_md5.data %}
-                            <a href="/user/config_ttl" class="btn btn-primary  w-100">{{ _("Lock Auswahl") }}</a>
+                            <a href="/user/config_ttl" class="btn btn-primary  w-100">{{ _("Lock Selection") }}</a>
                         {% else %}
-                            <button type="button" class="btn btn-light w-100" disabled>{{ _("Bitte TTLock Benutzername und Passwort eingeben") }}</button>
+                            <button type="button" class="btn btn-light w-100" disabled>{{ _("Please enter TTLock Username and Password") }}</button>
                         {% endif %}
                         <p></p>
                                         
 
-                        <button type="submit" class="btn btn-primary w-100">{{ _("Speichern") }}</button>
+                        <button type="submit" class="btn btn-primary w-100">{{ _("Save") }}</button>
                     </form>
                 </div>
             </div>

@@ -10,7 +10,7 @@
                     <form action="{{ url_for('benutzer.journal_add') }}" method="post">
                         {{ form.hidden_tag() }}
                         
-                        <h6 class="mb-4 text-start">Journal Eintrag</h6>
+                        <h6 class="mb-4 text-start">{{ _("Journal Entry") }}</h6>
 
                         <!-- Journal Felder -->
                         <div class="form-check form-switch mb-3">
@@ -48,7 +48,7 @@
                             {{ form.note.label(class="form-label", for="floatingNote") }}
                         </div>
 
-                        <button type="submit" class="btn btn-primary w-100">{{ _("Eintrag Hinzufügen") }}</button>
+                        <button type="submit" class="btn btn-primary w-100">{{ _("Add") }}</button>
                     </form>
                 </div>
             </div>
