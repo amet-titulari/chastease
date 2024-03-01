@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-03-01 13:33+0100\n"
+"POT-Creation-Date: 2024-03-01 15:34+0100\n"
 "PO-Revision-Date: 2024-03-01 13:22+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -137,25 +137,25 @@ msgstr "Löschen"
 
 #: templates/navbar.html:17
 msgid "Journal"
-msgstr "Journal"
+msgstr "Tagebuch"
 
 #: templates/navbar.html:21
 msgid "Add Journal"
-msgstr "Journal Hinzufügen"
+msgstr "Neuer Tagebucheintrag"
 
 #: templates/navbar.html:22
 msgid "Show Journal"
-msgstr "Journal anziegen"
+msgstr "Tagebuch anzeigen"
 
 #: templates/navbar.html:29
 msgid "History"
-msgstr "History"
+msgstr "Verlauf"
 
-#: templates/navbar.html:37
+#: templates/navbar.html:36
 msgid "Links"
 msgstr "Links"
 
-#: templates/navbar.html:62
+#: templates/navbar.html:61
 msgid "Login"
 msgstr "Anmelden"
 
@@ -170,6 +170,14 @@ msgstr "Konfiguration"
 #: templates/navbar.html:75
 msgid "Logoff"
 msgstr "Abmelden"
+
+#: templates/navbar.html:89
+msgid "German"
+msgstr "Deutsch"
+
+#: templates/navbar.html:90
+msgid "English"
+msgstr "Englisch"
 
 #: templates/extension/config.html:11
 msgid "Please wait!"

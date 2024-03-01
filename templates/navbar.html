@@ -15,7 +15,7 @@
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
             <i class="fas fa-book me-2"></i>{{ _("Journal") }}
-            <i class="fas fa-caret-down ms-2"></i>
+            <i class="fas fa-caret-down me-md-0"></i>
           </a>
           <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
             <a href="/user/journal_add" class="dropdown-item">{{ _("Add Journal") }}</a>
@@ -27,7 +27,6 @@
         <li class="nav-item">
           <a class="nav-link" href="/user/history">
             <i class="fas fa-history me-2"></i>{{ _("History") }}
-            <i class="fas fa-caret-down ms-2"></i>
           </a>
         </li>
 
@@ -35,7 +34,7 @@
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
             <i class="fas fa-lock me-2"></i>{{ _("Links") }}
-            <i class="fas fa-caret-down ms-2"></i>
+            <i class="fas fa-caret-down me-md-0"></i>
           </a>
           <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
             <a href="https://chaster.app" class="dropdown-item">Chaster.app</a>
@@ -59,7 +58,7 @@
 
         <div class="nav-item">
           
-          <a href="/login" class="nav-link"><i class="fa fa-user me-lg-2"></i>{{ _("Login") }}
+          <a href="/login" class="nav-link"><i class="fa fa-user me-md-0"></i>{{ _("Login") }}
           </a>
         </div>
         {% else %}
@@ -67,23 +66,29 @@
           <a href="#" class="nav-link dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
             <img class="rounded-circle me-2" src="{{ current_user.avatarUrl }}" alt="" style="width: 40px; height: 40px;">
             <span class="d-none d-lg-inline-flex">{{ current_user.username }}</span>
+            <i class="fas fa-caret-down me-md-0"></i>
           </a>
           <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
             <a href="/user/profile" class="dropdown-item">{{ _("My profile") }}</a>
             <a href="/user/config" class="dropdown-item">{{ _("My configuration") }}</a>
             <hr class="dropdown-divider">
             <a href="/logout" class="dropdown-item">{{ _("Logoff") }}</a>
+            <i class="fas fa-caret-down me-md-0"></i>
           </div>
         </div>
         {% endif %}
 
         <!-- Sprachauswahl -->
-        
-        <div class="nav-item">
-          <i class="fas fa-globe me-lg-2" style="margin-left: 20px;"></i>
-          <a href="{{ url_for('set_language', language='de') }}">[DE]</a>
-          <a href="{{ url_for('set_language', language='en') }}">[EN]</a>
-          
+
+        <div class="nav-item dropdown">
+          <a href="#" class="nav-link dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
+            <i class="fas fa-globe me-md-0"></i>
+            <i class="fas fa-caret-down me-md-0"></i>
+          </a>
+          <div class="dropdown-menu dropdown-menu-end bg-secondary border-0 rounded-0 rounded-bottom m-0">
+            <a href="{{ url_for('set_language', language='de') }}" class="dropdown-item">{{ _("German") }}</a>
+            <a href="{{ url_for('set_language', language='en') }}" class="dropdown-item">{{ _("English") }}</a>
+          </div>
         </div>
 
       </div>

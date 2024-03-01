@@ -68,11 +68,12 @@ app.register_blueprint(extension, url_prefix='/extension')
 
 
 def get_locale():
-    print(f'Session Language : {session['language']}')
 
     if 'language' in session:
+        #print(f'Session Language : {session['language']}')
         return session['language']
     else:
+        #print(f'Best Match : {request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LANGUAGES'])}')
         return request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LANGUAGES'])
 
 babel.init_app(app, locale_selector=get_locale)
@@ -106,7 +107,7 @@ def home():
 
 
         if result['success']:
-            content = f'<div class="container">\
+            content = f'<div class="container text-start">\
                     <h1>Hallo {current_user.username}</h1>\
                     <h3>Du kannst deine Hygeneöffnung jetzt durchführen</h3>\
                     <p>Viel Glück</p>\
@@ -115,7 +116,7 @@ def home():
                 </div>'
         else:
         
-            content = f'<div class="container">\
+            content = f'<div class="container text-start">\
                         <h1>Hallo {current_user.username}</h1>\
                         <h3>Sorry du bleibst verschlossen!</h3>\
                         <p>Viel Glück weiterhin!</p>\
@@ -126,7 +127,7 @@ def home():
 
     else:
 
-        content = f'    <div class="container">\
+        content = f'    <div class="container text-start">\
                             <h1>Willkommen bei Chastease!</h1>\
                             <h3>Diese Anwendung ist zur automatischen Steuerung des Schlüsseltresors mit TTLock.</h3>\
                             <p>Bitte melde dich an deinem Chaster Account an und erteile die notwendigen Berechtigungen.</p>\

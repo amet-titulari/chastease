@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-03-01 13:33+0100\n"
+"POT-Creation-Date: 2024-03-01 15:34+0100\n"
 "PO-Revision-Date: 2024-03-01 13:22+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -151,11 +151,11 @@ msgstr "Show Journal"
 msgid "History"
 msgstr "History"
 
-#: templates/navbar.html:37
+#: templates/navbar.html:36
 msgid "Links"
 msgstr "Links"
 
-#: templates/navbar.html:62
+#: templates/navbar.html:61
 msgid "Login"
 msgstr "Login"
 
@@ -170,6 +170,14 @@ msgstr "My Configuration"
 #: templates/navbar.html:75
 msgid "Logoff"
 msgstr "Logoff"
+
+#: templates/navbar.html:89
+msgid "German"
+msgstr "German"
+
+#: templates/navbar.html:90
+msgid "English"
+msgstr "English"
 
 #: templates/extension/config.html:11
 msgid "Please wait!"
@@ -190,5 +198,3 @@ msgstr "Lock Alias"
 #: templates/journal/new_journal.html:5
 msgid "New Journalentry"
 msgstr "New Journalentry"
-
-
