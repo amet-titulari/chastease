@@ -117,8 +117,8 @@ def config_ttl():
         for gateway in TTL_gateway_list['data']['list']
     ]
 
-    print(f'Schlösser: {locks}\n')
-    print(f'Gateways: {gateways}\n')
+    #print(f'Schlösser: {locks}\n')
+    #print(f'Gateways: {gateways}\n')
 
     form = BenutzerConfigFormTTL()
 

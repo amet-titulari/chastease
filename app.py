@@ -87,7 +87,7 @@ def load_user(user_id):
 def set_language(language):
     session['language'] = language
     session.modified = True
-    print(session['language'])
+    #print(session['language'])
     return redirect(request.referrer or url_for('home'))
 
 @app.route('/')

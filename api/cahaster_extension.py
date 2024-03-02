@@ -84,7 +84,7 @@ def get_config_info(token):
             # Die Antwort als JSON-Objekt bekommen
             data = response.json()
 
-            print(f'Get_Config_info: {data}\n')
+            #print(f'Get_Config_info: {data}\n')
 
             if data['sessionId'] == None:
                 configdata = data['config']
@@ -128,8 +128,8 @@ def put_config_update(token, data):
     # daher brauchen wir es nur im 'json'-Parameter zu übergeben.
     response = requests.put(url, headers=headers, json=data)
 
-    print(f'\nConfig Json: {data}')
-    print(f'Response: {response}')
+    #print(f'\nConfig Json: {data}')
+    #print(f'Response: {response}')
 
     if response.status_code == 200:
         print("Erfolgreiche Aktualisierung:", response.json())

@@ -141,7 +141,7 @@ def get_ttlock_history():
     end_date                = int(time.time() * 1000)
 
     # Laden der Konfigurationsdaten
-    print(os.getcwd())
+    #print(os.getcwd())
 
     url = "https://euapi.ttlock.com/v3/lockRecord/list"
 

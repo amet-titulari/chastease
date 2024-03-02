@@ -34,14 +34,14 @@ def handle_token():
             try:
                 data = request.json
                 main_token = data.get('mainToken')
-                print(f'\nMainToken: {main_token}')
+                #print(f'\nMainToken: {main_token}')
 
                 if not main_token:
                     raise ValueError("Kein Token gefunden.")
 
                 session['main_token'] = main_token
                 sessionauth = get_session_auth_info(main_token)
-                print(f'\nSessionauth: {sessionauth}\n')
+                #print(f'\nSessionauth: {sessionauth}\n')
 
                 if not sessionauth.get('success'):
                     raise ValueError("Fehler bei der Authentifizierung.")
@@ -54,7 +54,7 @@ def handle_token():
                 role = user_data.get('role')
                 avatarUrl = user_data.get('avatarUrl')
 
-                print(f'\nUserinfo: {username}\t{role}\t{avatarUrl}\n')
+                #print(f'\nUserinfo: {username}\t{role}\t{avatarUrl}\n')
 
                 benutzer = Benutzer.query.filter_by(username=username).first()
                 #print(f'\nBenutzer: {benutzer}')
@@ -71,7 +71,7 @@ def handle_token():
 
                 # Konfig abrufen
                 config_data = sessionauth.get('data', {}).get('session', {}).get('config', {})
-                print(f'\nKonfiguration:{config_data}')
+                #print(f'\nKonfiguration:{config_data}')
                 benutzer_info = benutzer.to_dict()
 
                 #print(f'\nBenutzer Info: {benutzer_info}')
@@ -95,7 +95,7 @@ def handle_token():
                 return jsonify({"success": False, "message": str(e)}), 500  # Server-seitiger Fehler
 
     elif request.method == 'GET':
-        print("Methode GET")
+        #print("Methode GET")
         # Hier können Sie entscheiden, was bei einem GET-Request passieren soll.
         # Zum Beispiel: Eine bestimmte Information als JSON zurückgeben oder eine einfache Nachricht.
         return jsonify({"message": "GET-Request ist für diese Route nicht zulässig."}), 405
