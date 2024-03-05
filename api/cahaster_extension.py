@@ -87,6 +87,7 @@ def get_config_info(token):
             #print(f'Get_Config_info: {data}\n')
 
             if data['sessionId'] == None:
+                print(f'DATA {data}')
                 configdata = data['config']
                 config = {'config' : configdata}
                 configreturn = json.dumps(config)
@@ -96,8 +97,9 @@ def get_config_info(token):
                 sessioninfo = get_session_info(data['sessionId'])
                 
                 if sessioninfo['success']:
-                    session = sessioninfo['session_info']
-                    return {'success': True, 'data': session} 
+                    #print(sessioninfo['session_info']['session'])
+                    configreturn = sessioninfo['session_info']['session']
+                    return {'success': True, 'noSession': False, 'data': configreturn} 
                     
 
         else:

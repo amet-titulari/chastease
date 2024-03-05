@@ -61,15 +61,15 @@
                     body: JSON.stringify({ configurationToken: configurationToken })
                 })
                 .then(response => response.json())
-                .then(data => {
+                .then(configdata => {
                     // Konfigurationsformular mit den Daten aus der Antwort befüllen
-                    console.log('Konfiguration geladen:', data);
+                    console.log('Konfiguration geladen:', configdata);
         
                     document.getElementById('responseMessage').innerHTML = 'Success: Data fully loaded';
         
-                    document.getElementById('ttl_user').value = data.data.ttl_user || '';
-                    document.getElementById('ttl_pass').value = data.data.ttl_pass || '';
-                    document.getElementById('ttl_alias').value = data.data.ttl_alias || '';
+                    document.getElementById('ttl_user').value = configdata.configdata.ttl_user || '';
+                    document.getElementById('ttl_pass').value = configdata.configdata.ttl_pass || '';
+                    document.getElementById('ttl_alias').value = configdata.configdata.ttl_alias || '';
         
                     // Please wait ausblenden
                     document.getElementById('userTableContainer').style.display = 'none';

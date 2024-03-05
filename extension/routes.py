@@ -166,24 +166,23 @@ def fetchconfig():
                 raise ValueError("Kein Token gefunden.")
             
             configinfo = get_config_info(configurationToken)
-            print(f'Config Info from get config: {configinfo}\n')
+            #print(f'Config Info from get config: {configinfo}\n\n')
+            print(f'Config info: {configinfo['data']['config']}')
             
 
             if configinfo['success']:
-                if configinfo['noSession']:
-                    print(f'NO SESSION YET!!!!')
-                    configdata = configinfo['config']
-                    print(f'Configdata: {configdata}')
-                else:
-                    configdata  = configinfo['data']['session']['config']
-                    print(f'Config Data: {configdata}\n')
+                configdata = configinfo['data']['config']
+            else:
+                configdata = {'icon': 'user-lock', 'enabled': True, 'ttl_user': 'user@example.com', 'ttl_pass': 'Passw0rd!', 'ttl_alias': 'Lock Alias'}
+
+            print(f'Configdata: {configdata}')
                 
 
 
             returnmsg = {
                             "success": True,
                             "message": "Config Token OK.",
-                            "data"   : configdata
+                            "configdata"   : configdata
                         }
             
             
