@@ -202,19 +202,24 @@ def fetchconfig():
 
 @extension.route('/hooks', methods=['POST'])
 def hooks():
-    # Prüfen, ob es sich um eine JSON-Anfrage handelt
-    print(f"Hook wurde ausgelöst!")
-    if request.is_json:
-        # Anfragedaten extrahieren
-        data = request.get_json()
-        print("Erhaltene Daten:", data)
+    # Hier die Daten des Webhook-Ereignisses verarbeiten
+    event = request.json
+    print("Webhook-Ereignis empfangen:", event)
+        
+    event_type = event.get('type')
+    if event_type == 'extension_session.created':
+        # Logik für das Ereignis "session created"
+        print(f'Event: {event}')
+    elif event_type == 'extension_session.updated':
+        # Logik für das Ereignis "session updated"
+        print(f'Event: {event}')
+    elif event_type == 'extension_session.deleted':
+        # Logik für das Ereignis "session deleted"
+        print(f'Event: {event}')
+    elif event_type == 'action_log.created':
+        # Logik für das Ereignis "action log created"
+        print(f'Event: {event}')
 
-        # Hier können Sie basierend auf den Daten Verarbeitungslogik hinzufügen.
-        # Zum Beispiel:
-        # if data['event_type'] == 'extension_session.created':
-        #     # Logik für die Behandlung des Ereignisses extension_session.created
 
-        # Bestätigung des Empfangs senden
-        return jsonify({"message": "Ereignis erfolgreich empfangen!"}), 200
-    else:
-        return jsonify({"error": "Anfrage muss JSON sein"}), 400
+    # Mit 200 OK antworten, um den Erhalt zu bestätigen
+    return jsonify({'status': 'success'}), 200
