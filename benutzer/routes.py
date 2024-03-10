@@ -203,10 +203,10 @@ def relock():
 def ttl_open(uid):
 
     benutzer = Benutzer.query.filter_by(lock_uuid=uid).first()
-    print(benutzer)
 
     if benutzer and benutzer.lock_uuid == uid:
         login_user(benutzer)  # Meldet den Benutzer an
+        print(session)
         open_ttlock()
         flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')
     else:

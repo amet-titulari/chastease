@@ -86,8 +86,8 @@ def get_lock_detail(client_id, access_token):
         return {'success': True, 'data': result}
 
 def open_ttlock():
-    check = is_ttl_token_valid()
-    if check:
+    #check = is_ttl_token_valid()
+    #if check:
 
         benutzer = Benutzer.query.filter_by(id=current_user.id).first()
 
