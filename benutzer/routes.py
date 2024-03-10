@@ -14,6 +14,7 @@ from flask_login import login_required, login_user, current_user
 from helper.log_config import logger
 
 from . import benutzer
+from .token_handling import refresh_ca_token, refresh_ttl_token
 
 from .models import Benutzer,  Journal, History_Chaster, History_TTLock
 from .forms import BenutzerConfigForm, BenutzerConfigFormTTL ,JournalAddForm, JournalEditForm
@@ -206,7 +207,13 @@ def ttl_open(uid):
 
     if benutzer and benutzer.lock_uuid == uid:
         login_user(benutzer)  # Meldet den Benutzer an
-        print(session)
+    
+        refresh_ca_token()
+        refresh_ttl_token()
+        
+        #for key, value in session.items():
+        #    print(f'{key}: {value}')
+        
         open_ttlock()
         flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')
     else:
