@@ -209,9 +209,6 @@ def ttl_open(uid):
             open_ttlock()
             flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')
 
-            #Nach Gebrauch UUID löschen um eine zweite Öffnung zu verhindern
-            #benutzer.lock_uuid = ''
-            #db.session.commit()
 
     else:
             flash(f'Die UID {uid} ist nicht korrekt das TTLock bleibt verschlossen!', 'danger')
