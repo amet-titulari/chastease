@@ -204,15 +204,17 @@ def relock():
 def ttl_open(uid):
 
     benutzer = Benutzer.query.filter_by(lock_uuid=uid).first()
-
+    session['ca_refresh_token'] = benutzer.CA_refresh_token
+    session['ttl_refresh_token'] = benutzer.TTL_refresh_token
+    
     if benutzer and benutzer.lock_uuid == uid:
         login_user(benutzer)  # Meldet den Benutzer an
     
         refresh_ca_token()
         refresh_ttl_token()
         
-        #for key, value in session.items():
-        #    print(f'{key}: {value}')
+        for key, value in session.items():
+            print(f'{key}: {value}')
         
         open_ttlock()
         flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')

@@ -1,6 +1,8 @@
 import time
 import requests
 
+from database import db
+
 from flask import session, current_app, flash, redirect, url_for
 from flask_login import current_user
 
@@ -32,6 +34,8 @@ def is_ca_token_valid():
 
 def refresh_ca_token():
 
+    benutzer = Benutzer.query.filter_by(id=current_user.id).first()
+
     # URL des Token-Endpunkts des OAuth2-Anbieters
     token_url = 'https://sso.chaster.app/auth/realms/app/protocol/openid-connect/token'
 
@@ -51,6 +55,9 @@ def refresh_ca_token():
         session['ca_access_token'] = new_tokens['access_token']
         session['ca_refresh_token'] = new_tokens['refresh_token']
         session['ca_token_expiration_time'] = time.time() + new_tokens['expires_in']
+
+        benutzer.CA_refresh_token = session['ca_refresh_token']
+        db.session.commit()
         return True
     else:
         # Fehlerbehandlung
@@ -115,6 +122,9 @@ def get_ttlock_tokens():
                 session['ttl_access_token'] = new_tokens['access_token']
                 session['ttl_refresh_token'] = new_tokens['refresh_token']
                 session['ttl_token_expiration_time'] = time.time() + new_tokens['expires_in']
+
+                benutzer.TTL_refresh_token = session['ttl_refresh_token']
+                db.session.commit()
                 return {'success': True}
             
         except requests.exceptions.RequestException as e:
@@ -141,11 +151,17 @@ def refresh_ttl_token():
 
         # Überprüfen der Antwort
         if response.status_code == 200:
+            benutzer = Benutzer.query.filter_by(id=current_user.id).first()
             new_tokens = response.json()
 
             session['ttl_access_token'] = new_tokens['access_token']
             session['ttl_refresh_token'] = new_tokens['refresh_token']
             session['ttl_token_expiration_time'] = time.time() + new_tokens['expires_in']
+
+            benutzer.TTL_refresh_token = session['ttl_refresh_token']
+            db.session.commit()
+
+
             return True
     except:
         return False

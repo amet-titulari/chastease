@@ -31,6 +31,7 @@ def handler_callback(code):
 
         session['ca_access_token'] = token_data.get('access_token')
         session['ca_refresh_token'] = token_data.get('refresh_token')
+        print(session['ca_refresh_token'])
         session['ca_token_expiration_time'] = time.time() + token_data['expires_in']
 
         return {'success': True}        
@@ -64,6 +65,7 @@ def get_auth_userinfo():
             
             if not benutzer:
                 benutzer = Benutzer(username=username, role=role, avatarUrl=avatarUrl)
+                benutzer.CA_refresh_token=session['ca_refresh_token']
                 db.session.add(benutzer)
                 db.session.commit()
                 login_user(benutzer)    
@@ -71,7 +73,8 @@ def get_auth_userinfo():
             else: 
                 benutzer.username = username
                 benutzer.role = role
-                benutzer.avatarUrl = avatarUrl    
+                benutzer.avatarUrl = avatarUrl
+                benutzer.CA_refresh_token=session['ca_refresh_token']    
                 db.session.commit()
                 login_user(benutzer)  
                 return {'success': True, 'Message': f'Benutzer {username} angemeldetet'}

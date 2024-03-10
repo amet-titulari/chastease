@@ -12,6 +12,7 @@ class Benutzer(UserMixin, db.Model):
 
     # Konfigurationsfelder für Chaster.app
     CA_username         = db.Column(db.String(128))
+    CA_refresh_token    = db.Column(db.String(1024))
     CA_keyholdername    = db.Column(db.String(128))
     CA_keyholder_id     = db.Column(db.String(128))
     CA_user_id          = db.Column(db.String(128))
@@ -21,6 +22,7 @@ class Benutzer(UserMixin, db.Model):
 
     # Konfiguration für TTLock
     TTL_username        = db.Column(db.String(128))
+    TTL_refresh_token   = db.Column(db.String(128))
     TTL_password_md5    = db.Column(db.String(128))
     TTL_lock_id         = db.Column(db.String(128))
     TTL_gateway_id      = db.Column(db.String(128))
