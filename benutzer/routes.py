@@ -8,7 +8,8 @@ from sqlalchemy import desc
 from database import db
 
 from flask import  current_app, session, redirect, request, flash, url_for,render_template
-from flask_login import login_required, current_user
+from flask_login import login_required, login_user, current_user
+
 
 from helper.log_config import logger
 
@@ -198,21 +199,20 @@ def relock():
             print("Die Antwort war nicht erfolgreich.")
 
 @benutzer.route('/ttl_open/<uid>')
-@login_required
+#@login_required
 def ttl_open(uid):
 
-    benutzer = Benutzer.query.filter_by(id=current_user.id).first()
+    benutzer = Benutzer.query.filter_by(lock_uuid=uid).first()
+    print(benutzer)
 
-
-    if benutzer.lock_uuid == uid:
-        
-            open_ttlock()
-            flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')
-
-
+    if benutzer and benutzer.lock_uuid == uid:
+        login_user(benutzer)  # Meldet den Benutzer an
+        open_ttlock()
+        flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')
     else:
-            flash(f'Die UID {uid} ist nicht korrekt das TTLock bleibt verschlossen!', 'danger')
-        
+        flash(f'Die UID {uid} ist nicht korrekt das TTLock bleibt verschlossen!', 'danger')
+    
+
     return redirect(url_for('home'))
 
 @benutzer.route('/history')

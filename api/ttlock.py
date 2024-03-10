@@ -112,15 +112,6 @@ def open_ttlock():
 
 def get_ttlock_history():
 
-    # Infos zu Lock Records:
-    # https://euopen.ttlock.com/document/doc?urlName=cloud%2FlockRecord%2FlistEn.html
-
-    # --> Damit kann sichergestellt werden, dass öffnen wie Bluetooth Bestraft werden kann
-    # --> recordTypeFromLock = 1 (unlock by Bluetooth) und recordtype = 1 (unlock by app)
-    # --> öffnungen dürfen nur noch mit folgendem Eintrag erfolgen
-    # --> recordTypeFromLock = 28 (unlock by gateway) und recordtyp = 12 (unlock by gateway)
-
-    # Überprüfen, ob das Token gültig ist
     check = is_ttl_token_valid()
     if not check:
         return "Token ungültig oder abgelaufen"
