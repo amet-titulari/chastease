@@ -204,25 +204,37 @@ def relock():
 def ttl_open(uid):
 
     benutzer = Benutzer.query.filter_by(lock_uuid=uid).first()
-    session['ca_refresh_token'] = benutzer.CA_refresh_token
-    session['ttl_refresh_token'] = benutzer.TTL_refresh_token
+
     
     if benutzer and benutzer.lock_uuid == uid:
         login_user(benutzer)  # Meldet den Benutzer an
     
+        session['ca_refresh_token'] = benutzer.CA_refresh_token
+        session['ttl_refresh_token'] = benutzer.TTL_refresh_token
+    
         refresh_ca_token()
         refresh_ttl_token()
-        
-        for key, value in session.items():
-            print(f'{key}: {value}')
-        
+
         open_ttlock()
+
         flash(f'Die UID {uid} ist korrekt und öffnet das TTLock!', 'success')
+        content = f'<div class="container text-start">\
+                <h1>Hallo {current_user.username}</h1>\
+                <h3>Du kannst deine Hygeneöffnung jetzt durchführen</h3>\
+                <p>Viel Glück</p>\
+                </p>\
+                <a href="/user/relock" class="btn btn-info" role="button">Relock Session</a>\
+            </div>'
     else:
         flash(f'Die UID {uid} ist nicht korrekt das TTLock bleibt verschlossen!', 'danger')
-    
-
-    return redirect(url_for('home'))
+        content = f'<div class="container text-start">\
+                <h1>Hallo {current_user.username}</h1>\
+                <h3>Du hast einen falschen QR Code verwendet!</h3>\
+                <p>Viel Glück beim nächsten mal!</p>\
+                </p>\
+            </div>'
+      
+    return render_template('index.html', content=content) 
 
 @benutzer.route('/history')
 @login_required
