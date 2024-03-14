@@ -45,8 +45,13 @@ def config():
             benutzer.TTL_password_md5 = (hashlib.md5(form.TTL_password_md5.data.encode()).hexdigest() 
                                          if not is_md5(form.TTL_password_md5.data) 
                                          else form.TTL_password_md5.data)
-
+            
         db.session.commit()
+
+        if not benutzer.TTL_lock_id:
+           return redirect(url_for('benutzer.config_ttl')) 
+
+
         form = BenutzerConfigForm(obj=benutzer)
 
         flash('Konfiguration aktualisiert!', 'success')
@@ -79,7 +84,9 @@ def config():
     #print(lock_info)
 
     if lock_info['success']:
-        if 'keyholder' in lock_info['data']:
+        
+        if lock_info['data']['keyholder'] is not None:
+
             benutzer.CA_keyholder_id = lock_info['data']['keyholder']['_id']
             benutzer.CA_keyholdername = lock_info['data']['keyholder']['username']
             db.session.commit()
@@ -104,44 +111,54 @@ def config():
 @login_required
 def config_ttl():
 
-    TTL_lock_list = get_lock_list(current_app.config['TTL_CLIENT_ID'], session['ttl_access_token'])
-    TTL_gateway_list = get_gateway_list(current_app.config['TTL_CLIENT_ID'], session['ttl_access_token'])
+    try:
+        gettoken = get_ttlock_tokens()
 
-    # Alle Schlösser auslesen
-    locks = [
-        ( lock['lockId'], lock['lockAlias'])
-        for lock in TTL_lock_list['data']['list']
-    ]
+        if not gettoken:
+            flash('Konfiguration aktualisiert!', 'success')
+        
+        else:
 
-    # Alle Gateway's auslesen
-    gateways = [
-        (gateway['gatewayId'], gateway['gatewayName'])
-        for gateway in TTL_gateway_list['data']['list']
-    ]
+            TTL_lock_list = get_lock_list(current_app.config['TTL_CLIENT_ID'], session['ttl_access_token'])
+            TTL_gateway_list = get_gateway_list(current_app.config['TTL_CLIENT_ID'], session['ttl_access_token'])
 
-    #print(f'Schlösser: {locks}\n')
-    #print(f'Gateways: {gateways}\n')
+            # Alle Schlösser auslesen
+            locks = [
+                ( lock['lockId'], lock['lockAlias'])
+                for lock in TTL_lock_list['data']['list']
+            ]
 
-    form = BenutzerConfigFormTTL()
+            # Alle Gateway's auslesen
+            gateways = [
+                (gateway['gatewayId'], gateway['gatewayName'])
+                for gateway in TTL_gateway_list['data']['list']
+            ]
 
-    form.TTL_lock.choices = locks
-    form.TTL_gateway.choices = gateways
+            #print(f'Schlösser: {locks}\n')
+            #print(f'Gateways: {gateways}\n')
 
-    benutzer = Benutzer.query.filter_by(id=current_user.id).first()
-  
+            form = BenutzerConfigFormTTL()
 
-    if form.validate_on_submit():
-        # Formularverarbeitung für POST-Anfrage
-        benutzer.TTL_username = benutzer.TTL_username
+            form.TTL_lock.choices = locks
+            form.TTL_gateway.choices = gateways
 
-        benutzer.TTL_lock_id = form.TTL_lock.data
-        benutzer.TTL_gateway_id = form.TTL_gateway.data
-        db.session.commit()
-        flash('Konfiguration aktualisiert!', 'success')
+            benutzer = Benutzer.query.filter_by(id=current_user.id).first()
+    
 
+        if form.validate_on_submit():
+            # Formularverarbeitung für POST-Anfrage
+            benutzer.TTL_username = benutzer.TTL_username
 
+            benutzer.TTL_lock_id = form.TTL_lock.data
+            benutzer.TTL_gateway_id = form.TTL_gateway.data
+            db.session.commit()
+            flash('Konfiguration aktualisiert!', 'success')
 
-    return render_template('benutzerconfig_ttl.html', form=form )
+        return render_template('benutzerconfig_ttl.html', form=form )
+    
+    except:
+        e= "Es ist ein Fehler aufetreten!"
+        return {'success': False, 'error': f' {str(e)}'}
    
 @benutzer.route('/relock')
 @login_required

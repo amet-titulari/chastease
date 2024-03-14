@@ -177,10 +177,12 @@ def callback():
             # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
             pass
 
+@app.errorhandler(404)
+def page_not_found(e):
+    # Du kannst hier auch ein Template rendern statt eines einfachen Strings.
+    return render_template('404.html') 
 
 
-
-    return redirect(url_for('home'))
 
 if __name__ == '__main__':
     if os.path.isfile('./instance/database.sqlite'):
