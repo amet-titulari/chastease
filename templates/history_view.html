@@ -1,90 +1,158 @@
 {% extends 'base.html' %}
 
 {% block content %}
+
+    <!-- Flash-Nachricht "Bitte warten" -->
+    <div id="loading-message" style="display: none;">
+        {{ _("TTLock Entry") }}
+    </div>
+
+    
     <div class="container-fluid">
         <div class="row w-100">
-            <!-- Erste Tabelle in der ersten Hälfte der Zeile -->
-            <div class="col-6">
-                <div class="bg-secondary rounded">
-                    <h6 class="mb-4 text-start">{{ _("Log CHASTER.APP") }}</h6>
-                    <div class="table-responsive">
-                        <table class="table table-striped w-100">
-                            <thead>
-                                <tr>
-                                    <th scope="col">{{ _("Date") }}</th>
-                                    <!-- <th scope="col">Type</th> -->
-                                    <th scope="col">{{ _("Title") }}</th> 
-                                    <th scope="col">{{ _("Description") }}</th>
-                                    <th scope="col">{{ _("Ext") }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for journal in chaster %}
-                                    <tr>
-                                        <td>
-                                            <script>
-                                                var createdAt = new Date('{{ journal.created_at }}');
-                                                var formattedDate = createdAt.toLocaleDateString('de-DE'); 
-                                                var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
-                                                document.write(formattedDate + ' ' + formattedTime);
-                                            </script>
-                                        </td>
-                                        <!-- <td>{{ journal.type }}</td> -->
-                                        <td>{{ journal.title }}</td>
-                                        <td>{{ journal.description }}</td>
-                                        <td>{{ journal.extension }}</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+            <!-- Pillen-Navigation -->
+            <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link btn btn-outline-primary" id="pills-ttlock-tab" data-bs-toggle="pill" data-bs-target="#pills-ttlock" type="button" role="tab" aria-controls="pills-ttlock" aria-selected="true">{{ _("TTLock Entry") }}</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link btn btn-outline-primary" id="pills-chaster-tab" data-bs-toggle="pill" data-bs-target="#pills-chaster" type="button" role="tab" aria-controls="pills-chaster" aria-selected="false">{{ _("Log CHASTER.APP") }}</button>
+                </li>
+            </ul>
+            <div class="tab-content" id="pills-tabContent">
+                <!-- Zweite Tabelle in der ersten Hälfte der Zeile -->
+                <div class="tab-pane fade" id="pills-ttlock" role="tabpanel" aria-labelledby="pills-ttlock-tab">
+                    <div class="col-12">
+                        <div class="bg-secondary rounded">
+                            <h6 class="mb-4 text-start">{{ _("TTLock Entry") }}</h6>
+                            <div class="table-responsive">
+                                <table class="table table-striped w-100">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">{{ _("Date") }}</th>
+                                            <th scope="col"> </th>
+                                            <th scope="col">{{ _("Type") }}</th>
+                                            <th scope="col"> </th>
+                                            <th scope="col">{{ _("Kind") }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for journal in ttlock %}
+                                            <tr>
+                                                <td>
+                                                    <script>
+                                                        var createdAt = new Date('{{ journal.created_at }}');
+                                                        var formattedDate = createdAt.toLocaleDateString('de-DE'); 
+                                                        var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
+                                                        document.write(formattedDate + ' ' + formattedTime);
+                                                    </script>
+                                                </td>
+                                                <td>
+                                                    {% if journal.recordtyp != 12 %}
+                                                        <i class="fas fa-exclamation-triangle" style="color: red;"></i>
+                                                    {% endif %}
+                                                </td>
+                                                <td>{{ journal.recordtypstr }}</td>
+                                                <td>
+                                                    {% if journal.recordtypefromlock != 28 %}
+                                                        <i class="fas fa-exclamation-triangle" style="color: red;"></i>
+                                                    {% endif %}
+                                                </td>                                        
+                                                <td>{{ journal.recordtypefromlockstr }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <!-- Zweite Tabelle in der zweiten Hälfte der Zeile -->
-            <div class="col-6">
-                <div class="bg-secondary rounded">
-                    <h6 class="mb-4 text-start">{{ _("TTLock Entry") }}</h6>
-                    <div class="table-responsive">
-                        <table class="table table-striped w-100">
-                            <thead>
-                               <tr>
-                                   <th scope="col">{{ _("Date") }}</th>
-                                   <th scope="col"> </th>
-                                    <th scope="col">{{ _("Type") }}</th>
-                                    <th scope="col"> </th>
-                                    <th scope="col">{{ _("Kind") }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for journal in ttlock %}
-                                    <tr>
-                                        <td>
-                                            <script>
-                                                var createdAt = new Date('{{ journal.created_at }}');
-                                                var formattedDate = createdAt.toLocaleDateString('de-DE'); 
-                                                var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
-                                                document.write(formattedDate + ' ' + formattedTime);
-                                            </script>
-                                        </td>
-                                        <td>
-                                            {% if journal.recordtyp != 12 %}
-                                                <i class="fas fa-exclamation-triangle" style="color: red;"></i>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ journal.recordtypstr }}</td>
-                                        <td>
-                                            {% if journal.recordtypefromlock != 28 %}
-                                                <i class="fas fa-exclamation-triangle" style="color: red;"></i>
-                                            {% endif %}
-                                        </td>                                        
-                                        <td>{{ journal.recordtypefromlockstr }}</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                <!-- Erste Tabelle in der zweiten Hälfte der Zeile -->
+                <div class="tab-pane fade show active" id="pills-chaster" role="tabpanel" aria-labelledby="pills-chaster-tab">
+                    <div class="col-12">
+                        <div class="bg-secondary rounded">
+                            <h6 class="mb-4 text-start">{{ _("Log CHASTER.APP") }}</h6>
+                            <div class="table-responsive">
+                                <table class="table table-striped w-100">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">{{ _("Date") }}</th>
+                                            <!-- <th scope="col">Type</th> -->
+                                            <th scope="col">{{ _("Title") }}</th> 
+                                            <th scope="col">{{ _("Description") }}</th>
+                                            <th scope="col">{{ _("Ext") }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for journal in chaster %}
+                                            <tr>
+                                                <td>
+                                                    <script>
+                                                        var createdAt = new Date('{{ journal.created_at }}');
+                                                        var formattedDate = createdAt.toLocaleDateString('de-DE'); 
+                                                        var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
+                                                        document.write(formattedDate + ' ' + formattedTime);
+                                                    </script>
+                                                </td>
+                                                <!-- <td>{{ journal.type }}</td> -->
+                                                <td>{{ journal.title }}</td>
+                                                <td>{{ journal.description }}</td>
+                                                <td>{{ journal.extension }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    
+    <script type="text/javascript">
+        $(document).ready(function(){
+            // Funktion zum Einblenden der "Bitte warten"-Nachricht
+            function showLoadingMessage() {
+                $('#loading-message').show();
+            }
+    
+            // Funktion zum Ausblenden der "Bitte warten"-Nachricht
+            function hideLoadingMessage() {
+                $('#loading-message').hide();
+            }
+    
+            // AJAX-Anfrage für die Aktualisierung der Lock-Historien
+            function updateHistory() {
+                // Einblenden der "Bitte warten"-Nachricht
+                showLoadingMessage();
+    
+                $.ajax({
+                    url: '/update_history', // Endpunkt für die Aktualisierung der Historien
+                    type: 'GET',
+                    success: function(response) {
+                        console.log('Lock-Historien erfolgreich aktualisiert');
+                        // Ausblenden der "Bitte warten"-Nachricht nach erfolgreicher Aktualisierung
+                        hideLoadingMessage();
+                    },
+                    error: function(error) {
+                        console.error('Fehler beim Aktualisieren der Lock-Historien:', error);
+                        // Ausblenden der "Bitte warten"-Nachricht bei Fehlern
+                        hideLoadingMessage();
+                    }
+                });
+            }
+    
+            // Automatische Aktualisierung alle 5 Minuten (300.000 Millisekunden)
+            setInterval(updateHistory, 300000);
+        });
+    </script>
+    
+
+    
+
+
+
+
 {% endblock %}

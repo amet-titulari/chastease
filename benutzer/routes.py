@@ -257,26 +257,30 @@ def ttl_open(uid):
 @login_required
 def get_lockhistory():
         
-        from api.chaster import get_chaster_history
-        from api.ttlock import get_ttlock_history
-
-        history = get_chaster_history()
-
-        if history['success']:
-            pass
-        else:
-            flash(f'Fehler beim Abrufen der Lock-History', 'danger')
-
-        tthistory = get_ttlock_history()
-        if tthistory['success']:              
-            pass
-        else:
-            flash(f'Fehler beim Abrufen der Lock-History', 'danger')
-
         chaster = History_Chaster.query.order_by(desc(History_Chaster.created_at)).all()
         ttlock = History_TTLock.query.order_by(desc(History_TTLock.created_at)).all()
 
         return render_template('history_view.html', chaster=chaster, ttlock=ttlock)
+
+@benutzer.route('/update_history')
+@login_required
+def update_lockhistory():
+    from api.chaster import get_chaster_history
+    from api.ttlock import get_ttlock_history
+
+    chaster_history = get_chaster_history()
+    if chaster_history['success']:
+        pass
+    else:
+        flash('Fehler beim Aktualisieren der CHASTER Lock-Historie', 'danger')
+
+    ttlock_history = get_ttlock_history()
+    if ttlock_history['success']:
+        pass
+    else:
+        flash('Fehler beim Aktualisieren der TTLock-Historie', 'danger')
+
+    return jsonify({'success': True})
 
 
 @benutzer.route('/journal_add', methods=['GET', 'POST'])
