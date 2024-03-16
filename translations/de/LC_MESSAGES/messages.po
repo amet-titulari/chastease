@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-03-01 15:34+0100\n"
-"PO-Revision-Date: 2024-03-01 13:22+0100\n"
+"POT-Creation-Date: 2024-03-16 18:44+0100\n"
+"PO-Revision-Date: 2024-03-16 18:44+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
 "Language-Team: de <LL@li.org>\n"
@@ -20,15 +20,15 @@ msgstr ""
 
 #: templates/benutzerconfig.html:13
 msgid "Chaster.app User"
-msgstr "Chaster.app User"
+msgstr "Chaster.app Benutzer"
 
 #: templates/benutzerconfig.html:39
 msgid "Lock Selection"
-msgstr "Schloss auswahl"
+msgstr "Auswahl Schloss"
 
 #: templates/benutzerconfig.html:41
 msgid "Please enter TTLock Username and Password"
-msgstr "Bitte TTLock Benutzername und Passwort eingeben"
+msgstr "Bitte gib dein TTlock Benutzer und Passwort"
 
 #: templates/benutzerconfig.html:46 templates/benutzerconfig_ttl.html:31
 msgid "Save"
@@ -38,38 +38,39 @@ msgstr "Speichern"
 msgid "TTLock Configuration"
 msgstr "TTLock Konfiguration"
 
-#: templates/history_view.html:9
-msgid "Log CHASTER.APP"
-msgstr "Log CHASTER.APP"
+#: templates/history_view.html:7 templates/history_view.html:16
+#: templates/history_view.html:27
+msgid "TTLock Entry"
+msgstr "TTLock Eintrag"
 
-#: templates/history_view.html:14 templates/history_view.html:51
+#: templates/history_view.html:19 templates/history_view.html:74
+msgid "Log CHASTER.APP"
+msgstr "Log aus Chaster"
+
+#: templates/history_view.html:32 templates/history_view.html:79
 #: templates/journal_view.html:15
 msgid "Date"
 msgstr "Datum"
 
-#: templates/history_view.html:16
+#: templates/history_view.html:34
+msgid "Type"
+msgstr "Typ"
+
+#: templates/history_view.html:36
+msgid "Kind"
+msgstr "Art"
+
+#: templates/history_view.html:81
 msgid "Title"
 msgstr "Titel"
 
-#: templates/history_view.html:17
+#: templates/history_view.html:82
 msgid "Description"
 msgstr "Beschreibung"
 
-#: templates/history_view.html:18
+#: templates/history_view.html:83
 msgid "Ext"
-msgstr "Ext"
-
-#: templates/history_view.html:46
-msgid "TTLock Entry"
-msgstr "TTLock Eintrag"
-
-#: templates/history_view.html:53
-msgid "Type"
-msgstr "Type"
-
-#: templates/history_view.html:55
-msgid "Kind"
-msgstr "Kind"
+msgstr "EXT"
 
 #: templates/journal_add.html:13
 msgid "Journal Entry"
@@ -109,7 +110,7 @@ msgstr "Edge"
 
 #: templates/journal_view.html:19
 msgid "Ruined"
-msgstr "Runied"
+msgstr "Ruined"
 
 #: templates/journal_view.html:20
 msgid "Orgasm"
@@ -121,7 +122,7 @@ msgstr "Horny"
 
 #: templates/journal_view.html:22
 msgid "Note"
-msgstr "Notiz"
+msgstr "Bemerkung"
 
 #: templates/journal_view.html:23
 msgid "Aktion"
@@ -129,7 +130,7 @@ msgstr "Aktion"
 
 #: templates/journal_view.html:50
 msgid "Are you shure you want to delete?"
-msgstr "Sicher das der Eintrag gelöscht wird?"
+msgstr "Sicher dass sie löschen wollen?"
 
 #: templates/journal_view.html:52
 msgid "Delete"
@@ -141,7 +142,7 @@ msgstr "Tagebuch"
 
 #: templates/navbar.html:21
 msgid "Add Journal"
-msgstr "Neuer Tagebucheintrag"
+msgstr "Hinzufügen Eintrag"
 
 #: templates/navbar.html:22
 msgid "Show Journal"
@@ -149,7 +150,7 @@ msgstr "Tagebuch anzeigen"
 
 #: templates/navbar.html:29
 msgid "History"
-msgstr "Verlauf"
+msgstr "History"
 
 #: templates/navbar.html:36
 msgid "Links"
@@ -161,11 +162,11 @@ msgstr "Anmelden"
 
 #: templates/navbar.html:72
 msgid "My profile"
-msgstr "Profil"
+msgstr "Mein Profil"
 
 #: templates/navbar.html:73
 msgid "My configuration"
-msgstr "Konfiguration"
+msgstr "Meine Konfiguration"
 
 #: templates/navbar.html:75
 msgid "Logoff"
@@ -185,7 +186,7 @@ msgstr "Bitte warten!"
 
 #: templates/extension/config.html:16
 msgid "Username"
-msgstr "Benutzername"
+msgstr "Benutzer"
 
 #: templates/extension/config.html:20
 msgid "Password"
@@ -193,8 +194,9 @@ msgstr "Passwort"
 
 #: templates/extension/config.html:24
 msgid "Lock Alias"
-msgstr "Lock Alias"
+msgstr "Schloss Alias"
 
 #: templates/journal/new_journal.html:5
 msgid "New Journalentry"
-msgstr "Neuer Journaleintrag"
+msgstr "Neuer Tagebucheintrag"
+

@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-03-01 15:34+0100\n"
-"PO-Revision-Date: 2024-03-01 13:22+0100\n"
+"POT-Creation-Date: 2024-03-16 18:44+0100\n"
+"PO-Revision-Date: 2024-03-16 18:44+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
 "Language-Team: en <LL@li.org>\n"
@@ -24,7 +24,7 @@ msgstr "Chaster.app User"
 
 #: templates/benutzerconfig.html:39
 msgid "Lock Selection"
-msgstr "Lock Selection"
+msgstr "Chaster.app User"
 
 #: templates/benutzerconfig.html:41
 msgid "Please enter TTLock Username and Password"
@@ -38,38 +38,39 @@ msgstr "Save"
 msgid "TTLock Configuration"
 msgstr "TTLock Configuration"
 
-#: templates/history_view.html:9
+#: templates/history_view.html:7 templates/history_view.html:16
+#: templates/history_view.html:27
+msgid "TTLock Entry"
+msgstr "TTLock Entry"
+
+#: templates/history_view.html:19 templates/history_view.html:74
 msgid "Log CHASTER.APP"
 msgstr "Log CHASTER.APP"
 
-#: templates/history_view.html:14 templates/history_view.html:51
+#: templates/history_view.html:32 templates/history_view.html:79
 #: templates/journal_view.html:15
 msgid "Date"
 msgstr "Date"
 
-#: templates/history_view.html:16
-msgid "Title"
-msgstr "Title"
-
-#: templates/history_view.html:17
-msgid "Description"
-msgstr "Description"
-
-#: templates/history_view.html:18
-msgid "Ext"
-msgstr "Ext"
-
-#: templates/history_view.html:46
-msgid "TTLock Entry"
-msgstr "TTLock Entry"
-
-#: templates/history_view.html:53
+#: templates/history_view.html:34
 msgid "Type"
 msgstr "Type"
 
-#: templates/history_view.html:55
+#: templates/history_view.html:36
 msgid "Kind"
 msgstr "Kind"
+
+#: templates/history_view.html:81
+msgid "Title"
+msgstr "Title"
+
+#: templates/history_view.html:82
+msgid "Description"
+msgstr "Description"
+
+#: templates/history_view.html:83
+msgid "Ext"
+msgstr "EXT"
 
 #: templates/journal_add.html:13
 msgid "Journal Entry"
@@ -89,7 +90,7 @@ msgstr "Update"
 
 #: templates/journal_view.html:8
 msgid "Journal Entries"
-msgstr "Journal Entgries"
+msgstr "Journal Entries"
 
 #: templates/journal_view.html:14
 msgid "ID"
@@ -109,7 +110,7 @@ msgstr "Edge"
 
 #: templates/journal_view.html:19
 msgid "Ruined"
-msgstr "Ruined"
+msgstr "Runied"
 
 #: templates/journal_view.html:20
 msgid "Orgasm"
@@ -161,11 +162,11 @@ msgstr "Login"
 
 #: templates/navbar.html:72
 msgid "My profile"
-msgstr "My Profile"
+msgstr "My profile"
 
 #: templates/navbar.html:73
 msgid "My configuration"
-msgstr "My Configuration"
+msgstr "My configuration"
 
 #: templates/navbar.html:75
 msgid "Logoff"
@@ -198,3 +199,4 @@ msgstr "Lock Alias"
 #: templates/journal/new_journal.html:5
 msgid "New Journalentry"
 msgstr "New Journalentry"
+
