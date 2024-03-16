@@ -42,14 +42,14 @@
                                         <td>{% if journal.orgasm %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</td>
                                         <td>{{ journal.horny }}</td>
                                         <td>{{ journal.note }}</td>
-                                        <td>
-                                            <a href="/user/journal_edit/{{ journal.journal_id }}" class="btn btn-primary">
+                                        <td class="d-inline-flex flex-nowrap">
+                                            <a href="/user/journal_edit/{{ journal.journal_id }}" class="btn btn-primary me-2">
                                                 <i class="fas fa-pencil-alt"></i>
                                             </a>
                                             <button class="btn btn-danger"
-                                                    data-confirm-msg="{{ _('Are you shure you want to delete?') }}" 
+                                                    data-confirm-msg="{{ _('Are you sure you want to delete?') }}" 
                                                     onclick="return confirmDelete(this);">
-                                                {{ _("Delete") }}
+                                                    <i class="fas fa-trash-alt"></i>
                                             </button>
                                         </td>
                                     </tr>

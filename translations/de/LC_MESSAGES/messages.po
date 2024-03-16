@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-03-16 18:44+0100\n"
+"POT-Creation-Date: 2024-03-16 18:58+0100\n"
 "PO-Revision-Date: 2024-03-16 18:44+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -131,10 +131,6 @@ msgstr "Aktion"
 #: templates/journal_view.html:50
 msgid "Are you shure you want to delete?"
 msgstr "Sicher dass sie löschen wollen?"
-
-#: templates/journal_view.html:52
-msgid "Delete"
-msgstr "Löschen"
 
 #: templates/navbar.html:17
 msgid "Journal"
