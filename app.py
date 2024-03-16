@@ -176,6 +176,8 @@ def callback():
         if TT_lock_tokens['success']:
             # Erfolgsfall: Verarbeiten Sie die zurückgegebenen Daten
             pass
+    
+        return redirect(url_for('home'))
 
 @app.errorhandler(404)
 def page_not_found(e):
