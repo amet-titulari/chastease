@@ -40,11 +40,12 @@
                                         {% for journal in ttlock %}
                                             <tr>
                                                 <td>
+                                                    <span id="createdAt_{{ loop.index }}"></span>
                                                     <script>
                                                         var createdAt = new Date('{{ journal.created_at }}');
                                                         var formattedDate = createdAt.toLocaleDateString('de-DE'); 
                                                         var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
-                                                        document.write(formattedDate + ' ' + formattedTime);
+                                                        document.getElementById('createdAt_{{ loop.index }}').textContent = formattedDate + ' ' + formattedTime;
                                                     </script>
                                                 </td>
                                                 <td>
