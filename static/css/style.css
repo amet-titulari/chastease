@@ -19,8 +19,8 @@ body {
 :root {
     --primary: #a197a7;
     --secondary: #191C24;
-    --light: #e5fdff;
-    --dark: ##272533;
+    --light: #ffffff;
+    --dark: ##222222;
 }
 
 .back-to-top {

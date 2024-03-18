@@ -36,14 +36,14 @@
                         </div>
 
                         {% if form.TTL_username.data and form.TTL_password_md5.data %}
-                            <a href="/user/config_ttl" class="btn btn-primary  w-100">{{ _("Lock Selection") }}</a>
+                            <a href="/user/config_ttl" class="btn btn-outline-light w-50">{{ _("Lock Selection") }}</a>
                         {% else %}
-                            <button type="button" class="btn btn-light w-100" disabled>{{ _("Please enter TTLock Username and Password") }}</button>
+                            <button type="button" class="btn btn-outline-light w-50" disabled>{{ _("Please enter TTLock Username and Password") }}</button>
                         {% endif %}
                         <p></p>
                                         
 
-                        <button type="submit" class="btn btn-primary w-100">{{ _("Save") }}</button>
+                        <button type="submit" class="btn btn-outline-light w-50">{{ _("Save") }}</button>
                     </form>
                 </div>
             </div>

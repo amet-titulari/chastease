@@ -7,7 +7,7 @@ from sqlalchemy import desc
 
 from database import db
 
-from flask import  current_app, session, redirect, request, flash, url_for,render_template
+from flask import  current_app, session, redirect, request, flash, url_for,render_template, jsonify
 from flask_login import login_required, login_user, current_user
 
 
