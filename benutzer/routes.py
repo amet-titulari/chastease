@@ -257,8 +257,8 @@ def ttl_open(uid):
 @login_required
 def get_lockhistory():
         
-        chaster = History_Chaster.query.order_by(desc(History_Chaster.created_at)).all()
-        ttlock = History_TTLock.query.order_by(desc(History_TTLock.created_at)).all()
+        chaster = History_Chaster.query.filter_by(benutzer_id=current_user.id).order_by(desc(History_Chaster.created_at)).all()
+        ttlock = History_TTLock.query.filter_by(benutzer_id=current_user.id).order_by(desc(History_TTLock.created_at)).all()
 
         return render_template('history_view.html', chaster=chaster, ttlock=ttlock)
 

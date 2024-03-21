@@ -260,8 +260,8 @@ def update_combination_relock(ca_lock_id, ca_access_token, ca_combination):
 def get_chaster_history():
     check = is_ca_token_valid()
     if check:
-
-        url = 'https://api.chaster.app/locks/658e78d24865e38abf4ecfed/history'
+        print(f'Benutzer: {current_user.__dict__}')
+        url = f'https://api.chaster.app/locks/{current_user.CA_lock_id}/history'
         headers = {
             'accept': 'application/json',
             'Authorization': f'Bearer {session["ca_access_token"]}',

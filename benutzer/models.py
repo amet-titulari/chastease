@@ -39,7 +39,7 @@ class Benutzer(UserMixin, db.Model):
             "Chaster Keyholder"    : self.CA_keyholdername ,
             #"CA_keyholder_id"     : self.CA_keyholder_id ,
             #"CA_user_id"          : self.CA_user_id ,
-            #"CA_lock_id"          : self.CA_lock_id ,
+            "CA_lock_id"          : self.CA_lock_id ,
             "Lock Status"          : self.CA_lock_status ,
             #"CA_combination_id"   : self.CA_combination_id , 
 
