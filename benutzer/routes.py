@@ -265,6 +265,7 @@ def get_lockhistory():
 @benutzer.route('/update_history')
 @login_required
 def update_lockhistory():
+    print("Update gestartet!")
     from api.chaster import get_chaster_history
     from api.ttlock import get_ttlock_history
 

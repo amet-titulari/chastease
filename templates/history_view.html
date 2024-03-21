@@ -4,11 +4,15 @@
 
     <!-- Flash-Nachricht "Bitte warten" -->
     <div id="loading-message" style="display: none;">
-        {{ _("TTLock Entry") }}
+        {{ _("History_update_message") }}
     </div>
 
     
     <div class="container-fluid">
+            <!-- Flash-Nachricht "Bitte warten" -->
+            <div id="loading-message" style="display: none;">
+                {{ _("History_update_message") }}
+            </div>
         <div class="row w-100">
             <!-- Pillen-Navigation -->
             <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
@@ -39,15 +43,13 @@
                                     <tbody>
                                         {% for journal in ttlock %}
                                             <tr>
-                                                <td>
-                                                    <span id="createdAt_{{ loop.index }}"></span>
-                                                    <script>
-                                                        var createdAt = new Date('{{ journal.created_at }}');
-                                                        var formattedDate = createdAt.toLocaleDateString('de-DE'); 
-                                                        var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
-                                                        document.getElementById('createdAt_{{ loop.index }}').textContent = formattedDate + ' ' + formattedTime;
-                                                    </script>
-                                                </td>
+                                                <td id="createdAt_{{ loop.index }}"></td>
+                                                <script>
+                                                    var createdAt = new Date('{{ journal.created_at }}');
+                                                    var formattedDate = createdAt.toLocaleDateString('de-DE'); 
+                                                    var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
+                                                    document.getElementById('createdAt_{{ loop.index }}').textContent = formattedDate + ' ' + formattedTime;
+                                                </script>
                                                 <td>
                                                     {% if journal.recordtyp != 12 %}
                                                         <i class="fas fa-exclamation-triangle" style="color: red;"></i>
@@ -87,14 +89,13 @@
                                     <tbody>
                                         {% for journal in chaster %}
                                             <tr>
-                                                <td>
-                                                    <script>
-                                                        var createdAt = new Date('{{ journal.created_at }}');
-                                                        var formattedDate = createdAt.toLocaleDateString('de-DE'); 
-                                                        var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
-                                                        document.write(formattedDate + ' ' + formattedTime);
-                                                    </script>
-                                                </td>
+                                                <td id="createdAt_chaster_{{ loop.index }}"></td>
+                                                <script>
+                                                    var createdAt = new Date('{{ journal.created_at }}');
+                                                    var formattedDate = createdAt.toLocaleDateString('de-DE'); 
+                                                    var formattedTime = createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); 
+                                                    document.getElementById('createdAt_chaster_{{ loop.index }}').textContent = formattedDate + ' ' + formattedTime;
+                                                </script>
                                                 <!-- <td>{{ journal.type }}</td> -->
                                                 <td>{{ journal.title }}</td>
                                                 <td>{{ journal.description }}</td>
@@ -115,14 +116,14 @@
     
     <script type="text/javascript">
         $(document).ready(function(){
+            
+                    // Funktion zum Ausblenden der "Bitte warten"-Nachricht
+                    function hideLoadingMessage() {
+                        $('#loading-message').hide();
+                    }
             // Funktion zum Einblenden der "Bitte warten"-Nachricht
             function showLoadingMessage() {
                 $('#loading-message').show();
-            }
-    
-            // Funktion zum Ausblenden der "Bitte warten"-Nachricht
-            function hideLoadingMessage() {
-                $('#loading-message').hide();
             }
     
             // AJAX-Anfrage für die Aktualisierung der Lock-Historien
@@ -146,8 +147,12 @@
                 });
             }
     
-            // Automatische Aktualisierung alle 5 Minuten (300.000 Millisekunden)
-            setInterval(updateHistory, 300000);
+        // Manueller Aufruf der updateHistory-Funktion beim Laden der Seite
+        showLoadingMessage();
+        updateHistory();
+
+        // Automatische Aktualisierung alle 5 Minuten (300.000 Millisekunden)
+        setInterval(updateHistory, 300000);
         });
     </script>
 {% endblock %}

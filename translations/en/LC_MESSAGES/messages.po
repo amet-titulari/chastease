@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-03-16 18:58+0100\n"
+"POT-Creation-Date: 2024-03-21 11:58+0100\n"
 "PO-Revision-Date: 2024-03-16 18:44+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -38,37 +38,40 @@ msgstr "Save"
 msgid "TTLock Configuration"
 msgstr "TTLock Configuration"
 
-#: templates/history_view.html:7 templates/history_view.html:16
-#: templates/history_view.html:27
+#: templates/history_view.html:7 templates/history_view.html:14
+msgid "History_update_message"
+msgstr "History is updating!"
+
+#: templates/history_view.html:20 templates/history_view.html:31
 msgid "TTLock Entry"
 msgstr "TTLock Entry"
 
-#: templates/history_view.html:19 templates/history_view.html:74
+#: templates/history_view.html:23 templates/history_view.html:77
 msgid "Log CHASTER.APP"
 msgstr "Log CHASTER.APP"
 
-#: templates/history_view.html:32 templates/history_view.html:79
+#: templates/history_view.html:36 templates/history_view.html:82
 #: templates/journal_view.html:15
 msgid "Date"
 msgstr "Date"
 
-#: templates/history_view.html:34
+#: templates/history_view.html:38
 msgid "Type"
 msgstr "Type"
 
-#: templates/history_view.html:36
+#: templates/history_view.html:40
 msgid "Kind"
 msgstr "Kind"
 
-#: templates/history_view.html:81
+#: templates/history_view.html:84
 msgid "Title"
 msgstr "Title"
 
-#: templates/history_view.html:82
+#: templates/history_view.html:85
 msgid "Description"
 msgstr "Description"
 
-#: templates/history_view.html:83
+#: templates/history_view.html:86
 msgid "Ext"
 msgstr "EXT"
 
@@ -129,7 +132,8 @@ msgid "Aktion"
 msgstr "Action"
 
 #: templates/journal_view.html:50
-msgid "Are you shure you want to delete?"
+#, fuzzy
+msgid "Are you sure you want to delete?"
 msgstr "Are you shure you want to delete?"
 
 #: templates/navbar.html:17
@@ -195,3 +199,4 @@ msgstr "Lock Alias"
 #: templates/journal/new_journal.html:5
 msgid "New Journalentry"
 msgstr "New Journalentry"
+
