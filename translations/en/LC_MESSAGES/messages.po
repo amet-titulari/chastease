@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-03-21 11:58+0100\n"
+"POT-Creation-Date: 2024-03-21 14:40+0100\n"
 "PO-Revision-Date: 2024-03-16 18:44+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -37,6 +37,19 @@ msgstr "Save"
 #: templates/benutzerconfig_ttl.html:16
 msgid "TTLock Configuration"
 msgstr "TTLock Configuration"
+
+#: templates/benutzerprofil.html:7
+#, fuzzy
+msgid "User Profile"
+msgstr "My profile"
+
+#: templates/benutzerprofil.html:14
+msgid "Key"
+msgstr ""
+
+#: templates/benutzerprofil.html:15
+msgid "Value"
+msgstr ""
 
 #: templates/history_view.html:7 templates/history_view.html:14
 msgid "History_update_message"

@@ -30,12 +30,11 @@ class Benutzer(UserMixin, db.Model):
     def to_dict(self):
         return {
             #"id"                  : self.id,
-            "Extension User"       : self.username,
+            "User"                 : self.username,
             "Role"                 : self.role,
             #"avatarUrl"           : self.avatarUrl,
             #"lock_uuid"           : self.lock_uuid,
             "Chaster User"         : self.CA_username,
-
             "Chaster Keyholder"    : self.CA_keyholdername ,
             #"CA_keyholder_id"     : self.CA_keyholder_id ,
             #"CA_user_id"          : self.CA_user_id ,
@@ -51,6 +50,8 @@ class Benutzer(UserMixin, db.Model):
 
             # Fügen Sie hier weitere Felder hinzu, die zurückgegeben werden sollen
         }
+    
+    
 class History_TTLock(db.Model):
     __tablename__ = 'history_ttlock'
     hist_id              = db.Column(db.String(128), primary_key=True)

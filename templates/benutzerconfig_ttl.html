@@ -5,9 +5,9 @@
     <!-- Form Start -->
 
     <div class="container-fluid pt-4 px-4">
-        <div class="row w-100">
+        <div class="row w-80">
             <div class="col-12">
-                <div class="bg-secondary rounded h-100 w-100 p-4">
+                <div class="bg-secondary rounded h-100 w-80 p-4">
                     <!-- Stellen Sie sicher, dass die action auf die korrekte Route zeigt -->
                     <form action="{{ url_for('benutzer.config_ttl') }}" method="post">
                         {{ form.hidden_tag() }}
@@ -17,13 +17,13 @@
     
     
                         <!-- Dropdown für TTL_lock -->
-                        <div class="form-floating mb-3 w-100">
+                        <div class="form-floating mb-3 w-80">
                             {{ form.TTL_lock(class="form-select", id="floatingTTLLock") }}
                             <label for="floatingTTLLock">{{ form.TTL_lock.label.text }}</label>
                         </div>
     
                         <!-- Dropdown für TTL_gateway -->
-                        <div class="form-floating mb-3 w-100">
+                        <div class="form-floating mb-3 w-80">
                             {{ form.TTL_gateway(class="form-select", id="floatingTTLGateway") }}
                             <label for="floatingTTLGateway">{{ form.TTL_gateway.label.text }}</label>
                         </div>

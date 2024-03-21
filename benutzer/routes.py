@@ -28,6 +28,12 @@ from benutzer.token_handling import get_ttlock_tokens
 def is_md5(s):
     return bool(re.match(r'^[a-fA-F0-9]{32}$', s))
 
+@benutzer.route('/profile')
+@login_required
+def profile():
+    benutzer = Benutzer.query.filter_by(id=current_user.id).first()   
+    return render_template('benutzerprofil.html', benutzer=benutzer)
+
 @benutzer.route('/config', methods=['GET', 'POST'])
 @login_required
 def config():

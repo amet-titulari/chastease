@@ -1,0 +1,30 @@
+<!-- templates/benutzerprofil.html -->
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="container mt-4">
+    <h1 class="mb-4">{{ _("User Profile") }}</h1>
+    <h1>USER: {{ current_user.username }}</h1>
+
+
+    <table class="table table-striped table-bordered">
+        <thead class="table-dark">
+            <tr>
+                <th class="text-start">{{ _("Key") }}</th>
+                <th class="text-start">{{ _("Value") }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for key, value in benutzer.to_dict().items() %}
+            <tr>
+                <td class="text-start">{{ key }}</td>
+                <td class="text-start">{{ value }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+
+{% endblock %}
