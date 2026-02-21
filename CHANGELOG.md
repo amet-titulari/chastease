@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.6 - 2026-02-21
+
+- Auth-Flow auf Username/Password fokussiert, Registrierung mit Pflichtfeld E-Mail.
+- Aktive Session erzwingt Dashboard statt neuem Setup; Setup-Guard gegen parallele aktive Sessions.
+- Session-Vertrag im Setup erweitert (Startdatum, KI-gesteuertes Enddatum mit optionalem Max-Enddatum, Limits/Opening-Period).
+- Psychogramm-/Setup-UI verbessert: kompakteres responsives Layout, bessere Mobil-Darstellung, i18n fuer Dropdown-Werte.
+- Session-Kill als Feature-Flag eingefuehrt (`ENABLE_SESSION_KILL`), inklusive API-Endpoint und Dashboard-Button.
+- Frontend-Flow verfeinert: Login-Karte ausblendbar nach Login, Logout oben rechts, Session-KILL fuer erneuten Setup-Durchlauf.
+
 ## 0.0.5 - 2026-02-21
 
 - User-First Setup eingefuehrt (`/users`, `/users/{id}`, `/users/{id}/characters`).
