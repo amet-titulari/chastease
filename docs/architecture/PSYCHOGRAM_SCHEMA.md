@@ -65,25 +65,43 @@ Normierte Wertebereichsskala `0-100`:
 
 ### interaction_preferences
 
-- `preferred_tone` (enum: `soft`, `balanced`, `strict`)
-- `feedback_style` (enum: `short`, `balanced`, `detailed`)
-- `control_request_style` (enum: `direct`, `contextual`, `gentle`)
+- `instruction_style` (enum: `direct`, `polite_authority`, `suggestive`, `mixed`)
+- `escalation_mode` (enum: `very_slow`, `slow`, `moderate`, `strong`, `aggressive`)
+- `experience_level` (1-10)
+- `experience_profile` (enum: `beginner`, `intermediate`, `expert`)
 - `autonomy_profile` (enum: `suggest_only`, `suggest_first`, `mixed`, `execute_preferred`)
 - `autonomy_bias` (0-100)
   - 0 = stark `execute_preferred`, 100 = stark `suggest_only`
 - `praise_timing` (enum: `immediate`, `delayed`, `rare_but_impactful`, `situational`)
+
+### safety_profile
+
+- `mode` (enum: `safeword`, `traffic_light`)
+- `safeword` (string, optional wenn `mode=safeword`)
+- `traffic_light_words` (object, optional wenn `mode=traffic_light`)
+  - `green` (string)
+  - `yellow` (string)
+  - `red` (string)
+
+### personal_preferences
+
+- `grooming_preference` (enum: `no_preference`, `clean_shaven`, `trimmed`, `natural`)
 
 ## Scoring-Logik (MVP)
 
 1. Jede Frage wird einem oder mehreren `traits` mit Gewicht zugeordnet.  
 2. Fragebogenwerte (`1-10`) werden auf `0-100` normalisiert.  
 3. Harte Limits aus direkten Grenzfragen ueberschreiben abgeleitete Vorschlaege.  
-4. Bei widerspruechlichen Antworten:
+4. Safety-Validierung:
+- `q10_safety_mode = safeword` erfordert `q10_safeword`
+- `q10_safety_mode = traffic_light` erfordert `q10_traffic_green`, `q10_traffic_yellow`, `q10_traffic_red`
+
+5. Bei widerspruechlichen Antworten:
 - `risk_flags` setzen
 - `confidence` reduzieren
 - konservative Policy-Werte verwenden
 
-5. Dynamische Nachkalibrierung:
+6. Dynamische Nachkalibrierung:
 - bei neuen Erkenntnissen (`update_reason`) darf das Psychogramm aktualisiert werden
 - jedes Update setzt `updated_at` und wird auditierbar protokolliert
 
@@ -104,11 +122,11 @@ Zweck:
 
 ```json
 {
-  "psychogram_version": "2.0.0",
+  "psychogram_version": "2.4.0",
   "created_at": "2026-02-21T10:30:00Z",
   "updated_at": null,
   "update_reason": "initial_setup",
-  "source_questionnaire_version": "setup-q-v2",
+  "source_questionnaire_version": "setup-q-v2.4",
   "source_model": "bdsmtest-inspired",
   "consent_scope": {
     "allowed_topics": ["discipline", "routine", "accountability"],
@@ -136,12 +154,24 @@ Zweck:
     "blocked_trigger_words": ["public", "workplace"]
   },
   "interaction_preferences": {
-    "preferred_tone": "balanced",
-    "feedback_style": "short",
-    "control_request_style": "direct",
+    "instruction_style": "mixed",
+    "escalation_mode": "moderate",
+    "experience_level": 6,
+    "experience_profile": "intermediate",
     "autonomy_profile": "mixed",
     "autonomy_bias": 45,
     "praise_timing": "rare_but_impactful"
+  },
+  "safety_profile": {
+    "mode": "traffic_light",
+    "traffic_light_words": {
+      "green": "green",
+      "yellow": "yellow",
+      "red": "red"
+    }
+  },
+  "personal_preferences": {
+    "grooming_preference": "trimmed"
   },
   "risk_flags": [],
   "confidence": 0.84,

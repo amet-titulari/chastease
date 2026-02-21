@@ -41,6 +41,8 @@ Ein spielbarer vertikaler Slice:
 5. Frontend-Basis
 - einfacher Client fuer Login/Session/Turn-Loop
 - i18n-Basis fuer Deutsch/Englisch in API und UI
+- Accordion-Setup-Flow mit Schritt-Sperren, Auto-Navigation und Confirm-Gate vor `Complete Setup`
+- Dashboard fuer technische Prozesssicht (Setup-Status, IDs, Vertrags-/LLM-Uebersicht, letzte Events)
 
 6. Betrieb/Skalierung
 - Docker-Stack definieren

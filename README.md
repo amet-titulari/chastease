@@ -50,15 +50,15 @@ curl http://127.0.0.1:5000/api/v1/health
 Setup-Prototyp:
 
 ```bash
-# 0) Register (Email + Passwort)
+# 0) Register (Username + Email + Passwort)
 curl -X POST http://127.0.0.1:5000/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"wearer@example.com","display_name":"Wearer","password":"demo-pass-123"}'
+  -d '{"username":"wearer_demo","email":"wearer@example.com","password":"demo-pass-123"}'
 
 # oder Login
 curl -X POST http://127.0.0.1:5000/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"wearer@example.com","password":"demo-pass-123"}'
+  -d '{"username":"wearer_demo","password":"demo-pass-123"}'
 
 # 1) Setup starten (mit user_id)
 curl -X POST http://127.0.0.1:5000/api/v1/setup/sessions \
@@ -102,6 +102,7 @@ Setup-Persistenz (aktuell):
 - Optional per Env steuerbar: `SETUP_STORE_PATH=/pfad/zur/datei.json`
 - Relationale Persistenz: `DATABASE_URL` (default: `sqlite:///data/chastease.db`)
 - Session-Kill-Feature (nur Test/Build): `ENABLE_SESSION_KILL=true|false` (default: `false`)
+- Auth-Tokens werden serverseitig in-memory gehalten (nach Server-Neustart ist Login erneut erforderlich)
 
 ## Tests
 

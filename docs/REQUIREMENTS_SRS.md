@@ -25,11 +25,18 @@ Zustaende:
 
 Ablauf:
 1. Wearer startet neue Session.
-2. Setup-Agent stellt Konfigurationsfragen.
-3. Setup-Agent erhebt zusaetzlich psychologische Neigungen (consent-basiert) und erzeugt ein Psychogramm.
-4. System erzeugt verbindliche Session-Policy inkl. Psychogramm-Snapshot.
-5. Session wechselt auf `active`.
-6. Keyholder (KI) fuehrt Chat + Aktionen policy-konform aus.
+2. System erstellt/haelt eine Setup-Session im Status `draft`.
+3. Setup-Agent stellt Konfigurationsfragen und wechselt auf `setup_in_progress`.
+4. Setup-Agent erhebt zusaetzlich psychologische Neigungen (consent-basiert) und erzeugt ein Psychogramm.
+5. System erzeugt verbindliche Session-Policy inkl. Psychogramm-Snapshot.
+6. Wearer bestaetigt `Complete Setup`; Setup-Status wechselt auf `configured`.
+7. Nach `configured` sind Setup-Aenderungen gesperrt (Start-Setup, Psychogramm, AI-Config, Complete Setup).
+8. Session wechselt auf `active`.
+9. Keyholder (KI) fuehrt Chat + Aktionen policy-konform aus.
+
+Setup-Lock-Regel:
+- Nach bestaetigtem `Complete Setup` sind Konfigurationsaenderungen unterbunden.
+- `AI Chat`, `Psychogram Brief` und `Response` bleiben fuer Analyse/Test zugreifbar.
 
 ## 3. Setup-Agent und Session-Policy
 
@@ -119,9 +126,11 @@ Regeln:
 
 - Auth:
   - Mindestanforderung: Benutzername/Passwort
+  - MVP-Stand: API-Auth-Token werden serverseitig in-memory gehalten (kein persistentes AuthSession-Model)
+  - Folge: nach Server-Neustart ist erneuter Login erforderlich
   - Ziel: Passkey (WebAuthn) als bevorzugte starke Option
   - optional: OAuth als spaetere Erweiterung
-  - API-Zugriffstoken per JWT (Access + Refresh) fuer Session-Handling
+  - JWT Access/Refresh als spaetere Erweiterung
 - Mandantenfaehigkeit:
   - fuer MVP nicht erforderlich
 - Audit:

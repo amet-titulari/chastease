@@ -123,6 +123,8 @@ def app_shell(request: Request) -> str:
     button.ghost { background: transparent; border: 1px solid #2b3d63; }
     button.danger { background: #c62828; color: #fff; }
     button.danger:hover { background: #e53935; }
+    button.success { background: #1f9d55; color: #fff; }
+    button.success:hover { background: #24b562; }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
     textarea { width: 100%; min-height: 280px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     table { width: 100%; border-collapse: collapse; }
@@ -152,6 +154,8 @@ def app_shell(request: Request) -> str:
     .acc-lock { font-size: 12px; color: #8aa0c8; }
     .acc-body { display: none; padding: 16px; }
     .acc-item.active .acc-body { display: block; }
+    .status-ok { color: #87f7bf; }
+    .status-error { color: #ff9aa4; }
 
     @media (max-width: 820px) {
       .setup-grid {
@@ -229,6 +233,7 @@ def app_shell(request: Request) -> str:
             <p id="psychogramHint" class="small">Start Setup Session first to load the questionnaire.</p>
             <div id="questionGrid" class="qgrid"></div>
             <button id="submitAnswersBtn" class="hidden" onclick="submitAnswers()">Submit Answers</button>
+            <p id="psychogramSaveInfo" class="small hidden"></p>
           </div>
         </div>
 
@@ -260,7 +265,17 @@ def app_shell(request: Request) -> str:
         <div class="acc-item locked" data-panel="complete">
           <button class="acc-head" onclick="openPanel('complete')"><span id="panelCompleteTitle">Complete Setup</span><span id="lock_complete" class="acc-lock">locked</span></button>
           <div class="acc-body">
-            <button id="completeSetupBtn" onclick="completeSetup()">Complete Setup</button>
+            <button id="completeSetupBtn" onclick="openCompleteConfirmation()" disabled>Complete Setup</button>
+            <p id="completeSetupHint" class="small"></p>
+            <div id="completeConfirmBox" class="card hidden" style="margin-top:10px;">
+              <p id="completeConfirmText" class="small" style="margin-bottom:10px;">
+                Achtung: Durch die Bestätigung sind keine Änderungen mehr möglich! Bist du einverstanden die Konfiguration zu speichern?
+              </p>
+              <div class="row" style="margin-bottom:0;">
+                <button id="completeConfirmOkBtn" class="success" onclick="confirmCompleteSetup()">OK Speichert</button>
+                <button id="completeConfirmBackBtn" class="ghost" onclick="cancelCompleteSetup()">Zurück</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -301,12 +316,17 @@ def app_shell(request: Request) -> str:
     let userId = null;
     let authToken = null;
     let setupSessionId = null;
+    let setupStatus = null;
+    let answeredQuestions = 0;
     let questions = [];
     let activeSession = null;
     let currentLlmProfile = null;
     let authMode = "login";
     let dashboardVisible = false;
     let latestPendingActions = [];
+    let setupContract = null;
+    let dashboardLastEvent = "init";
+    let dashboardLastDetail = "";
     const PANELS = ["start", "psychogram", "ai_config", "complete", "chat", "brief", "response"];
     const LOCKED_INITIAL = new Set(["psychogram", "ai_config", "complete", "chat", "brief", "response"]);
 
@@ -370,6 +390,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         start_setup: "Setup starten",
         psychogram_hint: "Starte zuerst Setup Session, um das Psychogramm zu laden.",
         submit_answers: "Antworten senden",
+        psychogram_saved: "Psychogramm erfolgreich gespeichert.",
+        psychogram_save_failed: "Speichern fehlgeschlagen.",
         provider: "Provider",
         llm_api_url: "LLM API URL",
         llm_api_key: "LLM API Key",
@@ -382,6 +404,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         test_dry_run: "Test (Dry Run)",
         test_live: "Test (Live)",
         complete_setup: "Setup abschließen",
+        complete_ready: "Alle Prüfungen erfüllt. Setup kann abgeschlossen werden.",
+        complete_not_ready: "Bitte beantworte zuerst das Psychogramm vollständig.",
+        complete_confirm:
+          "Achtung: Durch die Bestätigung sind keine Änderungen mehr möglich! Bist du einverstanden die Konfiguration zu speichern?",
+        complete_ok: "OK Speichert",
+        complete_back: "Zurück",
+        analysis_in_progress: "Analyse in arbeit",
         chat_subtitle: "Schnelltest für Wearer -> Keyholder Turn-Flow.",
         voice: "Sprache",
         send: "Senden",
@@ -455,6 +484,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         start_setup: "Start Setup",
         psychogram_hint: "Start Setup Session first to load the questionnaire.",
         submit_answers: "Submit Answers",
+        psychogram_saved: "Psychogram saved successfully.",
+        psychogram_save_failed: "Saving failed.",
         provider: "Provider",
         llm_api_url: "LLM API URL",
         llm_api_key: "LLM API Key",
@@ -467,6 +498,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         test_dry_run: "Test (Dry Run)",
         test_live: "Test (Live)",
         complete_setup: "Complete Setup",
+        complete_ready: "All checks passed. Setup can be completed.",
+        complete_not_ready: "Please complete the psychogram first.",
+        complete_confirm:
+          "Warning: After confirmation no further changes are possible. Do you want to save this configuration?",
+        complete_ok: "OK Save",
+        complete_back: "Back",
+        analysis_in_progress: "Analysis in progress",
         chat_subtitle: "Quick test for Wearer -> Keyholder turn flow.",
         voice: "Voice",
         send: "Send",
@@ -544,22 +582,67 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       PANELS.forEach((panel) => setLocked(panel, LOCKED_INITIAL.has(panel)));
       setLocked("start", false);
       openPanel("start");
+      answeredQuestions = 0;
+      document.getElementById("completeConfirmBox").classList.add("hidden");
+      const saveInfo = document.getElementById("psychogramSaveInfo");
+      saveInfo.classList.add("hidden");
+      saveInfo.classList.remove("status-ok", "status-error");
+      saveInfo.textContent = "";
       updatePsychogramAvailability();
     }
 
     function unlockSetupFollowups() {
-      ["psychogram", "ai_config", "complete", "brief", "response"].forEach((panel) => setLocked(panel, false));
+      ["psychogram", "ai_config", "complete", "chat", "brief", "response"].forEach((panel) => setLocked(panel, false));
       updatePsychogramAvailability();
     }
 
     function updateChatLock() {
-      setLocked("chat", !activeSession);
+      const hasPreviewContext = Boolean(setupSessionId);
+      setLocked("chat", !activeSession && !hasPreviewContext);
     }
 
     function updatePsychogramAvailability() {
-      const hasSetup = Boolean(setupSessionId);
-      document.getElementById("psychogramHint").classList.toggle("hidden", hasSetup);
-      document.getElementById("submitAnswersBtn").classList.toggle("hidden", !hasSetup);
+      const canAnswer = setupStatus === "setup_in_progress";
+      document.getElementById("psychogramHint").classList.toggle("hidden", canAnswer);
+      document.getElementById("submitAnswersBtn").classList.toggle("hidden", !canAnswer);
+      updateCompleteReadiness();
+    }
+
+    function updateCompleteReadiness() {
+      const ready = setupStatus === "setup_in_progress" && answeredQuestions >= 6;
+      const btn = document.getElementById("completeSetupBtn");
+      const hint = document.getElementById("completeSetupHint");
+      if (!btn || !hint) return;
+      btn.disabled = !ready;
+      btn.classList.toggle("success", ready);
+      if (!ready) document.getElementById("completeConfirmBox").classList.add("hidden");
+      hint.textContent = ready ? tr("complete_ready") : tr("complete_not_ready");
+      hint.classList.toggle("status-ok", ready);
+      hint.classList.toggle("status-error", !ready);
+    }
+
+    function openCompleteConfirmation() {
+      if (document.getElementById("completeSetupBtn").disabled) return;
+      document.getElementById("completeConfirmBox").classList.remove("hidden");
+    }
+
+    function cancelCompleteSetup() {
+      document.getElementById("completeConfirmBox").classList.add("hidden");
+      openPanel("psychogram");
+    }
+
+    async function confirmCompleteSetup() {
+      document.getElementById("completeConfirmBox").classList.add("hidden");
+      setLocked("start", true);
+      setLocked("psychogram", true);
+      setLocked("ai_config", true);
+      setLocked("complete", true);
+      setLocked("chat", false);
+      setLocked("brief", false);
+      setLocked("response", false);
+      document.getElementById("brief").textContent = tr("analysis_in_progress");
+      openPanel("brief");
+      await completeSetup();
     }
 
     function setAuthMode(mode) {
@@ -587,7 +670,16 @@ Lob ist selten genug, um Wirkung zu behalten.`;
 
     function setOutput(data) {
       document.getElementById("output").value = JSON.stringify(data, null, 2);
-      if (data.psychogram_brief) document.getElementById("brief").textContent = data.psychogram_brief;
+      if (data.psychogram_brief) {
+        document.getElementById("brief").textContent = data.psychogram_brief;
+      } else if (data.chastity_session && data.chastity_session.psychogram_brief) {
+        document.getElementById("brief").textContent = data.chastity_session.psychogram_brief;
+      }
+      if (data && data.status) {
+        dashboardLastEvent = "api_response";
+        dashboardLastDetail = `status=${data.status}`;
+      }
+      refreshDashboard();
     }
 
     async function safeJson(res) {
@@ -735,11 +827,15 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       setText("testDryRunBtn", "test_dry_run");
       setText("testLiveBtn", "test_live");
       setText("completeSetupBtn", "complete_setup");
+      setText("completeConfirmText", "complete_confirm");
+      setText("completeConfirmOkBtn", "complete_ok");
+      setText("completeConfirmBackBtn", "complete_back");
       setText("chatSubtitle", "chat_subtitle");
       setText("voiceBtn", "voice");
       setText("sendBtn", "send");
       setText("reloadChatBtn", "reload");
       document.getElementById("chatInput").placeholder = uiLang() === "de" ? "Schreibe deine Aktion/Nachricht..." : "Write your action/message...";
+      updateCompleteReadiness();
     }
 
     function updatePenaltyCapsVisibility() {
@@ -841,6 +937,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       if (!data.configured) {
         document.getElementById("llmInfo").textContent = tr("no_llm_profile");
         currentLlmProfile = null;
+        refreshDashboard();
         return;
       }
       const p = data.profile;
@@ -852,6 +949,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("llmIsActive").value = p.is_active ? "true" : "false";
       document.getElementById("llmBehaviorPrompt").value = p.behavior_prompt || defaultBehaviorPrompt;
       document.getElementById("llmInfo").textContent = tr("llm_loaded").replace("{has}", p.has_api_key ? tr("yes") : tr("no"));
+      dashboardLastEvent = "llm_loaded";
+      dashboardLastDetail = `${p.provider_name || "-"} / ${p.chat_model || "-"}`;
+      refreshDashboard();
     }
 
     async function saveLlmProfile() {
@@ -879,6 +979,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         document.getElementById("llmInfo").textContent = "LLM profile saved.";
         currentLlmProfile = data.profile || currentLlmProfile;
         if (activeSession) renderDashboardSummary(activeSession);
+        dashboardLastEvent = "llm_saved";
+        dashboardLastDetail = `${currentLlmProfile?.provider_name || "-"} / ${currentLlmProfile?.chat_model || "-"}`;
+        refreshDashboard();
         openPanel("complete");
       }
     }
@@ -924,22 +1027,38 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("dashboard").classList.add("hidden");
       document.getElementById("appFlow").classList.remove("hidden");
       openPanel("start");
+      refreshDashboard();
     }
 
     function renderDashboardSummary(session) {
-      if (!session) {
-        document.getElementById("dashboardInfo").textContent = uiLang() === "de" ? "Keine aktive Session." : "No active session.";
-        document.getElementById("dashboardContract").innerHTML = "";
-        return;
-      }
-      document.getElementById("dashboardInfo").textContent =
-        `session_id: ${session.session_id}, status: ${session.status}, language: ${session.language}`;
-      const policy = session.policy || {};
+      const currentSession = session || activeSession || null;
+      const noSessionText = uiLang() === "de" ? "keine aktive Session" : "no active session";
+      const policy = (currentSession && currentSession.policy) || {};
       const contract = policy.contract || {};
       const limits = policy.limits || {};
       const integrations = (policy.integrations || []).join(", ") || "-";
       const llm = currentLlmProfile || {};
+      const setupContractText = setupContract
+        ? `${setupContract.start_date || "-"} -> ${setupContract.end_date || tr("ai_defined")} (max ${setupContract.max_end_date || "-"})`
+        : "-";
+      const activeSessionId = currentSession ? currentSession.session_id : "-";
+      const activeStatus = currentSession ? currentSession.status : noSessionText;
+      const activeLanguage = currentSession ? currentSession.language : "-";
+      const setupIdText = setupSessionId || "-";
+      const setupStatusText = setupStatus || "draft";
+      const dashboardInfo = uiLang() === "de"
+        ? `Setup=${setupStatusText} | Active=${activeStatus}`
+        : `Setup=${setupStatusText} | Active=${activeStatus}`;
+      document.getElementById("dashboardInfo").textContent = dashboardInfo;
       document.getElementById("dashboardContract").innerHTML = [
+        `<tr><th>User ID</th><td>${userId || "-"}</td></tr>`,
+        `<tr><th>Setup Session ID</th><td>${setupIdText}</td></tr>`,
+        `<tr><th>Setup Status</th><td>${setupStatusText}</td></tr>`,
+        `<tr><th>Answered Questions</th><td>${answeredQuestions}</td></tr>`,
+        `<tr><th>Setup Contract</th><td>${setupContractText}</td></tr>`,
+        `<tr><th>Active Session ID</th><td>${activeSessionId}</td></tr>`,
+        `<tr><th>Active Status</th><td>${activeStatus}</td></tr>`,
+        `<tr><th>Active Language</th><td>${activeLanguage}</td></tr>`,
         `<tr><th>${tr("contract")}</th><td>${contract.start_date || "-"} -> ${contract.end_date || tr("ai_defined")} (max ${contract.max_end_date || "-"})</td></tr>`,
         `<tr><th>${tr("autonomy_mode_row")}</th><td>${policy.autonomy_mode || "-"}</td></tr>`,
         `<tr><th>${tr("ai_controls_end_date")}</th><td>${contract.ai_controls_end_date ? tr("enabled") : tr("disabled")}</td></tr>`,
@@ -952,7 +1071,12 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         `<tr><th>${tr("llm_chat_model_row")}</th><td>${llm.chat_model || "-"}</td></tr>`,
         `<tr><th>${tr("llm_vision_model_row")}</th><td>${llm.vision_model || "-"}</td></tr>`,
         `<tr><th>${tr("llm_active")}</th><td>${llm.is_active === false ? tr("disabled") : tr("enabled")}</td></tr>`,
+        `<tr><th>Last Event</th><td>${dashboardLastEvent}${dashboardLastDetail ? ` (${dashboardLastDetail})` : ""}</td></tr>`,
       ].join("");
+    }
+
+    function refreshDashboard() {
+      renderDashboardSummary(activeSession);
     }
 
     function showHomeView() {
@@ -965,6 +1089,10 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     function showDashboard(session) {
       activeSession = session;
       renderDashboardSummary(session);
+      const analysis = session?.psychogram?.analysis;
+      if (analysis) {
+        document.getElementById("brief").textContent = analysis;
+      }
       document.getElementById("dashboardToggleBtn").classList.remove("hidden");
       document.getElementById("homeBtn").classList.remove("hidden");
       document.getElementById("logoutTopBtn").classList.remove("hidden");
@@ -993,6 +1121,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       out.scrollTop = out.scrollHeight;
     }
 
+    function appendPreviewChat(actionText, narrationText) {
+      const out = document.getElementById("chatOutput");
+      const previous = out.value ? `${out.value}\n\n` : "";
+      out.value = `${previous}#preview\nWearer: ${actionText}\nKeyholder: ${narrationText}\n`;
+      out.scrollTop = out.scrollHeight;
+    }
+
     function renderPendingActions(actions) {
       const wrap = document.getElementById("pendingActions");
       if (!actions || !actions.length) {
@@ -1015,7 +1150,6 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     }
 
     async function sendChatTurn() {
-      if (!activeSession || !activeSession.session_id) return setOutput({error: "No active session."});
       const input = document.getElementById("chatInput");
       const action = input.value.trim();
       const files = document.getElementById("chatFiles").files;
@@ -1026,16 +1160,46 @@ Lob ist selten genug, um Wirkung zu behalten.`;
           attachments.push({name: f.name, size: f.size, type: f.type || "application/octet-stream"});
         }
       }
-      const payload = {
-        session_id: activeSession.session_id,
-        message: action || "[attachment upload]",
-        language: activeSession.language || "de",
+      const messageValue = action || "[attachment upload]";
+      if (activeSession && activeSession.session_id) {
+        const payload = {
+          session_id: activeSession.session_id,
+          message: messageValue,
+          language: activeSession.language || "de",
+          attachments,
+        };
+        const res = await fetch("/api/v1/chat/turn", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload),
+        });
+        const data = await safeJson(res);
+        setOutput(data);
+      if (res.ok) {
+        input.value = "";
+        document.getElementById("chatFiles").value = "";
+        latestPendingActions = data.pending_actions || [];
+        renderPendingActions(latestPendingActions);
+        dashboardLastEvent = "chat_turn_active";
+        dashboardLastDetail = `session=${activeSession.session_id}`;
+        refreshDashboard();
+        await loadChatTurns();
+      }
+        return;
+      }
+
+      if (!setupSessionId) return setOutput({error: "Start setup first."});
+      const previewPayload = {
+        user_id: userId,
+        auth_token: authToken,
+        message: messageValue,
+        language: document.getElementById("language").value || "de",
         attachments,
       };
-      const res = await fetch("/api/v1/chat/turn", {
+      const res = await fetch(`/api/v1/setup/sessions/${setupSessionId}/chat-preview`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(payload),
+        body: JSON.stringify(previewPayload),
       });
       const data = await safeJson(res);
       setOutput(data);
@@ -1044,7 +1208,10 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         document.getElementById("chatFiles").value = "";
         latestPendingActions = data.pending_actions || [];
         renderPendingActions(latestPendingActions);
-        await loadChatTurns();
+        dashboardLastEvent = "chat_turn_preview";
+        dashboardLastDetail = `setup=${setupSessionId || "-"}`;
+        refreshDashboard();
+        appendPreviewChat(messageValue, data.narration || "");
       }
     }
 
@@ -1091,6 +1258,12 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       if (data.user_id && data.auth_token) {
         userId = data.user_id;
         authToken = data.auth_token;
+        setupSessionId = data.setup_session_id || setupSessionId;
+        setupStatus = data.setup_status || setupStatus;
+        answeredQuestions = 0;
+        setupContract = null;
+        dashboardLastEvent = "auth_ok";
+        dashboardLastDetail = `setup=${setupStatus || "-"}`;
         saveAuth();
         document.getElementById("userInfo").textContent = `username: ${data.username || data.display_name || "user"}`;
         document.getElementById("authCard").classList.add("hidden");
@@ -1100,6 +1273,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         setLlmDefaults();
         loadLlmProfile();
         showSetupFlow();
+        updatePsychogramAvailability();
+        refreshDashboard();
       }
     }
 
@@ -1110,13 +1285,28 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const data = await safeJson(res);
       if (res.ok && data.has_active_session && data.chastity_session) {
         activeSession = data.chastity_session;
+        setupStatus = "configured";
+        setLocked("start", true);
+        setLocked("psychogram", true);
+        setLocked("ai_config", true);
+        setLocked("complete", true);
         updateChatLock();
+        updateCompleteReadiness();
+        dashboardLastEvent = "active_session_loaded";
+        dashboardLastDetail = `session_id=${activeSession.session_id}`;
         showDashboard(data.chastity_session);
       } else if (res.ok) {
         activeSession = null;
+        if (!setupStatus) setupStatus = "draft";
+        setLocked("start", false);
+        resetAccordionLocks();
         updateChatLock();
+        updateCompleteReadiness();
+        dashboardLastEvent = "no_active_session";
+        dashboardLastDetail = `setup=${setupStatus}`;
         showSetupFlow();
       }
+      refreshDashboard();
     }
 
     async function registerUser() {
@@ -1152,6 +1342,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       userId = null;
       authToken = null;
       setupSessionId = null;
+      setupStatus = null;
+      answeredQuestions = 0;
+      setupContract = null;
       questions = [];
       activeSession = null;
       clearAuth();
@@ -1177,17 +1370,25 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       lockContractInputs(false);
       setContractDefaults();
       resetAccordionLocks();
+      dashboardLastEvent = "logged_out";
+      dashboardLastDetail = "";
+      refreshDashboard();
       setOutput({result: "logged_out"});
     }
 
     async function killActiveSession() {
       if (!userId || !authToken) return setOutput({error: "Login first."});
-      const url = `/api/v1/sessions/active?user_id=${encodeURIComponent(userId)}&auth_token=${encodeURIComponent(authToken)}`;
+      const setupQuery = setupSessionId ? `&setup_session_id=${encodeURIComponent(setupSessionId)}` : "";
+      const url = `/api/v1/sessions/active?user_id=${encodeURIComponent(userId)}&auth_token=${encodeURIComponent(authToken)}${setupQuery}`;
       const res = await fetch(url, { method: "DELETE" });
       const data = await safeJson(res);
       setOutput(data);
       if (res.ok && data.deleted) {
         activeSession = null;
+        setupStatus = data.setup_status || "draft";
+        setupSessionId = data.setup_session_id || null;
+        answeredQuestions = 0;
+        setupContract = null;
         document.getElementById("dashboard").classList.add("hidden");
         document.getElementById("dashboardInfo").textContent = "";
         document.getElementById("dashboardContract").innerHTML = "";
@@ -1195,13 +1396,15 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         document.getElementById("setupSessionInfo").textContent = "";
         document.getElementById("chatOutput").value = "";
         document.getElementById("chatInput").value = "";
-        setupSessionId = null;
         questions = [];
         document.getElementById("questionGrid").innerHTML = "";
         lockContractInputs(false);
         resetAccordionLocks();
         updateChatLock();
-        await checkActiveSession();
+        dashboardLastEvent = "session_killed";
+        dashboardLastDetail = `setup=${setupStatus}, setup_id=${setupSessionId || "-"}`;
+        showSetupFlow();
+        refreshDashboard();
       }
     }
 
@@ -1233,6 +1436,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       }
       if (data.setup_session_id) {
         setupSessionId = data.setup_session_id;
+        setupStatus = data.status || "setup_in_progress";
+        answeredQuestions = 0;
+        setupContract = data.contract || null;
         questions = data.questions || [];
         renderQuestions();
         lockContractInputs(true);
@@ -1240,26 +1446,49 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         const maxEnd = data.contract.max_end_date || "AI-decided";
         document.getElementById("setupSessionInfo").textContent =
           `setup_session_id: ${setupSessionId} | contract: ${data.contract.start_date} -> AI-defined (max ${maxEnd})`;
+        dashboardLastEvent = "setup_started";
+        dashboardLastDetail = `setup_id=${setupSessionId}`;
         openPanel("psychogram");
       }
+      updatePsychogramAvailability();
+      refreshDashboard();
       setOutput(data);
     }
 
     async function submitAnswers() {
-      if (!setupSessionId) return setOutput({error: "Start setup first."});
+      if (!setupSessionId || setupStatus !== "setup_in_progress") return setOutput({error: "Start setup first."});
       const answers = questions.map((q) => ({
         question_id: q.question_id,
         value: (q.type === "scale_10" || q.type === "scale_5")
           ? Number(document.getElementById(`q_${q.question_id}`).value)
           : document.getElementById(`q_${q.question_id}`).value,
       }));
+      const saveInfo = document.getElementById("psychogramSaveInfo");
+      saveInfo.classList.add("hidden");
+      saveInfo.classList.remove("status-ok", "status-error");
+      saveInfo.textContent = "";
       const res = await fetch(`/api/v1/setup/sessions/${setupSessionId}/answers`, {
         method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({answers}),
       });
       const data = await safeJson(res);
       setOutput(data);
       if (res.ok) {
+        answeredQuestions = Number(data?.answered_questions || answeredQuestions || 0);
+        dashboardLastEvent = "psychogram_saved";
+        dashboardLastDetail = `answered=${answeredQuestions}`;
+        saveInfo.textContent = tr("psychogram_saved");
+        saveInfo.classList.add("status-ok");
+        saveInfo.classList.remove("hidden");
+        updateCompleteReadiness();
+        refreshDashboard();
         openPanel("ai_config");
+      } else {
+        saveInfo.textContent = `${tr("psychogram_save_failed")} ${data?.detail || ""}`.trim();
+        saveInfo.classList.add("status-error");
+        saveInfo.classList.remove("hidden");
+        dashboardLastEvent = "psychogram_save_error";
+        dashboardLastDetail = `${data?.detail || "unknown"}`;
+        refreshDashboard();
       }
     }
 
@@ -1269,11 +1498,32 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const data = await safeJson(res);
       setOutput(data);
       if (res.ok) {
+        setupStatus = "configured";
+        answeredQuestions = Number(data?.answered_questions || answeredQuestions || 0);
+        setupContract = data?.chastity_session?.policy?.contract || setupContract;
+        setLocked("start", true);
+        setLocked("psychogram", true);
+        setLocked("ai_config", true);
+        setLocked("complete", true);
+        setLocked("brief", false);
+        setLocked("response", false);
+        updatePsychogramAvailability();
+        updateCompleteReadiness();
+        const briefText = data?.chastity_session?.psychogram_brief;
+        if (briefText) {
+          document.getElementById("brief").textContent = briefText;
+          openPanel("brief");
+        }
+        dashboardLastEvent = "setup_completed";
+        dashboardLastDetail = `status=configured`;
         await checkActiveSession();
         if (activeSession) {
           updateChatLock();
-          openPanel("chat");
+          openPanel("brief");
+        } else {
+          setLocked("chat", true);
         }
+        refreshDashboard();
       }
     }
 

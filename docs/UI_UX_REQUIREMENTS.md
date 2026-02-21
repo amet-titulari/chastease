@@ -20,6 +20,22 @@ Ein Wearer kann eine Session auf dem Smartphone starten und nahtlos auf Tablet o
 - Beim Geraetewechsel wird der letzte konsistente Zustand inkl. Turn-Verlauf geladen.
 - Konfliktfaelle (gleichzeitige Eingaben auf mehreren Geraeten) muessen nachvollziehbar aufgeloest werden.
 - Kritische Aktionen (z. B. TTLock Open/Close Phase-2) muessen klar, unmissverstaendlich und fehlersicher gefuehrt werden.
+- App-Flow im Setup als Accordion mit genau einer offenen Karte:
+  - Start Setup Session
+  - Psychogram
+  - AI Configuration
+  - Complete Setup
+  - AI Chat
+  - Psychogram Brief
+  - Response
+- Folgekarten sind gesperrt, bis `Start Setup Session` erfolgreich war.
+- Auto-Navigation:
+  - nach Start Setup -> Psychogram
+  - nach Psychogram speichern -> AI Configuration
+  - nach LLM-Profil speichern -> Complete Setup
+- `Complete Setup` muss durch explizite Bestaetigung abgesichert sein.
+- Nach Bestaetigung sind Setup-Aenderungen gesperrt; Chat/Brief/Response bleiben les-/nutzbar.
+- Waehrend Psychogramm-Analyse wird ein sichtbarer Status angezeigt (`Analyse in arbeit`).
 
 ## Responsive Anforderungen
 

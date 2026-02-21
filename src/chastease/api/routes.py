@@ -258,6 +258,14 @@ class ChatTurnRequest(BaseModel):
     attachments: list[dict] = Field(default_factory=list)
 
 
+class SetupChatPreviewRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    auth_token: str = Field(min_length=8)
+    message: str = Field(min_length=1)
+    language: Literal["de", "en"] = "de"
+    attachments: list[dict] = Field(default_factory=list)
+
+
 class ChatActionExecuteRequest(BaseModel):
     session_id: str = Field(min_length=1)
     action_type: str = Field(min_length=2)
@@ -727,6 +735,55 @@ def _get_session_or_404(setup_session_id: str) -> dict:
     return session
 
 
+def _find_user_setup_session(
+    store: dict[str, dict], user_id: str, allowed_statuses: set[str] | None = None
+) -> tuple[str, dict] | tuple[None, None]:
+    statuses = allowed_statuses or {"draft", "setup_in_progress", "configured"}
+    candidates = [
+        (sid, sess)
+        for sid, sess in store.items()
+        if sess.get("user_id") == user_id and sess.get("status") in statuses
+    ]
+    if not candidates:
+        return (None, None)
+    candidates.sort(key=lambda item: item[1].get("updated_at", item[1].get("created_at", "")), reverse=True)
+    return candidates[0]
+
+
+def _create_draft_setup_session(user_id: str, language: str = "de") -> dict:
+    now = _now_iso()
+    return {
+        "setup_session_id": str(uuid4()),
+        "user_id": user_id,
+        "character_id": None,
+        "status": "draft",
+        "hard_stop_enabled": True,
+        "autonomy_mode": "execute",
+        "integrations": ["ttlock"],
+        "language": _lang(language),
+        "blocked_trigger_words": [],
+        "forbidden_topics": [],
+        "contract_start_date": None,
+        "contract_end_date": None,
+        "contract_max_end_date": None,
+        "ai_controls_end_date": True,
+        "max_penalty_per_day_minutes": 60,
+        "max_penalty_per_week_minutes": 240,
+        "opening_limit_period": "day",
+        "max_openings_in_period": 1,
+        "max_openings_per_day": 1,
+        "opening_window_minutes": 30,
+        "questionnaire_version": QUESTIONNAIRE_VERSION,
+        "answers": [],
+        "psychogram": None,
+        "policy_preview": None,
+        "active_session_id": None,
+        "psychogram_analysis": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
 def _get_db_session(request: Request):
     return request.app.state.db_session_factory()
 
@@ -786,6 +843,60 @@ def _extract_pending_actions(narration: str) -> tuple[str, list[dict]]:
     return cleaned, actions
 
 
+def _sync_setup_snapshot_to_active_session(request: Request, setup_session: dict) -> bool:
+    session_id = setup_session.get("active_session_id")
+    if not session_id:
+        return False
+    db = _get_db_session(request)
+    try:
+        db_session = db.get(ChastitySession, session_id)
+        if db_session is None:
+            return False
+        db_session.psychogram_snapshot_json = json.dumps(setup_session["psychogram"])
+        db_session.policy_snapshot_json = json.dumps(setup_session["policy_preview"])
+        db_session.updated_at = datetime.now(UTC)
+        db.add(db_session)
+        db.commit()
+        return True
+    finally:
+        db.close()
+
+
+def _build_ai_context_summary(psychogram: dict, policy: dict) -> str:
+    traits = psychogram.get("traits", {})
+    top_traits = ", ".join(
+        f"{name}:{score}"
+        for name, score in sorted(traits.items(), key=lambda item: item[1], reverse=True)[:4]
+    )
+    interaction = psychogram.get("interaction_preferences", {})
+    safety = psychogram.get("safety_profile", {})
+    personal = psychogram.get("personal_preferences", {})
+    limits = (policy or {}).get("limits", {})
+    interaction_policy = (policy or {}).get("interaction_profile", {})
+
+    safety_mode = safety.get("mode", "safeword")
+    safety_text = f"mode={safety_mode}"
+    if safety_mode == "safeword" and safety.get("safeword"):
+        safety_text = f"{safety_text}, safeword={safety.get('safeword')}"
+    if safety_mode == "traffic_light" and isinstance(safety.get("traffic_light_words"), dict):
+        tl = safety.get("traffic_light_words")
+        safety_text = f"{safety_text}, tl={tl.get('green','')}/{tl.get('yellow','')}/{tl.get('red','')}"
+
+    return (
+        f"summary={psychogram.get('summary', 'n/a')}; "
+        f"top_traits={top_traits or 'n/a'}; "
+        f"instruction_style={interaction.get('instruction_style', 'mixed')}; "
+        f"escalation_mode={interaction.get('escalation_mode', 'moderate')}; "
+        f"experience={interaction.get('experience_level', 5)}/"
+        f"{interaction.get('experience_profile', 'intermediate')}; "
+        f"grooming_preference={personal.get('grooming_preference', 'no_preference')}; "
+        f"safety={safety_text}; "
+        f"tone={interaction_policy.get('preferred_tone', 'balanced')}; "
+        f"intensity={limits.get('max_intensity_level', 2)}; "
+        f"hard_stop={policy.get('hard_stop_enabled', True)}"
+    )
+
+
 @api_router.post("/auth/register")
 def register(payload: RegisterRequest, request: Request) -> dict:
     db = _get_db_session(request)
@@ -814,12 +925,21 @@ def register(payload: RegisterRequest, request: Request) -> dict:
 
         token = secrets.token_urlsafe(24)
         auth_tokens[token] = user.id
+        store = load_sessions()
+        draft_id, draft_session = _find_user_setup_session(store, user.id, {"draft", "setup_in_progress"})
+        if draft_session is None:
+            draft_session = _create_draft_setup_session(user.id, "de")
+            draft_id = draft_session["setup_session_id"]
+            store[draft_id] = draft_session
+            save_sessions(store)
         return {
             "user_id": user.id,
             "username": username,
             "email": user.email,
             "display_name": user.display_name,
             "auth_token": token,
+            "setup_session_id": draft_id,
+            "setup_status": draft_session["status"],
         }
     finally:
         db.close()
@@ -838,12 +958,21 @@ def login(payload: LoginRequest, request: Request) -> dict:
 
         token = secrets.token_urlsafe(24)
         auth_tokens[token] = user.id
+        store = load_sessions()
+        draft_id, draft_session = _find_user_setup_session(store, user.id, {"draft", "setup_in_progress"})
+        if draft_session is None:
+            draft_session = _create_draft_setup_session(user.id, "de")
+            draft_id = draft_session["setup_session_id"]
+            store[draft_id] = draft_session
+            save_sessions(store)
         return {
             "user_id": user.id,
             "username": user.display_name,
             "email": user.email,
             "display_name": user.display_name,
             "auth_token": token,
+            "setup_session_id": draft_id,
+            "setup_status": draft_session["status"],
         }
     finally:
         db.close()
@@ -1077,7 +1206,8 @@ def _generate_ai_narration_for_session(
     db, request: Request, session: ChastitySession, action: str, language: str
 ) -> str:
     psychogram = json.loads(session.psychogram_snapshot_json)
-    psychogram_summary = psychogram.get("summary", "No psychogram summary available.")
+    policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
+    psychogram_summary = _build_ai_context_summary(psychogram, policy)
 
     ai_service = request.app.state.ai_service
     context = StoryTurnContext(
@@ -1097,6 +1227,58 @@ def _generate_ai_narration_for_session(
             behavior_prompt=profile.behavior_prompt,
         )
     return ai_service.generate_narration(context)
+
+
+def _generate_ai_narration_for_setup_preview(
+    db, request: Request, user_id: str, action: str, language: str, psychogram: dict, policy: dict
+) -> str:
+    ai_service = request.app.state.ai_service
+    context = StoryTurnContext(
+        session_id="setup-preview",
+        action=action,
+        language=language,
+        psychogram_summary=_build_ai_context_summary(psychogram, policy),
+    )
+    profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == user_id))
+    if profile is not None and profile.is_active and hasattr(ai_service, "generate_narration_with_profile"):
+        api_key = decrypt_secret(profile.api_key_encrypted, request.app.state.config.SECRET_KEY)
+        return ai_service.generate_narration_with_profile(
+            context,
+            api_url=profile.api_url,
+            api_key=api_key,
+            chat_model=profile.chat_model,
+            behavior_prompt=profile.behavior_prompt,
+        )
+    return ai_service.generate_narration(context)
+
+
+def _generate_psychogram_analysis_for_setup(db, request: Request, setup_session: dict) -> str:
+    psychogram = setup_session.get("psychogram") or {}
+    policy = setup_session.get("policy_preview") or {}
+    lang = _lang(setup_session.get("language", "de"))
+    action = (
+        "Analyze this psychogram for dashboard summary. Provide concise guidance: tone, boundaries, intensity and first steps."
+        if lang == "en"
+        else "Analysiere dieses Psychogramm für eine Dashboard-Zusammenfassung. Gib kurze Hinweise zu Ton, Grenzen, Intensität und ersten Schritten."
+    )
+    try:
+        return _generate_ai_narration_for_setup_preview(
+            db,
+            request,
+            setup_session["user_id"],
+            action,
+            lang,
+            psychogram,
+            policy,
+        )
+    except Exception:
+        interaction = psychogram.get("interaction_preferences", {})
+        safety = psychogram.get("safety_profile", {})
+        return (
+            f"Profilanalyse: escalation={interaction.get('escalation_mode', 'moderate')}, "
+            f"experience={interaction.get('experience_profile', 'intermediate')}, "
+            f"safety={safety.get('mode', 'safeword')}."
+        )
 
 
 @api_router.post("/story/turn")
@@ -1142,6 +1324,54 @@ def story_turn(payload: StoryTurnRequest, request: Request) -> dict:
         "session_id": payload.session_id,
         "turn_no": next_turn_no,
         "narration": narration,
+        "next_state": "awaiting_wearer_action",
+    }
+
+
+@api_router.post("/setup/sessions/{setup_session_id}/chat-preview")
+def setup_chat_preview(setup_session_id: str, payload: SetupChatPreviewRequest, request: Request) -> dict:
+    store = load_sessions()
+    setup_session = store.get(setup_session_id)
+    if setup_session is None:
+        raise HTTPException(status_code=404, detail=_t("de", "not_found"))
+    if setup_session["user_id"] != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid user for setup session.")
+    token_user_id = auth_tokens.get(payload.auth_token)
+    if token_user_id != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token for user.")
+    if setup_session.get("psychogram") is None or setup_session.get("policy_preview") is None:
+        raise HTTPException(status_code=400, detail="Submit questionnaire answers before chat preview.")
+
+    lang = _lang(payload.language)
+    message = payload.message.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Field 'message' is required.")
+    attachment_hint = ""
+    if payload.attachments:
+        attachment_names = [str(item.get("name", "file")) for item in payload.attachments]
+        attachment_hint = f" Attachments: {', '.join(attachment_names)}."
+    action_text = f"{message}{attachment_hint}"
+
+    db = _get_db_session(request)
+    try:
+        narration_raw = _generate_ai_narration_for_setup_preview(
+            db,
+            request,
+            payload.user_id,
+            action_text,
+            lang,
+            setup_session["psychogram"],
+            setup_session["policy_preview"],
+        )
+    finally:
+        db.close()
+    narration, pending_actions = _extract_pending_actions(narration_raw)
+    return {
+        "result": "accepted_preview",
+        "setup_session_id": setup_session_id,
+        "narration": narration,
+        "pending_actions": pending_actions,
+        "preview": True,
         "next_state": "awaiting_wearer_action",
     }
 
@@ -1222,7 +1452,6 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
 
 @api_router.post("/setup/sessions")
 def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
-    setup_session_id = str(uuid4())
     now = _now_iso()
     lang = _lang(payload.language)
     contract_start_date, contract_end_date, contract_max_end_date = _resolve_contract_dates(
@@ -1260,34 +1489,43 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
         db.close()
 
     store = load_sessions()
-    store[setup_session_id] = {
-        "setup_session_id": setup_session_id,
-        "user_id": payload.user_id,
-        "character_id": payload.character_id,
-        "status": "setup_in_progress",
-        "hard_stop_enabled": payload.hard_stop_enabled,
-        "autonomy_mode": payload.autonomy_mode,
-        "integrations": payload.integrations,
-        "language": lang,
-        "blocked_trigger_words": payload.blocked_trigger_words,
-        "forbidden_topics": payload.forbidden_topics,
-        "contract_start_date": contract_start_date,
-        "contract_end_date": contract_end_date,
-        "contract_max_end_date": contract_max_end_date,
-        "ai_controls_end_date": payload.ai_controls_end_date,
-        "max_penalty_per_day_minutes": payload.max_penalty_per_day_minutes,
-        "max_penalty_per_week_minutes": payload.max_penalty_per_week_minutes,
-        "opening_limit_period": opening_limit_period,
-        "max_openings_in_period": max_openings_in_period,
-        "max_openings_per_day": max_openings_in_period if opening_limit_period == "day" else 0,
-        "opening_window_minutes": payload.opening_window_minutes,
-        "questionnaire_version": QUESTIONNAIRE_VERSION,
-        "answers": [],
-        "psychogram": None,
-        "policy_preview": None,
-        "created_at": now,
-        "updated_at": now,
-    }
+    setup_session_id, setup_session = _find_user_setup_session(store, payload.user_id, {"draft", "setup_in_progress"})
+    if setup_session is None:
+        setup_session = _create_draft_setup_session(payload.user_id, lang)
+        setup_session_id = setup_session["setup_session_id"]
+
+    setup_session.update(
+        {
+            "setup_session_id": setup_session_id,
+            "user_id": payload.user_id,
+            "character_id": payload.character_id,
+            "status": "setup_in_progress",
+            "hard_stop_enabled": payload.hard_stop_enabled,
+            "autonomy_mode": payload.autonomy_mode,
+            "integrations": payload.integrations,
+            "language": lang,
+            "blocked_trigger_words": payload.blocked_trigger_words,
+            "forbidden_topics": payload.forbidden_topics,
+            "contract_start_date": contract_start_date,
+            "contract_end_date": contract_end_date,
+            "contract_max_end_date": contract_max_end_date,
+            "ai_controls_end_date": payload.ai_controls_end_date,
+            "max_penalty_per_day_minutes": payload.max_penalty_per_day_minutes,
+            "max_penalty_per_week_minutes": payload.max_penalty_per_week_minutes,
+            "opening_limit_period": opening_limit_period,
+            "max_openings_in_period": max_openings_in_period,
+            "max_openings_per_day": max_openings_in_period if opening_limit_period == "day" else 0,
+            "opening_window_minutes": payload.opening_window_minutes,
+            "questionnaire_version": QUESTIONNAIRE_VERSION,
+            "updated_at": now,
+        }
+    )
+    if "created_at" not in setup_session:
+        setup_session["created_at"] = now
+    # keep previous answers to allow iterative setup editing without data loss
+    setup_session.setdefault("answers", [])
+    setup_session.setdefault("psychogram", None)
+    setup_session.setdefault("policy_preview", None)
     save_sessions(store)
 
     return {
@@ -1313,7 +1551,7 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
 
 
 @api_router.post("/setup/sessions/{setup_session_id}/answers")
-def submit_setup_answers(setup_session_id: str, payload: SetupAnswersRequest) -> dict:
+def submit_setup_answers(setup_session_id: str, payload: SetupAnswersRequest, request: Request) -> dict:
     store = load_sessions()
     setup_session = store.get(setup_session_id)
     if setup_session is None:
@@ -1346,6 +1584,7 @@ def submit_setup_answers(setup_session_id: str, payload: SetupAnswersRequest) ->
     setup_session["updated_at"] = _now_iso()
     store[setup_session_id] = setup_session
     save_sessions(store)
+    applied_to_active_session = _sync_setup_snapshot_to_active_session(request, setup_session)
 
     return {
         "setup_session_id": setup_session_id,
@@ -1355,6 +1594,7 @@ def submit_setup_answers(setup_session_id: str, payload: SetupAnswersRequest) ->
         "psychogram_preview": setup_session["psychogram"],
         "policy_preview": setup_session["policy_preview"],
         "psychogram_brief": _psychogram_brief(setup_session["psychogram"], setup_session["policy_preview"]),
+        "applied_to_active_session": applied_to_active_session,
     }
 
 
@@ -1390,7 +1630,9 @@ def get_active_chastity_session(user_id: str, auth_token: str, request: Request)
 
 
 @api_router.delete("/sessions/active")
-def kill_active_chastity_session(user_id: str, auth_token: str, request: Request) -> dict:
+def kill_active_chastity_session(
+    user_id: str, auth_token: str, request: Request, setup_session_id: str | None = None
+) -> dict:
     if not getattr(request.app.state.config, "ENABLE_SESSION_KILL", False):
         raise HTTPException(status_code=404, detail="Not found.")
 
@@ -1410,16 +1652,50 @@ def kill_active_chastity_session(user_id: str, auth_token: str, request: Request
             .where(ChastitySession.status == "active")
             .order_by(ChastitySession.created_at.desc())
         )
-        if session is None:
-            return {"deleted": False, "reason": "no_active_session"}
+        deleted = False
+        killed_session_id = None
+        if session is not None:
+            turns = db.scalars(select(Turn).where(Turn.session_id == session.id)).all()
+            for turn in turns:
+                db.delete(turn)
+            killed_session_id = session.id
+            db.delete(session)
+            deleted = True
 
-        turns = db.scalars(select(Turn).where(Turn.session_id == session.id)).all()
-        for turn in turns:
-            db.delete(turn)
-        killed_session_id = session.id
-        db.delete(session)
         db.commit()
-        return {"deleted": True, "killed_session_id": killed_session_id}
+
+        deleted_setup_session = False
+        if setup_session_id:
+            store = load_sessions()
+            setup_session = store.get(setup_session_id)
+            if setup_session and setup_session.get("user_id") == user_id:
+                del store[setup_session_id]
+                save_sessions(store)
+                deleted_setup_session = True
+
+        store = load_sessions()
+        draft_id, draft_session = _find_user_setup_session(store, user_id, {"draft", "setup_in_progress"})
+        if draft_session is None:
+            draft_session = _create_draft_setup_session(user_id, "de")
+            draft_id = draft_session["setup_session_id"]
+            store[draft_id] = draft_session
+            save_sessions(store)
+
+        if not deleted and not deleted_setup_session:
+            return {
+                "deleted": False,
+                "reason": "no_active_or_setup_session",
+                "setup_session_id": draft_id,
+                "setup_status": draft_session["status"],
+            }
+
+        return {
+            "deleted": deleted or deleted_setup_session,
+            "killed_session_id": killed_session_id,
+            "deleted_setup_session": deleted_setup_session,
+            "setup_session_id": draft_id,
+            "setup_status": draft_session["status"],
+        }
     finally:
         db.close()
 
@@ -1482,11 +1758,16 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
     setup_session["status"] = "configured"
     setup_session["updated_at"] = _now_iso()
     session_id = str(uuid4())
+    setup_session["active_session_id"] = session_id
     store[setup_session_id] = setup_session
     save_sessions(store)
 
     db = _get_db_session(request)
     try:
+        psychogram_analysis = _generate_psychogram_analysis_for_setup(db, request, setup_session)
+        setup_session["psychogram_analysis"] = psychogram_analysis
+        setup_session["psychogram"]["analysis"] = psychogram_analysis
+
         db_session = ChastitySession(
             id=session_id,
             user_id=setup_session["user_id"],
@@ -1502,6 +1783,8 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
         db.commit()
     finally:
         db.close()
+    store[setup_session_id] = setup_session
+    save_sessions(store)
 
     return {
         "setup_session_id": setup_session_id,
@@ -1513,13 +1796,15 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
             "status": "active",
             "policy": setup_session["policy_preview"],
             "psychogram": setup_session["psychogram"],
-            "psychogram_brief": _psychogram_brief(setup_session["psychogram"], setup_session["policy_preview"]),
+            "psychogram_brief": setup_session.get("psychogram_analysis")
+            or _psychogram_brief(setup_session["psychogram"], setup_session["policy_preview"]),
+            "psychogram_analysis": setup_session.get("psychogram_analysis"),
         },
     }
 
 
 @api_router.patch("/setup/sessions/{setup_session_id}/psychogram")
-def recalibrate_psychogram(setup_session_id: str, payload: PsychogramRecalibrationRequest) -> dict:
+def recalibrate_psychogram(setup_session_id: str, payload: PsychogramRecalibrationRequest, request: Request) -> dict:
     store = load_sessions()
     setup_session = store.get(setup_session_id)
     if setup_session is None:
@@ -1539,6 +1824,7 @@ def recalibrate_psychogram(setup_session_id: str, payload: PsychogramRecalibrati
     setup_session["updated_at"] = _now_iso()
     store[setup_session_id] = setup_session
     save_sessions(store)
+    applied_to_active_session = _sync_setup_snapshot_to_active_session(request, setup_session)
 
     return {
         "setup_session_id": setup_session_id,
@@ -1546,6 +1832,7 @@ def recalibrate_psychogram(setup_session_id: str, payload: PsychogramRecalibrati
         "psychogram": setup_session["psychogram"],
         "policy_preview": setup_session["policy_preview"],
         "psychogram_brief": _psychogram_brief(setup_session["psychogram"], setup_session["policy_preview"]),
+        "applied_to_active_session": applied_to_active_session,
     }
 
 

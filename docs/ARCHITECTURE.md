@@ -58,8 +58,9 @@ Detaildiagramme liegen unter `/Users/swisi/Repos/privat/chastease/docs/architect
 
 *   MVP:
     *   Benutzername/Passwort als Mindestanforderung
-    *   JWT Access/Refresh fuer API-Sessions
+    *   serverseitig in-memory gehaltene Auth-Tokens (aktuelle Implementierung)
 *   Zielausbau:
+    *   JWT Access/Refresh fuer API-Sessions
     *   Passkey (WebAuthn) als bevorzugter Login
     *   OAuth als optionale Erweiterung
 

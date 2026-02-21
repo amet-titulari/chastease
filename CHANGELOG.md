@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.9 - 2026-02-21
+
+- Complete-Setup-Bestaetigung verhaelt sich nun final: `Start Setup`, `Psychogram`, `AI Configuration` und `Complete Setup` werden sofort gesperrt.
+- `AI Chat`, `Psychogram Brief` und `Response` bleiben nach der Bestaetigung fuer Analyse/Debug offen.
+- Nach Bestaetigung wird direkt in den `Psychogram Brief` gewechselt und waehrend Verarbeitung `Analyse in arbeit` angezeigt.
+- Session-Kill-Flow bleibt testbar: nach Loeschen wird wieder ein `draft`-Setup bereitgestellt.
+- Dokumentation auf Implementierungsstand 0.0.9 synchronisiert (Flow, Auth-Stand, Psychogramm-Schema, Backlog-Erweiterungen).
+
 ## 0.0.8 - 2026-02-21
 
 - App-Flow auf Accordion umgestellt: Start Setup, Psychogram, AI Configuration, Complete Setup, AI Chat, Psychogram Brief, Response.

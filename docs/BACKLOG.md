@@ -22,3 +22,6 @@
 
 - [ ] Questgenerator und Questfortschritt
 - [ ] Monitoring (Sentry/OpenTelemetry)
+- [ ] Szenario-Bibliothek fuer Keyholder-Interaktionsmuster
+- [ ] Toy-/Geraete-Praeferenzen im Setup inkl. Policy-Ableitung
+- [ ] Trigger-Kategorien und feinere Safety-Filter im Psychogramm/Policy-Layer
