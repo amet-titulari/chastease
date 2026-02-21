@@ -1,40 +1,85 @@
 # Architekturueberblick
 
-## Systemkontext
+Dieses Dokument beschreibt die Leitplanken fuer die technische Umsetzung.  
+Detaildiagramme liegen unter `/Users/swisi/Repos/privat/chastease/docs/architecture/`.
 
-- Client (Web/SPA) spricht mit Flask-API
-- Flask-API kapselt Game-Logik und Persistenz
-- AI-Adapter kapselt LLM-Aufrufe
-- Datenbank speichert Spieler-, Charakter- und Weltzustand
+## Architekturziele
 
-## Startstruktur (Modular Monolith)
+*   Modulare Erweiterbarkeit ohne fruehen Microservice-Overhead
+*   Robuste Trennung von API, Domäne, Persistenz und KI-Integration
+*   Nachvollziehbarer Story-Verlauf pro Session (Replay-faehig)
+*   Solide Testbarkeit auf Unit- und API-Ebene
 
-`src/chastease/`:
+## Architekturansatz
 
-- `api/` - HTTP-Endpunkte
-- `config.py` - Laufzeitkonfiguration
-- spaeter:
-- `domains/characters/`
-- `domains/world/`
-- `domains/quests/`
-- `domains/combat/`
-- `services/ai/`
-- `repositories/`
+*   Stil: Modular Monolith
+*   Backend: Python API, FastAPI bevorzugt fuer Zielarchitektur
+*   Aktueller Code-Stand: FastAPI-Scaffold
+*   Persistenz: PostgreSQL (spaeter mit SQLAlchemy + Alembic)
+*   KI: gekapselter AI-Service-Adapter
+*   API-Versionierung: `/api/v1`
+*   Deploymentziel: Docker-Stack mit horizontaler Skalierung
 
-## Architekturprinzipien
+## Modulgrenzen (Zielstruktur)
 
-- App-Factory Pattern fuer testbare Flask-Instanzen
-- Domänenlogik getrennt von API-Transportschicht
-- AI-Aufrufe nur ueber dedizierten Service
-- Jede Spieleraktion als Event dokumentierbar (Audit/Replay)
+`/Users/swisi/Repos/privat/chastease/src/chastease/`
 
-## API Versionierung
+*   `api/`
+*   `domains/characters/`
+*   `domains/quests/`
+*   `domains/sessions/`
+*   `services/ai/`
+*   `repositories/`
+*   `shared/`
 
-- Prefix: `/api/v1`
-- Breaking changes in neue Version (`/api/v2`)
+Aktueller Scope:
 
-## Nicht-funktionale Ziele
+*   `world` und `combat` sind vorerst aus dem MVP ausgeschlossen und werden spaeter als Erweiterungsmodule eingefuehrt.
 
-- Testbarkeit: Unit- und API-Tests ab MVP
-- Erweiterbarkeit: klare Modulgrenzen
-- Beobachtbarkeit: Logging und spaeter Tracing/Metriken
+## Layering-Regeln
+
+*   API Layer darf Domain Use Cases aufrufen, aber keine SQL-Details enthalten.
+*   Domain Layer ist framework-arm und enthaelt Spielregeln.
+*   Repository Layer kapselt Datenzugriff und Transaktionen.
+*   AI-Service darf nur ueber klar definiertes Interface aus Use Cases aufgerufen werden.
+
+## Qualitaetsanforderungen
+
+*   Testbarkeit:
+    *   Unit-Tests fuer Domainregeln
+    *   API-Tests fuer Endpunkte
+*   Zuverlaessigkeit:
+    *   Timeouts und Retries bei KI-Aufrufen
+    *   Sauberer Fehlerkanal mit stabilen Fehlercodes
+*   Performance:
+    *   Chat-Latenz hat Prioritaet gegenueber Aktionspfad-Latenz
+    *   Agenten-/Integrationsaktionen duerfen langsamer sein als Chatantworten
+*   Wartbarkeit:
+    *   ADRs fuer zentrale Architekturentscheidungen
+    *   Konsistente Modulnamensgebung und Grenzdisziplin
+
+## Auth-Strategie (Vorschlag)
+
+*   MVP:
+    *   Benutzername/Passwort als Mindestanforderung
+    *   JWT Access/Refresh fuer API-Sessions
+*   Zielausbau:
+    *   Passkey (WebAuthn) als bevorzugter Login
+    *   OAuth als optionale Erweiterung
+
+## Referenzen
+
+*   C4 System Context:
+    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/C4_SYSTEM_CONTEXT.md`
+*   C4 Container:
+    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/C4_CONTAINER.md`
+*   C4 Komponenten (Backend):
+    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/C4_COMPONENT_BACKEND.md`
+*   Action Matrix:
+    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/ACTION_MATRIX.md`
+*   UML Domain Model:
+    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_DOMAIN_MODEL.md`
+*   UML Story Turn Sequence:
+    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_SEQUENCE_STORY_TURN.md`
+*   ADR API Framework:
+    *   `/Users/swisi/Repos/privat/chastease/docs/adr/ADR-002-api-framework.md`

@@ -1,11 +1,11 @@
 # chastease
 
-Modernes KI-gestuetztes Rollenspiel mit Flask-API als Backend.
+Modernes KI-gestuetztes Rollenspiel mit Python-API als Backend (FastAPI Zielarchitektur).
 Dieses Repository ist die gemeinsame Basis fuer Implementierung, Planung und Dokumentation.
 
 ## Projektziele
 
-- Flask-basierte API fuer ein modulares RPG
+- Python-basierte API fuer ein modulares RPG
 - KI-gestuetzter Story/Game-Master-Loop
 - Persistente Spielstaende und Weltzustaende
 - Saubere Architektur mit klaren Domänenmodulen
@@ -13,7 +13,8 @@ Dieses Repository ist die gemeinsame Basis fuer Implementierung, Planung und Dok
 ## Tech-Stack (Start)
 
 - Python 3.12+
-- Flask
+- FastAPI
+- Uvicorn
 - Pytest
 
 Erweiterungen fuer die naechsten Schritte:
@@ -63,7 +64,10 @@ docs/
 
 ## Dokumentation
 
+- Einstieg: `docs/PROJECT_DOCUMENTATION.md`
 - Produktvision: `docs/PRODUCT_VISION.md`
+- Anforderungen (SRS): `docs/REQUIREMENTS_SRS.md`
+- UI/UX Anforderungen: `docs/UI_UX_REQUIREMENTS.md`
 - Architektur: `docs/ARCHITECTURE.md`
 - Umsetzungsplan (MVP): `docs/PROJECT_PLAN.md`
 - Backlog: `docs/BACKLOG.md`

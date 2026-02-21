@@ -1,11 +1,11 @@
-from flask import Flask
+from fastapi import FastAPI
 
-from .api.routes import api_bp
+from .api.routes import api_router
 from .config import Config
 
 
-def create_app(config_object: type[Config] = Config) -> Flask:
-    app = Flask(__name__)
-    app.config.from_object(config_object)
-    app.register_blueprint(api_bp, url_prefix="/api/v1")
+def create_app(config_object: type[Config] = Config) -> FastAPI:
+    app = FastAPI(title="chastease-api", version="0.0.1")
+    app.state.config = config_object()
+    app.include_router(api_router, prefix="/api/v1")
     return app
