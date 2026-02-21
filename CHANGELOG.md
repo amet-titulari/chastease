@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.0.8 - 2026-02-21
+
+- App-Flow auf Accordion umgestellt: Start Setup, Psychogram, AI Configuration, Complete Setup, AI Chat, Psychogram Brief, Response.
+- Nur eine Karte gleichzeitig offen; Folgekarten bis erfolgreichem Setup-Start gesperrt.
+- Auto-Navigation im Setup-Flow: Start -> Psychogram, Submit Answers -> AI Configuration, Save LLM Profile -> Complete Setup.
+- Dashboard/Chat entkoppelt, Home/Dashboard/Logout oben rechts konsolidiert.
+- Setup-Form verbessert: Penalty-Felder werden bei deaktivierten Caps ausgeblendet.
+- Datumslogik bidirektional synchronisiert (Start, Max End, Max Duration), inklusive `0 Tage = KI entscheidet Enddatum`.
+- UI-Texte für DE/EN zentralisiert und breit übersetzt.
+- Psychogramm v2.4 erweitert:
+  - `interaction_preferences`: `escalation_mode`, `experience_level`, `experience_profile`
+  - `safety_profile`: `mode`, optional `safeword`, optional `traffic_light_words`
+  - `personal_preferences`: `grooming_preference`
+- Safety-Validierung ergänzt: abhängige Pflichtfelder werden über `q10_safety_mode` erzwungen.
+- Questionnaire um Sicherheits-/Eskalations-/Grooming-/Erfahrungsfelder erweitert.
+- Psychogramm-UI zeigt je nach `safety_mode` nur relevante Sicherheitsfelder.
+
 ## 0.0.6 - 2026-02-21
 
 - Auth-Flow auf Username/Password fokussiert, Registrierung mit Pflichtfeld E-Mail.

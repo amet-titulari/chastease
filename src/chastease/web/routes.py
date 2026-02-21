@@ -54,29 +54,6 @@ def landing_page() -> str:
     }
     .btn-primary { background: var(--brand); color: #fff; }
     .btn-secondary { background: #fff; border-color: var(--line); color: var(--ink); }
-    .grid {
-      margin-top: 18px;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 12px;
-    }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 14px;
-    }
-    .card strong { display: block; margin-bottom: 6px; }
-    .badge {
-      display: inline-block;
-      margin-top: 8px;
-      padding: 4px 8px;
-      border-radius: 999px;
-      background: #eaf2ff;
-      color: #13407d;
-      font-size: 12px;
-      font-weight: 700;
-    }
   </style>
 </head>
 <body>
@@ -146,13 +123,36 @@ def app_shell(request: Request) -> str:
     button.ghost { background: transparent; border: 1px solid #2b3d63; }
     button.danger { background: #c62828; color: #fff; }
     button.danger:hover { background: #e53935; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
     textarea { width: 100%; min-height: 280px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     table { width: 100%; border-collapse: collapse; }
     th, td { border-bottom: 1px solid #22314f; padding: 8px 6px; text-align: left; font-size: 13px; }
     th { color: #9ab0d8; font-weight: 600; width: 220px; }
     .small { font-size: 12px; color: #9ab0d8; }
     a { color: #7fb5ff; text-decoration: none; }
-    .hidden { display: none; }
+    .hidden { display: none !important; }
+
+    .accordion { display: grid; gap: 10px; }
+    .acc-item { background: #101a30; border: 1px solid #22314f; border-radius: 12px; overflow: hidden; }
+    .acc-head {
+      width: 100%;
+      background: transparent;
+      border: 0;
+      color: #e8eefc;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      font-size: 30px;
+      font-weight: 700;
+      text-align: left;
+    }
+    .acc-item.active .acc-head { border-bottom: 1px solid #22314f; }
+    .acc-item.locked .acc-head { color: #8aa0c8; }
+    .acc-lock { font-size: 12px; color: #8aa0c8; }
+    .acc-body { display: none; padding: 16px; }
+    .acc-item.active .acc-body { display: block; }
+
     @media (max-width: 820px) {
       .setup-grid {
         grid-template-columns: 1fr;
@@ -163,9 +163,9 @@ def app_shell(request: Request) -> str:
 </head>
 <body>
   <div class="wrap">
-    <h1>Prototype App</h1>
+    <h1 id="appTitle">Prototype App</h1>
     <div class="topbar">
-      <p class="small"><a href="/">Zur Landingpage</a></p>
+      <p class="small"><a id="landingLink" href="/">Zur Landingpage</a></p>
       <div class="topbar-actions">
         <button id="homeBtn" class="ghost hidden" onclick="showHomeView()">Home</button>
         <button id="dashboardToggleBtn" class="ghost hidden" onclick="toggleDashboard()">Dashboard</button>
@@ -174,12 +174,12 @@ def app_shell(request: Request) -> str:
     </div>
 
     <div id="authCard" class="card">
-      <h2>0) Login / Register</h2>
+      <h2 id="authTitle">Login / Register</h2>
       <div class="row">
-        <div><label>Username</label><input id="username" value="" /></div>
-        <div id="emailWrap" class="hidden"><label>Email</label><input id="email" value="" /></div>
-        <div><label>Password</label><input id="password" type="password" value="" /></div>
-        <div id="passwordRepeatWrap" class="hidden"><label>Password repeat</label><input id="passwordRepeat" type="password" value="" /></div>
+        <div><label id="labelUsername">Username</label><input id="username" value="" /></div>
+        <div id="emailWrap" class="hidden"><label id="labelEmail">Email</label><input id="email" value="" /></div>
+        <div><label id="labelPassword">Password</label><input id="password" type="password" value="" /></div>
+        <div id="passwordRepeatWrap" class="hidden"><label id="labelPasswordRepeat">Password repeat</label><input id="passwordRepeat" type="password" value="" /></div>
       </div>
       <div class="row">
         <button id="loginBtn" onclick="handleLoginClick()">Login</button>
@@ -189,8 +189,8 @@ def app_shell(request: Request) -> str:
     </div>
 
     <div id="dashboard" class="card hidden">
-      <h2>1) Dashboard</h2>
-      <p class="small">Konfigurationsübersicht der aktiven Session.</p>
+      <h2 id="dashboardTitle">Dashboard</h2>
+      <p id="dashboardSubtitle" class="small">Konfigurationsübersicht der aktiven Session.</p>
       <p id="dashboardInfo" class="small"></p>
       <table id="dashboardContractTable">
         <tbody id="dashboardContract"></tbody>
@@ -199,85 +199,101 @@ def app_shell(request: Request) -> str:
     </div>
 
     <div id="appFlow" class="hidden">
-    <div class="card">
-      <h2>2) AI Configuration</h2>
-      <div class="setup-grid">
-        <div class="setup-item"><label>Provider</label><input id="llmProviderName" value="custom" /></div>
-        <div class="setup-item"><label>LLM API URL</label><input id="llmApiUrl" value="https://api.x.ai/v1/chat/completions" /></div>
-        <div class="setup-item"><label>LLM API Key</label><input id="llmApiKey" type="password" value="" placeholder="leave empty to keep existing key" /></div>
-        <div class="setup-item"><label>LLM Model (Chat)</label><input id="llmChatModel" value="grok-4-latest" /></div>
-        <div class="setup-item"><label>LLM Model (Vision)</label><input id="llmVisionModel" value="grok-4-latest" /></div>
-        <div class="setup-item"><label>Profile active</label><select id="llmIsActive"><option value="true">enabled</option><option value="false">disabled</option></select></div>
+      <div class="accordion">
+        <div class="acc-item active" data-panel="start">
+          <button class="acc-head" onclick="openPanel('start')"><span id="panelStartTitle">Start Setup Session</span><span id="lock_start" class="acc-lock hidden">locked</span></button>
+          <div class="acc-body">
+            <div class="setup-grid">
+              <div class="setup-item"><label id="labelStartDate">Start Date</label><input id="contractStartDate" type="date" /></div>
+              <div class="setup-item"><label id="labelMaxEndDate">Max End Date</label><input id="contractMaxEndDate" type="date" /></div>
+              <div class="setup-item"><label id="labelMaxDuration">Max Duration (days)</label><input id="contractMaxDurationDays" type="number" min="0" max="3650" value="30" /></div>
+              <div class="setup-item"><label></label><div id="durationHint" class="small">If you change date or duration, the other value is auto-calculated. 0 days means AI decides end date.</div></div>
+              <div class="setup-item"><label id="labelAutonomyMode">Autonomy Mode</label><select id="autonomy"><option value="execute">execute</option><option value="suggest">suggest</option></select></div>
+              <div class="setup-item"><label id="labelLanguage">Language</label><select id="language"><option value="de">Deutsch</option><option value="en">English</option></select></div>
+              <div class="setup-item"><label id="labelHardStop">Hard Stop</label><select id="hardStop"><option value="true">enabled</option><option value="false">disabled</option></select></div>
+              <div class="setup-item"><label id="labelPenaltyCaps">Penalty Caps</label><select id="penaltyCapsEnabled"><option value="true">enabled</option><option value="false">disabled</option></select></div>
+              <div id="maxPenaltyDayWrap" class="setup-item"><label id="labelMaxPenaltyDay">Max Penalty / Day (min)</label><input id="maxPenaltyDay" type="number" min="0" max="1440" value="60" /></div>
+              <div id="maxPenaltyWeekWrap" class="setup-item"><label id="labelMaxPenaltyWeek">Max Penalty / Week (min)</label><input id="maxPenaltyWeek" type="number" min="0" max="10080" value="240" /></div>
+              <div class="setup-item"><label id="labelOpeningsPeriod">Openings Period</label><select id="openingLimitPeriod"><option value="day">day</option><option value="week">week</option><option value="month">month</option></select></div>
+              <div class="setup-item"><label id="labelMaxOpeningsPeriod">Max Openings / Period</label><input id="maxOpeningsInPeriod" type="number" min="0" max="200" value="1" /></div>
+              <div class="setup-item"><label id="labelOpeningWindow">Opening Window (min)</label><input id="openingWindowMinutes" type="number" min="1" max="240" value="30" /></div>
+            </div>
+            <button id="startSetupBtn" onclick="startSetup()">Start Setup</button>
+            <p id="setupSessionInfo" class="small"></p>
+          </div>
+        </div>
+
+        <div class="acc-item locked" data-panel="psychogram">
+          <button class="acc-head" onclick="openPanel('psychogram')"><span id="panelPsychogramTitle">Psychogram</span><span id="lock_psychogram" class="acc-lock">locked</span></button>
+          <div class="acc-body">
+            <p id="psychogramHint" class="small">Start Setup Session first to load the questionnaire.</p>
+            <div id="questionGrid" class="qgrid"></div>
+            <button id="submitAnswersBtn" class="hidden" onclick="submitAnswers()">Submit Answers</button>
+          </div>
+        </div>
+
+        <div class="acc-item locked" data-panel="ai_config">
+          <button class="acc-head" onclick="openPanel('ai_config')"><span id="panelAiConfigTitle">AI Configuration</span><span id="lock_ai_config" class="acc-lock">locked</span></button>
+          <div class="acc-body">
+            <div class="setup-grid">
+              <div class="setup-item"><label id="labelProvider">Provider</label><input id="llmProviderName" value="custom" /></div>
+              <div class="setup-item"><label id="labelLlmApiUrl">LLM API URL</label><input id="llmApiUrl" value="https://api.x.ai/v1/chat/completions" /></div>
+              <div class="setup-item"><label id="labelLlmApiKey">LLM API Key</label><input id="llmApiKey" type="password" value="" placeholder="leave empty to keep existing key" /></div>
+              <div class="setup-item"><label id="labelLlmChatModel">LLM Model (Chat)</label><input id="llmChatModel" value="grok-4-latest" /></div>
+              <div class="setup-item"><label id="labelLlmVisionModel">LLM Model (Vision)</label><input id="llmVisionModel" value="grok-4-latest" /></div>
+              <div class="setup-item"><label id="labelProfileActive">Profile active</label><select id="llmIsActive"><option value="true">enabled</option><option value="false">disabled</option></select></div>
+            </div>
+            <div class="setup-item" style="max-width:760px;">
+              <label id="labelBehaviorPrompt">Behavior Prompt</label>
+              <textarea id="llmBehaviorPrompt" style="min-height:180px;"></textarea>
+            </div>
+            <div class="row">
+              <button id="saveLlmProfileBtn" onclick="saveLlmProfile()">Save LLM Profile</button>
+              <button id="reloadLlmProfileBtn" class="ghost" onclick="loadLlmProfile()">Reload</button>
+              <button id="testDryRunBtn" class="ghost" onclick="testLlmProfile(true)">Test (Dry Run)</button>
+              <button id="testLiveBtn" class="ghost" onclick="testLlmProfile(false)">Test (Live)</button>
+            </div>
+            <p id="llmInfo" class="small"></p>
+          </div>
+        </div>
+
+        <div class="acc-item locked" data-panel="complete">
+          <button class="acc-head" onclick="openPanel('complete')"><span id="panelCompleteTitle">Complete Setup</span><span id="lock_complete" class="acc-lock">locked</span></button>
+          <div class="acc-body">
+            <button id="completeSetupBtn" onclick="completeSetup()">Complete Setup</button>
+          </div>
+        </div>
+
+        <div class="acc-item locked" data-panel="chat">
+          <button class="acc-head" onclick="openPanel('chat')"><span id="panelChatTitle">AI Chat</span><span id="lock_chat" class="acc-lock">locked</span></button>
+          <div class="acc-body">
+            <p id="chatSubtitle" class="small">Schnelltest für Wearer -> Keyholder Turn-Flow.</p>
+            <div class="row">
+              <input id="chatInput" placeholder="Write your action/message..." style="min-width:280px; flex:1;" />
+              <input id="chatFiles" type="file" multiple />
+              <button id="voiceBtn" class="ghost" onclick="startVoiceInput()">Voice</button>
+              <button id="sendBtn" onclick="sendChatTurn()">Send</button>
+              <button id="reloadChatBtn" class="ghost" onclick="loadChatTurns()">Reload</button>
+            </div>
+            <div id="pendingActions" class="small"></div>
+            <textarea id="chatOutput" readonly style="min-height:220px;"></textarea>
+          </div>
+        </div>
+
+        <div class="acc-item locked" data-panel="brief">
+          <button class="acc-head" onclick="openPanel('brief')"><span id="panelBriefTitle">Psychogram Brief</span><span id="lock_brief" class="acc-lock">locked</span></button>
+          <div class="acc-body">
+            <p id="brief" class="small">No evaluation yet.</p>
+          </div>
+        </div>
+
+        <div class="acc-item locked" data-panel="response">
+          <button class="acc-head" onclick="openPanel('response')"><span id="panelResponseTitle">Response</span><span id="lock_response" class="acc-lock">locked</span></button>
+          <div class="acc-body">
+            <textarea id="output" readonly></textarea>
+          </div>
+        </div>
       </div>
-      <div class="setup-item" style="max-width:760px;">
-        <label>Behavior Prompt</label>
-        <textarea id="llmBehaviorPrompt" style="min-height:180px;"></textarea>
-      </div>
-      <div class="row">
-        <button onclick="saveLlmProfile()">Save LLM Profile</button>
-        <button class="ghost" onclick="loadLlmProfile()">Reload</button>
-        <button class="ghost" onclick="testLlmProfile(true)">Test (Dry Run)</button>
-        <button class="ghost" onclick="testLlmProfile(false)">Test (Live)</button>
-      </div>
-      <p id="llmInfo" class="small"></p>
-    </div>
-
-    <div id="chatCard" class="card hidden">
-      <h2>3) AI Chat</h2>
-      <p class="small">Schnelltest für Wearer -> Keyholder Turn-Flow.</p>
-      <div class="row">
-        <input id="chatInput" placeholder="Write your action/message..." style="min-width:280px; flex:1;" />
-        <input id="chatFiles" type="file" multiple />
-        <button class="ghost" onclick="startVoiceInput()">Voice</button>
-        <button onclick="sendChatTurn()">Send</button>
-        <button class="ghost" onclick="loadChatTurns()">Reload</button>
-      </div>
-      <div id="pendingActions" class="small"></div>
-      <textarea id="chatOutput" readonly style="min-height:220px;"></textarea>
-    </div>
-
-    <div class="card">
-      <h2>4) Start Setup Session</h2>
-      <div class="setup-grid">
-        <div class="setup-item"><label>Start Date</label><input id="contractStartDate" type="date" /></div>
-        <div class="setup-item"><label>Max End Date</label><input id="contractMaxEndDate" type="date" /></div>
-        <div class="setup-item"><label>Max Duration (days)</label><input id="contractMaxDurationDays" type="number" min="0" max="3650" value="30" /></div>
-        <div class="setup-item"><label></label><div id="durationHint" class="small">If you change date or duration, the other value is auto-calculated. 0 days means AI decides end date.</div></div>
-        <div class="setup-item"><label>Autonomy Mode</label><select id="autonomy"><option value="execute">execute</option><option value="suggest">suggest</option></select></div>
-        <div class="setup-item"><label>Language</label><select id="language"><option value="de">Deutsch</option><option value="en">English</option></select></div>
-        <div class="setup-item"><label>Hard Stop</label><select id="hardStop"><option value="true">enabled</option><option value="false">disabled</option></select></div>
-        <div class="setup-item"><label>Penalty Caps</label><select id="penaltyCapsEnabled"><option value="true">enabled</option><option value="false">disabled</option></select></div>
-        <div class="setup-item"><label>Max Penalty / Day (min)</label><input id="maxPenaltyDay" type="number" min="0" max="1440" value="60" /></div>
-        <div class="setup-item"><label>Max Penalty / Week (min)</label><input id="maxPenaltyWeek" type="number" min="0" max="10080" value="240" /></div>
-        <div class="setup-item"><label>Openings Period</label><select id="openingLimitPeriod"><option value="day">day</option><option value="week">week</option><option value="month">month</option></select></div>
-        <div class="setup-item"><label>Max Openings / Period</label><input id="maxOpeningsInPeriod" type="number" min="0" max="200" value="1" /></div>
-        <div class="setup-item"><label>Opening Window (min)</label><input id="openingWindowMinutes" type="number" min="1" max="240" value="30" /></div>
-      </div>
-      <button onclick="startSetup()">Start Setup</button>
-      <p id="setupSessionInfo" class="small"></p>
-    </div>
-
-    <div class="card">
-      <h2>5) Answer Questionnaire</h2>
-      <p class="small">Questions are loaded dynamically from the setup endpoint.</p>
-      <div id="questionGrid" class="qgrid"></div>
-      <button onclick="submitAnswers()">Submit Answers</button>
-    </div>
-
-    <div class="card">
-      <h2>6) Complete Setup</h2>
-      <button onclick="completeSetup()">Complete Setup</button>
-    </div>
-
-    <div class="card">
-      <h2>Psychogram Brief</h2>
-      <p id="brief" class="small">No evaluation yet.</p>
-    </div>
-
-    <div class="card">
-      <h2>Response</h2>
-      <textarea id="output" readonly></textarea>
-    </div>
     </div>
   </div>
 
@@ -291,6 +307,9 @@ def app_shell(request: Request) -> str:
     let authMode = "login";
     let dashboardVisible = false;
     let latestPendingActions = [];
+    const PANELS = ["start", "psychogram", "ai_config", "complete", "chat", "brief", "response"];
+    const LOCKED_INITIAL = new Set(["psychogram", "ai_config", "complete", "chat", "brief", "response"]);
+
     const defaultBehaviorPrompt = `Du bist meine ruhige, intelligente und psychologisch dominante Herrin / Keyholderin.
 
 Deine Dominanz ist kontrolliert, leise und absolut praesent. Du brauchst keine Lautstaerke, keine Beleidigungen und keine platte Grausamkeit - deine Macht liegt in Praezision, Geduld und Timing.
@@ -310,6 +329,178 @@ Kaum Ausrufezeichen.
 Keine groben Beschimpfungen.
 Begruessungen variieren.
 Lob ist selten genug, um Wirkung zu behalten.`;
+    const UI_TEXTS = {
+      de: {
+        app_title: "Prototype App",
+        landing_link: "Zur Landingpage",
+        home: "Home",
+        dashboard: "Dashboard",
+        logout: "Logout",
+        auth_title: "Login / Register",
+        username: "Username",
+        email: "Email",
+        password: "Passwort",
+        password_repeat: "Passwort wiederholen",
+        login: "Login",
+        register: "Register",
+        dashboard_title: "Dashboard",
+        dashboard_subtitle: "Konfigurationsübersicht der aktiven Session.",
+        kill_session: "Session KILL",
+        panel_start: "Start Setup Session",
+        panel_psychogram: "Psychogram",
+        panel_ai_config: "AI Configuration",
+        panel_complete: "Complete Setup",
+        panel_chat: "AI Chat",
+        panel_brief: "Psychogram Brief",
+        panel_response: "Response",
+        locked: "gesperrt",
+        start_date: "Startdatum",
+        max_end_date: "Max Enddatum",
+        max_duration: "Max Dauer (Tage)",
+        duration_hint: "Wenn du Datum oder Dauer änderst, wird der andere Wert automatisch berechnet. 0 Tage bedeutet: KI entscheidet das Enddatum.",
+        autonomy_mode: "Autonomie-Modus",
+        language: "Sprache",
+        hard_stop: "Hard Stop",
+        penalty_caps: "Penalty Caps",
+        max_penalty_day: "Max Penalty / Tag (min)",
+        max_penalty_week: "Max Penalty / Woche (min)",
+        openings_period: "Öffnungs-Zeitraum",
+        max_openings_period: "Max Öffnungen / Zeitraum",
+        opening_window: "Öffnungsfenster (min)",
+        start_setup: "Setup starten",
+        psychogram_hint: "Starte zuerst Setup Session, um das Psychogramm zu laden.",
+        submit_answers: "Antworten senden",
+        provider: "Provider",
+        llm_api_url: "LLM API URL",
+        llm_api_key: "LLM API Key",
+        llm_chat_model: "LLM Modell (Chat)",
+        llm_vision_model: "LLM Modell (Vision)",
+        profile_active: "Profil aktiv",
+        behavior_prompt: "Verhaltensprompt",
+        save_llm_profile: "LLM-Profil speichern",
+        reload: "Neu laden",
+        test_dry_run: "Test (Dry Run)",
+        test_live: "Test (Live)",
+        complete_setup: "Setup abschließen",
+        chat_subtitle: "Schnelltest für Wearer -> Keyholder Turn-Flow.",
+        voice: "Sprache",
+        send: "Senden",
+        no_turns: "Noch keine Turns.",
+        pending_actions: "Ausstehende Aktionen",
+        value: "Wert",
+        execute: "ausfuehren",
+        suggest: "vorschlagen",
+        enabled: "aktiviert",
+        disabled: "deaktiviert",
+        day: "Tag",
+        week: "Woche",
+        month: "Monat",
+        dry_run_ok: "Dry run erfolgreich.",
+        live_test_ok: "Live-Test ausgeführt.",
+        llm_loaded: "LLM-Profil geladen. API-Key gespeichert: {has}.",
+        no_llm_profile: "Noch kein LLM-Profil konfiguriert.",
+        contract: "Vertrag",
+        autonomy_mode_row: "Autonomie-Modus",
+        ai_controls_end_date: "KI steuert Enddatum",
+        integrations: "Integrationen",
+        hard_stop_row: "Hard Stop",
+        penalty_caps_row: "Penalty Caps",
+        openings: "Öffnungen",
+        llm_provider: "LLM Provider",
+        llm_url: "LLM URL",
+        llm_chat_model_row: "Chat Modell",
+        llm_vision_model_row: "Vision Modell",
+        llm_active: "LLM aktiv",
+        ai_defined: "KI-definiert",
+        yes: "ja",
+        no: "nein",
+      },
+      en: {
+        app_title: "Prototype App",
+        landing_link: "Back to landing page",
+        home: "Home",
+        dashboard: "Dashboard",
+        logout: "Logout",
+        auth_title: "Login / Register",
+        username: "Username",
+        email: "Email",
+        password: "Password",
+        password_repeat: "Repeat password",
+        login: "Login",
+        register: "Register",
+        dashboard_title: "Dashboard",
+        dashboard_subtitle: "Configuration overview of the active session.",
+        kill_session: "Session KILL",
+        panel_start: "Start Setup Session",
+        panel_psychogram: "Psychogram",
+        panel_ai_config: "AI Configuration",
+        panel_complete: "Complete Setup",
+        panel_chat: "AI Chat",
+        panel_brief: "Psychogram Brief",
+        panel_response: "Response",
+        locked: "locked",
+        start_date: "Start Date",
+        max_end_date: "Max End Date",
+        max_duration: "Max Duration (days)",
+        duration_hint: "If you change date or duration, the other value is auto-calculated. 0 days means AI decides end date.",
+        autonomy_mode: "Autonomy Mode",
+        language: "Language",
+        hard_stop: "Hard Stop",
+        penalty_caps: "Penalty Caps",
+        max_penalty_day: "Max Penalty / Day (min)",
+        max_penalty_week: "Max Penalty / Week (min)",
+        openings_period: "Openings Period",
+        max_openings_period: "Max Openings / Period",
+        opening_window: "Opening Window (min)",
+        start_setup: "Start Setup",
+        psychogram_hint: "Start Setup Session first to load the questionnaire.",
+        submit_answers: "Submit Answers",
+        provider: "Provider",
+        llm_api_url: "LLM API URL",
+        llm_api_key: "LLM API Key",
+        llm_chat_model: "LLM Model (Chat)",
+        llm_vision_model: "LLM Model (Vision)",
+        profile_active: "Profile active",
+        behavior_prompt: "Behavior Prompt",
+        save_llm_profile: "Save LLM Profile",
+        reload: "Reload",
+        test_dry_run: "Test (Dry Run)",
+        test_live: "Test (Live)",
+        complete_setup: "Complete Setup",
+        chat_subtitle: "Quick test for Wearer -> Keyholder turn flow.",
+        voice: "Voice",
+        send: "Send",
+        no_turns: "No turns yet.",
+        pending_actions: "Pending actions",
+        value: "Value",
+        execute: "execute",
+        suggest: "suggest",
+        enabled: "enabled",
+        disabled: "disabled",
+        day: "day",
+        week: "week",
+        month: "month",
+        dry_run_ok: "Dry run successful.",
+        live_test_ok: "Live test executed.",
+        llm_loaded: "LLM profile loaded. API key stored: {has}.",
+        no_llm_profile: "No LLM profile configured yet.",
+        contract: "Contract",
+        autonomy_mode_row: "Autonomy Mode",
+        ai_controls_end_date: "AI Controls End Date",
+        integrations: "Integrations",
+        hard_stop_row: "Hard Stop",
+        penalty_caps_row: "Penalty Caps",
+        openings: "Openings",
+        llm_provider: "LLM Provider",
+        llm_url: "LLM URL",
+        llm_chat_model_row: "Chat Model",
+        llm_vision_model_row: "Vision Model",
+        llm_active: "LLM Active",
+        ai_defined: "AI-defined",
+        yes: "yes",
+        no: "no",
+      },
+    };
 
     function authStorageKey() {
       return "chastease_auth_v1";
@@ -323,6 +514,52 @@ Lob ist selten genug, um Wirkung zu behalten.`;
 
     function clearAuth() {
       localStorage.removeItem(authStorageKey());
+    }
+
+    function isLocked(panel) {
+      const item = document.querySelector(`.acc-item[data-panel="${panel}"]`);
+      return item ? item.classList.contains("locked") : false;
+    }
+
+    function setLocked(panel, locked) {
+      const item = document.querySelector(`.acc-item[data-panel="${panel}"]`);
+      if (!item) return;
+      item.classList.toggle("locked", locked);
+      const btn = item.querySelector(".acc-head");
+      if (btn) btn.disabled = locked;
+      const lock = document.getElementById(`lock_${panel}`);
+      if (lock) lock.classList.toggle("hidden", !locked);
+    }
+
+    function openPanel(panel) {
+      if (isLocked(panel)) return;
+      PANELS.forEach((name) => {
+        const item = document.querySelector(`.acc-item[data-panel="${name}"]`);
+        if (!item) return;
+        item.classList.toggle("active", name === panel);
+      });
+    }
+
+    function resetAccordionLocks() {
+      PANELS.forEach((panel) => setLocked(panel, LOCKED_INITIAL.has(panel)));
+      setLocked("start", false);
+      openPanel("start");
+      updatePsychogramAvailability();
+    }
+
+    function unlockSetupFollowups() {
+      ["psychogram", "ai_config", "complete", "brief", "response"].forEach((panel) => setLocked(panel, false));
+      updatePsychogramAvailability();
+    }
+
+    function updateChatLock() {
+      setLocked("chat", !activeSession);
+    }
+
+    function updatePsychogramAvailability() {
+      const hasSetup = Boolean(setupSessionId);
+      document.getElementById("psychogramHint").classList.toggle("hidden", hasSetup);
+      document.getElementById("submitAnswersBtn").classList.toggle("hidden", !hasSetup);
     }
 
     function setAuthMode(mode) {
@@ -367,12 +604,14 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       grid.innerHTML = "";
       questions.forEach((q) => {
         const wrap = document.createElement("div");
+        wrap.className = "q-item";
+        wrap.dataset.questionId = q.question_id;
         if (q.type === "scale_10" || q.type === "scale_5") {
           const mid = q.type === "scale_5" ? 3 : 5;
           wrap.innerHTML = `<label>${q.text} (${q.question_id})</label>
             <input id="q_${q.question_id}" type="range" min="${q.scale_min}" max="${q.scale_max}" step="1" value="${mid}" oninput="document.getElementById('v_${q.question_id}').textContent=this.value" />
             <div class="small">${q.scale_hint || ""}</div>
-            <div class="small">Wert: <strong id="v_${q.question_id}">${mid}</strong></div>`;
+            <div class="small">${tr("value")}: <strong id="v_${q.question_id}">${mid}</strong></div>`;
         } else if (q.type === "choice") {
           const options = (q.options || []).map((o) => `<option value="${o.value}">${o.label}</option>`).join("");
           wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><select id="q_${q.question_id}">${options}</select>`;
@@ -381,6 +620,29 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         }
         grid.appendChild(wrap);
       });
+      const safetyMode = document.getElementById("q_q10_safety_mode");
+      if (safetyMode) {
+        safetyMode.addEventListener("change", updateSafetyModeVisibility);
+      }
+      updateSafetyModeVisibility();
+    }
+
+    function toggleQuestionVisibility(questionId, visible) {
+      const node = document.querySelector(`.q-item[data-question-id="${questionId}"]`);
+      if (!node) return;
+      node.classList.toggle("hidden", !visible);
+    }
+
+    function updateSafetyModeVisibility() {
+      const modeField = document.getElementById("q_q10_safety_mode");
+      if (!modeField) return;
+      const mode = modeField.value;
+      const showSafeword = mode === "safeword";
+      const showTrafficLight = mode === "traffic_light";
+      toggleQuestionVisibility("q10_safeword", showSafeword);
+      toggleQuestionVisibility("q10_traffic_green", showTrafficLight);
+      toggleQuestionVisibility("q10_traffic_yellow", showTrafficLight);
+      toggleQuestionVisibility("q10_traffic_red", showTrafficLight);
     }
 
     function setContractDefaults() {
@@ -400,29 +662,103 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       return map;
     }
 
+    function uiLang() {
+      const language = document.getElementById("language");
+      if (!language) return "de";
+      return language.value === "en" ? "en" : "de";
+    }
+
+    function tr(key) {
+      const lang = uiLang();
+      return UI_TEXTS[lang][key] || key;
+    }
+
+    function setText(id, key) {
+      const node = document.getElementById(id);
+      if (node) node.textContent = tr(key);
+    }
+
+    function applyStaticUiTranslations() {
+      setText("appTitle", "app_title");
+      setText("landingLink", "landing_link");
+      setText("homeBtn", "home");
+      setText("dashboardToggleBtn", "dashboard");
+      setText("logoutTopBtn", "logout");
+      setText("authTitle", "auth_title");
+      setText("labelUsername", "username");
+      setText("labelEmail", "email");
+      setText("labelPassword", "password");
+      setText("labelPasswordRepeat", "password_repeat");
+      setText("loginBtn", "login");
+      setText("registerBtn", "register");
+      setText("dashboardTitle", "dashboard_title");
+      setText("dashboardSubtitle", "dashboard_subtitle");
+      setText("killSessionBtn", "kill_session");
+      setText("panelStartTitle", "panel_start");
+      setText("panelPsychogramTitle", "panel_psychogram");
+      setText("panelAiConfigTitle", "panel_ai_config");
+      setText("panelCompleteTitle", "panel_complete");
+      setText("panelChatTitle", "panel_chat");
+      setText("panelBriefTitle", "panel_brief");
+      setText("panelResponseTitle", "panel_response");
+      setText("lock_start", "locked");
+      setText("lock_psychogram", "locked");
+      setText("lock_ai_config", "locked");
+      setText("lock_complete", "locked");
+      setText("lock_chat", "locked");
+      setText("lock_brief", "locked");
+      setText("lock_response", "locked");
+      setText("labelStartDate", "start_date");
+      setText("labelMaxEndDate", "max_end_date");
+      setText("labelMaxDuration", "max_duration");
+      setText("labelAutonomyMode", "autonomy_mode");
+      setText("labelLanguage", "language");
+      setText("labelHardStop", "hard_stop");
+      setText("labelPenaltyCaps", "penalty_caps");
+      setText("labelMaxPenaltyDay", "max_penalty_day");
+      setText("labelMaxPenaltyWeek", "max_penalty_week");
+      setText("labelOpeningsPeriod", "openings_period");
+      setText("labelMaxOpeningsPeriod", "max_openings_period");
+      setText("labelOpeningWindow", "opening_window");
+      setText("startSetupBtn", "start_setup");
+      setText("psychogramHint", "psychogram_hint");
+      setText("submitAnswersBtn", "submit_answers");
+      setText("labelProvider", "provider");
+      setText("labelLlmApiUrl", "llm_api_url");
+      setText("labelLlmApiKey", "llm_api_key");
+      setText("labelLlmChatModel", "llm_chat_model");
+      setText("labelLlmVisionModel", "llm_vision_model");
+      setText("labelProfileActive", "profile_active");
+      setText("labelBehaviorPrompt", "behavior_prompt");
+      setText("saveLlmProfileBtn", "save_llm_profile");
+      setText("reloadLlmProfileBtn", "reload");
+      setText("testDryRunBtn", "test_dry_run");
+      setText("testLiveBtn", "test_live");
+      setText("completeSetupBtn", "complete_setup");
+      setText("chatSubtitle", "chat_subtitle");
+      setText("voiceBtn", "voice");
+      setText("sendBtn", "send");
+      setText("reloadChatBtn", "reload");
+      document.getElementById("chatInput").placeholder = uiLang() === "de" ? "Schreibe deine Aktion/Nachricht..." : "Write your action/message...";
+    }
+
+    function updatePenaltyCapsVisibility() {
+      const enabled = document.getElementById("penaltyCapsEnabled").value === "true";
+      document.getElementById("maxPenaltyDayWrap").classList.toggle("hidden", !enabled);
+      document.getElementById("maxPenaltyWeekWrap").classList.toggle("hidden", !enabled);
+    }
+
     function applySetupTranslations() {
-      const lang = document.getElementById("language").value;
-      const de = {
-        execute: "ausfuehren",
-        suggest: "vorschlagen",
-        enabled: "aktiviert",
-        disabled: "deaktiviert",
-        day: "Tag",
-        week: "Woche",
-        month: "Monat",
-        duration_hint: "Wenn du Datum oder Dauer aenderst, wird der andere Wert automatisch berechnet. 0 Tage bedeutet: KI entscheidet das Enddatum.",
+      const t = {
+        execute: tr("execute"),
+        suggest: tr("suggest"),
+        enabled: tr("enabled"),
+        disabled: tr("disabled"),
+        day: tr("day"),
+        week: tr("week"),
+        month: tr("month"),
+        duration_hint: tr("duration_hint"),
       };
-      const en = {
-        execute: "execute",
-        suggest: "suggest",
-        enabled: "enabled",
-        disabled: "disabled",
-        day: "day",
-        week: "week",
-        month: "month",
-        duration_hint: "If you change date or duration, the other value is auto-calculated. 0 days means AI decides end date.",
-      };
-      const t = lang === "de" ? de : en;
 
       const autonomy = selectOptionsByValue("autonomy");
       autonomy.execute.textContent = t.execute;
@@ -442,6 +778,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       openingPeriod.month.textContent = t.month;
 
       document.getElementById("durationHint").textContent = t.duration_hint;
+      applyStaticUiTranslations();
+      updatePenaltyCapsVisibility();
     }
 
     function parseDateInput(id) {
@@ -485,6 +823,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("contractMaxEndDate").addEventListener("change", syncDurationFromEndDate);
       document.getElementById("contractMaxDurationDays").addEventListener("input", syncEndDateFromDuration);
       document.getElementById("language").addEventListener("change", applySetupTranslations);
+      document.getElementById("penaltyCapsEnabled").addEventListener("change", updatePenaltyCapsVisibility);
     }
 
     function setLlmDefaults() {
@@ -500,7 +839,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const data = await safeJson(res);
       if (!res.ok) return setOutput(data);
       if (!data.configured) {
-        document.getElementById("llmInfo").textContent = "No LLM profile configured yet.";
+        document.getElementById("llmInfo").textContent = tr("no_llm_profile");
         currentLlmProfile = null;
         return;
       }
@@ -512,7 +851,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("llmVisionModel").value = p.vision_model || "";
       document.getElementById("llmIsActive").value = p.is_active ? "true" : "false";
       document.getElementById("llmBehaviorPrompt").value = p.behavior_prompt || defaultBehaviorPrompt;
-      document.getElementById("llmInfo").textContent = `LLM profile loaded. API key stored: ${p.has_api_key ? "yes" : "no"}.`;
+      document.getElementById("llmInfo").textContent = tr("llm_loaded").replace("{has}", p.has_api_key ? tr("yes") : tr("no"));
     }
 
     async function saveLlmProfile() {
@@ -540,6 +879,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         document.getElementById("llmInfo").textContent = "LLM profile saved.";
         currentLlmProfile = data.profile || currentLlmProfile;
         if (activeSession) renderDashboardSummary(activeSession);
+        openPanel("complete");
       }
     }
 
@@ -554,7 +894,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const data = await safeJson(res);
       setOutput(data);
       if (res.ok) {
-        document.getElementById("llmInfo").textContent = dryRun ? "Dry run successful." : "Live test executed.";
+        document.getElementById("llmInfo").textContent = dryRun ? tr("dry_run_ok") : tr("live_test_ok");
       }
     }
 
@@ -580,14 +920,18 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     }
 
     function showSetupFlow() {
+      dashboardVisible = false;
       document.getElementById("dashboard").classList.add("hidden");
-      document.getElementById("chatCard").classList.add("hidden");
       document.getElementById("appFlow").classList.remove("hidden");
-      document.getElementById("dashboardToggleBtn").classList.add("hidden");
-      document.getElementById("homeBtn").classList.add("hidden");
+      openPanel("start");
     }
 
     function renderDashboardSummary(session) {
+      if (!session) {
+        document.getElementById("dashboardInfo").textContent = uiLang() === "de" ? "Keine aktive Session." : "No active session.";
+        document.getElementById("dashboardContract").innerHTML = "";
+        return;
+      }
       document.getElementById("dashboardInfo").textContent =
         `session_id: ${session.session_id}, status: ${session.status}, language: ${session.language}`;
       const policy = session.policy || {};
@@ -596,18 +940,18 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const integrations = (policy.integrations || []).join(", ") || "-";
       const llm = currentLlmProfile || {};
       document.getElementById("dashboardContract").innerHTML = [
-        `<tr><th>Contract</th><td>${contract.start_date || "-"} -> ${contract.end_date || "AI-defined"} (max ${contract.max_end_date || "-"})</td></tr>`,
-        `<tr><th>Autonomy Mode</th><td>${policy.autonomy_mode || "-"}</td></tr>`,
-        `<tr><th>AI Controls End Date</th><td>${contract.ai_controls_end_date ? "enabled" : "disabled"}</td></tr>`,
-        `<tr><th>Integrations</th><td>${integrations}</td></tr>`,
-        `<tr><th>Hard Stop</th><td>${policy.hard_stop_enabled ? "enabled" : "disabled"}</td></tr>`,
-        `<tr><th>Penalty Caps</th><td>day=${limits.max_penalty_per_day_minutes ?? "-"} min, week=${limits.max_penalty_per_week_minutes ?? "-"} min</td></tr>`,
-        `<tr><th>Openings</th><td>${limits.max_openings_in_period ?? limits.max_openings_per_day ?? "-"} / ${limits.opening_limit_period || "day"}, window=${limits.opening_window_minutes ?? "-"} min</td></tr>`,
-        `<tr><th>LLM Provider</th><td>${llm.provider_name || "-"}</td></tr>`,
-        `<tr><th>LLM URL</th><td>${llm.api_url || "-"}</td></tr>`,
-        `<tr><th>Chat Model</th><td>${llm.chat_model || "-"}</td></tr>`,
-        `<tr><th>Vision Model</th><td>${llm.vision_model || "-"}</td></tr>`,
-        `<tr><th>LLM Active</th><td>${llm.is_active === false ? "disabled" : "enabled"}</td></tr>`,
+        `<tr><th>${tr("contract")}</th><td>${contract.start_date || "-"} -> ${contract.end_date || tr("ai_defined")} (max ${contract.max_end_date || "-"})</td></tr>`,
+        `<tr><th>${tr("autonomy_mode_row")}</th><td>${policy.autonomy_mode || "-"}</td></tr>`,
+        `<tr><th>${tr("ai_controls_end_date")}</th><td>${contract.ai_controls_end_date ? tr("enabled") : tr("disabled")}</td></tr>`,
+        `<tr><th>${tr("integrations")}</th><td>${integrations}</td></tr>`,
+        `<tr><th>${tr("hard_stop_row")}</th><td>${policy.hard_stop_enabled ? tr("enabled") : tr("disabled")}</td></tr>`,
+        `<tr><th>${tr("penalty_caps_row")}</th><td>${tr("day")}=${limits.max_penalty_per_day_minutes ?? "-"} min, ${tr("week")}=${limits.max_penalty_per_week_minutes ?? "-"} min</td></tr>`,
+        `<tr><th>${tr("openings")}</th><td>${limits.max_openings_in_period ?? limits.max_openings_per_day ?? "-"} / ${limits.opening_limit_period || tr("day")}, window=${limits.opening_window_minutes ?? "-"} min</td></tr>`,
+        `<tr><th>${tr("llm_provider")}</th><td>${llm.provider_name || "-"}</td></tr>`,
+        `<tr><th>${tr("llm_url")}</th><td>${llm.api_url || "-"}</td></tr>`,
+        `<tr><th>${tr("llm_chat_model_row")}</th><td>${llm.chat_model || "-"}</td></tr>`,
+        `<tr><th>${tr("llm_vision_model_row")}</th><td>${llm.vision_model || "-"}</td></tr>`,
+        `<tr><th>${tr("llm_active")}</th><td>${llm.is_active === false ? tr("disabled") : tr("enabled")}</td></tr>`,
       ].join("");
     }
 
@@ -615,8 +959,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       dashboardVisible = false;
       document.getElementById("dashboard").classList.add("hidden");
       document.getElementById("appFlow").classList.remove("hidden");
-      document.getElementById("chatCard").classList.toggle("hidden", !activeSession);
-      loadChatTurns();
+      if (activeSession) loadChatTurns();
     }
 
     function showDashboard(session) {
@@ -624,11 +967,16 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       renderDashboardSummary(session);
       document.getElementById("dashboardToggleBtn").classList.remove("hidden");
       document.getElementById("homeBtn").classList.remove("hidden");
+      document.getElementById("logoutTopBtn").classList.remove("hidden");
+      updateChatLock();
       showHomeView();
     }
 
     function toggleDashboard() {
       dashboardVisible = !dashboardVisible;
+      if (dashboardVisible) {
+        renderDashboardSummary(activeSession);
+      }
       document.getElementById("dashboard").classList.toggle("hidden", !dashboardVisible);
       document.getElementById("appFlow").classList.toggle("hidden", dashboardVisible);
     }
@@ -636,7 +984,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     function renderChatTurns(turns) {
       const out = document.getElementById("chatOutput");
       if (!turns || !turns.length) {
-        out.value = "No turns yet.";
+        out.value = tr("no_turns");
         return;
       }
       out.value = turns
@@ -651,11 +999,11 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         wrap.innerHTML = "";
         return;
       }
-      const buttons = actions.map((a, i) => {
+      const buttons = actions.map((a) => {
         const payload = JSON.stringify(a.payload || {});
         return `<button class="ghost" onclick='executePendingAction("${a.action_type}", ${JSON.stringify(payload)})'>Execute ${a.action_type}</button>`;
       });
-      wrap.innerHTML = `<div class="small">Pending actions: ${buttons.join(" ")}</div>`;
+      wrap.innerHTML = `<div class="small">${tr("pending_actions")}: ${buttons.join(" ")}</div>`;
     }
 
     async function loadChatTurns() {
@@ -747,9 +1095,11 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         document.getElementById("userInfo").textContent = `username: ${data.username || data.display_name || "user"}`;
         document.getElementById("authCard").classList.add("hidden");
         document.getElementById("homeBtn").classList.remove("hidden");
+        document.getElementById("dashboardToggleBtn").classList.remove("hidden");
         document.getElementById("logoutTopBtn").classList.remove("hidden");
         setLlmDefaults();
         loadLlmProfile();
+        showSetupFlow();
       }
     }
 
@@ -759,8 +1109,12 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const res = await fetch(url);
       const data = await safeJson(res);
       if (res.ok && data.has_active_session && data.chastity_session) {
+        activeSession = data.chastity_session;
+        updateChatLock();
         showDashboard(data.chastity_session);
       } else if (res.ok) {
+        activeSession = null;
+        updateChatLock();
         showSetupFlow();
       }
     }
@@ -773,7 +1127,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const payload = {
         username: document.getElementById("username").value,
         email: document.getElementById("email").value,
-        password: document.getElementById("password").value
+        password: document.getElementById("password").value,
       };
       const res = await fetch("/api/v1/auth/register", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload) });
       const data = await safeJson(res);
@@ -785,7 +1139,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     async function loginUser() {
       const payload = {
         username: document.getElementById("username").value,
-        password: document.getElementById("password").value
+        password: document.getElementById("password").value,
       };
       const res = await fetch("/api/v1/auth/login", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload) });
       const data = await safeJson(res);
@@ -812,8 +1166,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("llmInfo").textContent = "";
       document.getElementById("llmApiKey").value = "";
       currentLlmProfile = null;
+      dashboardVisible = false;
       document.getElementById("dashboard").classList.add("hidden");
-      document.getElementById("chatCard").classList.add("hidden");
       document.getElementById("dashboardToggleBtn").classList.add("hidden");
       document.getElementById("homeBtn").classList.add("hidden");
       document.getElementById("appFlow").classList.add("hidden");
@@ -822,6 +1176,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       setAuthMode("login");
       lockContractInputs(false);
       setContractDefaults();
+      resetAccordionLocks();
       setOutput({result: "logged_out"});
     }
 
@@ -834,7 +1189,6 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       if (res.ok && data.deleted) {
         activeSession = null;
         document.getElementById("dashboard").classList.add("hidden");
-        document.getElementById("chatCard").classList.add("hidden");
         document.getElementById("dashboardInfo").textContent = "";
         document.getElementById("dashboardContract").innerHTML = "";
         document.getElementById("pendingActions").innerHTML = "";
@@ -845,8 +1199,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         questions = [];
         document.getElementById("questionGrid").innerHTML = "";
         lockContractInputs(false);
-        document.getElementById("dashboardToggleBtn").classList.add("hidden");
-        document.getElementById("homeBtn").classList.add("hidden");
+        resetAccordionLocks();
+        updateChatLock();
         await checkActiveSession();
       }
     }
@@ -882,9 +1236,11 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         questions = data.questions || [];
         renderQuestions();
         lockContractInputs(true);
+        unlockSetupFollowups();
         const maxEnd = data.contract.max_end_date || "AI-decided";
         document.getElementById("setupSessionInfo").textContent =
           `setup_session_id: ${setupSessionId} | contract: ${data.contract.start_date} -> AI-defined (max ${maxEnd})`;
+        openPanel("psychogram");
       }
       setOutput(data);
     }
@@ -898,9 +1254,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
           : document.getElementById(`q_${q.question_id}`).value,
       }));
       const res = await fetch(`/api/v1/setup/sessions/${setupSessionId}/answers`, {
-        method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({answers})
+        method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({answers}),
       });
-      setOutput(await safeJson(res));
+      const data = await safeJson(res);
+      setOutput(data);
+      if (res.ok) {
+        openPanel("ai_config");
+      }
     }
 
     async function completeSetup() {
@@ -908,7 +1268,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const res = await fetch(`/api/v1/setup/sessions/${setupSessionId}/complete`, { method: "POST" });
       const data = await safeJson(res);
       setOutput(data);
-      if (res.ok) await checkActiveSession();
+      if (res.ok) {
+        await checkActiveSession();
+        if (activeSession) {
+          updateChatLock();
+          openPanel("chat");
+        }
+      }
     }
 
     async function bootstrapAuth() {
@@ -937,6 +1303,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     setLlmDefaults();
     initContractSync();
     applySetupTranslations();
+    resetAccordionLocks();
     bootstrapAuth();
   </script>
 </body>

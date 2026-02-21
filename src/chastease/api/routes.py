@@ -20,7 +20,7 @@ from chastease.services.ai.base import StoryTurnContext
 api_router = APIRouter()
 auth_tokens: dict[str, str] = {}
 
-QUESTIONNAIRE_VERSION = "setup-q-v2.1"
+QUESTIONNAIRE_VERSION = "setup-q-v2.4"
 SUPPORTED_LANGUAGES = {"de", "en"}
 
 TRANSLATIONS = {
@@ -109,15 +109,6 @@ QUESTION_BANK = [
         "weights": {"strictness_affinity": 0.8, "challenge_affinity": 0.6},
     },
     {
-        "id": "q7_taboo_text",
-        "type": "text",
-        "texts": {
-            "de": "Gibt es Themen/Handlungen/Worte/Szenarien, die komplett tabu sind? (Freitext)",
-            "en": "Are there topics/actions/words/scenarios that are completely taboo? (Free text)",
-        },
-        "weights": {},
-    },
-    {
         "id": "q8_instruction_style",
         "type": "choice",
         "texts": {
@@ -130,6 +121,104 @@ QUESTION_BANK = [
             {"value": "suggestive", "de": "suggestiv/verfuehrerisch", "en": "suggestive/seductive"},
             {"value": "mixed", "de": "gemischt je nach Situation", "en": "mixed depending on situation"},
         ],
+        "weights": {},
+    },
+    {
+        "id": "q11_escalation_mode",
+        "type": "choice",
+        "texts": {
+            "de": "Wie schnell soll Intensitaet eskalieren?",
+            "en": "How quickly should intensity escalate?",
+        },
+        "options": [
+            {"value": "very_slow", "de": "sehr langsam", "en": "very slow"},
+            {"value": "slow", "de": "langsam", "en": "slow"},
+            {"value": "moderate", "de": "moderat", "en": "moderate"},
+            {"value": "strong", "de": "stark", "en": "strong"},
+            {"value": "aggressive", "de": "aggressiv", "en": "aggressive"},
+        ],
+        "weights": {},
+    },
+    {
+        "id": "q12_grooming_preference",
+        "type": "choice",
+        "texts": {
+            "de": "Welche Intimrasur-Praeferenz soll beachtet werden?",
+            "en": "Which grooming preference should be respected?",
+        },
+        "options": [
+            {"value": "no_preference", "de": "keine Praeferenz", "en": "no preference"},
+            {"value": "clean_shaven", "de": "glatt rasiert", "en": "clean shaven"},
+            {"value": "trimmed", "de": "getrimmt", "en": "trimmed"},
+            {"value": "natural", "de": "natuerlich", "en": "natural"},
+        ],
+        "weights": {},
+    },
+    {
+        "id": "q7_taboo_text",
+        "type": "text",
+        "texts": {
+            "de": "Gibt es Themen/Handlungen/Worte/Szenarien, die komplett tabu sind? (Freitext)",
+            "en": "Are there topics/actions/words/scenarios that are completely taboo? (Free text)",
+        },
+        "weights": {},
+    },
+    {
+        "id": "q10_safety_mode",
+        "type": "choice",
+        "texts": {
+            "de": "Welches Sicherheitssystem soll verwendet werden?",
+            "en": "Which safety system should be used?",
+        },
+        "options": [
+            {"value": "safeword", "de": "Safeword", "en": "Safeword"},
+            {"value": "traffic_light", "de": "Ampelsystem", "en": "Traffic light"},
+        ],
+        "weights": {},
+    },
+    {
+        "id": "q10_safeword",
+        "type": "text",
+        "texts": {
+            "de": "Safeword (nur bei safety_mode=safeword)",
+            "en": "Safeword (only when safety_mode=safeword)",
+        },
+        "weights": {},
+    },
+    {
+        "id": "q10_traffic_green",
+        "type": "text",
+        "texts": {
+            "de": "Ampelsystem: Gruen bedeutet ...",
+            "en": "Traffic light: Green means ...",
+        },
+        "weights": {},
+    },
+    {
+        "id": "q10_traffic_yellow",
+        "type": "text",
+        "texts": {
+            "de": "Ampelsystem: Gelb bedeutet ...",
+            "en": "Traffic light: Yellow means ...",
+        },
+        "weights": {},
+    },
+    {
+        "id": "q10_traffic_red",
+        "type": "text",
+        "texts": {
+            "de": "Ampelsystem: Rot bedeutet ...",
+            "en": "Traffic light: Red means ...",
+        },
+        "weights": {},
+    },
+    {
+        "id": "q13_experience_level",
+        "type": "scale_10",
+        "texts": {
+            "de": "Wie erfahren bist du in diesem Kontext? (1=Anfaenger, 10=Experte)",
+            "en": "How experienced are you in this context? (1=beginner, 10=expert)",
+        },
         "weights": {},
     },
     {
@@ -391,6 +480,39 @@ def _psychogram_brief(psychogram: dict, policy: dict) -> str:
     return f"Top traits -> {top_text}. Tone={tone}, intensity={intensity}, confidence={psychogram['confidence']}."
 
 
+def _derive_experience_profile(level: int) -> str:
+    if level <= 4:
+        return "beginner"
+    if level <= 7:
+        return "intermediate"
+    return "expert"
+
+
+def _validate_safety_answers(answers: dict[str, int | str]) -> None:
+    # Backward compatible: only enforce required safety payload when mode is explicitly answered.
+    mode_raw = answers.get("q10_safety_mode")
+    if mode_raw is None:
+        return
+    mode = str(mode_raw).strip()
+    if mode not in {"safeword", "traffic_light"}:
+        raise HTTPException(status_code=400, detail="Invalid safety_mode value.")
+    if mode == "safeword":
+        safeword = str(answers.get("q10_safeword", "")).strip()
+        if not safeword:
+            raise HTTPException(
+                status_code=400, detail="q10_safeword is required when q10_safety_mode is safeword."
+            )
+        return
+    green = str(answers.get("q10_traffic_green", "")).strip()
+    yellow = str(answers.get("q10_traffic_yellow", "")).strip()
+    red = str(answers.get("q10_traffic_red", "")).strip()
+    if not green or not yellow or not red:
+        raise HTTPException(
+            status_code=400,
+            detail="q10_traffic_green, q10_traffic_yellow and q10_traffic_red are required when q10_safety_mode is traffic_light.",
+        )
+
+
 def _build_psychogram(setup_session: dict) -> dict:
     lang = _lang(setup_session["language"])
     answers = {entry["question_id"]: entry["value"] for entry in setup_session["answers"]}
@@ -430,11 +552,28 @@ def _build_psychogram(setup_session: dict) -> dict:
     autonomy_profile, autonomy_bias = _derive_autonomy_preferences(setup_session, traits)
     praise_timing = _derive_praise_timing(traits)
     instruction_style = answers.get("q8_instruction_style", "mixed")
+    escalation_mode = answers.get("q11_escalation_mode", "moderate")
+    grooming_preference = answers.get("q12_grooming_preference", "no_preference")
+    experience_level = int(answers.get("q13_experience_level", 5))
     taboo_text = answers.get("q7_taboo_text", "")
     open_context = answers.get("q9_open_context", "")
+    safety_mode = str(answers.get("q10_safety_mode", "safeword"))
+    safety_profile: dict[str, str | dict[str, str]] = {"mode": safety_mode}
+    if safety_mode == "safeword":
+        safeword = str(answers.get("q10_safeword", "")).strip()
+        if safeword:
+            safety_profile["safeword"] = safeword
+    elif safety_mode == "traffic_light":
+        traffic_words = {
+            "green": str(answers.get("q10_traffic_green", "")).strip(),
+            "yellow": str(answers.get("q10_traffic_yellow", "")).strip(),
+            "red": str(answers.get("q10_traffic_red", "")).strip(),
+        }
+        if all(traffic_words.values()):
+            safety_profile["traffic_light_words"] = traffic_words
 
     return {
-        "psychogram_version": "2.0.0",
+        "psychogram_version": "2.4.0",
         "source_questionnaire_version": QUESTIONNAIRE_VERSION,
         "source_model": "bdsmtest-inspired",
         "created_at": _now_iso(),
@@ -448,6 +587,13 @@ def _build_psychogram(setup_session: dict) -> dict:
             "autonomy_bias": autonomy_bias,
             "praise_timing": praise_timing,
             "instruction_style": instruction_style,
+            "escalation_mode": escalation_mode,
+            "experience_level": experience_level,
+            "experience_profile": _derive_experience_profile(experience_level),
+        },
+        "safety_profile": safety_profile,
+        "personal_preferences": {
+            "grooming_preference": grooming_preference,
         },
         "taboo_text": taboo_text,
         "open_context": open_context,
@@ -1189,6 +1335,7 @@ def submit_setup_answers(setup_session_id: str, payload: SetupAnswersRequest) ->
     answers_by_question = {entry["question_id"]: entry["value"] for entry in setup_session["answers"]}
     for answer in payload.answers:
         answers_by_question[answer.question_id] = answer.value
+    _validate_safety_answers(answers_by_question)
 
     setup_session["answers"] = [
         {"question_id": question_id, "value": value}
@@ -1325,6 +1472,7 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
         raise HTTPException(status_code=409, detail=_t(lang, "cannot_complete"))
     if len(setup_session["answers"]) < 6:
         raise HTTPException(status_code=400, detail=_t(lang, "not_enough_answers"))
+    _validate_safety_answers({entry["question_id"]: entry["value"] for entry in setup_session["answers"]})
 
     if setup_session["psychogram"] is None:
         setup_session["psychogram"] = _build_psychogram(setup_session)
