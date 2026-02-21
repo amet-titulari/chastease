@@ -50,15 +50,20 @@ curl http://127.0.0.1:5000/api/v1/health
 Setup-Prototyp:
 
 ```bash
-# 0) User erstellen/laden
-curl -X POST http://127.0.0.1:5000/api/v1/users \
+# 0) Register (Email + Passwort)
+curl -X POST http://127.0.0.1:5000/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"wearer@example.com","display_name":"Wearer"}'
+  -d '{"email":"wearer@example.com","display_name":"Wearer","password":"demo-pass-123"}'
+
+# oder Login
+curl -X POST http://127.0.0.1:5000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"wearer@example.com","password":"demo-pass-123"}'
 
 # 1) Setup starten (mit user_id)
 curl -X POST http://127.0.0.1:5000/api/v1/setup/sessions \
   -H "Content-Type: application/json" \
-  -d '{"user_id":"<user_id>","hard_stop_enabled":true,"autonomy_mode":"execute","language":"de","integrations":["ttlock"],"blocked_trigger_words":["public"],"forbidden_topics":["workplace"]}'
+  -d '{"user_id":"<user_id>","auth_token":"<auth_token>","hard_stop_enabled":true,"autonomy_mode":"execute","language":"de","integrations":["ttlock"],"blocked_trigger_words":["public"],"forbidden_topics":["workplace"]}'
 
 # 2) Antworten senden
 curl -X POST http://127.0.0.1:5000/api/v1/setup/sessions/<setup_session_id>/answers \

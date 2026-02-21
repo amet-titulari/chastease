@@ -9,11 +9,20 @@ def test_story_turn_requires_session_id(client):
 
 
 def test_story_turn_persistent_flow(client):
-    user_response = client.post("/api/v1/users", json={"email": "story@example.com", "display_name": "Story User"})
-    user_id = user_response.json()["user_id"]
+    auth_response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "story-user",
+            "email": "story-user@example.com",
+            "display_name": "Story User",
+            "password": "demo-pass-123",
+        },
+    )
+    user_id = auth_response.json()["user_id"]
+    auth_token = auth_response.json()["auth_token"]
     setup_response = client.post(
         "/api/v1/setup/sessions",
-        json={"user_id": user_id, "language": "en"},
+        json={"user_id": user_id, "auth_token": auth_token, "language": "en"},
     )
     setup_id = setup_response.json()["setup_session_id"]
 

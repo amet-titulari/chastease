@@ -15,6 +15,36 @@ def test_user_create_and_get(client):
     assert get_data["display_name"] == "User One"
 
 
+def test_auth_register_and_login(client):
+    register = client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "auth-user",
+            "email": "auth-user@example.com",
+            "display_name": "Auth User",
+            "password": "demo-pass-123",
+        },
+    )
+    assert register.status_code == 200
+    register_data = register.json()
+    assert register_data["auth_token"]
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "auth-user", "password": "demo-pass-123"},
+    )
+    assert login.status_code == 200
+    login_data = login.json()
+    assert login_data["user_id"] == register_data["user_id"]
+    assert login_data["auth_token"]
+
+    active = client.get(
+        f"/api/v1/sessions/active?user_id={register_data['user_id']}&auth_token={register_data['auth_token']}"
+    )
+    assert active.status_code == 200
+    assert active.json()["has_active_session"] is False
+
+
 def test_character_create_for_user(client):
     create_user = client.post(
         "/api/v1/users",

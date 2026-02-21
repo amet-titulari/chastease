@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import os
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -11,4 +12,6 @@ import uvicorn
 app = create_app()
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=5000)
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "5000"))
+    uvicorn.run(app, host=host, port=port)

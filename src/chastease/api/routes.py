@@ -1,5 +1,8 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 import json
+import hashlib
+import hmac
+import secrets
 from typing import Literal
 from uuid import uuid4
 
@@ -13,6 +16,7 @@ from chastease.repositories.setup_store import load_sessions, save_sessions
 from chastease.services.ai.base import StoryTurnContext
 
 api_router = APIRouter()
+auth_tokens: dict[str, str] = {}
 
 QUESTIONNAIRE_VERSION = "setup-q-v2.1"
 SUPPORTED_LANGUAGES = {"de", "en"}
@@ -159,12 +163,23 @@ class StoryTurnRequest(BaseModel):
 class SetupStartRequest(BaseModel):
     user_id: str = Field(min_length=1)
     character_id: str | None = None
+    auth_token: str = Field(min_length=8)
     hard_stop_enabled: bool = True
     autonomy_mode: Literal["execute", "suggest"] = "execute"
     integrations: list[Literal["ttlock", "chaster", "emlalock"]] = Field(default_factory=list)
     language: Literal["de", "en"] = "de"
     blocked_trigger_words: list[str] = Field(default_factory=list)
     forbidden_topics: list[str] = Field(default_factory=list)
+    contract_start_date: str | None = None
+    contract_end_date: str | None = None  # legacy fixed end date
+    contract_max_end_date: str | None = None
+    ai_controls_end_date: bool = True
+    max_penalty_per_day_minutes: int = Field(default=60, ge=0, le=1440)
+    max_penalty_per_week_minutes: int = Field(default=240, ge=0, le=10080)
+    opening_limit_period: Literal["day", "week", "month"] = "day"
+    max_openings_in_period: int = Field(default=1, ge=0, le=200)
+    max_openings_per_day: int | None = Field(default=None, ge=0, le=10)  # legacy alias
+    opening_window_minutes: int = Field(default=30, ge=1, le=240)
 
 
 class SetupAnswer(BaseModel):
@@ -194,6 +209,18 @@ class CharacterCreateRequest(BaseModel):
     hp: int = Field(default=100, ge=1, le=1000)
 
 
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=3)
+    email: str = Field(min_length=5)
+    display_name: str | None = None
+    password: str = Field(min_length=8)
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=3)
+    password: str = Field(min_length=8)
+
+
 def _lang(value: str) -> str:
     return value if value in SUPPORTED_LANGUAGES else "de"
 
@@ -204,6 +231,54 @@ def _t(lang: str, key: str) -> str:
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _resolve_contract_dates(
+    start_raw: str | None, end_raw: str | None, max_end_raw: str | None
+) -> tuple[str, str | None, str]:
+    today = datetime.now(UTC).date()
+    default_start = today
+    default_max_end = today + timedelta(days=30)
+
+    try:
+        start_date = date.fromisoformat(start_raw) if start_raw else default_start
+        max_end_date = date.fromisoformat(max_end_raw) if max_end_raw else default_max_end
+        end_date = date.fromisoformat(end_raw) if end_raw else None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.") from exc
+
+    if max_end_date < start_date:
+        raise HTTPException(status_code=400, detail="contract_max_end_date must be on or after contract_start_date.")
+    if end_date is not None:
+        if end_date < start_date:
+            raise HTTPException(status_code=400, detail="contract_end_date must be on or after contract_start_date.")
+        if end_date > max_end_date:
+            raise HTTPException(status_code=400, detail="contract_end_date must not be after contract_max_end_date.")
+    return start_date.isoformat(), (end_date.isoformat() if end_date else None), max_end_date.isoformat()
+
+
+def _normalize_email(raw: str) -> str:
+    email = raw.strip().lower()
+    if "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email format.")
+    local, domain = email.split("@", 1)
+    if not local or "." not in domain:
+        raise HTTPException(status_code=400, detail="Invalid email format.")
+    return email
+
+
+def _hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000).hex()
+    return f"{salt}${digest}"
+
+
+def _verify_password(password: str, encoded: str) -> bool:
+    if "$" not in encoded:
+        return False
+    salt, expected = encoded.split("$", 1)
+    actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000).hex()
+    return hmac.compare_digest(actual, expected)
 
 
 def _localized_questions(language: str) -> list[dict]:
@@ -374,6 +449,8 @@ def _derive_allowed_categories(traits: dict) -> list[str]:
 
 
 def _conservative_policy_defaults(setup_session: dict) -> dict:
+    day_cap = setup_session.get("max_penalty_per_day_minutes", 60)
+    week_cap = setup_session.get("max_penalty_per_week_minutes", 240)
     return {
         "applied": True,
         "reason": "low_confidence",
@@ -381,8 +458,8 @@ def _conservative_policy_defaults(setup_session: dict) -> dict:
         "max_intensity_level": 2,
         "autonomy_profile": "suggest_first",
         "autonomy_bias": 80,
-        "max_penalty_per_day_minutes": 20,
-        "max_penalty_per_week_minutes": 90,
+        "max_penalty_per_day_minutes": 0 if day_cap == 0 else min(day_cap, 20),
+        "max_penalty_per_week_minutes": 0 if week_cap == 0 else min(week_cap, 90),
         "hard_stop_enabled": setup_session["hard_stop_enabled"],
     }
 
@@ -395,6 +472,10 @@ def _build_policy(setup_session: dict, psychogram: dict) -> dict:
     conservative = _conservative_policy_defaults(setup_session) if low_confidence else {"applied": False}
     default_limits = conservative if low_confidence else {}
 
+    max_penalty_day = setup_session.get("max_penalty_per_day_minutes", 60)
+    max_penalty_week = setup_session.get("max_penalty_per_week_minutes", 240)
+    opening_period = setup_session.get("opening_limit_period", "day")
+    max_openings = setup_session.get("max_openings_in_period", setup_session.get("max_openings_per_day", 1))
     return {
         "policy_version": "1.1.0",
         "hard_stop_enabled": setup_session["hard_stop_enabled"],
@@ -404,9 +485,23 @@ def _build_policy(setup_session: dict, psychogram: dict) -> dict:
             "max_intensity_level": default_limits.get(
                 "max_intensity_level", max(1, min(5, round(traits["strictness_affinity"] / 20)))
             ),
-            "max_penalty_per_day_minutes": default_limits.get("max_penalty_per_day_minutes", 60),
-            "max_penalty_per_week_minutes": default_limits.get("max_penalty_per_week_minutes", 240),
+            "max_penalty_per_day_minutes": default_limits.get(
+                "max_penalty_per_day_minutes", max_penalty_day
+            ),
+            "max_penalty_per_week_minutes": default_limits.get(
+                "max_penalty_per_week_minutes", max_penalty_week
+            ),
             "allowed_challenge_categories": _derive_allowed_categories(traits),
+            "max_openings_per_day": max_openings if opening_period == "day" else 0,
+            "opening_limit_period": opening_period,
+            "max_openings_in_period": max_openings,
+            "opening_window_minutes": setup_session.get("opening_window_minutes", 30),
+        },
+        "contract": {
+            "start_date": setup_session.get("contract_start_date"),
+            "end_date": setup_session.get("contract_end_date"),
+            "max_end_date": setup_session.get("contract_max_end_date", setup_session.get("contract_end_date")),
+            "ai_controls_end_date": setup_session.get("ai_controls_end_date", False),
         },
         "interaction_profile": {
             "preferred_tone": "balanced"
@@ -450,6 +545,99 @@ def _get_db_session(request: Request):
     return request.app.state.db_session_factory()
 
 
+def _serialize_chastity_session(session: ChastitySession) -> dict:
+    return {
+        "session_id": session.id,
+        "user_id": session.user_id,
+        "character_id": session.character_id,
+        "status": session.status,
+        "language": session.language,
+        "policy": json.loads(session.policy_snapshot_json),
+        "psychogram": json.loads(session.psychogram_snapshot_json),
+        "created_at": session.created_at.isoformat(),
+        "updated_at": session.updated_at.isoformat(),
+    }
+
+
+@api_router.post("/auth/register")
+def register(payload: RegisterRequest, request: Request) -> dict:
+    db = _get_db_session(request)
+    try:
+        username = payload.username.strip()
+        if not username:
+            raise HTTPException(status_code=400, detail="Username is required.")
+        email = _normalize_email(payload.email)
+        display_name = username
+        existing_email = db.scalar(select(User).where(User.email == email))
+        if existing_email is not None:
+            raise HTTPException(status_code=409, detail="Email already registered.")
+        existing_username = db.scalar(select(User).where(func.lower(User.display_name) == username.lower()))
+        if existing_username is not None:
+            raise HTTPException(status_code=409, detail="Username already registered.")
+
+        user = User(
+            id=str(uuid4()),
+            email=email,
+            display_name=display_name,
+            password_hash=_hash_password(payload.password),
+            created_at=datetime.now(UTC),
+        )
+        db.add(user)
+        db.commit()
+
+        token = secrets.token_urlsafe(24)
+        auth_tokens[token] = user.id
+        return {
+            "user_id": user.id,
+            "username": username,
+            "email": user.email,
+            "display_name": user.display_name,
+            "auth_token": token,
+        }
+    finally:
+        db.close()
+
+
+@api_router.post("/auth/login")
+def login(payload: LoginRequest, request: Request) -> dict:
+    db = _get_db_session(request)
+    try:
+        username = payload.username.strip()
+        if not username:
+            raise HTTPException(status_code=400, detail="Username is required.")
+        user = db.scalar(select(User).where(func.lower(User.display_name) == username.lower()))
+        if user is None or not _verify_password(payload.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid credentials.")
+
+        token = secrets.token_urlsafe(24)
+        auth_tokens[token] = user.id
+        return {
+            "user_id": user.id,
+            "username": user.display_name,
+            "email": user.email,
+            "display_name": user.display_name,
+            "auth_token": token,
+        }
+    finally:
+        db.close()
+
+
+@api_router.get("/auth/me")
+def auth_me(auth_token: str, request: Request) -> dict:
+    user_id = auth_tokens.get(auth_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token.")
+
+    db = _get_db_session(request)
+    try:
+        user = db.get(User, user_id)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid auth token.")
+        return {"user_id": user.id, "email": user.email, "display_name": user.display_name}
+    finally:
+        db.close()
+
+
 @api_router.post("/users")
 def create_user(payload: UserCreateRequest, request: Request) -> dict:
     db = _get_db_session(request)
@@ -467,6 +655,7 @@ def create_user(payload: UserCreateRequest, request: Request) -> dict:
             id=str(uuid4()),
             email=payload.email.strip().lower(),
             display_name=payload.display_name.strip(),
+            password_hash="legacy_no_login",
             created_at=datetime.now(UTC),
         )
         db.add(user)
@@ -612,8 +801,19 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
     setup_session_id = str(uuid4())
     now = _now_iso()
     lang = _lang(payload.language)
+    contract_start_date, contract_end_date, contract_max_end_date = _resolve_contract_dates(
+        payload.contract_start_date, payload.contract_end_date, payload.contract_max_end_date
+    )
+    opening_limit_period = payload.opening_limit_period
+    max_openings_in_period = payload.max_openings_in_period
+    if payload.max_openings_per_day is not None:
+        opening_limit_period = "day"
+        max_openings_in_period = payload.max_openings_per_day
     db = _get_db_session(request)
     try:
+        token_user_id = auth_tokens.get(payload.auth_token)
+        if token_user_id != payload.user_id:
+            raise HTTPException(status_code=401, detail="Invalid auth token for user.")
         user = db.get(User, payload.user_id)
         if user is None:
             raise HTTPException(status_code=404, detail="User not found.")
@@ -621,6 +821,14 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
             character = db.get(Character, payload.character_id)
             if character is None or character.user_id != payload.user_id:
                 raise HTTPException(status_code=400, detail="Invalid character_id for user.")
+        active_session = db.scalar(
+            select(ChastitySession)
+            .where(ChastitySession.user_id == payload.user_id)
+            .where(ChastitySession.status == "active")
+            .order_by(ChastitySession.created_at.desc())
+        )
+        if active_session is not None:
+            raise HTTPException(status_code=409, detail="Active session already exists.")
     finally:
         db.close()
 
@@ -636,6 +844,16 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
         "language": lang,
         "blocked_trigger_words": payload.blocked_trigger_words,
         "forbidden_topics": payload.forbidden_topics,
+        "contract_start_date": contract_start_date,
+        "contract_end_date": contract_end_date,
+        "contract_max_end_date": contract_max_end_date,
+        "ai_controls_end_date": payload.ai_controls_end_date,
+        "max_penalty_per_day_minutes": payload.max_penalty_per_day_minutes,
+        "max_penalty_per_week_minutes": payload.max_penalty_per_week_minutes,
+        "opening_limit_period": opening_limit_period,
+        "max_openings_in_period": max_openings_in_period,
+        "max_openings_per_day": max_openings_in_period if opening_limit_period == "day" else 0,
+        "opening_window_minutes": payload.opening_window_minutes,
         "questionnaire_version": QUESTIONNAIRE_VERSION,
         "answers": [],
         "psychogram": None,
@@ -652,6 +870,17 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
         "status": "setup_in_progress",
         "questionnaire_version": QUESTIONNAIRE_VERSION,
         "language": lang,
+        "contract": {
+            "start_date": contract_start_date,
+            "end_date": contract_end_date,
+            "max_end_date": contract_max_end_date,
+            "ai_controls_end_date": payload.ai_controls_end_date,
+            "max_penalty_per_day_minutes": payload.max_penalty_per_day_minutes,
+            "max_penalty_per_week_minutes": payload.max_penalty_per_week_minutes,
+            "opening_limit_period": opening_limit_period,
+            "max_openings_in_period": max_openings_in_period,
+            "opening_window_minutes": payload.opening_window_minutes,
+        },
         "questions": _localized_questions(lang),
     }
 
@@ -706,6 +935,32 @@ def get_setup_session(setup_session_id: str) -> dict:
     return _get_session_or_404(setup_session_id)
 
 
+@api_router.get("/sessions/active")
+def get_active_chastity_session(user_id: str, auth_token: str, request: Request) -> dict:
+    token_user_id = auth_tokens.get(auth_token)
+    if token_user_id != user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token for user.")
+
+    db = _get_db_session(request)
+    try:
+        user = db.get(User, user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        session = db.scalar(
+            select(ChastitySession)
+            .where(ChastitySession.user_id == user_id)
+            .where(ChastitySession.status == "active")
+            .order_by(ChastitySession.created_at.desc())
+        )
+        if session is None:
+            return {"has_active_session": False}
+
+        return {"has_active_session": True, "chastity_session": _serialize_chastity_session(session)}
+    finally:
+        db.close()
+
+
 @api_router.get("/sessions/{session_id}")
 def get_chastity_session(session_id: str, request: Request) -> dict:
     db = _get_db_session(request)
@@ -713,17 +968,7 @@ def get_chastity_session(session_id: str, request: Request) -> dict:
         session = db.get(ChastitySession, session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
-        return {
-            "session_id": session.id,
-            "user_id": session.user_id,
-            "character_id": session.character_id,
-            "status": session.status,
-            "language": session.language,
-            "policy": json.loads(session.policy_snapshot_json),
-            "psychogram": json.loads(session.psychogram_snapshot_json),
-            "created_at": session.created_at.isoformat(),
-            "updated_at": session.updated_at.isoformat(),
-        }
+        return _serialize_chastity_session(session)
     finally:
         db.close()
 
