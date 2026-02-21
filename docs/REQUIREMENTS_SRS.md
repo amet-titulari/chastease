@@ -26,9 +26,10 @@ Zustaende:
 Ablauf:
 1. Wearer startet neue Session.
 2. Setup-Agent stellt Konfigurationsfragen.
-3. System erzeugt verbindliche Session-Policy.
-4. Session wechselt auf `active`.
-5. Keyholder (KI) fuehrt Chat + Aktionen policy-konform aus.
+3. Setup-Agent erhebt zusaetzlich psychologische Neigungen (consent-basiert) und erzeugt ein Psychogramm.
+4. System erzeugt verbindliche Session-Policy inkl. Psychogramm-Snapshot.
+5. Session wechselt auf `active`.
+6. Keyholder (KI) fuehrt Chat + Aktionen policy-konform aus.
 
 ## 3. Setup-Agent und Session-Policy
 
@@ -40,6 +41,11 @@ Der Setup-Agent muss folgende Konfiguration erheben:
   - `execute` (default) oder `suggest`
 - KI-Charakterprofil:
   - Wesenszuege/Tonfall/Strengegrad/Interaktionsstil
+- Psychologischer Fragebogen:
+  - BDSM-test-aehnlicher, consent-basierter Fragenkatalog
+  - Ermittlung von Vorlieben, Grenzen, Triggern, Belastungsrahmen
+  - Erstellung eines kompakten Psychogramms als Kontextprofil fuer den KI-Keyholder
+  - Ziel: KI versteht Vorlieben/Abneigungen besser und gestaltet Interaktion/Verlauf interessanter
 - Sitzungsgrenzen:
   - Zeitrahmen, Straff- und Gutschriftgrenzen, Oeffnungsregeln
 - Bildkontrolle:
@@ -49,6 +55,12 @@ Der Setup-Agent muss folgende Konfiguration erheben:
   - Integrationen sind benutzerwaehlbar und nicht zwingend
   - mehrere Integrationen duerfen parallel aktiv sein (z. B. Chaster und Emlalock gleichzeitig)
   - Setup-Agent erstellt Sessions bei Chaster/Emlalock soweit durch API unterstuetzt automatisch
+
+Anforderung an Datennutzung:
+- Fragebogenantworten und Psychogramm duerfen ausschliesslich fuer Sessionsteuerung, Sicherheit und KI-Profilschaerfung verwendet werden.
+- Das Psychogramm dient als Interaktionsprofil, nicht als klinische Diagnostik.
+- Schema und Ableitungsregeln:
+  - `/Users/swisi/Repos/privat/chastease/docs/architecture/PSYCHOGRAM_SCHEMA.md`
 
 ## 4. Aktionsmodell (Keyholder)
 

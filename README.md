@@ -7,7 +7,7 @@ Dieses Repository ist die gemeinsame Basis fuer Implementierung, Planung und Dok
 
 - Python-basierte API fuer ein modulares RPG
 - KI-gestuetzter Story/Game-Master-Loop
-- Persistente Spielstaende und Weltzustaende
+- Persistente Spielstaende und Sitzungszustaende
 - Saubere Architektur mit klaren Domänenmodulen
 
 ## Tech-Stack (Start)

@@ -18,7 +18,7 @@ Ein spielbarer vertikaler Slice:
 
 2. Persistenz
 - SQLAlchemy integrieren
-- Modelle: User, Character, GameSession, Turn
+- Modelle: User, Character, ChastitySession, Turn
 - Migrationen mit Alembic
 
 3. AI-Integration
@@ -26,6 +26,8 @@ Ein spielbarer vertikaler Slice:
 - Response-Schema validieren
 - Fehlerbehandlung/Timeout/Retry
 - Setup-Agent + Session-Policy Builder
+- Setup-Fragebogen fuer Neigungen (BDSM-test-aehnlich, consent-basiert)
+- Psychogramm-Erzeugung zur Scharfstellung des KI-Charakterprofils
 - Action-Gateway (`execute` und `suggest`)
 - TTLock 2-Phasenfreigabe fuer Oeffnen/Schliessen
 - Bildpruefungs-Service (automatisiert)
@@ -39,11 +41,7 @@ Ein spielbarer vertikaler Slice:
 5. Frontend-Basis
 - einfacher Client fuer Login/Session/Turn-Loop
 
-6. Erweiterungen (nach MVP)
-- Domain `world` aktivieren
-- Domain `combat` aktivieren
-
-7. Betrieb/Skalierung
+6. Betrieb/Skalierung
 - Docker-Stack definieren
 - horizontale Skalierung der API-Instanzen
 - Monitoring + Backup-Strategie

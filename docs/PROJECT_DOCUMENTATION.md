@@ -22,6 +22,7 @@ Das System soll modular, testbar und langfristig erweiterbar sein.
 - `/Users/swisi/Repos/privat/chastease/docs/architecture/C4_CONTAINER.md`
 - `/Users/swisi/Repos/privat/chastease/docs/architecture/C4_COMPONENT_BACKEND.md`
 - `/Users/swisi/Repos/privat/chastease/docs/architecture/ACTION_MATRIX.md`
+- `/Users/swisi/Repos/privat/chastease/docs/architecture/PSYCHOGRAM_SCHEMA.md`
 - `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_DOMAIN_MODEL.md`
 - `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_SEQUENCE_STORY_TURN.md`
 

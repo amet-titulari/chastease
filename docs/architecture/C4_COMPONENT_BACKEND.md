@@ -89,11 +89,6 @@ flowchart LR
 - `shared/`:
   - moduluebergreifende DTOs, Events, Fehlercodes, Audit und Memory-Protokoll
 
-## Scope-Hinweis
-
-- `domains/world/` und `domains/combat/` sind derzeit bewusst nicht im aktiven MVP-Scope.
-- Beide Module werden als spaetere Erweiterung eingeplant.
-
 ## Wichtige Architekturregeln
 
 - KI-Interaktion laeuft ausschliesslich ueber `services/ai/`.

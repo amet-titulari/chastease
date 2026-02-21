@@ -7,7 +7,7 @@ flowchart TB
     Player["Spieler:in"] --> Web["Web Client (SPA)"]
     Web --> Api["Python API (FastAPI preferred)"]
 
-    Api --> Domain["Domain Layer\nCharacters, World, Quests, Combat, Sessions"]
+    Api --> Domain["Domain Layer\nCharacters, Quests, Sessions"]
     Api --> AiService["AI Service Adapter"]
     Api --> Repo["Repository Layer"]
 
@@ -29,6 +29,6 @@ flowchart TB
 - Repository Layer:
   - Datenzugriff und Transaktionsgrenzen
 - PostgreSQL:
-  - Persistenz von Usern, Charakteren, Sessions, Turns, World State
+  - Persistenz von Usern, Charakteren, Sessions und Turns
 - Job Queue (spaeter):
   - asynchrone KI- oder Content-Generierungsjobs

@@ -2,6 +2,10 @@
 
 ## Prioritaet P0
 
+- [ ] Setup-/Initialisierungsprozess (Fragebogen -> Policy-Entwurf -> Bestaetigung -> aktive Session)
+- [ ] Psychologischer Neigungsfragebogen im Setup (BDSM-test-aehnlich, consent-basiert)
+- [ ] Psychogramm-Generierung aus Setup-Antworten zur KI-Profilschaerfung
+- [ ] Policy-Versionierung inkl. Setup-Snapshot pro Session
 - [ ] Datenbankanbindung mit SQLAlchemy
 - [ ] Session- und Charaktermodelle
 - [ ] Persistenter Story-Turn-Flow
@@ -17,8 +21,3 @@
 
 - [ ] Questgenerator und Questfortschritt
 - [ ] Monitoring (Sentry/OpenTelemetry)
-
-## Prioritaet P3 (Spaeter)
-
-- [ ] Domain `world` (Orte, Weltflags, NPC-Zustaende)
-- [ ] Domain `combat` (rundenbasiertes Kampfsystem)

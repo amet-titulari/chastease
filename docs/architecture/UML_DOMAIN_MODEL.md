@@ -20,7 +20,7 @@ classDiagram
       +int hp
     }
 
-    class GameSession {
+    class ChastitySession {
       +UUID id
       +UUID user_id
       +UUID character_id
@@ -41,9 +41,9 @@ classDiagram
     }
 
     User "1" --> "0..*" Character
-    User "1" --> "0..*" GameSession
-    Character "1" --> "0..*" GameSession
-    GameSession "1" --> "0..*" Turn
+    User "1" --> "0..*" ChastitySession
+    Character "1" --> "0..*" ChastitySession
+    ChastitySession "1" --> "0..*" Turn
 ```
 
 ## Modellregeln (MVP)

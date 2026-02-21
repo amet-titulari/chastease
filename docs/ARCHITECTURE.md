@@ -32,10 +32,6 @@ Detaildiagramme liegen unter `/Users/swisi/Repos/privat/chastease/docs/architect
 *   `repositories/`
 *   `shared/`
 
-Aktueller Scope:
-
-*   `world` und `combat` sind vorerst aus dem MVP ausgeschlossen und werden spaeter als Erweiterungsmodule eingefuehrt.
-
 ## Layering-Regeln
 
 *   API Layer darf Domain Use Cases aufrufen, aber keine SQL-Details enthalten.
@@ -77,6 +73,8 @@ Aktueller Scope:
     *   `/Users/swisi/Repos/privat/chastease/docs/architecture/C4_COMPONENT_BACKEND.md`
 *   Action Matrix:
     *   `/Users/swisi/Repos/privat/chastease/docs/architecture/ACTION_MATRIX.md`
+*   Psychogramm Schema:
+    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/PSYCHOGRAM_SCHEMA.md`
 *   UML Domain Model:
     *   `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_DOMAIN_MODEL.md`
 *   UML Story Turn Sequence:

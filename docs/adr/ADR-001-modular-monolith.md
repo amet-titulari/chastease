@@ -5,7 +5,7 @@
 
 ## Kontext
 
-Chastease soll schnell einen belastbaren MVP liefern, gleichzeitig aber spaeter um Features wie Quests, Combat, Admin-Tools und asynchrone KI-Prozesse wachsen.
+Chastease soll schnell einen belastbaren MVP liefern und gleichzeitig um Features wie Quests, Admin-Tools und asynchrone KI-Prozesse wachsen.
 Ein zu frueher Microservice-Schnitt wuerde aktuell unnoetigen Betriebsaufwand erzeugen.
 
 ## Entscheidung
