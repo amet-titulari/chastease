@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.4 - 2026-02-21
+
+- Psychogramm-Feedback umgesetzt: dynamische Updates, `update_reason`, `autonomy_profile`, `autonomy_bias`, `praise_timing`.
+- Sicherheits- und Filterfelder erweitert (`blocked_trigger_words`, `forbidden_topics`, Challenge-Kategorien).
+- Konservative Defaults bei niedriger Psychogramm-Confidence explizit implementiert.
+- Fragebogen auf Session-Setup v2.1 (8 Hauptfragen + offene Abschlussfrage) umgestellt.
+- Kurzauswertung `psychogram_brief` in API-Responses und Demo-UI integriert.
+
 ## 0.0.3 - 2026-02-21
 
 - Setup-Prototyp funktional ausgebaut (Start, Fragebogen, Preview, Abschluss).

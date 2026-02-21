@@ -44,8 +44,10 @@ Der Setup-Agent muss folgende Konfiguration erheben:
 - Psychologischer Fragebogen:
   - BDSM-test-aehnlicher, consent-basierter Fragenkatalog
   - Ermittlung von Vorlieben, Grenzen, Triggern, Belastungsrahmen
+  - Umfang fuer MVP: kurzer Einstiegsfragebogen mit ca. 8-12 Fragen (Skala 1-10)
   - Erstellung eines kompakten Psychogramms als Kontextprofil fuer den KI-Keyholder
   - Ziel: KI versteht Vorlieben/Abneigungen besser und gestaltet Interaktion/Verlauf interessanter
+  - Psychogramm ist dynamisch aktualisierbar (`updated_at`, `update_reason`)
 - Sitzungsgrenzen:
   - Zeitrahmen, Straff- und Gutschriftgrenzen, Oeffnungsregeln
 - Bildkontrolle:
@@ -61,6 +63,8 @@ Anforderung an Datennutzung:
 - Das Psychogramm dient als Interaktionsprofil, nicht als klinische Diagnostik.
 - Schema und Ableitungsregeln:
   - `/Users/swisi/Repos/privat/chastease/docs/architecture/PSYCHOGRAM_SCHEMA.md`
+- Trigger-/Filter-Anforderung:
+  - `blocked_trigger_words` und `forbidden_topics` muessen in Policy-Sicherheitsfilter einfliessen.
 
 ## 4. Aktionsmodell (Keyholder)
 
@@ -81,6 +85,12 @@ Regeln:
 - Im Modus `suggest` werden Aktionen vorgeschlagen, nicht sofort ausgefuehrt.
 - Phase 2 der TTLock-Freigabe bestaetigt der Wearer selbst.
 - Missachtungen von Oeffnungsdauern werden als Policy-Verstoss im Audit protokolliert und duerfen Folgeaktionen ausloesen.
+- Bei `confidence < 0.5` muessen konservative Defaults aktiv werden:
+  - `tone=balanced`
+  - `max_intensity_level=2`
+  - `autonomy_profile=suggest_first`
+  - `autonomy_bias=80`
+  - `max_penalty_per_day_minutes=20`
 
 ## 5. Bildverarbeitung
 

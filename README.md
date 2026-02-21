@@ -47,15 +47,20 @@ Setup-Prototyp:
 # 1) Setup starten
 curl -X POST http://127.0.0.1:5000/api/v1/setup/sessions \
   -H "Content-Type: application/json" \
-  -d '{"wearer_id":"wearer-1","hard_stop_enabled":true,"autonomy_mode":"execute","language":"de","integrations":["ttlock"]}'
+  -d '{"wearer_id":"wearer-1","hard_stop_enabled":true,"autonomy_mode":"execute","language":"de","integrations":["ttlock"],"blocked_trigger_words":["public"],"forbidden_topics":["workplace"]}'
 
 # 2) Antworten senden
 curl -X POST http://127.0.0.1:5000/api/v1/setup/sessions/<setup_session_id>/answers \
   -H "Content-Type: application/json" \
-  -d '{"answers":[{"question_id":"q_rule_structure","value":8},{"question_id":"q_strict_guidance","value":7},{"question_id":"q_positive_reinforcement","value":5},{"question_id":"q_control_checkins","value":9},{"question_id":"q_challenge_tasks","value":8},{"question_id":"q_variety","value":6}]}'
+  -d '{"answers":[{"question_id":"q1_rule_structure","value":8},{"question_id":"q2_strictness_authority","value":7},{"question_id":"q3_control_need","value":8},{"question_id":"q4_praise_importance","value":5},{"question_id":"q5_novelty_challenge","value":8},{"question_id":"q6_intensity_1_5","value":4},{"question_id":"q8_instruction_style","value":"mixed"},{"question_id":"q9_open_context","value":"Heute nur kurze Session."}]}'
 
 # 3) Setup abschliessen (erstellt aktive ChastitySession)
 curl -X POST http://127.0.0.1:5000/api/v1/setup/sessions/<setup_session_id>/complete
+
+# 4) Psychogramm nachkalibrieren
+curl -X PATCH http://127.0.0.1:5000/api/v1/setup/sessions/<setup_session_id>/psychogram \
+  -H "Content-Type: application/json" \
+  -d '{"update_reason":"mid_session_calibration","trait_overrides":{"strictness_affinity":85}}'
 ```
 
 Browser-Demo:
