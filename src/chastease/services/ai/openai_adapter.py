@@ -10,18 +10,59 @@ class OpenAIAdapter:
         self.model = model
         self.api_key = api_key
 
+    @staticmethod
+    def _parse_psychogram_summary(summary: str) -> dict[str, str]:
+        parsed: dict[str, str] = {}
+        for part in summary.split(";"):
+            piece = part.strip()
+            if not piece or "=" not in piece:
+                continue
+            key, value = piece.split("=", 1)
+            parsed[key.strip()] = value.strip()
+        return parsed
+
+    @staticmethod
+    def _is_analysis_request(action: str, language: str) -> bool:
+        text = action.lower()
+        if language == "en":
+            return any(token in text for token in ["analy", "profile", "psychogram"])
+        return any(token in text for token in ["analys", "psychogram", "profil"])
+
+    def _analysis_fallback(self, context: StoryTurnContext) -> str:
+        profile = self._parse_psychogram_summary(context.psychogram_summary or "")
+        escalation = profile.get("escalation_mode", "moderate")
+        experience = profile.get("experience", "5/intermediate")
+        safety = profile.get("safety", "mode=safeword")
+        intensity = profile.get("intensity", "2")
+        instruction_style = profile.get("instruction_style", "mixed")
+
+        if context.language == "en":
+            return (
+                "Psychogram analysis: I will lead with clear structure, controlled pacing and consistent boundaries. "
+                f"Current steering: escalation={escalation}, intensity={intensity}, instruction style={instruction_style}. "
+                f"Experience calibration={experience}; safety baseline={safety}. "
+                "This means clear guidance, gradual pressure and strict respect for your safety constraints."
+            )
+        return (
+            "Psychogramm-Analyse: Ich fuehre mit klarer Struktur, kontrolliertem Tempo und konsistenten Grenzen. "
+            f"Aktuelle Steuerung: escalation={escalation}, intensity={intensity}, instruction_style={instruction_style}. "
+            f"Erfahrungs-Kalibrierung={experience}; Sicherheitsbasis={safety}. "
+            "Das bedeutet klare Anweisungen, schrittweise Steigerung und konsequente Einhaltung deiner Safety-Regeln."
+        )
+
     def generate_narration(self, context: StoryTurnContext) -> str:
+        if self._is_analysis_request(context.action, context.language):
+            return self._analysis_fallback(context)
+
         if not self.api_key:
             if context.language == "en":
                 return (
-                    f"Keyholder notes your action '{context.action}'. "
-                    f"Based on your profile ({context.psychogram_summary}), "
-                    "the session continues with measured control."
+                    "Keyholder acknowledges your input. "
+                    "Session control remains structured, calm and policy-bound."
                 )
             return (
-                f"Keyholder registriert deine Aktion '{context.action}'. "
-                f"Basierend auf deinem Profil ({context.psychogram_summary}) "
-                "wird die Session kontrolliert fortgesetzt."
+                "Keyholder hat deine Eingabe registriert. "
+                "Die Sitzungssteuerung bleibt strukturiert, ruhig und policy-konform."
             )
 
         # Placeholder for real API call path.
@@ -59,7 +100,8 @@ class OpenAIAdapter:
             f"Psychogram summary: {context.psychogram_summary}\n"
             f"Wearer action: {context.action}\n"
             f"Language: {context.language}\n"
-            "Respond as the keyholder with concise narrative and next guidance."
+            "Respond as the keyholder with concise narrative and next guidance. "
+            "Do not echo raw machine-readable key/value profile fields."
         )
 
         headers = {

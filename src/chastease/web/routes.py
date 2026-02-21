@@ -64,6 +64,7 @@ def landing_page() -> str:
       <div class="actions">
         <a class="btn btn-primary" href="/app?mode=login">Login</a>
         <a class="btn btn-secondary" href="/app?mode=register">Register</a>
+        <a class="btn btn-secondary" href="/chat">AI Chat</a>
       </div>
     </section>
   </div>
@@ -118,6 +119,7 @@ def app_shell(request: Request) -> str:
     label { display: block; font-size: 13px; color: #a9b9da; margin-bottom: 4px; }
     input, select, button, textarea { border-radius: 8px; border: 1px solid #2b3d63; background: #0f1930; color: #e8eefc; padding: 8px 10px; }
     input[type=range] { width: 100%; padding: 0; }
+    .slider-ends { display: flex; justify-content: space-between; gap: 8px; }
     button { background: #2d8cff; border: 0; cursor: pointer; }
     button:hover { background: #4aa0ff; }
     button.ghost { background: transparent; border: 1px solid #2b3d63; }
@@ -171,6 +173,7 @@ def app_shell(request: Request) -> str:
     <div class="topbar">
       <p class="small"><a id="landingLink" href="/">Zur Landingpage</a></p>
       <div class="topbar-actions">
+        <a class="btn btn-secondary" href="/chat" style="padding:6px 10px;">AI Chat</a>
         <button id="homeBtn" class="ghost hidden" onclick="showHomeView()">Home</button>
         <button id="dashboardToggleBtn" class="ghost hidden" onclick="toggleDashboard()">Dashboard</button>
         <button id="logoutTopBtn" class="ghost hidden" onclick="logoutUser()">Logout</button>
@@ -232,6 +235,11 @@ def app_shell(request: Request) -> str:
           <div class="acc-body">
             <p id="psychogramHint" class="small">Start Setup Session first to load the questionnaire.</p>
             <div id="questionGrid" class="qgrid"></div>
+            <div id="trafficLightInfo" class="small hidden" style="margin:8px 0 12px 0;">
+              <div><strong>GRUEN</strong> = Alle OK, Steigerung moeglich / gewuenscht</div>
+              <div><strong>GELB</strong> = Ich komme langsam an meine Grenze</div>
+              <div><strong>ROT</strong> = Die Grenze wurde uebertreten! Bremsen um Abbruch zu vermeiden</div>
+            </div>
             <button id="submitAnswersBtn" class="hidden" onclick="submitAnswers()">Submit Answers</button>
             <p id="psychogramSaveInfo" class="small hidden"></p>
           </div>
@@ -392,6 +400,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         submit_answers: "Antworten senden",
         psychogram_saved: "Psychogramm erfolgreich gespeichert.",
         psychogram_save_failed: "Speichern fehlgeschlagen.",
+        traffic_green_line: "Alle OK, Steigerung moeglich / gewuenscht",
+        traffic_yellow_line: "Ich komme langsam an meine Grenze",
+        traffic_red_line: "Die Grenze wurde uebertreten! Bremsen um Abbruch zu vermeiden",
         provider: "Provider",
         llm_api_url: "LLM API URL",
         llm_api_key: "LLM API Key",
@@ -486,6 +497,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         submit_answers: "Submit Answers",
         psychogram_saved: "Psychogram saved successfully.",
         psychogram_save_failed: "Saving failed.",
+        traffic_green_line: "All OK, escalation possible / desired",
+        traffic_yellow_line: "I am slowly reaching my limit",
+        traffic_red_line: "Limit exceeded! Slow down to avoid abort",
         provider: "Provider",
         llm_api_url: "LLM API URL",
         llm_api_key: "LLM API Key",
@@ -698,12 +712,15 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         const wrap = document.createElement("div");
         wrap.className = "q-item";
         wrap.dataset.questionId = q.question_id;
-        if (q.type === "scale_10" || q.type === "scale_5") {
-          const mid = q.type === "scale_5" ? 3 : 5;
+        if (q.type === "scale_100" || q.type === "scale_10" || q.type === "scale_5") {
+          const min = Number(q.scale_min || (q.type === "scale_5" ? 1 : 1));
+          const max = Number(q.scale_max || (q.type === "scale_5" ? 5 : 10));
+          const mid = Math.round((min + max) / 2);
+          const left = q.scale_left || q.scale_hint || "";
+          const right = q.scale_right || "";
           wrap.innerHTML = `<label>${q.text} (${q.question_id})</label>
-            <input id="q_${q.question_id}" type="range" min="${q.scale_min}" max="${q.scale_max}" step="1" value="${mid}" oninput="document.getElementById('v_${q.question_id}').textContent=this.value" />
-            <div class="small">${q.scale_hint || ""}</div>
-            <div class="small">${tr("value")}: <strong id="v_${q.question_id}">${mid}</strong></div>`;
+            <input id="q_${q.question_id}" type="range" min="${min}" max="${max}" step="1" value="${mid}" />
+            <div class="small slider-ends"><span>${left}</span><span>${right}</span></div>`;
         } else if (q.type === "choice") {
           const options = (q.options || []).map((o) => `<option value="${o.value}">${o.label}</option>`).join("");
           wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><select id="q_${q.question_id}">${options}</select>`;
@@ -732,9 +749,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const showSafeword = mode === "safeword";
       const showTrafficLight = mode === "traffic_light";
       toggleQuestionVisibility("q10_safeword", showSafeword);
-      toggleQuestionVisibility("q10_traffic_green", showTrafficLight);
-      toggleQuestionVisibility("q10_traffic_yellow", showTrafficLight);
-      toggleQuestionVisibility("q10_traffic_red", showTrafficLight);
+      const info = document.getElementById("trafficLightInfo");
+      if (info) info.classList.toggle("hidden", !showTrafficLight);
     }
 
     function setContractDefaults() {
@@ -815,6 +831,12 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       setText("startSetupBtn", "start_setup");
       setText("psychogramHint", "psychogram_hint");
       setText("submitAnswersBtn", "submit_answers");
+      const trafficInfo = document.getElementById("trafficLightInfo");
+      if (trafficInfo) {
+        trafficInfo.innerHTML = `<div><strong>${uiLang() === "de" ? "GRUEN" : "GREEN"}</strong> = ${tr("traffic_green_line")}</div>
+          <div><strong>${uiLang() === "de" ? "GELB" : "YELLOW"}</strong> = ${tr("traffic_yellow_line")}</div>
+          <div><strong>${uiLang() === "de" ? "ROT" : "RED"}</strong> = ${tr("traffic_red_line")}</div>`;
+      }
       setText("labelProvider", "provider");
       setText("labelLlmApiUrl", "llm_api_url");
       setText("labelLlmApiKey", "llm_api_key");
@@ -1459,7 +1481,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       if (!setupSessionId || setupStatus !== "setup_in_progress") return setOutput({error: "Start setup first."});
       const answers = questions.map((q) => ({
         question_id: q.question_id,
-        value: (q.type === "scale_10" || q.type === "scale_5")
+        value: (q.type === "scale_100" || q.type === "scale_10" || q.type === "scale_5")
           ? Number(document.getElementById(`q_${q.question_id}`).value)
           : document.getElementById(`q_${q.question_id}`).value,
       }));
@@ -1560,3 +1582,312 @@ Lob ist selten genug, um Wirkung zu behalten.`;
 </html>
 """
     return html.replace("__KILL_BUTTON_CLASS__", kill_button_class)
+
+
+@web_router.get("/chat", response_class=HTMLResponse)
+def chat_shell() -> str:
+    return """
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chastease AI Chat</title>
+  <style>
+    :root {
+      --bg: #080f1e;
+      --ink: #e9efff;
+      --muted: #9bb0d9;
+      --line: #213255;
+      --panel: #101b33;
+      --panel-soft: #0f1830;
+      --brand: #2d8cff;
+      --brand-soft: #1f335e;
+      --ok: #35c68b;
+      --danger: #d65a5a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 360px at 85% -10%, #1c2f58 0%, transparent 60%),
+        radial-gradient(800px 360px at -20% 120%, #143a44 0%, transparent 58%),
+        var(--bg);
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 20px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      border-radius: 10px;
+      border: 1px solid #2b3f66;
+      background: #111e3b;
+      color: var(--ink);
+      padding: 9px 12px;
+      text-decoration: none;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .btn.primary { background: var(--brand); border-color: transparent; }
+    .btn.ghost { background: transparent; }
+    .grid { display: grid; grid-template-columns: 300px 1fr; gap: 12px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+    .small { color: var(--muted); font-size: 12px; }
+    h1 { margin: 0; font-size: clamp(2rem, 4vw, 2.8rem); }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+    .status { margin-top: 8px; min-height: 18px; }
+    .ok { color: var(--ok); }
+    .err { color: var(--danger); }
+    .chat-shell { display: grid; grid-template-rows: 1fr auto; min-height: 72vh; }
+    .messages { overflow: auto; padding: 6px; display: grid; gap: 8px; }
+    .msg { border: 1px solid #2a3f67; border-radius: 12px; padding: 10px; background: var(--panel-soft); }
+    .msg.user { background: #152748; }
+    .msg .role { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .composer { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 12px; }
+    textarea {
+      width: 100%;
+      min-height: 88px;
+      resize: vertical;
+      border-radius: 10px;
+      border: 1px solid #2d436d;
+      background: #0f1830;
+      color: var(--ink);
+      padding: 10px;
+      font-family: inherit;
+    }
+    input, select {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid #2d436d;
+      background: #0f1830;
+      color: var(--ink);
+      padding: 9px 10px;
+    }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .file-list { display: grid; gap: 4px; margin-top: 8px; }
+    .file-pill { display: inline-block; border: 1px solid #314c7b; padding: 4px 8px; border-radius: 999px; font-size: 12px; color: #c6d6ff; }
+    .downloads { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .downloads button { border-radius: 8px; border: 1px solid #355183; background: #132445; color: #d8e6ff; padding: 6px 10px; cursor: pointer; }
+
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr; }
+      .chat-shell { min-height: 62vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <h1>AI Chat</h1>
+        <div class="small">Text, Bilder, Screenshots, Sprache und Datei-Antworten</div>
+      </div>
+      <div class="actions">
+        <a class="btn ghost" href="/">Home</a>
+        <a class="btn ghost" href="/app">Dashboard</a>
+      </div>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Session</h2>
+        <div class="small">Der Chat nutzt deine aktive Session.</div>
+        <div style="margin-top:8px;">
+          <label class="small">User ID</label>
+          <input id="userId" placeholder="auto via auth token" />
+        </div>
+        <div style="margin-top:8px;">
+          <label class="small">Auth Token</label>
+          <input id="authToken" type="password" placeholder="auto via localStorage" />
+        </div>
+        <div class="row">
+          <button class="btn" onclick="loadAuthFromStorage()">Load Auth</button>
+          <button class="btn" onclick="resolveActiveSession()">Load Session</button>
+        </div>
+        <div style="margin-top:8px;">
+          <label class="small">Session ID</label>
+          <input id="sessionId" placeholder="active session id" />
+        </div>
+        <div class="status small" id="status"></div>
+      </section>
+
+      <section class="card chat-shell">
+        <div id="messages" class="messages"></div>
+        <div class="composer">
+          <textarea id="messageInput" placeholder="Schreibe hier deine Nachricht an den Keyholder..."></textarea>
+          <div class="row">
+            <input id="fileInput" type="file" multiple accept="image/*,.pdf,.txt,.md,.json,.csv,.doc,.docx" />
+            <button class="btn" id="voiceBtn" onclick="toggleVoice()">Voice</button>
+            <button class="btn primary" onclick="sendMessage()">Senden</button>
+            <button class="btn ghost" onclick="downloadLastAsText()">Antwort als TXT</button>
+            <button class="btn ghost" onclick="downloadLastAsJson()">Antwort als JSON</button>
+          </div>
+          <div id="fileList" class="file-list"></div>
+          <div id="downloads" class="downloads"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    let recognition = null;
+    let voiceOn = false;
+    let lastResponse = null;
+
+    function setStatus(text, kind = "ok") {
+      const node = document.getElementById("status");
+      node.textContent = text;
+      node.className = `status small ${kind === "err" ? "err" : "ok"}`;
+    }
+
+    function authStorageKey() {
+      return "chastease_auth_v1";
+    }
+
+    function loadAuthFromStorage() {
+      try {
+        const raw = localStorage.getItem(authStorageKey());
+        if (!raw) return setStatus("Kein gespeicherter Login gefunden.", "err");
+        const parsed = JSON.parse(raw);
+        document.getElementById("userId").value = parsed.user_id || "";
+        document.getElementById("authToken").value = parsed.auth_token || "";
+        setStatus("Auth geladen.");
+      } catch {
+        setStatus("Auth konnte nicht geladen werden.", "err");
+      }
+    }
+
+    async function safeJson(res) {
+      try { return await res.json(); }
+      catch {
+        const text = await res.text();
+        return { error: "non-json", body: text, status: res.status };
+      }
+    }
+
+    async function resolveActiveSession() {
+      const userId = document.getElementById("userId").value.trim();
+      const authToken = document.getElementById("authToken").value.trim();
+      if (!userId || !authToken) return setStatus("User ID und Auth Token erforderlich.", "err");
+      const url = `/api/v1/sessions/active?user_id=${encodeURIComponent(userId)}&auth_token=${encodeURIComponent(authToken)}`;
+      const res = await fetch(url);
+      const data = await safeJson(res);
+      if (!res.ok) return setStatus(data?.detail || "Session konnte nicht geladen werden.", "err");
+      if (!data.has_active_session) return setStatus("Keine aktive Session gefunden.", "err");
+      document.getElementById("sessionId").value = data.chastity_session.session_id;
+      setStatus("Aktive Session geladen.");
+    }
+
+    function readSelectedFiles() {
+      const files = Array.from(document.getElementById("fileInput").files || []);
+      const list = document.getElementById("fileList");
+      list.innerHTML = files.map((f) => `<span class="file-pill">${f.name} (${Math.round(f.size/1024)} KB)</span>`).join("");
+      return files.map((f) => ({ name: f.name, size: f.size, type: f.type || "application/octet-stream" }));
+    }
+
+    function addMessage(role, text) {
+      const wrap = document.createElement("article");
+      wrap.className = `msg ${role === "wearer" ? "user" : "assistant"}`;
+      wrap.innerHTML = `<div class="role">${role === "wearer" ? "Wearer" : "Keyholder"}</div><div>${(text || "").replace(/\\n/g, "<br/>")}</div>`;
+      const box = document.getElementById("messages");
+      box.appendChild(wrap);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function downloadBlob(name, mimeType, content) {
+      const blob = new Blob([content], { type: mimeType || "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name || "response.txt";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1200);
+    }
+
+    function renderGeneratedFiles(files) {
+      const box = document.getElementById("downloads");
+      box.innerHTML = "";
+      if (!files || !files.length) return;
+      files.forEach((f, idx) => {
+        const btn = document.createElement("button");
+        btn.textContent = `Download: ${f.name || `file-${idx + 1}.txt`}`;
+        btn.onclick = () => downloadBlob(f.name, f.mime_type, f.content || "");
+        box.appendChild(btn);
+      });
+    }
+
+    async function sendMessage() {
+      const sessionId = document.getElementById("sessionId").value.trim();
+      const message = document.getElementById("messageInput").value.trim();
+      if (!sessionId) return setStatus("Session ID fehlt.", "err");
+      if (!message) return setStatus("Nachricht fehlt.", "err");
+
+      const attachments = readSelectedFiles();
+      addMessage("wearer", message);
+      setStatus("Anfrage laeuft, bitte warten...");
+      const res = await fetch("/api/v1/chat/turn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, message, language: "de", attachments }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) return setStatus(data?.detail || "Chat-Request fehlgeschlagen.", "err");
+      lastResponse = data;
+      addMessage("keyholder", data.narration || "");
+      renderGeneratedFiles(data.generated_files || []);
+      document.getElementById("messageInput").value = "";
+      document.getElementById("fileInput").value = "";
+      document.getElementById("fileList").innerHTML = "";
+      setStatus("Antwort erhalten.");
+    }
+
+    function downloadLastAsText() {
+      if (!lastResponse) return setStatus("Noch keine Antwort zum Exportieren.", "err");
+      downloadBlob("ai-response.txt", "text/plain", lastResponse.narration || "");
+    }
+
+    function downloadLastAsJson() {
+      if (!lastResponse) return setStatus("Noch keine Antwort zum Exportieren.", "err");
+      downloadBlob("ai-response.json", "application/json", JSON.stringify(lastResponse, null, 2));
+    }
+
+    function toggleVoice() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return setStatus("Voice wird in diesem Browser nicht unterstuetzt.", "err");
+      if (!recognition) {
+        recognition = new SpeechRecognition();
+        recognition.lang = "de-DE";
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.onresult = (event) => {
+          let finalTranscript = "";
+          for (let i = event.resultIndex; i < event.results.length; i += 1) {
+            if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+          }
+          if (finalTranscript) {
+            const input = document.getElementById("messageInput");
+            input.value = `${input.value} ${finalTranscript}`.trim();
+          }
+        };
+        recognition.onend = () => {
+          if (voiceOn) recognition.start();
+        };
+      }
+      voiceOn = !voiceOn;
+      document.getElementById("voiceBtn").textContent = voiceOn ? "Stop Voice" : "Voice";
+      if (voiceOn) {
+        recognition.start();
+        setStatus("Voice-Aufnahme aktiv.");
+      } else {
+        recognition.stop();
+        setStatus("Voice-Aufnahme gestoppt.");
+      }
+    }
+
+    document.getElementById("fileInput").addEventListener("change", readSelectedFiles);
+    loadAuthFromStorage();
+  </script>
+</body>
+</html>
+"""

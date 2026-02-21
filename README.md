@@ -90,6 +90,18 @@ Prototype App:
 http://127.0.0.1:5000/app
 ```
 
+AI Chat UI:
+
+```text
+http://127.0.0.1:5000/chat
+```
+
+Hinweis zu Datei-Antworten der KI:
+
+- Chat-Responses koennen `generated_files` enthalten.
+- Prototyp-Marker im Narration-Text: `[[FILE|{"name":"brief.txt","mime_type":"text/plain","content":"..."}]]`
+- Diese Dateien werden im Chat als Download angeboten.
+
 Mehrsprachigkeit (MVP):
 
 - Unterstuetzte Sprachen: `de`, `en`

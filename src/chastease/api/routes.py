@@ -56,7 +56,7 @@ TRANSLATIONS = {
 QUESTION_BANK = [
     {
         "id": "q1_rule_structure",
-        "type": "scale_10",
+        "type": "scale_100",
         "texts": {
             "de": "Wie wichtig sind dir klare, schriftliche Regeln und genau definierte Erwartungen?",
             "en": "How important are clear written rules and well-defined expectations to you?",
@@ -65,7 +65,7 @@ QUESTION_BANK = [
     },
     {
         "id": "q2_strictness_authority",
-        "type": "scale_10",
+        "type": "scale_100",
         "texts": {
             "de": "Wie stark moechtest du in dieser Session Strenge, Konsequenz und Autoritaet erleben?",
             "en": "How strongly do you want to experience strictness, consequences, and authority in this session?",
@@ -74,7 +74,7 @@ QUESTION_BANK = [
     },
     {
         "id": "q3_control_need",
-        "type": "scale_10",
+        "type": "scale_100",
         "texts": {
             "de": "Wie sehr brauchst du das Gefuehl, wirklich kontrolliert und ueberwacht zu werden?",
             "en": "How much do you need to feel genuinely controlled and monitored?",
@@ -83,7 +83,7 @@ QUESTION_BANK = [
     },
     {
         "id": "q4_praise_importance",
-        "type": "scale_10",
+        "type": "scale_100",
         "texts": {
             "de": "Wie wichtig ist positives Feedback/Anerkennung fuer gutes Verhalten?",
             "en": "How important is positive feedback/recognition for good behavior?",
@@ -92,7 +92,7 @@ QUESTION_BANK = [
     },
     {
         "id": "q5_novelty_challenge",
-        "type": "scale_10",
+        "type": "scale_100",
         "texts": {
             "de": "Wie sehr suchst du Abwechslung, neue Aufgaben und ungewohnte Herausforderungen?",
             "en": "How much are you looking for variety, new tasks, and unfamiliar challenges?",
@@ -101,10 +101,10 @@ QUESTION_BANK = [
     },
     {
         "id": "q6_intensity_1_5",
-        "type": "scale_5",
+        "type": "scale_100",
         "texts": {
-            "de": "Welche Intensitaet passt aktuell am besten? (1=sanft ... 5=sehr fordernd)",
-            "en": "What intensity fits best right now? (1=gentle ... 5=very demanding)",
+            "de": "Welche Intensitaet passt aktuell am besten?",
+            "en": "What intensity fits best right now?",
         },
         "weights": {"strictness_affinity": 0.8, "challenge_affinity": 0.6},
     },
@@ -186,38 +186,11 @@ QUESTION_BANK = [
         "weights": {},
     },
     {
-        "id": "q10_traffic_green",
-        "type": "text",
-        "texts": {
-            "de": "Ampelsystem: Gruen bedeutet ...",
-            "en": "Traffic light: Green means ...",
-        },
-        "weights": {},
-    },
-    {
-        "id": "q10_traffic_yellow",
-        "type": "text",
-        "texts": {
-            "de": "Ampelsystem: Gelb bedeutet ...",
-            "en": "Traffic light: Yellow means ...",
-        },
-        "weights": {},
-    },
-    {
-        "id": "q10_traffic_red",
-        "type": "text",
-        "texts": {
-            "de": "Ampelsystem: Rot bedeutet ...",
-            "en": "Traffic light: Red means ...",
-        },
-        "weights": {},
-    },
-    {
         "id": "q13_experience_level",
-        "type": "scale_10",
+        "type": "scale_100",
         "texts": {
-            "de": "Wie erfahren bist du in diesem Kontext? (1=Anfaenger, 10=Experte)",
-            "en": "How experienced are you in this context? (1=beginner, 10=expert)",
+            "de": "Wie erfahren bist du in diesem Kontext?",
+            "en": "How experienced are you in this context?",
         },
         "weights": {},
     },
@@ -427,20 +400,19 @@ def _localized_questions(language: str) -> list[dict]:
             "text": question["texts"][lang],
             "type": question["type"],
         }
-        if question["type"] == "scale_10":
+        if question["type"] == "scale_100":
             item["scale_min"] = 1
-            item["scale_max"] = 10
-            item["scale_hint"] = (
-                "1=trifft nicht zu, 10=trifft sehr zu"
-                if lang == "de"
-                else "1=does not apply, 10=applies strongly"
-            )
-        elif question["type"] == "scale_5":
-            item["scale_min"] = 1
-            item["scale_max"] = 5
-            item["scale_hint"] = (
-                "1=sanft, 5=sehr fordernd" if lang == "de" else "1=gentle, 5=very demanding"
-            )
+            item["scale_max"] = 100
+            qid = question["id"]
+            if qid == "q6_intensity_1_5":
+                item["scale_left"] = "sehr sanft" if lang == "de" else "very gentle"
+                item["scale_right"] = "sehr fordernd" if lang == "de" else "very demanding"
+            elif qid == "q13_experience_level":
+                item["scale_left"] = "Anfaenger" if lang == "de" else "beginner"
+                item["scale_right"] = "Experte" if lang == "de" else "expert"
+            else:
+                item["scale_left"] = "trifft nicht zu" if lang == "de" else "does not apply"
+                item["scale_right"] = "trifft sehr zu" if lang == "de" else "applies strongly"
         elif question["type"] == "choice":
             item["options"] = [{"value": opt["value"], "label": opt[lang]} for opt in question["options"]]
         localized.append(item)
@@ -449,13 +421,9 @@ def _localized_questions(language: str) -> list[dict]:
 
 def _validate_answer(question: dict, raw_value: int | str) -> int | str:
     q_type = question["type"]
-    if q_type == "scale_10":
-        if not isinstance(raw_value, int) or raw_value < 1 or raw_value > 10:
-            raise ValueError("Expected integer value in range 1..10")
-        return raw_value
-    if q_type == "scale_5":
-        if not isinstance(raw_value, int) or raw_value < 1 or raw_value > 5:
-            raise ValueError("Expected integer value in range 1..5")
+    if q_type == "scale_100":
+        if not isinstance(raw_value, int) or raw_value < 1 or raw_value > 100:
+            raise ValueError("Expected integer value in range 1..100")
         return raw_value
     if q_type == "choice":
         if not isinstance(raw_value, str):
@@ -472,10 +440,8 @@ def _validate_answer(question: dict, raw_value: int | str) -> int | str:
 
 
 def _normalize_to_0_100(question_type: str, value: int) -> int:
-    if question_type == "scale_10":
-        return round(((value - 1) / 9) * 100)
-    if question_type == "scale_5":
-        return round(((value - 1) / 4) * 100)
+    if question_type == "scale_100":
+        return round(((value - 1) / 99) * 100)
     return 50
 
 
@@ -511,14 +477,8 @@ def _validate_safety_answers(answers: dict[str, int | str]) -> None:
                 status_code=400, detail="q10_safeword is required when q10_safety_mode is safeword."
             )
         return
-    green = str(answers.get("q10_traffic_green", "")).strip()
-    yellow = str(answers.get("q10_traffic_yellow", "")).strip()
-    red = str(answers.get("q10_traffic_red", "")).strip()
-    if not green or not yellow or not red:
-        raise HTTPException(
-            status_code=400,
-            detail="q10_traffic_green, q10_traffic_yellow and q10_traffic_red are required when q10_safety_mode is traffic_light.",
-        )
+    # traffic_light mode uses predefined words/guidance and requires no extra input fields
+    return
 
 
 def _build_psychogram(setup_session: dict) -> dict:
@@ -549,7 +509,7 @@ def _build_psychogram(setup_session: dict) -> dict:
     scored_count = sum(
         1
         for qid, value in answers.items()
-        if qid in question_map and question_map[qid]["type"] in {"scale_10", "scale_5"} and isinstance(value, int)
+        if qid in question_map and question_map[qid]["type"] == "scale_100" and isinstance(value, int)
     )
     confidence = round(0.2 + (scored_count / 6) * 0.8, 2)
     summary = _t(lang, "summary_template").format(
@@ -562,7 +522,8 @@ def _build_psychogram(setup_session: dict) -> dict:
     instruction_style = answers.get("q8_instruction_style", "mixed")
     escalation_mode = answers.get("q11_escalation_mode", "moderate")
     grooming_preference = answers.get("q12_grooming_preference", "no_preference")
-    experience_level = int(answers.get("q13_experience_level", 5))
+    experience_level_raw = int(answers.get("q13_experience_level", 50))
+    experience_level = max(1, min(10, round(experience_level_raw / 10)))
     taboo_text = answers.get("q7_taboo_text", "")
     open_context = answers.get("q9_open_context", "")
     safety_mode = str(answers.get("q10_safety_mode", "safeword"))
@@ -572,13 +533,7 @@ def _build_psychogram(setup_session: dict) -> dict:
         if safeword:
             safety_profile["safeword"] = safeword
     elif safety_mode == "traffic_light":
-        traffic_words = {
-            "green": str(answers.get("q10_traffic_green", "")).strip(),
-            "yellow": str(answers.get("q10_traffic_yellow", "")).strip(),
-            "red": str(answers.get("q10_traffic_red", "")).strip(),
-        }
-        if all(traffic_words.values()):
-            safety_profile["traffic_light_words"] = traffic_words
+        safety_profile["traffic_light_words"] = {"green": "green", "yellow": "yellow", "red": "red"}
 
     return {
         "psychogram_version": "2.4.0",
@@ -827,9 +782,11 @@ def _serialize_llm_profile(profile: LLMProfile) -> dict:
     }
 
 
-def _extract_pending_actions(narration: str) -> tuple[str, list[dict]]:
+def _extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]]:
     pattern = re.compile(r"\[\[ACTION:(?P<kind>[a-zA-Z0-9_\-]+)\|(?P<payload>\{.*?\})\]\]")
+    file_pattern = re.compile(r"\[\[FILE\|(?P<payload>\{.*?\})\]\]")
     actions: list[dict] = []
+    generated_files: list[dict] = []
     cleaned = narration
     for match in pattern.finditer(narration):
         action_type = match.group("kind")
@@ -840,7 +797,21 @@ def _extract_pending_actions(narration: str) -> tuple[str, list[dict]]:
             payload = {"raw": payload_text}
         actions.append({"action_type": action_type, "payload": payload, "requires_execute_call": True})
         cleaned = cleaned.replace(match.group(0), "").strip()
-    return cleaned, actions
+    for match in file_pattern.finditer(narration):
+        payload_text = match.group("payload")
+        try:
+            payload = json.loads(payload_text)
+        except Exception:
+            payload = {"name": "response.txt", "mime_type": "text/plain", "content": payload_text}
+        generated_files.append(
+            {
+                "name": str(payload.get("name", "response.txt")),
+                "mime_type": str(payload.get("mime_type", "text/plain")),
+                "content": str(payload.get("content", "")),
+            }
+        )
+        cleaned = cleaned.replace(match.group(0), "").strip()
+    return cleaned, actions, generated_files
 
 
 def _sync_setup_snapshot_to_active_session(request: Request, setup_session: dict) -> bool:
@@ -1365,12 +1336,13 @@ def setup_chat_preview(setup_session_id: str, payload: SetupChatPreviewRequest, 
         )
     finally:
         db.close()
-    narration, pending_actions = _extract_pending_actions(narration_raw)
+    narration, pending_actions, generated_files = _extract_pending_actions(narration_raw)
     return {
         "result": "accepted_preview",
         "setup_session_id": setup_session_id,
         "narration": narration,
         "pending_actions": pending_actions,
+        "generated_files": generated_files,
         "preview": True,
         "next_state": "awaiting_wearer_action",
     }
@@ -1397,7 +1369,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
 
         narration_raw = _generate_ai_narration_for_session(db, request, session, action_text, lang)
-        narration, pending_actions = _extract_pending_actions(narration_raw)
+        narration, pending_actions, generated_files = _extract_pending_actions(narration_raw)
 
         current_turn_no = db.scalar(
             select(func.max(Turn.turn_no)).where(Turn.session_id == session.id)
@@ -1425,6 +1397,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         "turn_no": next_turn_no,
         "narration": narration,
         "pending_actions": pending_actions,
+        "generated_files": generated_files,
         "next_state": "awaiting_wearer_action",
     }
 

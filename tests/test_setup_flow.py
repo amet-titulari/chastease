@@ -82,7 +82,9 @@ def test_setup_session_returns_english_questions(client):
     assert data["language"] == "en"
     assert data["questions"][0]["text"].startswith("How important")
     assert data["questions"][0]["scale_min"] == 1
-    assert data["questions"][0]["scale_max"] == 10
+    assert data["questions"][0]["scale_max"] == 100
+    assert data["questions"][0]["scale_left"] == "does not apply"
+    assert data["questions"][0]["scale_right"] == "applies strongly"
 
 
 def test_setup_start_requires_valid_token(client):

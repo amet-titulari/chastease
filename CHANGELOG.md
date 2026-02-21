@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.0.10 - 2026-02-21
+
+- Neue dedizierte Seite `/chat` mit modernem Chat-Layout eingefuehrt (inspiriert von ChatGPT/Perplexity/Gemini-Flow).
+- Chat-Features auf `/chat`:
+  - Text-Chat
+  - Bild-/Datei-Upload (inkl. Screenshots/Anhänge)
+  - Voice-Diktat im Browser (Web Speech API, falls verfuegbar)
+  - Export letzter Antwort als TXT/JSON
+  - Download von durch KI gelieferten Dateiantworten (`generated_files`)
+- API Chat-Responses erweitert:
+  - `generated_files` wird in `/api/v1/chat/turn` und `/api/v1/setup/sessions/{id}/chat-preview` mitgeliefert.
+  - Marker-Parsing fuer Dateiantworten unterstuetzt (`[[FILE|{...}]]`).
+- Psychogramm-Form korrigiert:
+  - Skalen wieder als Slider statt Textfelder (kompatibel fuer `scale_100`, `scale_10`, `scale_5`).
+  - Ampelsystem ohne Eingabefelder umgesetzt (nur feste Anzeige mit Gruen/Gelb/Rot-Definition).
+- Landingpage und App-Topbar um direkten Link auf `/chat` erweitert.
+
 ## 0.0.9 - 2026-02-21
 
 - Complete-Setup-Bestaetigung verhaelt sich nun final: `Start Setup`, `Psychogram`, `AI Configuration` und `Complete Setup` werden sofort gesperrt.
