@@ -35,6 +35,12 @@ python run.py
 
 API laeuft dann auf `http://127.0.0.1:5000`.
 
+Frontend Start:
+
+```text
+http://127.0.0.1:5000/
+```
+
 Healthcheck:
 
 ```bash
@@ -44,10 +50,15 @@ curl http://127.0.0.1:5000/api/v1/health
 Setup-Prototyp:
 
 ```bash
-# 1) Setup starten
+# 0) User erstellen/laden
+curl -X POST http://127.0.0.1:5000/api/v1/users \
+  -H "Content-Type: application/json" \
+  -d '{"email":"wearer@example.com","display_name":"Wearer"}'
+
+# 1) Setup starten (mit user_id)
 curl -X POST http://127.0.0.1:5000/api/v1/setup/sessions \
   -H "Content-Type: application/json" \
-  -d '{"wearer_id":"wearer-1","hard_stop_enabled":true,"autonomy_mode":"execute","language":"de","integrations":["ttlock"],"blocked_trigger_words":["public"],"forbidden_topics":["workplace"]}'
+  -d '{"user_id":"<user_id>","hard_stop_enabled":true,"autonomy_mode":"execute","language":"de","integrations":["ttlock"],"blocked_trigger_words":["public"],"forbidden_topics":["workplace"]}'
 
 # 2) Antworten senden
 curl -X POST http://127.0.0.1:5000/api/v1/setup/sessions/<setup_session_id>/answers \
@@ -68,10 +79,10 @@ curl -X POST http://127.0.0.1:5000/api/v1/story/turn \
   -d '{"session_id":"<session_id>","action":"I follow the instruction.","language":"en"}'
 ```
 
-Browser-Demo:
+Prototype App:
 
 ```text
-http://127.0.0.1:5000/api/v1/setup/demo
+http://127.0.0.1:5000/app
 ```
 
 Mehrsprachigkeit (MVP):

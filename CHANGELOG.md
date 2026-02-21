@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.5 - 2026-02-21
+
+- User-First Setup eingefuehrt (`/users`, `/users/{id}`, `/users/{id}/characters`).
+- Setup-Start auf `user_id` umgestellt, optional mit `character_id`.
+- Persistente Sessiondaten auf `user_id`/`character_id` angepasst.
+- Landingpage (`/`) und App-Shell (`/app`) eingefuehrt.
+- Alte Demo-Route als Redirect auf `/app` weitergefuehrt.
+- Tests fuer User-Setup und Web-Seiten erweitert.
+
 ## 0.0.4 - 2026-02-21
 
 - Psychogramm-Feedback umgesetzt: dynamische Updates, `update_reason`, `autonomy_profile`, `autonomy_bias`, `praise_timing`.

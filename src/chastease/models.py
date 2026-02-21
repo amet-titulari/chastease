@@ -11,6 +11,7 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False, default="Wearer")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
@@ -31,7 +32,8 @@ class ChastitySession(Base):
     __tablename__ = "chastity_sessions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    wearer_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    character_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("characters.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False)
     language: Mapped[str] = mapped_column(String(5), nullable=False)
     policy_snapshot_json: Mapped[str] = mapped_column(Text, nullable=False)

@@ -4,11 +4,11 @@ from typing import Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from chastease.models import ChastitySession, Turn
+from chastease.models import Character, ChastitySession, Turn, User
 from chastease.repositories.setup_store import load_sessions, save_sessions
 from chastease.services.ai.base import StoryTurnContext
 
@@ -157,7 +157,8 @@ class StoryTurnRequest(BaseModel):
 
 
 class SetupStartRequest(BaseModel):
-    wearer_id: str = Field(min_length=1)
+    user_id: str = Field(min_length=1)
+    character_id: str | None = None
     hard_stop_enabled: bool = True
     autonomy_mode: Literal["execute", "suggest"] = "execute"
     integrations: list[Literal["ttlock", "chaster", "emlalock"]] = Field(default_factory=list)
@@ -178,6 +179,19 @@ class SetupAnswersRequest(BaseModel):
 class PsychogramRecalibrationRequest(BaseModel):
     update_reason: str = Field(min_length=3)
     trait_overrides: dict[str, int] = Field(default_factory=dict)
+
+
+class UserCreateRequest(BaseModel):
+    email: str = Field(min_length=3)
+    display_name: str = Field(min_length=1)
+
+
+class CharacterCreateRequest(BaseModel):
+    name: str = Field(min_length=1)
+    strength: int = Field(default=5, ge=1, le=10)
+    intelligence: int = Field(default=5, ge=1, le=10)
+    charisma: int = Field(default=5, ge=1, le=10)
+    hp: int = Field(default=100, ge=1, le=1000)
 
 
 def _lang(value: str) -> str:
@@ -436,6 +450,100 @@ def _get_db_session(request: Request):
     return request.app.state.db_session_factory()
 
 
+@api_router.post("/users")
+def create_user(payload: UserCreateRequest, request: Request) -> dict:
+    db = _get_db_session(request)
+    try:
+        existing = db.scalar(select(User).where(User.email == payload.email.strip().lower()))
+        if existing is not None:
+            return {
+                "user_id": existing.id,
+                "email": existing.email,
+                "display_name": existing.display_name,
+                "created": False,
+            }
+
+        user = User(
+            id=str(uuid4()),
+            email=payload.email.strip().lower(),
+            display_name=payload.display_name.strip(),
+            created_at=datetime.now(UTC),
+        )
+        db.add(user)
+        db.commit()
+        return {
+            "user_id": user.id,
+            "email": user.email,
+            "display_name": user.display_name,
+            "created": True,
+        }
+    finally:
+        db.close()
+
+
+@api_router.get("/users/{user_id}")
+def get_user(user_id: str, request: Request) -> dict:
+    db = _get_db_session(request)
+    try:
+        user = db.get(User, user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        characters = db.scalars(select(Character).where(Character.user_id == user_id)).all()
+        return {
+            "user_id": user.id,
+            "email": user.email,
+            "display_name": user.display_name,
+            "created_at": user.created_at.isoformat(),
+            "characters": [
+                {
+                    "character_id": c.id,
+                    "name": c.name,
+                    "strength": c.strength,
+                    "intelligence": c.intelligence,
+                    "charisma": c.charisma,
+                    "hp": c.hp,
+                }
+                for c in characters
+            ],
+        }
+    finally:
+        db.close()
+
+
+@api_router.post("/users/{user_id}/characters")
+def create_character(user_id: str, payload: CharacterCreateRequest, request: Request) -> dict:
+    db = _get_db_session(request)
+    try:
+        user = db.get(User, user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        character = Character(
+            id=str(uuid4()),
+            user_id=user_id,
+            name=payload.name.strip(),
+            strength=payload.strength,
+            intelligence=payload.intelligence,
+            charisma=payload.charisma,
+            hp=payload.hp,
+            created_at=datetime.now(UTC),
+        )
+        db.add(character)
+        db.commit()
+        return {
+            "character_id": character.id,
+            "user_id": user_id,
+            "name": character.name,
+            "strength": character.strength,
+            "intelligence": character.intelligence,
+            "charisma": character.charisma,
+            "hp": character.hp,
+        }
+    finally:
+        db.close()
+
+
 @api_router.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": "chastease-api"}
@@ -500,15 +608,27 @@ def story_turn(payload: StoryTurnRequest, request: Request) -> dict:
 
 
 @api_router.post("/setup/sessions")
-def start_setup_session(payload: SetupStartRequest) -> dict:
+def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
     setup_session_id = str(uuid4())
     now = _now_iso()
     lang = _lang(payload.language)
+    db = _get_db_session(request)
+    try:
+        user = db.get(User, payload.user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found.")
+        if payload.character_id:
+            character = db.get(Character, payload.character_id)
+            if character is None or character.user_id != payload.user_id:
+                raise HTTPException(status_code=400, detail="Invalid character_id for user.")
+    finally:
+        db.close()
 
     store = load_sessions()
     store[setup_session_id] = {
         "setup_session_id": setup_session_id,
-        "wearer_id": payload.wearer_id,
+        "user_id": payload.user_id,
+        "character_id": payload.character_id,
         "status": "setup_in_progress",
         "hard_stop_enabled": payload.hard_stop_enabled,
         "autonomy_mode": payload.autonomy_mode,
@@ -527,6 +647,8 @@ def start_setup_session(payload: SetupStartRequest) -> dict:
 
     return {
         "setup_session_id": setup_session_id,
+        "user_id": payload.user_id,
+        "character_id": payload.character_id,
         "status": "setup_in_progress",
         "questionnaire_version": QUESTIONNAIRE_VERSION,
         "language": lang,
@@ -593,7 +715,8 @@ def get_chastity_session(session_id: str, request: Request) -> dict:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
         return {
             "session_id": session.id,
-            "wearer_id": session.wearer_id,
+            "user_id": session.user_id,
+            "character_id": session.character_id,
             "status": session.status,
             "language": session.language,
             "policy": json.loads(session.policy_snapshot_json),
@@ -657,7 +780,8 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
     try:
         db_session = ChastitySession(
             id=session_id,
-            wearer_id=setup_session["wearer_id"],
+            user_id=setup_session["user_id"],
+            character_id=setup_session.get("character_id"),
             status="active",
             language=setup_session["language"],
             policy_snapshot_json=json.dumps(setup_session["policy_preview"]),
@@ -675,7 +799,8 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
         "status": "configured",
         "chastity_session": {
             "session_id": session_id,
-            "wearer_id": setup_session["wearer_id"],
+            "user_id": setup_session["user_id"],
+            "character_id": setup_session.get("character_id"),
             "status": "active",
             "policy": setup_session["policy_preview"],
             "psychogram": setup_session["psychogram"],
@@ -725,153 +850,6 @@ def get_setup_questionnaire(language: Literal["de", "en"] = "de") -> dict:
     }
 
 
-@api_router.get("/setup/demo", response_class=HTMLResponse)
-def setup_demo() -> str:
-    return """
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chastease Setup Demo</title>
-  <style>
-    body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; margin: 0; background: #0b1220; color: #e8eefc; }
-    .wrap { max-width: 1024px; margin: 0 auto; padding: 24px; }
-    .card { background: #101a30; border: 1px solid #22314f; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-    h1, h2 { margin: 0 0 10px; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-    .qgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
-    label { display: block; font-size: 13px; color: #a9b9da; margin-bottom: 4px; }
-    input, select, button, textarea { border-radius: 8px; border: 1px solid #2b3d63; background: #0f1930; color: #e8eefc; padding: 8px 10px; }
-    input[type=range] { width: 100%; padding: 0; }
-    button { background: #2d8cff; border: 0; cursor: pointer; }
-    button:hover { background: #4aa0ff; }
-    textarea { width: 100%; min-height: 280px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .small { font-size: 12px; color: #9ab0d8; }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <h1>Setup Prototype Demo</h1>
-    <p class="small">Try German/English setup and psychogram generation.</p>
-
-    <div class="card">
-      <h2>1) Start Setup Session</h2>
-      <div class="row">
-        <div><label>Wearer ID</label><input id="wearerId" value="wearer-demo" /></div>
-        <div><label>Autonomy Mode</label><select id="autonomy"><option value="execute">execute</option><option value="suggest">suggest</option></select></div>
-        <div><label>Language</label><select id="language"><option value="de">Deutsch</option><option value="en">English</option></select></div>
-        <div><label>Hard Stop</label><select id="hardStop"><option value="true">enabled</option><option value="false">disabled</option></select></div>
-      </div>
-      <button onclick="startSetup()">Start Setup</button>
-      <p id="setupSessionInfo" class="small"></p>
-    </div>
-
-    <div class="card">
-      <h2>2) Answer Questionnaire</h2>
-      <p class="small">Scale 1-10. Questions load based on selected language.</p>
-      <div id="questionGrid" class="qgrid"></div>
-      <button onclick="submitAnswers()">Submit Answers</button>
-    </div>
-
-    <div class="card">
-      <h2>3) Complete Setup</h2>
-      <button onclick="completeSetup()">Complete Setup</button>
-    </div>
-
-    <div class="card">
-      <h2>Psychogram Brief</h2>
-      <p id="brief" class="small">No evaluation yet.</p>
-    </div>
-
-    <div class="card">
-      <h2>Response</h2>
-      <textarea id="output" readonly></textarea>
-    </div>
-  </div>
-
-  <script>
-    let setupSessionId = null;
-    let questions = [];
-
-    function setOutput(data) {
-      document.getElementById("output").value = JSON.stringify(data, null, 2);
-      if (data.psychogram_brief) {
-        document.getElementById("brief").textContent = data.psychogram_brief;
-      }
-    }
-
-    function renderQuestions() {
-      const grid = document.getElementById("questionGrid");
-      grid.innerHTML = "";
-      questions.forEach((q) => {
-        const wrap = document.createElement("div");
-        if (q.type === "scale_10" || q.type === "scale_5") {
-          const mid = q.type === "scale_5" ? 3 : 5;
-          wrap.innerHTML = `
-            <label>${q.text} (${q.question_id})</label>
-            <input id="q_${q.question_id}" type="range" min="${q.scale_min}" max="${q.scale_max}" step="1" value="${mid}" oninput="document.getElementById('v_${q.question_id}').textContent=this.value" />
-            <div class="small"><span>${q.scale_hint || ""}</span></div>
-            <div class="small">Wert: <strong id="v_${q.question_id}">${mid}</strong></div>
-          `;
-        } else if (q.type === "choice") {
-          const options = (q.options || []).map((o) => `<option value="${o.value}">${o.label}</option>`).join("");
-          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><select id="q_${q.question_id}">${options}</select>`;
-        } else {
-          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><textarea id="q_${q.question_id}" rows="3" style="min-height:72px;"></textarea>`;
-        }
-        grid.appendChild(wrap);
-      });
-    }
-
-    async function startSetup() {
-      const payload = {
-        wearer_id: document.getElementById("wearerId").value,
-        autonomy_mode: document.getElementById("autonomy").value,
-        hard_stop_enabled: document.getElementById("hardStop").value === "true",
-        language: document.getElementById("language").value,
-        integrations: ["ttlock"]
-      };
-      const res = await fetch("/api/v1/setup/sessions", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.setup_session_id) {
-        setupSessionId = data.setup_session_id;
-        questions = data.questions || [];
-        renderQuestions();
-        document.getElementById("setupSessionInfo").textContent = "setup_session_id: " + setupSessionId;
-      }
-      setOutput(data);
-    }
-
-    async function submitAnswers() {
-      if (!setupSessionId) return setOutput({error: "Start setup first."});
-      const answers = questions.map((q) => ({
-        question_id: q.question_id,
-        value:
-          q.type === "scale_10" || q.type === "scale_5"
-            ? Number(document.getElementById(`q_${q.question_id}`).value)
-            : document.getElementById(`q_${q.question_id}`).value,
-      }));
-      const res = await fetch(`/api/v1/setup/sessions/${setupSessionId}/answers`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({answers})
-      });
-      const data = await res.json();
-      setOutput(data);
-    }
-
-    async function completeSetup() {
-      if (!setupSessionId) return setOutput({error: "Start setup first."});
-      const res = await fetch(`/api/v1/setup/sessions/${setupSessionId}/complete`, { method: "POST" });
-      const data = await res.json();
-      setOutput(data);
-    }
-  </script>
-</body>
-</html>
-"""
+@api_router.get("/setup/demo")
+def setup_demo_redirect():
+    return RedirectResponse(url="/app", status_code=307)
