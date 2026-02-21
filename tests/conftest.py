@@ -14,6 +14,7 @@ from chastease import create_app  # noqa: E402
 @pytest.fixture()
 def client(monkeypatch, tmp_path):
     monkeypatch.setenv("SETUP_STORE_PATH", str(tmp_path / "setup_sessions.json"))
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'chastease_test.db'}")
     app = create_app()
     with TestClient(app) as test_client:
         yield test_client

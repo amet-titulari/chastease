@@ -17,15 +17,15 @@ Ein spielbarer vertikaler Slice:
 - Dokumentationsstruktur
 
 2. Persistenz
-- SQLAlchemy integrieren
-- Modelle: User, Character, ChastitySession, Turn
-- Migrationen mit Alembic
+- SQLAlchemy integriert
+- Modelle umgesetzt: User, Character, ChastitySession, Turn
+- Migrationen mit Alembic (naechster Schritt)
 
 3. AI-Integration
-- AI-Service mit Prompt-Templates
-- Response-Schema validieren
-- Fehlerbehandlung/Timeout/Retry
-- Setup-Agent + Session-Policy Builder
+- AI-Service Interface + erster OpenAI Adapter umgesetzt
+- Response-Schema validiert
+- Fehlerbehandlung/Timeout/Retry (Basis)
+- Setup-Agent + Session-Policy Builder umgesetzt
 - Setup-Fragebogen fuer Neigungen (BDSM-test-aehnlich, consent-basiert)
 - Psychogramm-Erzeugung zur Scharfstellung des KI-Charakterprofils
 - Action-Gateway (`execute` und `suggest`)
@@ -49,6 +49,6 @@ Ein spielbarer vertikaler Slice:
 
 ## Definition of Done (MVP)
 
-- End-to-end: Spieler gibt Aktion ein, erhaelt KI-Antwort, Zustand wird gespeichert
+- End-to-end: Spieler gibt Aktion ein, erhaelt KI-Antwort, Turn wird persistiert
 - Tests fuer Kernablauf vorhanden
 - Grunddokumentation aktuell

@@ -2,14 +2,14 @@
 
 ## Prioritaet P0
 
-- [ ] Setup-/Initialisierungsprozess (Fragebogen -> Policy-Entwurf -> Bestaetigung -> aktive Session)
-- [ ] Psychologischer Neigungsfragebogen im Setup (BDSM-test-aehnlich, consent-basiert)
-- [ ] Psychogramm-Generierung aus Setup-Antworten zur KI-Profilschaerfung
-- [ ] Policy-Versionierung inkl. Setup-Snapshot pro Session
-- [ ] Datenbankanbindung mit SQLAlchemy
-- [ ] Session- und Charaktermodelle
-- [ ] Persistenter Story-Turn-Flow
-- [ ] AI-Service Interface + erster OpenAI Adapter
+- [x] Setup-/Initialisierungsprozess (Fragebogen -> Policy-Entwurf -> Bestaetigung -> aktive Session)
+- [x] Psychologischer Neigungsfragebogen im Setup (BDSM-test-aehnlich, consent-basiert)
+- [x] Psychogramm-Generierung aus Setup-Antworten zur KI-Profilschaerfung
+- [x] Policy-Versionierung inkl. Setup-Snapshot pro Session
+- [x] Datenbankanbindung mit SQLAlchemy
+- [x] Session- und Charaktermodelle
+- [x] Persistenter Story-Turn-Flow
+- [x] AI-Service Interface + erster OpenAI Adapter
 
 ## Prioritaet P1
 

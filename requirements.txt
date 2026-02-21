@@ -1,5 +1,6 @@
 fastapi==0.115.8
 uvicorn==0.34.0
 httpx==0.28.1
+SQLAlchemy==2.0.38
 python-dotenv==1.0.1
 pytest==8.3.5

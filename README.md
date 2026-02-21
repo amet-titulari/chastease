@@ -61,6 +61,11 @@ curl -X POST http://127.0.0.1:5000/api/v1/setup/sessions/<setup_session_id>/comp
 curl -X PATCH http://127.0.0.1:5000/api/v1/setup/sessions/<setup_session_id>/psychogram \
   -H "Content-Type: application/json" \
   -d '{"update_reason":"mid_session_calibration","trait_overrides":{"strictness_affinity":85}}'
+
+# 5) Persistenten Story-Turn senden (session_id aus Setup-Complete verwenden)
+curl -X POST http://127.0.0.1:5000/api/v1/story/turn \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"<session_id>","action":"I follow the instruction.","language":"en"}'
 ```
 
 Browser-Demo:
@@ -79,6 +84,7 @@ Setup-Persistenz (aktuell):
 
 - Datei-basierter Store: `data/setup_sessions.json`
 - Optional per Env steuerbar: `SETUP_STORE_PATH=/pfad/zur/datei.json`
+- Relationale Persistenz: `DATABASE_URL` (default: `sqlite:///data/chastease.db`)
 
 ## Tests
 

@@ -1,12 +1,16 @@
 from datetime import UTC, datetime
+import json
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 
+from chastease.models import ChastitySession, Turn
 from chastease.repositories.setup_store import load_sessions, save_sessions
+from chastease.services.ai.base import StoryTurnContext
 
 api_router = APIRouter()
 
@@ -149,6 +153,7 @@ TRAIT_KEYS = [
 class StoryTurnRequest(BaseModel):
     action: str = Field(min_length=1)
     language: Literal["de", "en"] = "de"
+    session_id: str | None = None
 
 
 class SetupStartRequest(BaseModel):
@@ -427,21 +432,70 @@ def _get_session_or_404(setup_session_id: str) -> dict:
     return session
 
 
+def _get_db_session(request: Request):
+    return request.app.state.db_session_factory()
+
+
 @api_router.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": "chastease-api"}
 
 
 @api_router.post("/story/turn")
-def story_turn(payload: StoryTurnRequest) -> dict:
+def story_turn(payload: StoryTurnRequest, request: Request) -> dict:
     lang = _lang(payload.language)
     action = payload.action.strip()
     if not action:
         raise HTTPException(status_code=400, detail=_t(lang, "action_required"))
+    if not payload.session_id:
+        raise HTTPException(status_code=400, detail="Field 'session_id' is required.")
+
+    db = _get_db_session(request)
+    try:
+        session = db.get(ChastitySession, payload.session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Chastity session not found.")
+
+        psychogram = json.loads(session.psychogram_snapshot_json)
+        psychogram_summary = psychogram.get("summary", "No psychogram summary available.")
+
+        ai_service = request.app.state.ai_service
+        narration = ai_service.generate_narration(
+            StoryTurnContext(
+                session_id=session.id,
+                action=action,
+                language=lang,
+                psychogram_summary=psychogram_summary,
+            )
+        )
+
+        current_turn_no = db.scalar(
+            select(func.max(Turn.turn_no)).where(Turn.session_id == session.id)
+        )
+        next_turn_no = (current_turn_no or 0) + 1
+
+        turn = Turn(
+            id=str(uuid4()),
+            session_id=session.id,
+            turn_no=next_turn_no,
+            player_action=action,
+            ai_narration=narration,
+            language=lang,
+            created_at=datetime.now(UTC),
+        )
+        session.updated_at = datetime.now(UTC)
+        db.add(turn)
+        db.add(session)
+        db.commit()
+    finally:
+        db.close()
+
     return {
         "result": "accepted",
-        "narration": f"{_t(lang, 'story_prefix')}: {action}",
-        "next_state": "pending-ai-engine",
+        "session_id": payload.session_id,
+        "turn_no": next_turn_no,
+        "narration": narration,
+        "next_state": "awaiting_wearer_action",
     }
 
 
@@ -530,8 +584,54 @@ def get_setup_session(setup_session_id: str) -> dict:
     return _get_session_or_404(setup_session_id)
 
 
+@api_router.get("/sessions/{session_id}")
+def get_chastity_session(session_id: str, request: Request) -> dict:
+    db = _get_db_session(request)
+    try:
+        session = db.get(ChastitySession, session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Chastity session not found.")
+        return {
+            "session_id": session.id,
+            "wearer_id": session.wearer_id,
+            "status": session.status,
+            "language": session.language,
+            "policy": json.loads(session.policy_snapshot_json),
+            "psychogram": json.loads(session.psychogram_snapshot_json),
+            "created_at": session.created_at.isoformat(),
+            "updated_at": session.updated_at.isoformat(),
+        }
+    finally:
+        db.close()
+
+
+@api_router.get("/sessions/{session_id}/turns")
+def get_session_turns(session_id: str, request: Request) -> dict:
+    db = _get_db_session(request)
+    try:
+        session = db.get(ChastitySession, session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Chastity session not found.")
+        turns = db.scalars(select(Turn).where(Turn.session_id == session_id).order_by(Turn.turn_no)).all()
+        return {
+            "session_id": session_id,
+            "turns": [
+                {
+                    "turn_no": turn.turn_no,
+                    "player_action": turn.player_action,
+                    "ai_narration": turn.ai_narration,
+                    "language": turn.language,
+                    "created_at": turn.created_at.isoformat(),
+                }
+                for turn in turns
+            ],
+        }
+    finally:
+        db.close()
+
+
 @api_router.post("/setup/sessions/{setup_session_id}/complete")
-def complete_setup_session(setup_session_id: str) -> dict:
+def complete_setup_session(setup_session_id: str, request: Request) -> dict:
     store = load_sessions()
     setup_session = store.get(setup_session_id)
     if setup_session is None:
@@ -552,6 +652,23 @@ def complete_setup_session(setup_session_id: str) -> dict:
     session_id = str(uuid4())
     store[setup_session_id] = setup_session
     save_sessions(store)
+
+    db = _get_db_session(request)
+    try:
+        db_session = ChastitySession(
+            id=session_id,
+            wearer_id=setup_session["wearer_id"],
+            status="active",
+            language=setup_session["language"],
+            policy_snapshot_json=json.dumps(setup_session["policy_preview"]),
+            psychogram_snapshot_json=json.dumps(setup_session["psychogram"]),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        db.add(db_session)
+        db.commit()
+    finally:
+        db.close()
 
     return {
         "setup_session_id": setup_session_id,
