@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
@@ -54,3 +54,19 @@ class Turn(Base):
     ai_narration: Mapped[str] = mapped_column(Text, nullable=False)
     language: Mapped[str] = mapped_column(String(5), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class LLMProfile(Base):
+    __tablename__ = "llm_profiles"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, unique=True)
+    provider_name: Mapped[str] = mapped_column(String(80), nullable=False, default="custom")
+    api_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    chat_model: Mapped[str] = mapped_column(String(120), nullable=False)
+    vision_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    behavior_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

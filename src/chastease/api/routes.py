@@ -2,6 +2,7 @@ from datetime import UTC, date, datetime, timedelta
 import json
 import hashlib
 import hmac
+import re
 import secrets
 from typing import Literal
 from uuid import uuid4
@@ -11,8 +12,9 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from chastease.models import Character, ChastitySession, Turn, User
+from chastease.models import Character, ChastitySession, LLMProfile, Turn, User
 from chastease.repositories.setup_store import load_sessions, save_sessions
+from chastease.shared.secrets_crypto import decrypt_secret, encrypt_secret
 from chastease.services.ai.base import StoryTurnContext
 
 api_router = APIRouter()
@@ -160,6 +162,19 @@ class StoryTurnRequest(BaseModel):
     session_id: str | None = None
 
 
+class ChatTurnRequest(BaseModel):
+    session_id: str = Field(min_length=1)
+    message: str = Field(min_length=1)
+    language: Literal["de", "en"] = "de"
+    attachments: list[dict] = Field(default_factory=list)
+
+
+class ChatActionExecuteRequest(BaseModel):
+    session_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=2)
+    payload: dict = Field(default_factory=dict)
+
+
 class SetupStartRequest(BaseModel):
     user_id: str = Field(min_length=1)
     character_id: str | None = None
@@ -219,6 +234,24 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str = Field(min_length=3)
     password: str = Field(min_length=8)
+
+
+class LLMProfileUpsertRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    auth_token: str = Field(min_length=8)
+    provider_name: str = Field(default="custom", min_length=2)
+    api_url: str = Field(min_length=8)
+    api_key: str | None = None
+    chat_model: str = Field(min_length=2)
+    vision_model: str | None = None
+    behavior_prompt: str = Field(default="", min_length=0)
+    is_active: bool = True
+
+
+class LLMProfileTestRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    auth_token: str = Field(min_length=8)
+    dry_run: bool = True
 
 
 def _lang(value: str) -> str:
@@ -552,6 +585,16 @@ def _get_db_session(request: Request):
     return request.app.state.db_session_factory()
 
 
+def _require_user_token(user_id: str, auth_token: str, db) -> User:
+    token_user_id = auth_tokens.get(auth_token)
+    if token_user_id != user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token for user.")
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return user
+
+
 def _serialize_chastity_session(session: ChastitySession) -> dict:
     return {
         "session_id": session.id,
@@ -564,6 +607,37 @@ def _serialize_chastity_session(session: ChastitySession) -> dict:
         "created_at": session.created_at.isoformat(),
         "updated_at": session.updated_at.isoformat(),
     }
+
+
+def _serialize_llm_profile(profile: LLMProfile) -> dict:
+    return {
+        "user_id": profile.user_id,
+        "provider_name": profile.provider_name,
+        "api_url": profile.api_url,
+        "chat_model": profile.chat_model,
+        "vision_model": profile.vision_model,
+        "behavior_prompt": profile.behavior_prompt,
+        "is_active": profile.is_active,
+        "has_api_key": bool(profile.api_key_encrypted),
+        "created_at": profile.created_at.isoformat(),
+        "updated_at": profile.updated_at.isoformat(),
+    }
+
+
+def _extract_pending_actions(narration: str) -> tuple[str, list[dict]]:
+    pattern = re.compile(r"\[\[ACTION:(?P<kind>[a-zA-Z0-9_\-]+)\|(?P<payload>\{.*?\})\]\]")
+    actions: list[dict] = []
+    cleaned = narration
+    for match in pattern.finditer(narration):
+        action_type = match.group("kind")
+        payload_text = match.group("payload")
+        try:
+            payload = json.loads(payload_text)
+        except Exception:
+            payload = {"raw": payload_text}
+        actions.append({"action_type": action_type, "payload": payload, "requires_execute_call": True})
+        cleaned = cleaned.replace(match.group(0), "").strip()
+    return cleaned, actions
 
 
 @api_router.post("/auth/register")
@@ -641,6 +715,114 @@ def auth_me(auth_token: str, request: Request) -> dict:
         if user is None:
             raise HTTPException(status_code=401, detail="Invalid auth token.")
         return {"user_id": user.id, "email": user.email, "display_name": user.display_name}
+    finally:
+        db.close()
+
+
+@api_router.get("/llm/profile")
+def get_llm_profile(user_id: str, auth_token: str, request: Request) -> dict:
+    db = _get_db_session(request)
+    try:
+        _require_user_token(user_id, auth_token, db)
+        profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == user_id))
+        if profile is None:
+            return {"configured": False}
+        return {"configured": True, "profile": _serialize_llm_profile(profile)}
+    finally:
+        db.close()
+
+
+@api_router.post("/llm/profile")
+def upsert_llm_profile(payload: LLMProfileUpsertRequest, request: Request) -> dict:
+    db = _get_db_session(request)
+    try:
+        _require_user_token(payload.user_id, payload.auth_token, db)
+        profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == payload.user_id))
+        now = datetime.now(UTC)
+        encrypted_key = (
+            encrypt_secret(payload.api_key, request.app.state.config.SECRET_KEY)
+            if payload.api_key and payload.api_key.strip()
+            else None
+        )
+
+        if profile is None:
+            if not encrypted_key:
+                raise HTTPException(status_code=400, detail="api_key is required for first profile creation.")
+            profile = LLMProfile(
+                id=str(uuid4()),
+                user_id=payload.user_id,
+                provider_name=payload.provider_name.strip(),
+                api_url=payload.api_url.strip(),
+                api_key_encrypted=encrypted_key,
+                chat_model=payload.chat_model.strip(),
+                vision_model=(payload.vision_model.strip() if payload.vision_model else None),
+                behavior_prompt=payload.behavior_prompt,
+                is_active=payload.is_active,
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(profile)
+        else:
+            profile.provider_name = payload.provider_name.strip()
+            profile.api_url = payload.api_url.strip()
+            if encrypted_key:
+                profile.api_key_encrypted = encrypted_key
+            profile.chat_model = payload.chat_model.strip()
+            profile.vision_model = payload.vision_model.strip() if payload.vision_model else None
+            profile.behavior_prompt = payload.behavior_prompt
+            profile.is_active = payload.is_active
+            profile.updated_at = now
+            db.add(profile)
+        db.commit()
+        return {"configured": True, "profile": _serialize_llm_profile(profile)}
+    finally:
+        db.close()
+
+
+@api_router.post("/llm/test")
+def test_llm_profile(payload: LLMProfileTestRequest, request: Request) -> dict:
+    db = _get_db_session(request)
+    try:
+        _require_user_token(payload.user_id, payload.auth_token, db)
+        profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == payload.user_id))
+        if profile is None:
+            raise HTTPException(status_code=404, detail="LLM profile not configured.")
+        if not profile.is_active:
+            raise HTTPException(status_code=400, detail="LLM profile is disabled.")
+
+        if payload.dry_run:
+            return {
+                "ok": True,
+                "dry_run": True,
+                "profile": {
+                    "provider_name": profile.provider_name,
+                    "api_url": profile.api_url,
+                    "chat_model": profile.chat_model,
+                    "vision_model": profile.vision_model,
+                    "has_api_key": bool(profile.api_key_encrypted),
+                },
+            }
+
+        api_key = decrypt_secret(profile.api_key_encrypted, request.app.state.config.SECRET_KEY)
+        ai_service = request.app.state.ai_service
+        context = StoryTurnContext(
+            session_id="llm-connectivity-test",
+            action="Ping test action",
+            language="en",
+            psychogram_summary="test profile",
+        )
+        if hasattr(ai_service, "generate_narration_with_profile"):
+            narration = ai_service.generate_narration_with_profile(
+                context,
+                api_url=profile.api_url,
+                api_key=api_key,
+                chat_model=profile.chat_model,
+                behavior_prompt=profile.behavior_prompt,
+            )
+        else:
+            narration = ai_service.generate_narration(context)
+
+        return {"ok": True, "dry_run": False, "sample_response": narration}
     finally:
         db.close()
 
@@ -745,6 +927,32 @@ def health() -> dict:
     return {"status": "ok", "service": "chastease-api"}
 
 
+def _generate_ai_narration_for_session(
+    db, request: Request, session: ChastitySession, action: str, language: str
+) -> str:
+    psychogram = json.loads(session.psychogram_snapshot_json)
+    psychogram_summary = psychogram.get("summary", "No psychogram summary available.")
+
+    ai_service = request.app.state.ai_service
+    context = StoryTurnContext(
+        session_id=session.id,
+        action=action,
+        language=language,
+        psychogram_summary=psychogram_summary,
+    )
+    profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == session.user_id))
+    if profile is not None and profile.is_active and hasattr(ai_service, "generate_narration_with_profile"):
+        api_key = decrypt_secret(profile.api_key_encrypted, request.app.state.config.SECRET_KEY)
+        return ai_service.generate_narration_with_profile(
+            context,
+            api_url=profile.api_url,
+            api_key=api_key,
+            chat_model=profile.chat_model,
+            behavior_prompt=profile.behavior_prompt,
+        )
+    return ai_service.generate_narration(context)
+
+
 @api_router.post("/story/turn")
 def story_turn(payload: StoryTurnRequest, request: Request) -> dict:
     lang = _lang(payload.language)
@@ -760,18 +968,7 @@ def story_turn(payload: StoryTurnRequest, request: Request) -> dict:
         if session is None:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
 
-        psychogram = json.loads(session.psychogram_snapshot_json)
-        psychogram_summary = psychogram.get("summary", "No psychogram summary available.")
-
-        ai_service = request.app.state.ai_service
-        narration = ai_service.generate_narration(
-            StoryTurnContext(
-                session_id=session.id,
-                action=action,
-                language=lang,
-                psychogram_summary=psychogram_summary,
-            )
-        )
+        narration = _generate_ai_narration_for_session(db, request, session, action, lang)
 
         current_turn_no = db.scalar(
             select(func.max(Turn.turn_no)).where(Turn.session_id == session.id)
@@ -800,6 +997,80 @@ def story_turn(payload: StoryTurnRequest, request: Request) -> dict:
         "turn_no": next_turn_no,
         "narration": narration,
         "next_state": "awaiting_wearer_action",
+    }
+
+
+@api_router.post("/chat/turn")
+def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
+    lang = _lang(payload.language)
+    message = payload.message.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Field 'message' is required.")
+
+    attachment_hint = ""
+    if payload.attachments:
+        attachment_names = [str(item.get("name", "file")) for item in payload.attachments]
+        attachment_hint = f" Attachments: {', '.join(attachment_names)}."
+
+    action_text = f"{message}{attachment_hint}"
+
+    db = _get_db_session(request)
+    try:
+        session = db.get(ChastitySession, payload.session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Chastity session not found.")
+
+        narration_raw = _generate_ai_narration_for_session(db, request, session, action_text, lang)
+        narration, pending_actions = _extract_pending_actions(narration_raw)
+
+        current_turn_no = db.scalar(
+            select(func.max(Turn.turn_no)).where(Turn.session_id == session.id)
+        )
+        next_turn_no = (current_turn_no or 0) + 1
+        turn = Turn(
+            id=str(uuid4()),
+            session_id=session.id,
+            turn_no=next_turn_no,
+            player_action=action_text,
+            ai_narration=narration,
+            language=lang,
+            created_at=datetime.now(UTC),
+        )
+        session.updated_at = datetime.now(UTC)
+        db.add(turn)
+        db.add(session)
+        db.commit()
+    finally:
+        db.close()
+
+    return {
+        "result": "accepted",
+        "session_id": payload.session_id,
+        "turn_no": next_turn_no,
+        "narration": narration,
+        "pending_actions": pending_actions,
+        "next_state": "awaiting_wearer_action",
+    }
+
+
+@api_router.post("/chat/actions/execute")
+def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> dict:
+    db = _get_db_session(request)
+    try:
+        session = db.get(ChastitySession, payload.session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Chastity session not found.")
+        session.updated_at = datetime.now(UTC)
+        db.add(session)
+        db.commit()
+    finally:
+        db.close()
+    return {
+        "executed": True,
+        "session_id": payload.session_id,
+        "action_type": payload.action_type,
+        "payload": payload.payload,
+        "message": "Action execution placeholder completed.",
     }
 
 

@@ -1,3 +1,5 @@
+import httpx
+
 from .base import StoryTurnContext
 
 
@@ -32,3 +34,52 @@ class OpenAIAdapter:
             f"[{self.model}] Aktion '{context.action}' akzeptiert. "
             "Die Session bleibt in kontrollierter Entwicklung."
         )
+
+    def generate_narration_with_profile(
+        self,
+        context: StoryTurnContext,
+        *,
+        api_url: str,
+        api_key: str,
+        chat_model: str,
+        behavior_prompt: str = "",
+    ) -> str:
+        if not api_url or not api_key or not chat_model:
+            return self.generate_narration(context)
+
+        system_prompt = (
+            "You are a safe roleplay keyholder assistant. "
+            "Respect explicit hard limits and safety constraints."
+        )
+        if behavior_prompt.strip():
+            system_prompt = f"{system_prompt}\n\nBehavior profile:\n{behavior_prompt.strip()}"
+
+        user_prompt = (
+            f"Session: {context.session_id}\n"
+            f"Psychogram summary: {context.psychogram_summary}\n"
+            f"Wearer action: {context.action}\n"
+            f"Language: {context.language}\n"
+            "Respond as the keyholder with concise narrative and next guidance."
+        )
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": chat_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.7,
+        }
+
+        try:
+            with httpx.Client(timeout=25.0) as client:
+                response = client.post(api_url, headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]["content"].strip()
+        except Exception:
+            return self.generate_narration(context)

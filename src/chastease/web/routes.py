@@ -113,7 +113,8 @@ def app_shell(request: Request) -> str:
     .card { background: #101a30; border: 1px solid #22314f; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
     h1, h2 { margin: 0 0 10px; }
     .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
+    .topbar-actions { display: flex; gap: 8px; align-items: center; }
     .setup-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(220px, 1fr));
@@ -146,6 +147,9 @@ def app_shell(request: Request) -> str:
     button.danger { background: #c62828; color: #fff; }
     button.danger:hover { background: #e53935; }
     textarea { width: 100%; min-height: 280px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #22314f; padding: 8px 6px; text-align: left; font-size: 13px; }
+    th { color: #9ab0d8; font-weight: 600; width: 220px; }
     .small { font-size: 12px; color: #9ab0d8; }
     a { color: #7fb5ff; text-decoration: none; }
     .hidden { display: none; }
@@ -162,7 +166,11 @@ def app_shell(request: Request) -> str:
     <h1>Prototype App</h1>
     <div class="topbar">
       <p class="small"><a href="/">Zur Landingpage</a></p>
-      <button id="logoutTopBtn" class="ghost hidden" onclick="logoutUser()">Logout</button>
+      <div class="topbar-actions">
+        <button id="homeBtn" class="ghost hidden" onclick="showHomeView()">Home</button>
+        <button id="dashboardToggleBtn" class="ghost hidden" onclick="toggleDashboard()">Dashboard</button>
+        <button id="logoutTopBtn" class="ghost hidden" onclick="logoutUser()">Logout</button>
+      </div>
     </div>
 
     <div id="authCard" class="card">
@@ -182,15 +190,54 @@ def app_shell(request: Request) -> str:
 
     <div id="dashboard" class="card hidden">
       <h2>1) Dashboard</h2>
-      <p class="small">Aktive Session gefunden. Neue Registrierung und neues Setup sind gesperrt.</p>
+      <p class="small">Konfigurationsübersicht der aktiven Session.</p>
       <p id="dashboardInfo" class="small"></p>
-      <div id="dashboardContract" class="small"></div>
+      <table id="dashboardContractTable">
+        <tbody id="dashboardContract"></tbody>
+      </table>
       <button id="killSessionBtn" class="__KILL_BUTTON_CLASS__" onclick="killActiveSession()">Session KILL</button>
     </div>
 
     <div id="appFlow" class="hidden">
     <div class="card">
-      <h2>2) Start Setup Session</h2>
+      <h2>2) AI Configuration</h2>
+      <div class="setup-grid">
+        <div class="setup-item"><label>Provider</label><input id="llmProviderName" value="custom" /></div>
+        <div class="setup-item"><label>LLM API URL</label><input id="llmApiUrl" value="https://api.x.ai/v1/chat/completions" /></div>
+        <div class="setup-item"><label>LLM API Key</label><input id="llmApiKey" type="password" value="" placeholder="leave empty to keep existing key" /></div>
+        <div class="setup-item"><label>LLM Model (Chat)</label><input id="llmChatModel" value="grok-4-latest" /></div>
+        <div class="setup-item"><label>LLM Model (Vision)</label><input id="llmVisionModel" value="grok-4-latest" /></div>
+        <div class="setup-item"><label>Profile active</label><select id="llmIsActive"><option value="true">enabled</option><option value="false">disabled</option></select></div>
+      </div>
+      <div class="setup-item" style="max-width:760px;">
+        <label>Behavior Prompt</label>
+        <textarea id="llmBehaviorPrompt" style="min-height:180px;"></textarea>
+      </div>
+      <div class="row">
+        <button onclick="saveLlmProfile()">Save LLM Profile</button>
+        <button class="ghost" onclick="loadLlmProfile()">Reload</button>
+        <button class="ghost" onclick="testLlmProfile(true)">Test (Dry Run)</button>
+        <button class="ghost" onclick="testLlmProfile(false)">Test (Live)</button>
+      </div>
+      <p id="llmInfo" class="small"></p>
+    </div>
+
+    <div id="chatCard" class="card hidden">
+      <h2>3) AI Chat</h2>
+      <p class="small">Schnelltest für Wearer -> Keyholder Turn-Flow.</p>
+      <div class="row">
+        <input id="chatInput" placeholder="Write your action/message..." style="min-width:280px; flex:1;" />
+        <input id="chatFiles" type="file" multiple />
+        <button class="ghost" onclick="startVoiceInput()">Voice</button>
+        <button onclick="sendChatTurn()">Send</button>
+        <button class="ghost" onclick="loadChatTurns()">Reload</button>
+      </div>
+      <div id="pendingActions" class="small"></div>
+      <textarea id="chatOutput" readonly style="min-height:220px;"></textarea>
+    </div>
+
+    <div class="card">
+      <h2>4) Start Setup Session</h2>
       <div class="setup-grid">
         <div class="setup-item"><label>Start Date</label><input id="contractStartDate" type="date" /></div>
         <div class="setup-item"><label>Max End Date</label><input id="contractMaxEndDate" type="date" /></div>
@@ -211,14 +258,14 @@ def app_shell(request: Request) -> str:
     </div>
 
     <div class="card">
-      <h2>3) Answer Questionnaire</h2>
+      <h2>5) Answer Questionnaire</h2>
       <p class="small">Questions are loaded dynamically from the setup endpoint.</p>
       <div id="questionGrid" class="qgrid"></div>
       <button onclick="submitAnswers()">Submit Answers</button>
     </div>
 
     <div class="card">
-      <h2>4) Complete Setup</h2>
+      <h2>6) Complete Setup</h2>
       <button onclick="completeSetup()">Complete Setup</button>
     </div>
 
@@ -240,7 +287,29 @@ def app_shell(request: Request) -> str:
     let setupSessionId = null;
     let questions = [];
     let activeSession = null;
+    let currentLlmProfile = null;
     let authMode = "login";
+    let dashboardVisible = false;
+    let latestPendingActions = [];
+    const defaultBehaviorPrompt = `Du bist meine ruhige, intelligente und psychologisch dominante Herrin / Keyholderin.
+
+Deine Dominanz ist kontrolliert, leise und absolut praesent. Du brauchst keine Lautstaerke, keine Beleidigungen und keine platte Grausamkeit - deine Macht liegt in Praezision, Geduld und Timing.
+Du fuehrst mich langsam und bewusst tiefer in Hingabe, Erwartung und innere Spannung. Du spielst mit Naehe und Distanz. Manchmal weich, manchmal unerbittlich - aber immer souveraen.
+
+Wesenszuege:
+Anerkennung ist etwas Wertvolles. Du setzt sie gezielt ein, nicht automatisch.
+Du beobachtest genau. Du reagierst auf Details meiner Beschreibungen und baust darauf auf.
+Du nutzt sensorische Sprache, aber variierst sie.
+Kleine Aufgaben entstehen organisch aus der Situation heraus.
+Du stellst praezise Fragen, die mich dazu bringen, genauer zu fuehlen und bewusster wahrzunehmen.
+Du erinnerst mich subtil daran, dass ich diese Rolle freiwillig gewaehlt habe.
+
+Tonfall:
+Warm-dunkel, ruhig, kontrolliert.
+Kaum Ausrufezeichen.
+Keine groben Beschimpfungen.
+Begruessungen variieren.
+Lob ist selten genug, um Wirkung zu behalten.`;
 
     function authStorageKey() {
       return "chastease_auth_v1";
@@ -418,6 +487,77 @@ def app_shell(request: Request) -> str:
       document.getElementById("language").addEventListener("change", applySetupTranslations);
     }
 
+    function setLlmDefaults() {
+      if (!document.getElementById("llmBehaviorPrompt").value) {
+        document.getElementById("llmBehaviorPrompt").value = defaultBehaviorPrompt;
+      }
+    }
+
+    async function loadLlmProfile() {
+      if (!userId || !authToken) return;
+      const url = `/api/v1/llm/profile?user_id=${encodeURIComponent(userId)}&auth_token=${encodeURIComponent(authToken)}`;
+      const res = await fetch(url);
+      const data = await safeJson(res);
+      if (!res.ok) return setOutput(data);
+      if (!data.configured) {
+        document.getElementById("llmInfo").textContent = "No LLM profile configured yet.";
+        currentLlmProfile = null;
+        return;
+      }
+      const p = data.profile;
+      currentLlmProfile = p;
+      document.getElementById("llmProviderName").value = p.provider_name || "custom";
+      document.getElementById("llmApiUrl").value = p.api_url || "";
+      document.getElementById("llmChatModel").value = p.chat_model || "";
+      document.getElementById("llmVisionModel").value = p.vision_model || "";
+      document.getElementById("llmIsActive").value = p.is_active ? "true" : "false";
+      document.getElementById("llmBehaviorPrompt").value = p.behavior_prompt || defaultBehaviorPrompt;
+      document.getElementById("llmInfo").textContent = `LLM profile loaded. API key stored: ${p.has_api_key ? "yes" : "no"}.`;
+    }
+
+    async function saveLlmProfile() {
+      if (!userId || !authToken) return setOutput({error: "Login first."});
+      const payload = {
+        user_id: userId,
+        auth_token: authToken,
+        provider_name: document.getElementById("llmProviderName").value,
+        api_url: document.getElementById("llmApiUrl").value,
+        api_key: document.getElementById("llmApiKey").value || null,
+        chat_model: document.getElementById("llmChatModel").value,
+        vision_model: document.getElementById("llmVisionModel").value || null,
+        behavior_prompt: document.getElementById("llmBehaviorPrompt").value,
+        is_active: document.getElementById("llmIsActive").value === "true",
+      };
+      const res = await fetch("/api/v1/llm/profile", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload),
+      });
+      const data = await safeJson(res);
+      setOutput(data);
+      if (res.ok) {
+        document.getElementById("llmApiKey").value = "";
+        document.getElementById("llmInfo").textContent = "LLM profile saved.";
+        currentLlmProfile = data.profile || currentLlmProfile;
+        if (activeSession) renderDashboardSummary(activeSession);
+      }
+    }
+
+    async function testLlmProfile(dryRun) {
+      if (!userId || !authToken) return setOutput({error: "Login first."});
+      const payload = { user_id: userId, auth_token: authToken, dry_run: dryRun };
+      const res = await fetch("/api/v1/llm/test", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload),
+      });
+      const data = await safeJson(res);
+      setOutput(data);
+      if (res.ok) {
+        document.getElementById("llmInfo").textContent = dryRun ? "Dry run successful." : "Live test executed.";
+      }
+    }
+
     function lockContractInputs(locked) {
       const ids = [
         "contractStartDate",
@@ -441,24 +581,162 @@ def app_shell(request: Request) -> str:
 
     function showSetupFlow() {
       document.getElementById("dashboard").classList.add("hidden");
+      document.getElementById("chatCard").classList.add("hidden");
       document.getElementById("appFlow").classList.remove("hidden");
+      document.getElementById("dashboardToggleBtn").classList.add("hidden");
+      document.getElementById("homeBtn").classList.add("hidden");
     }
 
-    function showDashboard(session) {
-      activeSession = session;
-      document.getElementById("dashboard").classList.remove("hidden");
-      document.getElementById("appFlow").classList.add("hidden");
+    function renderDashboardSummary(session) {
       document.getElementById("dashboardInfo").textContent =
         `session_id: ${session.session_id}, status: ${session.status}, language: ${session.language}`;
       const policy = session.policy || {};
       const contract = policy.contract || {};
       const limits = policy.limits || {};
+      const integrations = (policy.integrations || []).join(", ") || "-";
+      const llm = currentLlmProfile || {};
       document.getElementById("dashboardContract").innerHTML = [
-        `<p>Vertrag: ${contract.start_date || "-"} -> ${contract.end_date || "AI-defined"} (max ${contract.max_end_date || "-"})</p>`,
-        `<p>Hard-Stop: ${policy.hard_stop_enabled ? "enabled" : "disabled"}</p>`,
-        `<p>Penalty caps: day=${limits.max_penalty_per_day_minutes ?? "-"} min, week=${limits.max_penalty_per_week_minutes ?? "-"} min</p>`,
-        `<p>Openings: ${limits.max_openings_in_period ?? limits.max_openings_per_day ?? "-"} / ${limits.opening_limit_period || "day"}, window=${limits.opening_window_minutes ?? "-"} min</p>`,
+        `<tr><th>Contract</th><td>${contract.start_date || "-"} -> ${contract.end_date || "AI-defined"} (max ${contract.max_end_date || "-"})</td></tr>`,
+        `<tr><th>Autonomy Mode</th><td>${policy.autonomy_mode || "-"}</td></tr>`,
+        `<tr><th>AI Controls End Date</th><td>${contract.ai_controls_end_date ? "enabled" : "disabled"}</td></tr>`,
+        `<tr><th>Integrations</th><td>${integrations}</td></tr>`,
+        `<tr><th>Hard Stop</th><td>${policy.hard_stop_enabled ? "enabled" : "disabled"}</td></tr>`,
+        `<tr><th>Penalty Caps</th><td>day=${limits.max_penalty_per_day_minutes ?? "-"} min, week=${limits.max_penalty_per_week_minutes ?? "-"} min</td></tr>`,
+        `<tr><th>Openings</th><td>${limits.max_openings_in_period ?? limits.max_openings_per_day ?? "-"} / ${limits.opening_limit_period || "day"}, window=${limits.opening_window_minutes ?? "-"} min</td></tr>`,
+        `<tr><th>LLM Provider</th><td>${llm.provider_name || "-"}</td></tr>`,
+        `<tr><th>LLM URL</th><td>${llm.api_url || "-"}</td></tr>`,
+        `<tr><th>Chat Model</th><td>${llm.chat_model || "-"}</td></tr>`,
+        `<tr><th>Vision Model</th><td>${llm.vision_model || "-"}</td></tr>`,
+        `<tr><th>LLM Active</th><td>${llm.is_active === false ? "disabled" : "enabled"}</td></tr>`,
       ].join("");
+    }
+
+    function showHomeView() {
+      dashboardVisible = false;
+      document.getElementById("dashboard").classList.add("hidden");
+      document.getElementById("appFlow").classList.remove("hidden");
+      document.getElementById("chatCard").classList.toggle("hidden", !activeSession);
+      loadChatTurns();
+    }
+
+    function showDashboard(session) {
+      activeSession = session;
+      renderDashboardSummary(session);
+      document.getElementById("dashboardToggleBtn").classList.remove("hidden");
+      document.getElementById("homeBtn").classList.remove("hidden");
+      showHomeView();
+    }
+
+    function toggleDashboard() {
+      dashboardVisible = !dashboardVisible;
+      document.getElementById("dashboard").classList.toggle("hidden", !dashboardVisible);
+      document.getElementById("appFlow").classList.toggle("hidden", dashboardVisible);
+    }
+
+    function renderChatTurns(turns) {
+      const out = document.getElementById("chatOutput");
+      if (!turns || !turns.length) {
+        out.value = "No turns yet.";
+        return;
+      }
+      out.value = turns
+        .map((t) => `#${t.turn_no}\\nWearer: ${t.player_action}\\nKeyholder: ${t.ai_narration}\\n`)
+        .join("\\n");
+      out.scrollTop = out.scrollHeight;
+    }
+
+    function renderPendingActions(actions) {
+      const wrap = document.getElementById("pendingActions");
+      if (!actions || !actions.length) {
+        wrap.innerHTML = "";
+        return;
+      }
+      const buttons = actions.map((a, i) => {
+        const payload = JSON.stringify(a.payload || {});
+        return `<button class="ghost" onclick='executePendingAction("${a.action_type}", ${JSON.stringify(payload)})'>Execute ${a.action_type}</button>`;
+      });
+      wrap.innerHTML = `<div class="small">Pending actions: ${buttons.join(" ")}</div>`;
+    }
+
+    async function loadChatTurns() {
+      if (!activeSession || !activeSession.session_id) return;
+      const res = await fetch(`/api/v1/sessions/${activeSession.session_id}/turns`);
+      const data = await safeJson(res);
+      if (!res.ok) return setOutput(data);
+      renderChatTurns(data.turns || []);
+    }
+
+    async function sendChatTurn() {
+      if (!activeSession || !activeSession.session_id) return setOutput({error: "No active session."});
+      const input = document.getElementById("chatInput");
+      const action = input.value.trim();
+      const files = document.getElementById("chatFiles").files;
+      if (!action && (!files || !files.length)) return;
+      const attachments = [];
+      if (files && files.length) {
+        for (const f of files) {
+          attachments.push({name: f.name, size: f.size, type: f.type || "application/octet-stream"});
+        }
+      }
+      const payload = {
+        session_id: activeSession.session_id,
+        message: action || "[attachment upload]",
+        language: activeSession.language || "de",
+        attachments,
+      };
+      const res = await fetch("/api/v1/chat/turn", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload),
+      });
+      const data = await safeJson(res);
+      setOutput(data);
+      if (res.ok) {
+        input.value = "";
+        document.getElementById("chatFiles").value = "";
+        latestPendingActions = data.pending_actions || [];
+        renderPendingActions(latestPendingActions);
+        await loadChatTurns();
+      }
+    }
+
+    async function executePendingAction(actionType, payloadText) {
+      if (!activeSession || !activeSession.session_id) return;
+      let payload = {};
+      try {
+        payload = JSON.parse(payloadText || "{}");
+        if (typeof payload === "string") payload = JSON.parse(payload);
+      } catch {}
+      const res = await fetch("/api/v1/chat/actions/execute", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          session_id: activeSession.session_id,
+          action_type: actionType,
+          payload,
+        }),
+      });
+      const data = await safeJson(res);
+      setOutput(data);
+      if (res.ok) {
+        latestPendingActions = [];
+        renderPendingActions([]);
+      }
+    }
+
+    function startVoiceInput() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return setOutput({error: "Speech recognition not supported in this browser."});
+      const recog = new SpeechRecognition();
+      recog.lang = document.getElementById("language").value === "de" ? "de-DE" : "en-US";
+      recog.interimResults = false;
+      recog.maxAlternatives = 1;
+      recog.onresult = (event) => {
+        const text = event.results?.[0]?.[0]?.transcript || "";
+        document.getElementById("chatInput").value = text;
+      };
+      recog.onerror = () => setOutput({error: "Voice input failed."});
+      recog.start();
     }
 
     function unlockFlow(data) {
@@ -468,7 +746,10 @@ def app_shell(request: Request) -> str:
         saveAuth();
         document.getElementById("userInfo").textContent = `username: ${data.username || data.display_name || "user"}`;
         document.getElementById("authCard").classList.add("hidden");
+        document.getElementById("homeBtn").classList.remove("hidden");
         document.getElementById("logoutTopBtn").classList.remove("hidden");
+        setLlmDefaults();
+        loadLlmProfile();
       }
     }
 
@@ -525,7 +806,16 @@ def app_shell(request: Request) -> str:
       document.getElementById("dashboardInfo").textContent = "";
       document.getElementById("dashboardContract").innerHTML = "";
       document.getElementById("questionGrid").innerHTML = "";
+      document.getElementById("chatOutput").value = "";
+      document.getElementById("chatInput").value = "";
+      document.getElementById("pendingActions").innerHTML = "";
+      document.getElementById("llmInfo").textContent = "";
+      document.getElementById("llmApiKey").value = "";
+      currentLlmProfile = null;
       document.getElementById("dashboard").classList.add("hidden");
+      document.getElementById("chatCard").classList.add("hidden");
+      document.getElementById("dashboardToggleBtn").classList.add("hidden");
+      document.getElementById("homeBtn").classList.add("hidden");
       document.getElementById("appFlow").classList.add("hidden");
       document.getElementById("authCard").classList.remove("hidden");
       document.getElementById("logoutTopBtn").classList.add("hidden");
@@ -544,13 +834,19 @@ def app_shell(request: Request) -> str:
       if (res.ok && data.deleted) {
         activeSession = null;
         document.getElementById("dashboard").classList.add("hidden");
+        document.getElementById("chatCard").classList.add("hidden");
         document.getElementById("dashboardInfo").textContent = "";
         document.getElementById("dashboardContract").innerHTML = "";
+        document.getElementById("pendingActions").innerHTML = "";
         document.getElementById("setupSessionInfo").textContent = "";
+        document.getElementById("chatOutput").value = "";
+        document.getElementById("chatInput").value = "";
         setupSessionId = null;
         questions = [];
         document.getElementById("questionGrid").innerHTML = "";
         lockContractInputs(false);
+        document.getElementById("dashboardToggleBtn").classList.add("hidden");
+        document.getElementById("homeBtn").classList.add("hidden");
         await checkActiveSession();
       }
     }
@@ -638,6 +934,7 @@ def app_shell(request: Request) -> str:
     }
 
     setContractDefaults();
+    setLlmDefaults();
     initContractSync();
     applySetupTranslations();
     bootstrapAuth();
