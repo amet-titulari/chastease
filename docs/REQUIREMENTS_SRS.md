@@ -146,6 +146,7 @@ Regeln:
 ## 10. UI/UX Anforderungen
 
 - Das Frontend muss modern, responsive und geraeteuebergreifend nutzbar sein.
+- Mehrsprachigkeit ist verpflichtend: Deutsch (`de`) und Englisch (`en`) fuer MVP.
 - Ein Wearer muss Sessions nahtlos zwischen Smartphone, Tablet und Desktop fortsetzen koennen.
 - Chat steht im UX-Fokus und muss auf Mobile priorisiert dargestellt werden.
 - Kritische Aktionen muessen mit klarer, fehlersicherer Nutzerfuehrung dargestellt werden.

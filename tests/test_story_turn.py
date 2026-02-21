@@ -8,3 +8,13 @@ def test_story_turn_accepts_action(client):
     assert response.status_code == 200
     data = response.json()
     assert data["result"] == "accepted"
+
+
+def test_story_turn_accepts_action_in_english(client):
+    response = client.post(
+        "/api/v1/story/turn",
+        json={"action": "I open the chest.", "language": "en"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["narration"].startswith("You attempt:")

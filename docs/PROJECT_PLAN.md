@@ -40,6 +40,7 @@ Ein spielbarer vertikaler Slice:
 
 5. Frontend-Basis
 - einfacher Client fuer Login/Session/Turn-Loop
+- i18n-Basis fuer Deutsch/Englisch in API und UI
 
 6. Betrieb/Skalierung
 - Docker-Stack definieren

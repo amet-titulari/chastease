@@ -41,6 +41,40 @@ Healthcheck:
 curl http://127.0.0.1:5000/api/v1/health
 ```
 
+Setup-Prototyp:
+
+```bash
+# 1) Setup starten
+curl -X POST http://127.0.0.1:5000/api/v1/setup/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"wearer_id":"wearer-1","hard_stop_enabled":true,"autonomy_mode":"execute","language":"de","integrations":["ttlock"]}'
+
+# 2) Antworten senden
+curl -X POST http://127.0.0.1:5000/api/v1/setup/sessions/<setup_session_id>/answers \
+  -H "Content-Type: application/json" \
+  -d '{"answers":[{"question_id":"q_rule_structure","value":8},{"question_id":"q_strict_guidance","value":7},{"question_id":"q_positive_reinforcement","value":5},{"question_id":"q_control_checkins","value":9},{"question_id":"q_challenge_tasks","value":8},{"question_id":"q_variety","value":6}]}'
+
+# 3) Setup abschliessen (erstellt aktive ChastitySession)
+curl -X POST http://127.0.0.1:5000/api/v1/setup/sessions/<setup_session_id>/complete
+```
+
+Browser-Demo:
+
+```text
+http://127.0.0.1:5000/api/v1/setup/demo
+```
+
+Mehrsprachigkeit (MVP):
+
+- Unterstuetzte Sprachen: `de`, `en`
+- Sprachwahl aktuell ueber API-Feld `language` im Setup-/Story-Request
+- Fragebogen abrufen: `GET /api/v1/setup/questionnaire?language=de|en`
+
+Setup-Persistenz (aktuell):
+
+- Datei-basierter Store: `data/setup_sessions.json`
+- Optional per Env steuerbar: `SETUP_STORE_PATH=/pfad/zur/datei.json`
+
 ## Tests
 
 ```bash

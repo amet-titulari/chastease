@@ -66,7 +66,7 @@ Normierte Wertebereichsskala `0-100`:
 ## Scoring-Logik (MVP)
 
 1. Jede Frage wird einem oder mehreren `traits` mit Gewicht zugeordnet.  
-2. Rohwerte werden auf `0-100` normalisiert.  
+2. Fragebogenwerte (`1-10`) werden auf `0-100` normalisiert.  
 3. Harte Limits aus direkten Grenzfragen ueberschreiben abgeleitete Vorschlaege.  
 4. Bei widerspruechlichen Antworten:
 - `risk_flags` setzen

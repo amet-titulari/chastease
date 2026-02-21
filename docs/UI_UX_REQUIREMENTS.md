@@ -14,6 +14,8 @@ Ein Wearer kann eine Session auf dem Smartphone starten und nahtlos auf Tablet o
 
 ## Funktionale UX-Anforderungen
 
+- Die Anwendung muss in Deutsch (`de`) und Englisch (`en`) nutzbar sein.
+- Spracheinstellung ist nutzerbezogen zu speichern und auf allen Geraeten konsistent anzuwenden.
 - Aktive Session ist konto-gebunden und geraeteunabhaengig abrufbar.
 - Beim Geraetewechsel wird der letzte konsistente Zustand inkl. Turn-Verlauf geladen.
 - Konfliktfaelle (gleichzeitige Eingaben auf mehreren Geraeten) muessen nachvollziehbar aufgeloest werden.

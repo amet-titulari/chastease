@@ -14,6 +14,7 @@
 ## Prioritaet P1
 
 - [ ] Authentifizierung (JWT oder Session-basiert)
+- [ ] Mehrsprachigkeit (Deutsch/Englisch) in API, UI und Setup-Flow
 - [ ] Inventar- und Itemsystem (einfach)
 - [ ] Prompt-Template Versionierung
 
