@@ -234,27 +234,34 @@ def _now_iso() -> str:
 
 
 def _resolve_contract_dates(
-    start_raw: str | None, end_raw: str | None, max_end_raw: str | None
-) -> tuple[str, str | None, str]:
+    start_raw: str | None, end_raw: str | None, max_end_raw: str | None, ai_controls_end_date: bool
+) -> tuple[str, str | None, str | None]:
     today = datetime.now(UTC).date()
     default_start = today
     default_max_end = today + timedelta(days=30)
 
     try:
         start_date = date.fromisoformat(start_raw) if start_raw else default_start
-        max_end_date = date.fromisoformat(max_end_raw) if max_end_raw else default_max_end
+        max_end_date = date.fromisoformat(max_end_raw) if max_end_raw else None
         end_date = date.fromisoformat(end_raw) if end_raw else None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.") from exc
 
-    if max_end_date < start_date:
+    if max_end_date is None and not ai_controls_end_date:
+        max_end_date = default_max_end
+
+    if max_end_date is not None and max_end_date < start_date:
         raise HTTPException(status_code=400, detail="contract_max_end_date must be on or after contract_start_date.")
     if end_date is not None:
         if end_date < start_date:
             raise HTTPException(status_code=400, detail="contract_end_date must be on or after contract_start_date.")
-        if end_date > max_end_date:
+        if max_end_date is not None and end_date > max_end_date:
             raise HTTPException(status_code=400, detail="contract_end_date must not be after contract_max_end_date.")
-    return start_date.isoformat(), (end_date.isoformat() if end_date else None), max_end_date.isoformat()
+    return (
+        start_date.isoformat(),
+        (end_date.isoformat() if end_date else None),
+        (max_end_date.isoformat() if max_end_date else None),
+    )
 
 
 def _normalize_email(raw: str) -> str:
@@ -802,7 +809,10 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
     now = _now_iso()
     lang = _lang(payload.language)
     contract_start_date, contract_end_date, contract_max_end_date = _resolve_contract_dates(
-        payload.contract_start_date, payload.contract_end_date, payload.contract_max_end_date
+        payload.contract_start_date,
+        payload.contract_end_date,
+        payload.contract_max_end_date,
+        payload.ai_controls_end_date,
     )
     opening_limit_period = payload.opening_limit_period
     max_openings_in_period = payload.max_openings_in_period
@@ -957,6 +967,41 @@ def get_active_chastity_session(user_id: str, auth_token: str, request: Request)
             return {"has_active_session": False}
 
         return {"has_active_session": True, "chastity_session": _serialize_chastity_session(session)}
+    finally:
+        db.close()
+
+
+@api_router.delete("/sessions/active")
+def kill_active_chastity_session(user_id: str, auth_token: str, request: Request) -> dict:
+    if not getattr(request.app.state.config, "ENABLE_SESSION_KILL", False):
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    token_user_id = auth_tokens.get(auth_token)
+    if token_user_id != user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token for user.")
+
+    db = _get_db_session(request)
+    try:
+        user = db.get(User, user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        session = db.scalar(
+            select(ChastitySession)
+            .where(ChastitySession.user_id == user_id)
+            .where(ChastitySession.status == "active")
+            .order_by(ChastitySession.created_at.desc())
+        )
+        if session is None:
+            return {"deleted": False, "reason": "no_active_session"}
+
+        turns = db.scalars(select(Turn).where(Turn.session_id == session.id)).all()
+        for turn in turns:
+            db.delete(turn)
+        killed_session_id = session.id
+        db.delete(session)
+        db.commit()
+        return {"deleted": True, "killed_session_id": killed_session_id}
     finally:
         db.close()
 

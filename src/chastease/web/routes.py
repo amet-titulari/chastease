@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
 web_router = APIRouter()
@@ -96,8 +96,10 @@ def landing_page() -> str:
 
 
 @web_router.get("/app", response_class=HTMLResponse)
-def app_shell() -> str:
-    return """
+def app_shell(request: Request) -> str:
+    session_kill_enabled = bool(getattr(request.app.state.config, "ENABLE_SESSION_KILL", False))
+    kill_button_class = "danger" if session_kill_enabled else "hidden"
+    html = """
 <!doctype html>
 <html lang="en">
 <head>
@@ -105,11 +107,35 @@ def app_shell() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Chastease Prototype App</title>
   <style>
+    * { box-sizing: border-box; }
     body { font-family: "Avenir Next", "Segoe UI", Arial, sans-serif; margin: 0; background: #0b1220; color: #e8eefc; }
     .wrap { max-width: 1024px; margin: 0 auto; padding: 24px; }
     .card { background: #101a30; border: 1px solid #22314f; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
     h1, h2 { margin: 0 0 10px; }
     .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .setup-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 10px 12px;
+      max-width: 760px;
+      margin-bottom: 12px;
+      margin-right: auto;
+    }
+    .setup-item label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+      color: #a9b9da;
+      line-height: 1.2;
+    }
+    .setup-item input,
+    .setup-item select {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+    }
+    .setup-item input[type="date"] { max-width: 100%; }
     .qgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
     label { display: block; font-size: 13px; color: #a9b9da; margin-bottom: 4px; }
     input, select, button, textarea { border-radius: 8px; border: 1px solid #2b3d63; background: #0f1930; color: #e8eefc; padding: 8px 10px; }
@@ -117,31 +143,40 @@ def app_shell() -> str:
     button { background: #2d8cff; border: 0; cursor: pointer; }
     button:hover { background: #4aa0ff; }
     button.ghost { background: transparent; border: 1px solid #2b3d63; }
+    button.danger { background: #c62828; color: #fff; }
+    button.danger:hover { background: #e53935; }
     textarea { width: 100%; min-height: 280px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     .small { font-size: 12px; color: #9ab0d8; }
     a { color: #7fb5ff; text-decoration: none; }
     .hidden { display: none; }
+    @media (max-width: 820px) {
+      .setup-grid {
+        grid-template-columns: 1fr;
+        max-width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Prototype App</h1>
-    <p class="small"><a href="/">Zur Landingpage</a></p>
+    <div class="topbar">
+      <p class="small"><a href="/">Zur Landingpage</a></p>
+      <button id="logoutTopBtn" class="ghost hidden" onclick="logoutUser()">Logout</button>
+    </div>
 
-    <div class="card">
+    <div id="authCard" class="card">
       <h2>0) Login / Register</h2>
       <div class="row">
-        <button id="modeLoginBtn" onclick="setAuthMode('login')">Login</button>
-        <button id="modeRegisterBtn" class="ghost" onclick="setAuthMode('register')">Register</button>
+        <div><label>Username</label><input id="username" value="" /></div>
+        <div id="emailWrap" class="hidden"><label>Email</label><input id="email" value="" /></div>
+        <div><label>Password</label><input id="password" type="password" value="" /></div>
+        <div id="passwordRepeatWrap" class="hidden"><label>Password repeat</label><input id="passwordRepeat" type="password" value="" /></div>
       </div>
       <div class="row">
-        <div><label>Username</label><input id="username" value="wearer_demo" /></div>
-        <div id="emailWrap" class="hidden"><label>Email</label><input id="email" value="wearer@example.com" /></div>
-        <div><label>Password</label><input id="password" type="password" value="demo-pass-123" /></div>
-        <div id="passwordRepeatWrap" class="hidden"><label>Password repeat</label><input id="passwordRepeat" type="password" value="demo-pass-123" /></div>
+        <button id="loginBtn" onclick="handleLoginClick()">Login</button>
+        <button id="registerBtn" class="ghost" onclick="handleRegisterClick()">Register</button>
       </div>
-      <button id="authActionBtn" onclick="loginUser()">Login</button>
-      <button class="ghost" onclick="logoutUser()">Logout</button>
       <p id="userInfo" class="small"></p>
     </div>
 
@@ -150,23 +185,26 @@ def app_shell() -> str:
       <p class="small">Aktive Session gefunden. Neue Registrierung und neues Setup sind gesperrt.</p>
       <p id="dashboardInfo" class="small"></p>
       <div id="dashboardContract" class="small"></div>
+      <button id="killSessionBtn" class="__KILL_BUTTON_CLASS__" onclick="killActiveSession()">Session KILL</button>
     </div>
 
     <div id="appFlow" class="hidden">
     <div class="card">
       <h2>2) Start Setup Session</h2>
-      <div class="row">
-        <div><label>Start Date</label><input id="contractStartDate" type="date" /></div>
-        <div><label>Max End Date</label><input id="contractMaxEndDate" type="date" /></div>
-        <div><label>Autonomy Mode</label><select id="autonomy"><option value="execute">execute</option><option value="suggest">suggest</option></select></div>
-        <div><label>Language</label><select id="language"><option value="de">Deutsch</option><option value="en">English</option></select></div>
-        <div><label>Hard Stop</label><select id="hardStop"><option value="true">enabled</option><option value="false">disabled</option></select></div>
-        <div><label>Max Penalty / Day (min)</label><input id="maxPenaltyDay" type="number" min="0" max="1440" value="60" /></div>
-        <div><label>Max Penalty / Week (min)</label><input id="maxPenaltyWeek" type="number" min="0" max="10080" value="240" /></div>
-        <div><label>Penalty Caps</label><select id="penaltyCapsEnabled"><option value="true">enabled</option><option value="false">disabled</option></select></div>
-        <div><label>Openings Period</label><select id="openingLimitPeriod"><option value="day">day</option><option value="week">week</option><option value="month">month</option></select></div>
-        <div><label>Max Openings / Period</label><input id="maxOpeningsInPeriod" type="number" min="0" max="200" value="1" /></div>
-        <div><label>Opening Window (min)</label><input id="openingWindowMinutes" type="number" min="1" max="240" value="30" /></div>
+      <div class="setup-grid">
+        <div class="setup-item"><label>Start Date</label><input id="contractStartDate" type="date" /></div>
+        <div class="setup-item"><label>Max End Date</label><input id="contractMaxEndDate" type="date" /></div>
+        <div class="setup-item"><label>Max Duration (days)</label><input id="contractMaxDurationDays" type="number" min="0" max="3650" value="30" /></div>
+        <div class="setup-item"><label></label><div id="durationHint" class="small">If you change date or duration, the other value is auto-calculated. 0 days means AI decides end date.</div></div>
+        <div class="setup-item"><label>Autonomy Mode</label><select id="autonomy"><option value="execute">execute</option><option value="suggest">suggest</option></select></div>
+        <div class="setup-item"><label>Language</label><select id="language"><option value="de">Deutsch</option><option value="en">English</option></select></div>
+        <div class="setup-item"><label>Hard Stop</label><select id="hardStop"><option value="true">enabled</option><option value="false">disabled</option></select></div>
+        <div class="setup-item"><label>Penalty Caps</label><select id="penaltyCapsEnabled"><option value="true">enabled</option><option value="false">disabled</option></select></div>
+        <div class="setup-item"><label>Max Penalty / Day (min)</label><input id="maxPenaltyDay" type="number" min="0" max="1440" value="60" /></div>
+        <div class="setup-item"><label>Max Penalty / Week (min)</label><input id="maxPenaltyWeek" type="number" min="0" max="10080" value="240" /></div>
+        <div class="setup-item"><label>Openings Period</label><select id="openingLimitPeriod"><option value="day">day</option><option value="week">week</option><option value="month">month</option></select></div>
+        <div class="setup-item"><label>Max Openings / Period</label><input id="maxOpeningsInPeriod" type="number" min="0" max="200" value="1" /></div>
+        <div class="setup-item"><label>Opening Window (min)</label><input id="openingWindowMinutes" type="number" min="1" max="240" value="30" /></div>
       </div>
       <button onclick="startSetup()">Start Setup</button>
       <p id="setupSessionInfo" class="small"></p>
@@ -223,10 +261,22 @@ def app_shell() -> str:
       const registerMode = authMode === "register";
       document.getElementById("emailWrap").classList.toggle("hidden", !registerMode);
       document.getElementById("passwordRepeatWrap").classList.toggle("hidden", !registerMode);
-      document.getElementById("authActionBtn").textContent = registerMode ? "Register" : "Login";
-      document.getElementById("authActionBtn").onclick = registerMode ? registerUser : loginUser;
-      document.getElementById("modeLoginBtn").classList.toggle("ghost", registerMode);
-      document.getElementById("modeRegisterBtn").classList.toggle("ghost", !registerMode);
+      document.getElementById("loginBtn").classList.toggle("ghost", registerMode);
+      document.getElementById("registerBtn").classList.toggle("ghost", !registerMode);
+    }
+
+    function handleLoginClick() {
+      setAuthMode("login");
+      loginUser();
+    }
+
+    function handleRegisterClick() {
+      if (authMode !== "register") {
+        setAuthMode("register");
+        setOutput({info: "Register mode enabled. Please enter email and password repeat, then click Register again."});
+        return;
+      }
+      registerUser();
     }
 
     function setOutput(data) {
@@ -270,12 +320,109 @@ def app_shell() -> str:
       const maxEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       document.getElementById("contractStartDate").value = start;
       document.getElementById("contractMaxEndDate").value = maxEnd;
+      document.getElementById("contractMaxDurationDays").value = "30";
+    }
+
+    function selectOptionsByValue(id) {
+      const map = {};
+      Array.from(document.getElementById(id).options).forEach((opt) => {
+        map[opt.value] = opt;
+      });
+      return map;
+    }
+
+    function applySetupTranslations() {
+      const lang = document.getElementById("language").value;
+      const de = {
+        execute: "ausfuehren",
+        suggest: "vorschlagen",
+        enabled: "aktiviert",
+        disabled: "deaktiviert",
+        day: "Tag",
+        week: "Woche",
+        month: "Monat",
+        duration_hint: "Wenn du Datum oder Dauer aenderst, wird der andere Wert automatisch berechnet. 0 Tage bedeutet: KI entscheidet das Enddatum.",
+      };
+      const en = {
+        execute: "execute",
+        suggest: "suggest",
+        enabled: "enabled",
+        disabled: "disabled",
+        day: "day",
+        week: "week",
+        month: "month",
+        duration_hint: "If you change date or duration, the other value is auto-calculated. 0 days means AI decides end date.",
+      };
+      const t = lang === "de" ? de : en;
+
+      const autonomy = selectOptionsByValue("autonomy");
+      autonomy.execute.textContent = t.execute;
+      autonomy.suggest.textContent = t.suggest;
+
+      const hardStop = selectOptionsByValue("hardStop");
+      hardStop.true.textContent = t.enabled;
+      hardStop.false.textContent = t.disabled;
+
+      const penaltyCaps = selectOptionsByValue("penaltyCapsEnabled");
+      penaltyCaps.true.textContent = t.enabled;
+      penaltyCaps.false.textContent = t.disabled;
+
+      const openingPeriod = selectOptionsByValue("openingLimitPeriod");
+      openingPeriod.day.textContent = t.day;
+      openingPeriod.week.textContent = t.week;
+      openingPeriod.month.textContent = t.month;
+
+      document.getElementById("durationHint").textContent = t.duration_hint;
+    }
+
+    function parseDateInput(id) {
+      const raw = document.getElementById(id).value;
+      if (!raw) return null;
+      const date = new Date(`${raw}T00:00:00`);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function formatDateInput(date) {
+      return date.toISOString().slice(0, 10);
+    }
+
+    function syncDurationFromEndDate() {
+      const start = parseDateInput("contractStartDate");
+      const end = parseDateInput("contractMaxEndDate");
+      if (!start || !end) {
+        document.getElementById("contractMaxDurationDays").value = "0";
+        return;
+      }
+      const diffMs = end.getTime() - start.getTime();
+      const diffDays = Math.max(0, Math.round(diffMs / (24 * 60 * 60 * 1000)));
+      document.getElementById("contractMaxDurationDays").value = String(diffDays);
+    }
+
+    function syncEndDateFromDuration() {
+      const start = parseDateInput("contractStartDate");
+      const duration = Number(document.getElementById("contractMaxDurationDays").value);
+      if (!start || Number.isNaN(duration)) return;
+      const safeDuration = Math.max(0, duration);
+      if (safeDuration === 0) {
+        document.getElementById("contractMaxEndDate").value = "";
+        return;
+      }
+      const end = new Date(start.getTime() + safeDuration * 24 * 60 * 60 * 1000);
+      document.getElementById("contractMaxEndDate").value = formatDateInput(end);
+    }
+
+    function initContractSync() {
+      document.getElementById("contractStartDate").addEventListener("change", syncEndDateFromDuration);
+      document.getElementById("contractMaxEndDate").addEventListener("change", syncDurationFromEndDate);
+      document.getElementById("contractMaxDurationDays").addEventListener("input", syncEndDateFromDuration);
+      document.getElementById("language").addEventListener("change", applySetupTranslations);
     }
 
     function lockContractInputs(locked) {
       const ids = [
         "contractStartDate",
         "contractMaxEndDate",
+        "contractMaxDurationDays",
         "autonomy",
         "language",
         "hardStop",
@@ -320,6 +467,8 @@ def app_shell() -> str:
         authToken = data.auth_token;
         saveAuth();
         document.getElementById("userInfo").textContent = `username: ${data.username || data.display_name || "user"}`;
+        document.getElementById("authCard").classList.add("hidden");
+        document.getElementById("logoutTopBtn").classList.remove("hidden");
       }
     }
 
@@ -378,9 +527,32 @@ def app_shell() -> str:
       document.getElementById("questionGrid").innerHTML = "";
       document.getElementById("dashboard").classList.add("hidden");
       document.getElementById("appFlow").classList.add("hidden");
+      document.getElementById("authCard").classList.remove("hidden");
+      document.getElementById("logoutTopBtn").classList.add("hidden");
+      setAuthMode("login");
       lockContractInputs(false);
       setContractDefaults();
       setOutput({result: "logged_out"});
+    }
+
+    async function killActiveSession() {
+      if (!userId || !authToken) return setOutput({error: "Login first."});
+      const url = `/api/v1/sessions/active?user_id=${encodeURIComponent(userId)}&auth_token=${encodeURIComponent(authToken)}`;
+      const res = await fetch(url, { method: "DELETE" });
+      const data = await safeJson(res);
+      setOutput(data);
+      if (res.ok && data.deleted) {
+        activeSession = null;
+        document.getElementById("dashboard").classList.add("hidden");
+        document.getElementById("dashboardInfo").textContent = "";
+        document.getElementById("dashboardContract").innerHTML = "";
+        document.getElementById("setupSessionInfo").textContent = "";
+        setupSessionId = null;
+        questions = [];
+        document.getElementById("questionGrid").innerHTML = "";
+        lockContractInputs(false);
+        await checkActiveSession();
+      }
     }
 
     async function startSetup() {
@@ -394,7 +566,9 @@ def app_shell() -> str:
         language: document.getElementById("language").value,
         integrations: ["ttlock"],
         contract_start_date: document.getElementById("contractStartDate").value,
-        contract_max_end_date: document.getElementById("contractMaxEndDate").value,
+        contract_max_end_date: Number(document.getElementById("contractMaxDurationDays").value) === 0
+          ? null
+          : document.getElementById("contractMaxEndDate").value,
         ai_controls_end_date: true,
         max_penalty_per_day_minutes: penaltyEnabled ? Number(document.getElementById("maxPenaltyDay").value) : 0,
         max_penalty_per_week_minutes: penaltyEnabled ? Number(document.getElementById("maxPenaltyWeek").value) : 0,
@@ -412,8 +586,9 @@ def app_shell() -> str:
         questions = data.questions || [];
         renderQuestions();
         lockContractInputs(true);
+        const maxEnd = data.contract.max_end_date || "AI-decided";
         document.getElementById("setupSessionInfo").textContent =
-          `setup_session_id: ${setupSessionId} | contract: ${data.contract.start_date} -> AI-defined (max ${data.contract.max_end_date})`;
+          `setup_session_id: ${setupSessionId} | contract: ${data.contract.start_date} -> AI-defined (max ${maxEnd})`;
       }
       setOutput(data);
     }
@@ -463,8 +638,11 @@ def app_shell() -> str:
     }
 
     setContractDefaults();
+    initContractSync();
+    applySetupTranslations();
     bootstrapAuth();
   </script>
 </body>
 </html>
 """
+    return html.replace("__KILL_BUTTON_CLASS__", kill_button_class)

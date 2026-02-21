@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from dotenv import load_dotenv
 
 from .api.routes import api_router
 from .config import Config
@@ -8,6 +9,7 @@ from .web.routes import web_router
 
 
 def create_app(config_object: type[Config] = Config) -> FastAPI:
+    load_dotenv()
     app = FastAPI(title="chastease-api", version="0.0.5")
     app.state.config = config_object()
     app.state.engine = build_engine(app.state.config.DATABASE_URL)

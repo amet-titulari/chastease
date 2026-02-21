@@ -101,6 +101,7 @@ Setup-Persistenz (aktuell):
 - Datei-basierter Store: `data/setup_sessions.json`
 - Optional per Env steuerbar: `SETUP_STORE_PATH=/pfad/zur/datei.json`
 - Relationale Persistenz: `DATABASE_URL` (default: `sqlite:///data/chastease.db`)
+- Session-Kill-Feature (nur Test/Build): `ENABLE_SESSION_KILL=true|false` (default: `false`)
 
 ## Tests
 

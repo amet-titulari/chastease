@@ -279,3 +279,65 @@ def test_setup_start_accepts_disabled_penalty_caps(client):
     data = response.json()
     assert data["contract"]["max_penalty_per_day_minutes"] == 0
     assert data["contract"]["max_penalty_per_week_minutes"] == 0
+
+
+def test_setup_start_allows_ai_defined_end_without_max_date(client):
+    auth = _register(client, "ai-end-user", "AI End User")
+    response = client.post(
+        "/api/v1/setup/sessions",
+        json={
+            "user_id": auth["user_id"],
+            "auth_token": auth["auth_token"],
+            "contract_start_date": "2026-03-01",
+            "contract_max_end_date": None,
+            "ai_controls_end_date": True,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["contract"]["start_date"] == "2026-03-01"
+    assert data["contract"]["max_end_date"] is None
+    assert data["contract"]["ai_controls_end_date"] is True
+
+
+def test_kill_active_session_enables_new_setup(client):
+    auth = _register(client, "kill-user", "Kill User")
+    user_id = auth["user_id"]
+    start_response = client.post(
+        "/api/v1/setup/sessions",
+        json={"user_id": user_id, "auth_token": auth["auth_token"]},
+    )
+    setup_session_id = start_response.json()["setup_session_id"]
+
+    client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/answers",
+        json={
+            "answers": [
+                {"question_id": "q1_rule_structure", "value": 8},
+                {"question_id": "q2_strictness_authority", "value": 7},
+                {"question_id": "q3_control_need", "value": 8},
+                {"question_id": "q4_praise_importance", "value": 4},
+                {"question_id": "q5_novelty_challenge", "value": 8},
+                {"question_id": "q6_intensity_1_5", "value": 4},
+            ]
+        },
+    )
+    client.post(f"/api/v1/setup/sessions/{setup_session_id}/complete")
+
+    kill_response = client.delete(
+        f"/api/v1/sessions/active?user_id={user_id}&auth_token={auth['auth_token']}"
+    )
+    assert kill_response.status_code == 200
+    assert kill_response.json()["deleted"] is True
+
+    active_response = client.get(
+        f"/api/v1/sessions/active?user_id={user_id}&auth_token={auth['auth_token']}"
+    )
+    assert active_response.status_code == 200
+    assert active_response.json()["has_active_session"] is False
+
+    new_start = client.post(
+        "/api/v1/setup/sessions",
+        json={"user_id": user_id, "auth_token": auth["auth_token"]},
+    )
+    assert new_start.status_code == 200
