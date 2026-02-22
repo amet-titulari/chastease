@@ -212,6 +212,7 @@ def app_shell(request: Request) -> str:
           <div class="acc-body">
             <div class="setup-grid">
               <div class="setup-item"><label id="labelStartDate">Start Date</label><input id="contractStartDate" type="date" /></div>
+              <div class="setup-item"><label id="labelMinDuration">Min Duration (days)</label><input id="contractMinDurationDays" type="number" min="0" max="3650" value="0" /></div>
               <div class="setup-item"><label id="labelMaxEndDate">Max End Date</label><input id="contractMaxEndDate" type="date" /></div>
               <div class="setup-item"><label id="labelMaxDuration">Max Duration (days)</label><input id="contractMaxDurationDays" type="number" min="0" max="3650" value="30" /></div>
               <div class="setup-item"><label></label><div id="durationHint" class="small">If you change date or duration, the other value is auto-calculated. 0 days means AI decides end date.</div></div>
@@ -363,8 +364,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         locked: "gesperrt",
         start_date: "Startdatum",
         max_end_date: "Max Enddatum",
+        min_duration: "Min Dauer (Tage)",
         max_duration: "Max Dauer (Tage)",
-        duration_hint: "Wenn du Datum oder Dauer änderst, wird der andere Wert automatisch berechnet. 0 Tage bedeutet: KI entscheidet das Enddatum.",
+        duration_hint: "Wenn du Max-Datum oder Max-Dauer änderst, wird der andere Wert automatisch berechnet. 0 Max-Tage bedeutet: KI entscheidet das Enddatum. Min-Dauer definiert das frueheste erlaubte Enddatum.",
         autonomy_mode: "Autonomie-Modus",
         language: "Sprache",
         hard_stop: "Hard Stop",
@@ -376,6 +378,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         opening_window: "Öffnungsfenster (min)",
         start_setup: "Setup starten",
         psychogram_hint: "Starte zuerst Setup Session, um das Psychogramm zu laden.",
+        psychogram_readonly: "Psychogramm der aktiven Session (nur Lesen). Änderungen sind gesperrt.",
         submit_answers: "Antworten senden",
         psychogram_saved: "Psychogramm erfolgreich gespeichert.",
         psychogram_save_failed: "Speichern fehlgeschlagen.",
@@ -460,8 +463,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         locked: "locked",
         start_date: "Start Date",
         max_end_date: "Max End Date",
+        min_duration: "Min Duration (days)",
         max_duration: "Max Duration (days)",
-        duration_hint: "If you change date or duration, the other value is auto-calculated. 0 days means AI decides end date.",
+        duration_hint: "If you change max date or max duration, the other value is auto-calculated. 0 max days means AI decides end date. Min duration defines the earliest allowed end date.",
         autonomy_mode: "Autonomy Mode",
         language: "Language",
         hard_stop: "Hard Stop",
@@ -473,6 +477,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         opening_window: "Opening Window (min)",
         start_setup: "Start Setup",
         psychogram_hint: "Start Setup Session first to load the questionnaire.",
+        psychogram_readonly: "Psychogram of the active session (read-only). Changes are locked.",
         submit_answers: "Submit Answers",
         psychogram_saved: "Psychogram saved successfully.",
         psychogram_save_failed: "Saving failed.",
@@ -547,23 +552,19 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       localStorage.removeItem(authStorageKey());
     }
 
-    function isLocked(panel) {
-      const item = document.querySelector(`.acc-item[data-panel="${panel}"]`);
-      return item ? item.classList.contains("locked") : false;
-    }
-
     function setLocked(panel, locked) {
       const item = document.querySelector(`.acc-item[data-panel="${panel}"]`);
       if (!item) return;
       item.classList.toggle("locked", locked);
-      const btn = item.querySelector(".acc-head");
-      if (btn) btn.disabled = locked;
       const lock = document.getElementById(`lock_${panel}`);
       if (lock) lock.classList.toggle("hidden", !locked);
+      const controls = item.querySelectorAll(".acc-body input, .acc-body select, .acc-body textarea, .acc-body button");
+      controls.forEach((node) => {
+        node.disabled = locked;
+      });
     }
 
     function openPanel(panel) {
-      if (isLocked(panel)) return;
       PANELS.forEach((name) => {
         const item = document.querySelector(`.acc-item[data-panel="${name}"]`);
         if (!item) return;
@@ -595,9 +596,21 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     }
 
     function updatePsychogramAvailability() {
+      const hint = document.getElementById("psychogramHint");
+      const submit = document.getElementById("submitAnswersBtn");
       const canAnswer = setupStatus === "setup_in_progress";
-      document.getElementById("psychogramHint").classList.toggle("hidden", canAnswer);
-      document.getElementById("submitAnswersBtn").classList.toggle("hidden", !canAnswer);
+      if (canAnswer) {
+        hint.classList.add("hidden");
+        submit.classList.remove("hidden");
+      } else if (setupStatus === "configured") {
+        hint.textContent = tr("psychogram_readonly");
+        hint.classList.remove("hidden");
+        submit.classList.add("hidden");
+      } else {
+        hint.textContent = tr("psychogram_hint");
+        hint.classList.remove("hidden");
+        submit.classList.add("hidden");
+      }
       updateCompleteReadiness();
     }
 
@@ -680,7 +693,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       }
     }
 
-    function renderQuestions() {
+    function renderQuestions(prefillAnswers = {}, readOnly = false) {
       const grid = document.getElementById("questionGrid");
       grid.innerHTML = "";
       questions.forEach((q) => {
@@ -691,24 +704,76 @@ Lob ist selten genug, um Wirkung zu behalten.`;
           const min = Number(q.scale_min || (q.type === "scale_5" ? 1 : 1));
           const max = Number(q.scale_max || (q.type === "scale_5" ? 5 : 10));
           const mid = Math.round((min + max) / 2);
+          const rawValue = Number(prefillAnswers[q.question_id]);
+          const currentValue = Number.isFinite(rawValue) ? Math.max(min, Math.min(max, rawValue)) : mid;
           const left = q.scale_left || q.scale_hint || "";
           const right = q.scale_right || "";
           wrap.innerHTML = `<label>${q.text} (${q.question_id})</label>
-            <input id="q_${q.question_id}" type="range" min="${min}" max="${max}" step="1" value="${mid}" />
+            <input id="q_${q.question_id}" type="range" min="${min}" max="${max}" step="1" value="${currentValue}" ${readOnly ? "disabled" : ""} />
             <div class="small slider-ends"><span>${left}</span><span>${right}</span></div>`;
         } else if (q.type === "choice") {
           const options = (q.options || []).map((o) => `<option value="${o.value}">${o.label}</option>`).join("");
-          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><select id="q_${q.question_id}">${options}</select>`;
+          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><select id="q_${q.question_id}" ${readOnly ? "disabled" : ""}>${options}</select>`;
         } else {
-          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><textarea id="q_${q.question_id}" rows="3" style="min-height:72px;"></textarea>`;
+          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><textarea id="q_${q.question_id}" rows="3" style="min-height:72px;" ${readOnly ? "disabled" : ""}></textarea>`;
         }
         grid.appendChild(wrap);
+        const control = document.getElementById(`q_${q.question_id}`);
+        const value = prefillAnswers[q.question_id];
+        if (control && value !== undefined && value !== null) {
+          control.value = String(value);
+        }
       });
       const safetyMode = document.getElementById("q_q10_safety_mode");
       if (safetyMode) {
         safetyMode.addEventListener("change", updateSafetyModeVisibility);
       }
       updateSafetyModeVisibility();
+    }
+
+    function derivePsychogramAnswersFromSession(session) {
+      const psychogram = (session && session.psychogram) || {};
+      const policy = (session && session.policy) || {};
+      const traits = psychogram.traits || {};
+      const interaction = psychogram.interaction_preferences || {};
+      const safety = psychogram.safety_profile || {};
+      const personal = psychogram.personal_preferences || {};
+      const limits = policy.limits || {};
+
+      const intensity = Number(limits.max_intensity_level || 3);
+      const intensityAs100 = Math.max(1, Math.min(100, Math.round(((intensity - 1) / 4) * 99 + 1)));
+      const experience10 = Number(interaction.experience_level || 5);
+      const experienceAs100 = Math.max(1, Math.min(100, Math.round(experience10 * 10)));
+
+      return {
+        q1_rule_structure: Number(traits.structure_need || 50),
+        q2_strictness_authority: Number(traits.strictness_affinity || 50),
+        q3_control_need: Number(traits.accountability_need || 50),
+        q4_praise_importance: Number(traits.praise_affinity || 50),
+        q5_novelty_challenge: Number(traits.novelty_affinity || 50),
+        q6_intensity_1_5: intensityAs100,
+        q8_instruction_style: interaction.instruction_style || "mixed",
+        q11_escalation_mode: interaction.escalation_mode || "moderate",
+        q12_grooming_preference: personal.grooming_preference || "no_preference",
+        q7_taboo_text: psychogram.taboo_text || "",
+        q10_safety_mode: safety.mode || "safeword",
+        q10_safeword: safety.safeword || "",
+        q13_experience_level: experienceAs100,
+        q9_open_context: psychogram.open_context || "",
+      };
+    }
+
+    async function loadConfiguredPsychogramSnapshot(session) {
+      if (!session || !session.psychogram) return;
+      try {
+        const lang = session.language === "en" ? "en" : "de";
+        const res = await fetch(`/api/v1/setup/questionnaire?language=${encodeURIComponent(lang)}`);
+        const data = await safeJson(res);
+        if (res.ok && Array.isArray(data.questions)) {
+          questions = data.questions;
+        }
+      } catch {}
+      renderQuestions(derivePsychogramAnswersFromSession(session), true);
     }
 
     function toggleQuestionVisibility(questionId, visible) {
@@ -733,6 +798,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const start = now.toISOString().slice(0, 10);
       const maxEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       document.getElementById("contractStartDate").value = start;
+      document.getElementById("contractMinDurationDays").value = "0";
       document.getElementById("contractMaxEndDate").value = maxEnd;
       document.getElementById("contractMaxDurationDays").value = "30";
     }
@@ -792,6 +858,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       setText("lock_brief", "locked");
       setText("lock_response", "locked");
       setText("labelStartDate", "start_date");
+      setText("labelMinDuration", "min_duration");
       setText("labelMaxEndDate", "max_end_date");
       setText("labelMaxDuration", "max_duration");
       setText("labelAutonomyMode", "autonomy_mode");
@@ -891,11 +958,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const end = parseDateInput("contractMaxEndDate");
       if (!start || !end) {
         document.getElementById("contractMaxDurationDays").value = "0";
+        syncMinDurationGuard();
         return;
       }
       const diffMs = end.getTime() - start.getTime();
       const diffDays = Math.max(0, Math.round(diffMs / (24 * 60 * 60 * 1000)));
       document.getElementById("contractMaxDurationDays").value = String(diffDays);
+      syncMinDurationGuard();
     }
 
     function syncEndDateFromDuration() {
@@ -905,16 +974,41 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const safeDuration = Math.max(0, duration);
       if (safeDuration === 0) {
         document.getElementById("contractMaxEndDate").value = "";
+        syncMinDurationGuard();
         return;
       }
       const end = new Date(start.getTime() + safeDuration * 24 * 60 * 60 * 1000);
       document.getElementById("contractMaxEndDate").value = formatDateInput(end);
+      syncMinDurationGuard();
+    }
+
+    function syncMinDurationGuard() {
+      const minNode = document.getElementById("contractMinDurationDays");
+      const maxNode = document.getElementById("contractMaxDurationDays");
+      const minDuration = Math.max(0, Number(minNode.value) || 0);
+      const maxDuration = Math.max(0, Number(maxNode.value) || 0);
+      if (maxDuration > 0 && minDuration > maxDuration) {
+        minNode.value = String(maxDuration);
+        return;
+      }
+      minNode.value = String(minDuration);
+    }
+
+    function computeEndDateFromDuration(durationFieldId) {
+      const start = parseDateInput("contractStartDate");
+      const duration = Number(document.getElementById(durationFieldId).value);
+      if (!start || Number.isNaN(duration)) return null;
+      const safeDuration = Math.max(0, duration);
+      if (safeDuration === 0) return null;
+      const end = new Date(start.getTime() + safeDuration * 24 * 60 * 60 * 1000);
+      return formatDateInput(end);
     }
 
     function initContractSync() {
       document.getElementById("contractStartDate").addEventListener("change", syncEndDateFromDuration);
       document.getElementById("contractMaxEndDate").addEventListener("change", syncDurationFromEndDate);
       document.getElementById("contractMaxDurationDays").addEventListener("input", syncEndDateFromDuration);
+      document.getElementById("contractMinDurationDays").addEventListener("input", syncMinDurationGuard);
       document.getElementById("language").addEventListener("change", applySetupTranslations);
       document.getElementById("penaltyCapsEnabled").addEventListener("change", updatePenaltyCapsVisibility);
     }
@@ -1001,6 +1095,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     function lockContractInputs(locked) {
       const ids = [
         "contractStartDate",
+        "contractMinDurationDays",
         "contractMaxEndDate",
         "contractMaxDurationDays",
         "autonomy",
@@ -1036,7 +1131,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const integrations = (policy.integrations || []).join(", ") || "-";
       const llm = currentLlmProfile || {};
       const setupContractText = setupContract
-        ? `${setupContract.start_date || "-"} -> ${setupContract.end_date || tr("ai_defined")} (max ${setupContract.max_end_date || "-"})`
+        ? `${setupContract.start_date || "-"} -> ${setupContract.end_date || tr("ai_defined")} (min ${setupContract.min_end_date || "-"}, max ${setupContract.max_end_date || "-"})`
         : "-";
       const activeSessionId = currentSession ? currentSession.session_id : "-";
       const activeStatus = currentSession ? currentSession.status : noSessionText;
@@ -1056,7 +1151,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         `<tr><th>Active Session ID</th><td>${activeSessionId}</td></tr>`,
         `<tr><th>Active Status</th><td>${activeStatus}</td></tr>`,
         `<tr><th>Active Language</th><td>${activeLanguage}</td></tr>`,
-        `<tr><th>${tr("contract")}</th><td>${contract.start_date || "-"} -> ${contract.end_date || tr("ai_defined")} (max ${contract.max_end_date || "-"})</td></tr>`,
+        `<tr><th>${tr("contract")}</th><td>${contract.start_date || "-"} -> ${contract.end_date || tr("ai_defined")} (min ${contract.min_end_date || "-"}, max ${contract.max_end_date || "-"})</td></tr>`,
         `<tr><th>${tr("autonomy_mode_row")}</th><td>${policy.autonomy_mode || "-"}</td></tr>`,
         `<tr><th>${tr("ai_controls_end_date")}</th><td>${contract.ai_controls_end_date ? tr("enabled") : tr("disabled")}</td></tr>`,
         `<tr><th>${tr("integrations")}</th><td>${integrations}</td></tr>`,
@@ -1289,6 +1384,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       if (res.ok && data.has_active_session && data.chastity_session) {
         activeSession = data.chastity_session;
         setupStatus = "configured";
+        await loadConfiguredPsychogramSnapshot(activeSession);
         setLocked("start", true);
         setLocked("psychogram", true);
         setLocked("ai_config", true);
@@ -1425,6 +1521,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     async function startSetup() {
       if (!userId || !authToken) return setOutput({error: "Login/Register first."});
       const penaltyEnabled = document.getElementById("penaltyCapsEnabled").value === "true";
+      syncMinDurationGuard();
+      const computedMinEndDate = computeEndDateFromDuration("contractMinDurationDays");
       const payload = {
         user_id: userId,
         auth_token: authToken,
@@ -1433,6 +1531,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         language: document.getElementById("language").value,
         integrations: ["ttlock"],
         contract_start_date: document.getElementById("contractStartDate").value,
+        contract_min_end_date: computedMinEndDate,
         contract_max_end_date: Number(document.getElementById("contractMaxDurationDays").value) === 0
           ? null
           : document.getElementById("contractMaxEndDate").value,
@@ -1458,8 +1557,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         lockContractInputs(true);
         unlockSetupFollowups();
         const maxEnd = data.contract.max_end_date || "AI-decided";
+        const minEnd = data.contract.min_end_date || "-";
         document.getElementById("setupSessionInfo").textContent =
-          `setup_session_id: ${setupSessionId} | contract: ${data.contract.start_date} -> AI-defined (max ${maxEnd})`;
+          `setup_session_id: ${setupSessionId} | contract: ${data.contract.start_date} -> AI-defined (min ${minEnd}, max ${maxEnd})`;
         dashboardLastEvent = "setup_started";
         dashboardLastDetail = `setup_id=${setupSessionId}`;
         openPanel("psychogram");

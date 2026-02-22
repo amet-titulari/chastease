@@ -267,6 +267,7 @@ class SetupStartRequest(BaseModel):
     forbidden_topics: list[str] = Field(default_factory=list)
     contract_start_date: str | None = None
     contract_end_date: str | None = None  # legacy fixed end date
+    contract_min_end_date: str | None = None
     contract_max_end_date: str | None = None
     ai_controls_end_date: bool = True
     max_penalty_per_day_minutes: int = Field(default=60, ge=0, le=1440)
@@ -347,14 +348,19 @@ def _now_iso() -> str:
 
 
 def _resolve_contract_dates(
-    start_raw: str | None, end_raw: str | None, max_end_raw: str | None, ai_controls_end_date: bool
-) -> tuple[str, str | None, str | None]:
+    start_raw: str | None,
+    end_raw: str | None,
+    min_end_raw: str | None,
+    max_end_raw: str | None,
+    ai_controls_end_date: bool,
+) -> tuple[str, str | None, str | None, str | None]:
     today = datetime.now(UTC).date()
     default_start = today
     default_max_end = today + timedelta(days=30)
 
     try:
         start_date = date.fromisoformat(start_raw) if start_raw else default_start
+        min_end_date = date.fromisoformat(min_end_raw) if min_end_raw else None
         max_end_date = date.fromisoformat(max_end_raw) if max_end_raw else None
         end_date = date.fromisoformat(end_raw) if end_raw else None
     except ValueError as exc:
@@ -363,16 +369,23 @@ def _resolve_contract_dates(
     if max_end_date is None and not ai_controls_end_date:
         max_end_date = default_max_end
 
+    if min_end_date is not None and min_end_date < start_date:
+        raise HTTPException(status_code=400, detail="contract_min_end_date must be on or after contract_start_date.")
     if max_end_date is not None and max_end_date < start_date:
         raise HTTPException(status_code=400, detail="contract_max_end_date must be on or after contract_start_date.")
+    if min_end_date is not None and max_end_date is not None and min_end_date > max_end_date:
+        raise HTTPException(status_code=400, detail="contract_min_end_date must not be after contract_max_end_date.")
     if end_date is not None:
         if end_date < start_date:
             raise HTTPException(status_code=400, detail="contract_end_date must be on or after contract_start_date.")
+        if min_end_date is not None and end_date < min_end_date:
+            raise HTTPException(status_code=400, detail="contract_end_date must not be before contract_min_end_date.")
         if max_end_date is not None and end_date > max_end_date:
             raise HTTPException(status_code=400, detail="contract_end_date must not be after contract_max_end_date.")
     return (
         start_date.isoformat(),
         (end_date.isoformat() if end_date else None),
+        (min_end_date.isoformat() if min_end_date else None),
         (max_end_date.isoformat() if max_end_date else None),
     )
 
@@ -659,6 +672,7 @@ def _build_policy(setup_session: dict, psychogram: dict) -> dict:
         "contract": {
             "start_date": setup_session.get("contract_start_date"),
             "end_date": setup_session.get("contract_end_date"),
+            "min_end_date": setup_session.get("contract_min_end_date"),
             "max_end_date": setup_session.get("contract_max_end_date", setup_session.get("contract_end_date")),
             "ai_controls_end_date": setup_session.get("ai_controls_end_date", False),
         },
@@ -730,6 +744,7 @@ def _create_draft_setup_session(user_id: str, language: str = "de") -> dict:
         "forbidden_topics": [],
         "contract_start_date": None,
         "contract_end_date": None,
+        "contract_min_end_date": None,
         "contract_max_end_date": None,
         "ai_controls_end_date": True,
         "max_penalty_per_day_minutes": 60,
@@ -1531,9 +1546,10 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
 def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
     now = _now_iso()
     lang = _lang(payload.language)
-    contract_start_date, contract_end_date, contract_max_end_date = _resolve_contract_dates(
+    contract_start_date, contract_end_date, contract_min_end_date, contract_max_end_date = _resolve_contract_dates(
         payload.contract_start_date,
         payload.contract_end_date,
+        payload.contract_min_end_date,
         payload.contract_max_end_date,
         payload.ai_controls_end_date,
     )
@@ -1585,6 +1601,7 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
             "forbidden_topics": payload.forbidden_topics,
             "contract_start_date": contract_start_date,
             "contract_end_date": contract_end_date,
+            "contract_min_end_date": contract_min_end_date,
             "contract_max_end_date": contract_max_end_date,
             "ai_controls_end_date": payload.ai_controls_end_date,
             "max_penalty_per_day_minutes": payload.max_penalty_per_day_minutes,
@@ -1615,6 +1632,7 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
         "contract": {
             "start_date": contract_start_date,
             "end_date": contract_end_date,
+            "min_end_date": contract_min_end_date,
             "max_end_date": contract_max_end_date,
             "ai_controls_end_date": payload.ai_controls_end_date,
             "max_penalty_per_day_minutes": payload.max_penalty_per_day_minutes,
