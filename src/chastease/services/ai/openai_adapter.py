@@ -94,16 +94,8 @@ class OpenAIAdapter:
         candidates: list[tuple[str, str]] = []
         if base_path:
             kind = "responses" if base_path.endswith("/responses") else "chat"
-            # If the user configured an explicit endpoint path, keep it first, then one fast protocol fallback.
+            # If the user configured an explicit endpoint path, trust it to avoid double-timeouts.
             candidates.append((url, kind))
-            if kind == "chat":
-                alt = (f"{base}/v1/responses", "responses")
-                if alt not in candidates:
-                    candidates.append(alt)
-            else:
-                alt = (f"{base}/v1/chat/completions", "chat")
-                if alt not in candidates:
-                    candidates.append(alt)
             return candidates
         for endpoint, kind in [
             (f"{base}/v1/chat/completions", "chat"),
@@ -241,13 +233,13 @@ class OpenAIAdapter:
             ],
             "temperature": 0.3,
             "top_p": 0.9,
-            "max_tokens": 500,
+            "max_tokens": 350,
         }
         responses_payload = {
             "model": chat_model,
             "input": user_prompt,
             "temperature": 0.3,
-            "max_output_tokens": 500,
+            "max_output_tokens": 350,
         }
 
         has_image_payload = bool(attachment_content)

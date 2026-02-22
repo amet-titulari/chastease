@@ -26,6 +26,8 @@ Psychogramm-Objekt je Session:
 - `traits` (object)
 - `limits` (object)
 - `interaction_preferences` (object)
+- `hard_limits_text` (string)
+- `soft_limits_text` (string; fixed default)
 - `risk_flags` (array of string)
 - `confidence` (0.0 - 1.0)
 - `summary` (short text)
@@ -94,14 +96,18 @@ Normierte Wertebereichsskala `0-100`:
 3. Harte Limits aus direkten Grenzfragen ueberschreiben abgeleitete Vorschlaege.  
 4. Safety-Validierung:
 - `q10_safety_mode = safeword` erfordert `q10_safeword`
-- `q10_safety_mode = traffic_light` erfordert `q10_traffic_green`, `q10_traffic_yellow`, `q10_traffic_red`
+- `q10_safety_mode = traffic_light` nutzt feste Begriffe (`green/yellow/red`) ohne zusaetzliche Pflichtfelder
 
-5. Bei widerspruechlichen Antworten:
+5. Hard-/Soft-Limits:
+- `hard_limits_text` wird explizit ueber Fragebogen erhoben
+- `soft_limits_text` ist fix: `Dynamisch waehrend der Sitzung durch sichere Kommunikation.`
+
+6. Bei widerspruechlichen Antworten:
 - `risk_flags` setzen
 - `confidence` reduzieren
 - konservative Policy-Werte verwenden
 
-6. Dynamische Nachkalibrierung:
+7. Dynamische Nachkalibrierung:
 - bei neuen Erkenntnissen (`update_reason`) darf das Psychogramm aktualisiert werden
 - jedes Update setzt `updated_at` und wird auditierbar protokolliert
 
@@ -122,11 +128,11 @@ Zweck:
 
 ```json
 {
-  "psychogram_version": "2.4.0",
+  "psychogram_version": "2.5.0",
   "created_at": "2026-02-21T10:30:00Z",
   "updated_at": null,
   "update_reason": "initial_setup",
-  "source_questionnaire_version": "setup-q-v2.4",
+  "source_questionnaire_version": "setup-q-v2.5",
   "source_model": "bdsmtest-inspired",
   "consent_scope": {
     "allowed_topics": ["discipline", "routine", "accountability"],
@@ -173,6 +179,8 @@ Zweck:
   "personal_preferences": {
     "grooming_preference": "trimmed"
   },
+  "hard_limits_text": "Keine bleibenden koerperlichen Schaeden; keine oeffentliche Blossstellung.",
+  "soft_limits_text": "Dynamisch waehrend der Sitzung durch sichere Kommunikation.",
   "risk_flags": [],
   "confidence": 0.84,
   "summary": "Struktur- und Accountability-orientiert, mittlere Strenge, klare Grenzen."

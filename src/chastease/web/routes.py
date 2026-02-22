@@ -73,6 +73,525 @@ def landing_page() -> str:
 """
 
 
+@web_router.get("/analysis", response_class=HTMLResponse)
+def analysis_shell() -> str:
+    return """
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Psychogramm Analyse</title>
+  <style>
+    :root {
+      --bg: #080f1e;
+      --ink: #e9efff;
+      --muted: #9bb0d9;
+      --line: #213255;
+      --panel: #101b33;
+      --brand: #2d8cff;
+      --ok: #35c68b;
+      --danger: #d65a5a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 360px at 85% -10%, #1c2f58 0%, transparent 60%),
+        radial-gradient(800px 360px at -20% 120%, #143a44 0%, transparent 58%),
+        var(--bg);
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 22px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      border-radius: 10px;
+      border: 1px solid #2b3f66;
+      background: #111e3b;
+      color: var(--ink);
+      padding: 9px 12px;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+    .small { color: var(--muted); font-size: 12px; }
+    .status { margin-top: 10px; min-height: 18px; }
+    .ok { color: var(--ok); }
+    .err { color: var(--danger); }
+    .analysis { white-space: pre-wrap; line-height: 1.45; min-height: 220px; border: 1px solid #2a3f67; border-radius: 10px; padding: 12px; background: #0f1830; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <h1 style="margin:0 0 6px;">Psychogramm Analyse</h1>
+        <div class="small">Die KI analysiert dein Profil und schlägt einen vorläufigen Endtermin vor.</div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="/">Home</a>
+        <a class="btn" href="/app">Dashboard</a>
+      </div>
+    </div>
+
+    <section class="card">
+      <div id="analysisBox" class="analysis">Psychogramm wird analysiert. Geduld....</div>
+      <div id="status" class="status small"></div>
+    </section>
+  </div>
+
+  <script>
+    function setStatus(text, kind = "ok") {
+      const node = document.getElementById("status");
+      node.textContent = text;
+      node.className = `status small ${kind === "err" ? "err" : "ok"}`;
+    }
+
+    function authStorageKey() {
+      return "chastease_auth_v1";
+    }
+
+    async function safeJson(res) {
+      try { return await res.json(); }
+      catch {
+        const text = await res.text();
+        return { error: "non-json", body: text, status: res.status };
+      }
+    }
+
+    async function run() {
+      let auth = null;
+      let bootstrap = null;
+      try {
+        auth = JSON.parse(localStorage.getItem(authStorageKey()) || "{}");
+      } catch {}
+      try {
+        bootstrap = JSON.parse(sessionStorage.getItem("chastease_post_setup_bootstrap") || "{}");
+      } catch {}
+
+      const userId = auth?.user_id;
+      const authToken = auth?.auth_token;
+      const setupSessionId = bootstrap?.setup_session_id || new URLSearchParams(window.location.search).get("setup_session_id");
+      if (!userId || !authToken || !setupSessionId) {
+        setStatus("Setup-Kontext fehlt. Bitte Setup erneut abschließen.", "err");
+        return;
+      }
+
+      const res = await fetch(`/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/analysis`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, auth_token: authToken }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setStatus(data?.detail || "Psychogramm-Analyse fehlgeschlagen.", "err");
+        return;
+      }
+
+      const analysis = data?.psychogram_analysis || "Analyse abgeschlossen.";
+      const provisional = data?.proposed_end_date || "KI-entscheidet";
+      document.getElementById("analysisBox").textContent = `${analysis}\n\nVorläufiges Enddatum: ${provisional}`;
+      bootstrap = { ...(bootstrap || {}), setup_session_id: setupSessionId, session_id: data?.session_id || bootstrap?.session_id || "" };
+      sessionStorage.setItem("chastease_post_setup_bootstrap", JSON.stringify(bootstrap));
+      setStatus("Analyse abgeschlossen. Wechsel zu Keuschheitsvertrag...");
+
+      setTimeout(() => {
+        window.location.href = "/contract";
+      }, 900);
+    }
+
+    run();
+  </script>
+</body>
+</html>
+"""
+
+
+@web_router.get("/contract", response_class=HTMLResponse)
+def contract_shell() -> str:
+    return """
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Keuschheitsvertrag</title>
+  <style>
+    :root {
+      --bg: #080f1e;
+      --ink: #e9efff;
+      --muted: #9bb0d9;
+      --line: #213255;
+      --panel: #101b33;
+      --brand: #2d8cff;
+      --ok: #35c68b;
+      --danger: #d65a5a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 360px at 85% -10%, #1c2f58 0%, transparent 60%),
+        radial-gradient(800px 360px at -20% 120%, #143a44 0%, transparent 58%),
+        var(--bg);
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 22px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      border-radius: 10px;
+      border: 1px solid #2b3f66;
+      background: #111e3b;
+      color: var(--ink);
+      padding: 9px 12px;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .btn.primary { background: var(--brand); border-color: transparent; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+    .small { color: var(--muted); font-size: 12px; }
+    .status { margin-top: 10px; min-height: 18px; }
+    .ok { color: var(--ok); }
+    .err { color: var(--danger); }
+    .contract {
+      line-height: 1.45;
+      min-height: 300px;
+      border: 1px solid #2a3f67;
+      border-radius: 10px;
+      padding: 12px;
+      background: #0f1830;
+      overflow-wrap: anywhere;
+    }
+    .contract h1, .contract h2, .contract h3, .contract h4, .contract h5, .contract h6 {
+      margin: 0 0 10px;
+      line-height: 1.2;
+    }
+    .contract p { margin: 0 0 10px; color: var(--ink); }
+    .contract ul, .contract ol { margin: 0 0 12px 20px; padding: 0; }
+    .contract li { margin: 2px 0; }
+    .contract pre {
+      margin: 0 0 12px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #2a3f67;
+      background: #0a1328;
+      overflow: auto;
+    }
+    .contract code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: #0a1328;
+      border: 1px solid #2a3f67;
+      border-radius: 5px;
+      padding: 1px 4px;
+    }
+    .contract pre code {
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+    }
+    .contract a { color: #7fb5ff; }
+    .consent-box {
+      margin-top: 14px;
+      border: 1px solid #2a3f67;
+      border-radius: 10px;
+      padding: 12px;
+      background: #0f1830;
+    }
+    .consent-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .consent-row input {
+      flex: 1 1 320px;
+      min-width: 220px;
+      border-radius: 8px;
+      border: 1px solid #2b3f66;
+      background: #111e3b;
+      color: var(--ink);
+      padding: 8px 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <h1 style="margin:0 0 6px;">Keuschheitsvertrag</h1>
+        <div class="small">Der Keuschheitsvertrag wird aus den Session-Daten erstellt.</div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="/app">Dashboard</a>
+        <a class="btn primary" href="/chat">AI Chat</a>
+      </div>
+    </div>
+
+    <section class="card">
+      <div id="contractBox" class="contract">Der Keuschheitsvertrag wird generiert. Geduld ....</div>
+      <div id="status" class="status small"></div>
+      <div id="consentBox" class="consent-box">
+        <div class="small"><strong>Digital Consent</strong></div>
+        <div id="consentRequired" class="small" style="margin-top:6px;">Kontrolltext: "Ich akzeptiere diesen Vertrag"</div>
+        <div class="consent-row">
+          <input id="consentInput" placeholder="Ich akzeptiere diesen Vertrag" />
+          <button id="consentBtn" class="btn primary" onclick="acceptContractConsent()">Vertrag akzeptieren</button>
+        </div>
+        <div id="consentInfo" class="status small"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    function setStatus(text, kind = "ok") {
+      const node = document.getElementById("status");
+      node.textContent = text;
+      node.className = `status small ${kind === "err" ? "err" : "ok"}`;
+    }
+
+    function authStorageKey() {
+      return "chastease_auth_v1";
+    }
+
+    let contractUserId = null;
+    let contractAuthToken = null;
+    let contractSetupSessionId = null;
+    let contractConsentRequiredText = "Ich akzeptiere diesen Vertrag";
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function safeHref(value) {
+      const url = String(value || "").trim();
+      if (/^https?:\\/\\//i.test(url) || /^mailto:/i.test(url)) return url;
+      return "#";
+    }
+
+    function renderInlineMarkdown(text) {
+      let out = escapeHtml(text);
+      out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+      out = out.replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>");
+      out = out.replace(/\\*([^*]+)\\*/g, "<em>$1</em>");
+      out = out.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, (_m, label, href) => {
+        const target = escapeHtml(safeHref(href));
+        return `<a href="${target}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+      });
+      return out;
+    }
+
+    function renderMarkdownSafe(markdown) {
+      const raw = String(markdown || "").replace(/\\r\\n/g, "\\n");
+      const codeBlocks = [];
+      const withTokens = raw.replace(/```([\\s\\S]*?)```/g, (_m, code) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push(`<pre><code>${escapeHtml(String(code).trim())}</code></pre>`);
+        return `@@CODEBLOCK_${idx}@@`;
+      });
+
+      const lines = withTokens.split("\\n");
+      const html = [];
+      let paragraph = [];
+      let inUl = false;
+      let inOl = false;
+
+      function flushParagraph() {
+        if (!paragraph.length) return;
+        html.push(`<p>${paragraph.join("<br/>")}</p>`);
+        paragraph = [];
+      }
+
+      function closeLists() {
+        if (inUl) {
+          html.push("</ul>");
+          inUl = false;
+        }
+        if (inOl) {
+          html.push("</ol>");
+          inOl = false;
+        }
+      }
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const codeTokenMatch = trimmed.match(/^@@CODEBLOCK_(\\d+)@@$/);
+        if (codeTokenMatch) {
+          flushParagraph();
+          closeLists();
+          html.push(trimmed);
+          continue;
+        }
+        if (!trimmed) {
+          flushParagraph();
+          closeLists();
+          continue;
+        }
+        const heading = trimmed.match(/^(#{1,6})\\s+(.+)$/);
+        if (heading) {
+          flushParagraph();
+          closeLists();
+          const level = heading[1].length;
+          html.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+          continue;
+        }
+        const ul = trimmed.match(/^[-*]\\s+(.+)$/);
+        if (ul) {
+          flushParagraph();
+          if (inOl) {
+            html.push("</ol>");
+            inOl = false;
+          }
+          if (!inUl) {
+            html.push("<ul>");
+            inUl = true;
+          }
+          html.push(`<li>${renderInlineMarkdown(ul[1])}</li>`);
+          continue;
+        }
+        const ol = trimmed.match(/^\\d+\\.\\s+(.+)$/);
+        if (ol) {
+          flushParagraph();
+          if (inUl) {
+            html.push("</ul>");
+            inUl = false;
+          }
+          if (!inOl) {
+            html.push("<ol>");
+            inOl = true;
+          }
+          html.push(`<li>${renderInlineMarkdown(ol[1])}</li>`);
+          continue;
+        }
+        paragraph.push(renderInlineMarkdown(trimmed));
+      }
+
+      flushParagraph();
+      closeLists();
+
+      const rendered = html.join("\\n").replace(/@@CODEBLOCK_(\\d+)@@/g, (_m, idx) => {
+        return codeBlocks[Number(idx)] || "";
+      });
+      return rendered || `<p>${escapeHtml(raw)}</p>`;
+    }
+
+    function renderConsent(consent) {
+      const required = String(consent?.required_text || "Ich akzeptiere diesen Vertrag");
+      contractConsentRequiredText = required;
+      const accepted = Boolean(consent?.accepted);
+      const acceptedAt = String(consent?.accepted_at || "");
+      const consentText = String(consent?.consent_text || "");
+
+      document.getElementById("consentRequired").textContent = `Kontrolltext: "${required}"`;
+      const input = document.getElementById("consentInput");
+      const button = document.getElementById("consentBtn");
+      const info = document.getElementById("consentInfo");
+      input.placeholder = required;
+
+      if (accepted) {
+        input.value = consentText || required;
+        input.disabled = true;
+        button.disabled = true;
+        info.textContent = `Akzeptiert am ${acceptedAt || "-"}.`;
+        info.className = "status small ok";
+      } else {
+        if (!input.value) input.value = "";
+        input.disabled = false;
+        button.disabled = false;
+        info.textContent = "Noch nicht akzeptiert.";
+        info.className = "status small";
+      }
+    }
+
+    async function safeJson(res) {
+      try { return await res.json(); }
+      catch {
+        const text = await res.text();
+        return { error: "non-json", body: text, status: res.status };
+      }
+    }
+
+    async function run() {
+      let auth = null;
+      let bootstrap = null;
+      try {
+        auth = JSON.parse(localStorage.getItem(authStorageKey()) || "{}");
+      } catch {}
+      try {
+        bootstrap = JSON.parse(sessionStorage.getItem("chastease_post_setup_bootstrap") || "{}");
+      } catch {}
+
+      const userId = auth?.user_id;
+      const authToken = auth?.auth_token;
+      const setupSessionId = bootstrap?.setup_session_id || new URLSearchParams(window.location.search).get("setup_session_id");
+      contractUserId = userId;
+      contractAuthToken = authToken;
+      contractSetupSessionId = setupSessionId;
+      if (!userId || !authToken || !setupSessionId) {
+        setStatus("Setup-Kontext fehlt. Bitte Setup erneut abschließen.", "err");
+        return;
+      }
+
+      const res = await fetch(`/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/contract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, auth_token: authToken }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setStatus(data?.detail || "Keuschheitsvertrag konnte nicht generiert werden.", "err");
+        return;
+      }
+
+      const contractText = data?.contract_text || "Keuschheitsvertrag erstellt.";
+      document.getElementById("contractBox").innerHTML = renderMarkdownSafe(contractText);
+      renderConsent(data?.consent || null);
+      setStatus("Keuschheitsvertrag erstellt.");
+    }
+
+    async function acceptContractConsent() {
+      const consentText = String(document.getElementById("consentInput").value || "").trim();
+      if (!consentText) {
+        return setStatus("Bitte den Kontrolltext eingeben.", "err");
+      }
+      if (!contractUserId || !contractAuthToken || !contractSetupSessionId) {
+        return setStatus("Setup-Kontext fehlt. Bitte Seite neu laden.", "err");
+      }
+      setStatus("Consent wird gespeichert...");
+      const res = await fetch(`/api/v1/setup/sessions/${encodeURIComponent(contractSetupSessionId)}/contract/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: contractUserId,
+          auth_token: contractAuthToken,
+          consent_text: consentText,
+        }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setStatus(data?.detail || "Consent konnte nicht gespeichert werden.", "err");
+        return;
+      }
+      renderConsent(data?.consent || { required_text: contractConsentRequiredText, accepted: true, consent_text: consentText });
+      setStatus("Digital Consent gespeichert.");
+    }
+
+    run();
+  </script>
+</body>
+</html>
+"""
+
+
 @web_router.get("/app", response_class=HTMLResponse)
 def app_shell(request: Request) -> str:
     session_kill_enabled = bool(getattr(request.app.state.config, "ENABLE_SESSION_KILL", False))
@@ -132,6 +651,37 @@ def app_shell(request: Request) -> str:
     table { width: 100%; border-collapse: collapse; }
     th, td { border-bottom: 1px solid #22314f; padding: 8px 6px; text-align: left; font-size: 13px; }
     th { color: #9ab0d8; font-weight: 600; width: 220px; }
+    .md-block { line-height: 1.35; white-space: normal; }
+    .md-block h1, .md-block h2, .md-block h3, .md-block h4, .md-block h5, .md-block h6 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+    .md-block p { margin: 0 0 8px; }
+    .md-block ul, .md-block ol { margin: 0 0 10px 18px; padding: 0; }
+    .md-block li { margin: 2px 0; }
+    .md-block pre {
+      margin: 0 0 10px;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #2a3f67;
+      background: #0a1328;
+      overflow: auto;
+    }
+    .md-block code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: #0a1328;
+      border: 1px solid #2a3f67;
+      border-radius: 5px;
+      padding: 1px 4px;
+    }
+    .md-block pre code {
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+    }
+    .md-block a { color: #7fb5ff; }
     .small { font-size: 12px; color: #9ab0d8; }
     a { color: #7fb5ff; text-decoration: none; }
     .hidden { display: none !important; }
@@ -385,6 +935,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         traffic_green_line: "Alle OK, Steigerung moeglich / gewuenscht",
         traffic_yellow_line: "Ich komme langsam an meine Grenze",
         traffic_red_line: "Die Grenze wurde uebertreten! Bremsen um Abbruch zu vermeiden",
+        soft_limits_fixed_text: "Dynamisch waehrend der Sitzung durch sichere Kommunikation.",
         provider: "Provider",
         llm_api_url: "LLM API URL",
         llm_api_key: "LLM API Key",
@@ -404,6 +955,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         complete_ok: "OK Speichert",
         complete_back: "Zurück",
         analysis_in_progress: "Analyse in arbeit",
+        psychogram_analyzing: "Psychogramm wird analysiert. Geduld....",
         contract_generating: "Der Vertrag wird generiert...",
         contract_ready: "Vertrag und Analyse wurden erstellt.",
         chat_subtitle: "Schnelltest für Wearer -> Keyholder Turn-Flow.",
@@ -438,6 +990,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         psychogram_analysis_row: "Psychogramm-Analyse",
         generated_contract_row: "Keuschheitsvertrag",
         contract_status_row: "Vertragsstatus",
+        contract_consent_row: "Vertragsakzeptanz",
+        proposed_end_date_row: "Vorläufiges Enddatum (KI)",
         ai_defined: "KI-definiert",
         yes: "ja",
         no: "nein",
@@ -489,6 +1043,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         traffic_green_line: "All OK, escalation possible / desired",
         traffic_yellow_line: "I am slowly reaching my limit",
         traffic_red_line: "Limit exceeded! Slow down to avoid abort",
+        soft_limits_fixed_text: "Dynamic during the session via safe communication.",
         provider: "Provider",
         llm_api_url: "LLM API URL",
         llm_api_key: "LLM API Key",
@@ -508,6 +1063,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         complete_ok: "OK Save",
         complete_back: "Back",
         analysis_in_progress: "Analysis in progress",
+        psychogram_analyzing: "Psychogram is being analyzed. Please wait...",
         contract_generating: "Contract is being generated...",
         contract_ready: "Contract and analysis have been generated.",
         chat_subtitle: "Quick test for Wearer -> Keyholder turn flow.",
@@ -542,6 +1098,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         psychogram_analysis_row: "Psychogram Analysis",
         generated_contract_row: "Chastity Contract",
         contract_status_row: "Contract Status",
+        contract_consent_row: "Contract Acceptance",
+        proposed_end_date_row: "Provisional End Date (AI)",
         ai_defined: "AI-defined",
         yes: "yes",
         no: "no",
@@ -653,7 +1211,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       setLocked("psychogram", true);
       setLocked("ai_config", true);
       setLocked("complete", true);
-      setOutput({info: tr("contract_generating")});
+      const hint = document.getElementById("completeSetupHint");
+      if (hint) {
+        hint.textContent = tr("psychogram_analyzing");
+        hint.classList.add("status-ok");
+        hint.classList.remove("status-error");
+      }
+      setOutput({info: tr("psychogram_analyzing")});
       await completeSetup();
     }
 
@@ -710,6 +1274,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         const wrap = document.createElement("div");
         wrap.className = "q-item";
         wrap.dataset.questionId = q.question_id;
+        const fieldReadOnly = readOnly || q.read_only === true;
         if (q.type === "scale_100" || q.type === "scale_10" || q.type === "scale_5") {
           const min = Number(q.scale_min || (q.type === "scale_5" ? 1 : 1));
           const max = Number(q.scale_max || (q.type === "scale_5" ? 5 : 10));
@@ -719,19 +1284,21 @@ Lob ist selten genug, um Wirkung zu behalten.`;
           const left = q.scale_left || q.scale_hint || "";
           const right = q.scale_right || "";
           wrap.innerHTML = `<label>${q.text} (${q.question_id})</label>
-            <input id="q_${q.question_id}" type="range" min="${min}" max="${max}" step="1" value="${currentValue}" ${readOnly ? "disabled" : ""} />
+            <input id="q_${q.question_id}" type="range" min="${min}" max="${max}" step="1" value="${currentValue}" ${fieldReadOnly ? "disabled" : ""} />
             <div class="small slider-ends"><span>${left}</span><span>${right}</span></div>`;
         } else if (q.type === "choice") {
           const options = (q.options || []).map((o) => `<option value="${o.value}">${o.label}</option>`).join("");
-          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><select id="q_${q.question_id}" ${readOnly ? "disabled" : ""}>${options}</select>`;
+          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><select id="q_${q.question_id}" ${fieldReadOnly ? "disabled" : ""}>${options}</select>`;
         } else {
-          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><textarea id="q_${q.question_id}" rows="3" style="min-height:72px;" ${readOnly ? "disabled" : ""}></textarea>`;
+          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><textarea id="q_${q.question_id}" rows="2" style="min-height:56px;" ${fieldReadOnly ? "disabled" : ""}></textarea>`;
         }
         grid.appendChild(wrap);
         const control = document.getElementById(`q_${q.question_id}`);
         const value = prefillAnswers[q.question_id];
         if (control && value !== undefined && value !== null) {
           control.value = String(value);
+        } else if (control && q.default_value !== undefined && q.default_value !== null) {
+          control.value = String(q.default_value);
         }
       });
       const safetyMode = document.getElementById("q_q10_safety_mode");
@@ -765,6 +1332,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         q8_instruction_style: interaction.instruction_style || "mixed",
         q11_escalation_mode: interaction.escalation_mode || "moderate",
         q12_grooming_preference: personal.grooming_preference || "no_preference",
+        q14_hard_limits_text: psychogram.hard_limits_text || psychogram.taboo_text || "",
+        q15_soft_limits_text: psychogram.soft_limits_text || tr("soft_limits_fixed_text"),
         q7_taboo_text: psychogram.taboo_text || "",
         q10_safety_mode: safety.mode || "safeword",
         q10_safeword: safety.safeword || "",
@@ -1147,6 +1716,122 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       return `<div style="white-space:pre-wrap;line-height:1.35;">${escapeHtml(text)}</div>`;
     }
 
+    function safeHref(value) {
+      const url = String(value || "").trim();
+      if (/^https?:\\/\\//i.test(url) || /^mailto:/i.test(url)) return url;
+      return "#";
+    }
+
+    function renderInlineMarkdown(text) {
+      let out = escapeHtml(text);
+      out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+      out = out.replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>");
+      out = out.replace(/\\*([^*]+)\\*/g, "<em>$1</em>");
+      out = out.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, (_m, label, href) => {
+        const target = escapeHtml(safeHref(href));
+        return `<a href="${target}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+      });
+      return out;
+    }
+
+    function renderMarkdownSafe(markdown) {
+      const raw = String(markdown || "").replace(/\\r\\n/g, "\\n");
+      const codeBlocks = [];
+      const withTokens = raw.replace(/```([\\s\\S]*?)```/g, (_m, code) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push(`<pre><code>${escapeHtml(String(code).trim())}</code></pre>`);
+        return `@@CODEBLOCK_${idx}@@`;
+      });
+
+      const lines = withTokens.split("\\n");
+      const html = [];
+      let paragraph = [];
+      let inUl = false;
+      let inOl = false;
+
+      function flushParagraph() {
+        if (!paragraph.length) return;
+        html.push(`<p>${paragraph.join("<br/>")}</p>`);
+        paragraph = [];
+      }
+
+      function closeLists() {
+        if (inUl) {
+          html.push("</ul>");
+          inUl = false;
+        }
+        if (inOl) {
+          html.push("</ol>");
+          inOl = false;
+        }
+      }
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const codeTokenMatch = trimmed.match(/^@@CODEBLOCK_(\\d+)@@$/);
+        if (codeTokenMatch) {
+          flushParagraph();
+          closeLists();
+          html.push(trimmed);
+          continue;
+        }
+        if (!trimmed) {
+          flushParagraph();
+          closeLists();
+          continue;
+        }
+        const heading = trimmed.match(/^(#{1,6})\\s+(.+)$/);
+        if (heading) {
+          flushParagraph();
+          closeLists();
+          const level = heading[1].length;
+          html.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+          continue;
+        }
+        const ul = trimmed.match(/^[-*]\\s+(.+)$/);
+        if (ul) {
+          flushParagraph();
+          if (inOl) {
+            html.push("</ol>");
+            inOl = false;
+          }
+          if (!inUl) {
+            html.push("<ul>");
+            inUl = true;
+          }
+          html.push(`<li>${renderInlineMarkdown(ul[1])}</li>`);
+          continue;
+        }
+        const ol = trimmed.match(/^\\d+\\.\\s+(.+)$/);
+        if (ol) {
+          flushParagraph();
+          if (inUl) {
+            html.push("</ul>");
+            inUl = false;
+          }
+          if (!inOl) {
+            html.push("<ol>");
+            inOl = true;
+          }
+          html.push(`<li>${renderInlineMarkdown(ol[1])}</li>`);
+          continue;
+        }
+        paragraph.push(renderInlineMarkdown(trimmed));
+      }
+
+      flushParagraph();
+      closeLists();
+      const rendered = html.join("\\n").replace(/@@CODEBLOCK_(\\d+)@@/g, (_m, idx) => codeBlocks[Number(idx)] || "");
+      return rendered || `<p>${escapeHtml(raw)}</p>`;
+    }
+
+    function formatMarkdownBlock(value) {
+      const text = String(value ?? "").trim();
+      if (!text) return "-";
+      const html = renderMarkdownSafe(text);
+      return `<div class="md-block">${html}</div>`;
+    }
+
     function renderDashboardSummary(session) {
       const currentSession = session || activeSession || null;
       const noSessionText = uiLang() === "de" ? "keine aktive Session" : "no active session";
@@ -1154,6 +1839,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const psychogram = (currentSession && currentSession.psychogram) || {};
       const contract = policy.contract || {};
       const generatedContract = policy.generated_contract || {};
+      const contractConsent = generatedContract.consent || {};
       const limits = policy.limits || {};
       const integrations = (policy.integrations || []).join(", ") || "-";
       const llm = currentLlmProfile || {};
@@ -1161,8 +1847,15 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const contractStatus = generatedContract.status || setupStatus || "-";
       const generatedContractText = generatedContract.text || "";
       const generatedContractDisplay = generatedContractText
-        ? formatMultiline(generatedContractText)
+        ? formatMarkdownBlock(generatedContractText)
         : (currentSession ? tr("contract_generating") : "-");
+      const consentAccepted = Boolean(contractConsent.accepted);
+      const consentText = String(contractConsent.consent_text || "");
+      const consentRequired = String(contractConsent.required_text || "");
+      const consentAcceptedAt = String(contractConsent.accepted_at || "");
+      const contractConsentDisplay = consentAccepted
+        ? `${tr("yes")} (${escapeHtml(consentAcceptedAt || "-")})${consentText ? `: ${escapeHtml(consentText)}` : ""}`
+        : `${tr("no")}${consentRequired ? ` (required: ${escapeHtml(consentRequired)})` : ""}`;
       const setupContractText = setupContract
         ? `${setupContract.start_date || "-"} -> ${setupContract.end_date || tr("ai_defined")} (min ${setupContract.min_end_date || "-"}, max ${setupContract.max_end_date || "-"})`
         : "-";
@@ -1185,6 +1878,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         `<tr><th>Active Status</th><td>${activeStatus}</td></tr>`,
         `<tr><th>Active Language</th><td>${activeLanguage}</td></tr>`,
         `<tr><th>${tr("contract")}</th><td>${contract.start_date || "-"} -> ${contract.end_date || tr("ai_defined")} (min ${contract.min_end_date || "-"}, max ${contract.max_end_date || "-"})</td></tr>`,
+        `<tr><th>${tr("proposed_end_date_row")}</th><td>${contract.proposed_end_date || tr("ai_defined")}</td></tr>`,
         `<tr><th>${tr("autonomy_mode_row")}</th><td>${policy.autonomy_mode || "-"}</td></tr>`,
         `<tr><th>${tr("ai_controls_end_date")}</th><td>${contract.ai_controls_end_date ? tr("enabled") : tr("disabled")}</td></tr>`,
         `<tr><th>${tr("integrations")}</th><td>${integrations}</td></tr>`,
@@ -1197,6 +1891,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         `<tr><th>${tr("llm_vision_model_row")}</th><td>${llm.vision_model || "-"}</td></tr>`,
         `<tr><th>${tr("llm_active")}</th><td>${llm.is_active === false ? tr("disabled") : tr("enabled")}</td></tr>`,
         `<tr><th>${tr("contract_status_row")}</th><td>${escapeHtml(contractStatus)}</td></tr>`,
+        `<tr><th>${tr("contract_consent_row")}</th><td>${contractConsentDisplay}</td></tr>`,
         `<tr><th>${tr("psychogram_analysis_row")}</th><td>${formatMultiline(psychogramAnalysis)}</td></tr>`,
         `<tr><th>${tr("generated_contract_row")}</th><td>${generatedContractDisplay}</td></tr>`,
         `<tr><th>Last Event</th><td>${dashboardLastEvent}${dashboardLastDetail ? ` (${dashboardLastDetail})` : ""}</td></tr>`,
@@ -1668,7 +2363,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
             session_id: data?.chastity_session?.session_id || "",
           })
         );
-        window.location.href = "/chat?mode=analysis";
+        window.location.href = "/analysis";
       }
     }
 
