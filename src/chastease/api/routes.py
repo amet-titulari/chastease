@@ -20,6 +20,7 @@ from chastease.services.ai.base import StoryTurnContext
 
 api_router = APIRouter()
 auth_tokens: dict[str, str] = {}
+AUTH_TOKEN_VERSION = "v1"
 
 QUESTIONNAIRE_VERSION = "setup-q-v2.4"
 SUPPORTED_LANGUAGES = {"de", "en"}
@@ -345,6 +346,69 @@ def _t(lang: str, key: str) -> str:
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _b64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _b64url_decode(raw: str) -> bytes:
+    padding = "=" * ((4 - len(raw) % 4) % 4)
+    return base64.urlsafe_b64decode((raw + padding).encode("ascii"))
+
+
+def _mint_auth_token(user_id: str, secret_key: str) -> str:
+    issued_at = int(datetime.now(UTC).timestamp())
+    nonce = secrets.token_hex(8)
+    payload = f"{AUTH_TOKEN_VERSION}:{user_id}:{issued_at}:{nonce}"
+    signature = hmac.new(secret_key.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).digest()
+    return f"{_b64url_encode(payload.encode('utf-8'))}.{_b64url_encode(signature)}"
+
+
+def _verify_auth_token(token: str, secret_key: str, ttl_days: int) -> str | None:
+    if "." not in token:
+        return None
+    try:
+        payload_part, signature_part = token.split(".", 1)
+        payload_bytes = _b64url_decode(payload_part)
+        provided_sig = _b64url_decode(signature_part)
+    except Exception:
+        return None
+
+    expected_sig = hmac.new(secret_key.encode("utf-8"), payload_bytes, hashlib.sha256).digest()
+    if not hmac.compare_digest(provided_sig, expected_sig):
+        return None
+
+    try:
+        payload = payload_bytes.decode("utf-8")
+        version, user_id, issued_at_raw, _nonce = payload.split(":", 3)
+    except Exception:
+        return None
+    if version != AUTH_TOKEN_VERSION:
+        return None
+    try:
+        issued_at = int(issued_at_raw)
+    except ValueError:
+        return None
+    ttl_seconds = max(1, ttl_days) * 24 * 60 * 60
+    now_ts = int(datetime.now(UTC).timestamp())
+    if issued_at > now_ts + 60:
+        return None
+    if now_ts - issued_at > ttl_seconds:
+        return None
+    return user_id
+
+
+def _resolve_user_id_from_token(auth_token: str, request: Request) -> str | None:
+    cached = auth_tokens.get(auth_token)
+    if cached:
+        return cached
+    secret_key = request.app.state.config.SECRET_KEY
+    ttl_days = int(getattr(request.app.state.config, "AUTH_TOKEN_TTL_DAYS", 30))
+    user_id = _verify_auth_token(auth_token, secret_key, ttl_days)
+    if user_id:
+        auth_tokens[auth_token] = user_id
+    return user_id
 
 
 def _resolve_contract_dates(
@@ -768,8 +832,8 @@ def _get_db_session(request: Request):
     return request.app.state.db_session_factory()
 
 
-def _require_user_token(user_id: str, auth_token: str, db) -> User:
-    token_user_id = auth_tokens.get(auth_token)
+def _require_user_token(user_id: str, auth_token: str, db, request: Request) -> User:
+    token_user_id = _resolve_user_id_from_token(auth_token, request)
     if token_user_id != user_id:
         raise HTTPException(status_code=401, detail="Invalid auth token for user.")
     user = db.get(User, user_id)
@@ -919,7 +983,7 @@ def register(payload: RegisterRequest, request: Request) -> dict:
         db.add(user)
         db.commit()
 
-        token = secrets.token_urlsafe(24)
+        token = _mint_auth_token(user.id, request.app.state.config.SECRET_KEY)
         auth_tokens[token] = user.id
         store = load_sessions()
         draft_id, draft_session = _find_user_setup_session(store, user.id, {"draft", "setup_in_progress"})
@@ -952,7 +1016,7 @@ def login(payload: LoginRequest, request: Request) -> dict:
         if user is None or not _verify_password(payload.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials.")
 
-        token = secrets.token_urlsafe(24)
+        token = _mint_auth_token(user.id, request.app.state.config.SECRET_KEY)
         auth_tokens[token] = user.id
         store = load_sessions()
         draft_id, draft_session = _find_user_setup_session(store, user.id, {"draft", "setup_in_progress"})
@@ -976,7 +1040,7 @@ def login(payload: LoginRequest, request: Request) -> dict:
 
 @api_router.get("/auth/me")
 def auth_me(auth_token: str, request: Request) -> dict:
-    user_id = auth_tokens.get(auth_token)
+    user_id = _resolve_user_id_from_token(auth_token, request)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid auth token.")
 
@@ -994,7 +1058,7 @@ def auth_me(auth_token: str, request: Request) -> dict:
 def get_llm_profile(user_id: str, auth_token: str, request: Request) -> dict:
     db = _get_db_session(request)
     try:
-        _require_user_token(user_id, auth_token, db)
+        _require_user_token(user_id, auth_token, db, request)
         profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == user_id))
         if profile is None:
             return {"configured": False}
@@ -1007,7 +1071,7 @@ def get_llm_profile(user_id: str, auth_token: str, request: Request) -> dict:
 def upsert_llm_profile(payload: LLMProfileUpsertRequest, request: Request) -> dict:
     db = _get_db_session(request)
     try:
-        _require_user_token(payload.user_id, payload.auth_token, db)
+        _require_user_token(payload.user_id, payload.auth_token, db, request)
         profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == payload.user_id))
         now = datetime.now(UTC)
         encrypted_key = (
@@ -1054,7 +1118,7 @@ def upsert_llm_profile(payload: LLMProfileUpsertRequest, request: Request) -> di
 def test_llm_profile(payload: LLMProfileTestRequest, request: Request) -> dict:
     db = _get_db_session(request)
     try:
-        _require_user_token(payload.user_id, payload.auth_token, db)
+        _require_user_token(payload.user_id, payload.auth_token, db, request)
         profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == payload.user_id))
         if profile is None:
             raise HTTPException(status_code=404, detail="LLM profile not configured.")
@@ -1368,7 +1432,7 @@ def setup_chat_preview(setup_session_id: str, payload: SetupChatPreviewRequest, 
         raise HTTPException(status_code=404, detail=_t("de", "not_found"))
     if setup_session["user_id"] != payload.user_id:
         raise HTTPException(status_code=401, detail="Invalid user for setup session.")
-    token_user_id = auth_tokens.get(payload.auth_token)
+    token_user_id = _resolve_user_id_from_token(payload.auth_token, request)
     if token_user_id != payload.user_id:
         raise HTTPException(status_code=401, detail="Invalid auth token for user.")
     if setup_session.get("psychogram") is None or setup_session.get("policy_preview") is None:
@@ -1560,7 +1624,7 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
         max_openings_in_period = payload.max_openings_per_day
     db = _get_db_session(request)
     try:
-        token_user_id = auth_tokens.get(payload.auth_token)
+        token_user_id = _resolve_user_id_from_token(payload.auth_token, request)
         if token_user_id != payload.user_id:
             raise HTTPException(status_code=401, detail="Invalid auth token for user.")
         user = db.get(User, payload.user_id)
@@ -1700,7 +1764,7 @@ def get_setup_session(setup_session_id: str) -> dict:
 
 @api_router.get("/sessions/active")
 def get_active_chastity_session(user_id: str, auth_token: str, request: Request) -> dict:
-    token_user_id = auth_tokens.get(auth_token)
+    token_user_id = _resolve_user_id_from_token(auth_token, request)
     if token_user_id != user_id:
         raise HTTPException(status_code=401, detail="Invalid auth token for user.")
 
@@ -1731,7 +1795,7 @@ def kill_active_chastity_session(
     if not getattr(request.app.state.config, "ENABLE_SESSION_KILL", False):
         raise HTTPException(status_code=404, detail="Not found.")
 
-    token_user_id = auth_tokens.get(auth_token)
+    token_user_id = _resolve_user_id_from_token(auth_token, request)
     if token_user_id != user_id:
         raise HTTPException(status_code=401, detail="Invalid auth token for user.")
 
