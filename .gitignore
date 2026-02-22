@@ -209,3 +209,7 @@ __marimo__/
 # Local setup prototype persistence
 data/setup_sessions.json
 data/chastease.db
+
+# macOS Finder metadata
+.DS_Store
+**/.DS_Store
