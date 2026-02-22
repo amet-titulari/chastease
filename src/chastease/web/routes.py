@@ -404,6 +404,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         complete_ok: "OK Speichert",
         complete_back: "Zurück",
         analysis_in_progress: "Analyse in arbeit",
+        contract_generating: "Der Vertrag wird generiert...",
+        contract_ready: "Vertrag und Analyse wurden erstellt.",
         chat_subtitle: "Schnelltest für Wearer -> Keyholder Turn-Flow.",
         voice: "Sprache",
         send: "Senden",
@@ -433,6 +435,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         llm_chat_model_row: "Chat Modell",
         llm_vision_model_row: "Vision Modell",
         llm_active: "LLM aktiv",
+        psychogram_analysis_row: "Psychogramm-Analyse",
+        generated_contract_row: "Keuschheitsvertrag",
+        contract_status_row: "Vertragsstatus",
         ai_defined: "KI-definiert",
         yes: "ja",
         no: "nein",
@@ -503,6 +508,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         complete_ok: "OK Save",
         complete_back: "Back",
         analysis_in_progress: "Analysis in progress",
+        contract_generating: "Contract is being generated...",
+        contract_ready: "Contract and analysis have been generated.",
         chat_subtitle: "Quick test for Wearer -> Keyholder turn flow.",
         voice: "Voice",
         send: "Send",
@@ -532,6 +539,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         llm_chat_model_row: "Chat Model",
         llm_vision_model_row: "Vision Model",
         llm_active: "LLM Active",
+        psychogram_analysis_row: "Psychogram Analysis",
+        generated_contract_row: "Chastity Contract",
+        contract_status_row: "Contract Status",
         ai_defined: "AI-defined",
         yes: "yes",
         no: "no",
@@ -643,7 +653,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       setLocked("psychogram", true);
       setLocked("ai_config", true);
       setLocked("complete", true);
-      setOutput({info: tr("analysis_in_progress")});
+      setOutput({info: tr("contract_generating")});
       await completeSetup();
     }
 
@@ -1122,14 +1132,37 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       refreshDashboard();
     }
 
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function formatMultiline(value) {
+      const text = String(value ?? "").trim();
+      if (!text) return "-";
+      return `<div style="white-space:pre-wrap;line-height:1.35;">${escapeHtml(text)}</div>`;
+    }
+
     function renderDashboardSummary(session) {
       const currentSession = session || activeSession || null;
       const noSessionText = uiLang() === "de" ? "keine aktive Session" : "no active session";
       const policy = (currentSession && currentSession.policy) || {};
+      const psychogram = (currentSession && currentSession.psychogram) || {};
       const contract = policy.contract || {};
+      const generatedContract = policy.generated_contract || {};
       const limits = policy.limits || {};
       const integrations = (policy.integrations || []).join(", ") || "-";
       const llm = currentLlmProfile || {};
+      const psychogramAnalysis = psychogram.analysis || "-";
+      const contractStatus = generatedContract.status || setupStatus || "-";
+      const generatedContractText = generatedContract.text || "";
+      const generatedContractDisplay = generatedContractText
+        ? formatMultiline(generatedContractText)
+        : (currentSession ? tr("contract_generating") : "-");
       const setupContractText = setupContract
         ? `${setupContract.start_date || "-"} -> ${setupContract.end_date || tr("ai_defined")} (min ${setupContract.min_end_date || "-"}, max ${setupContract.max_end_date || "-"})`
         : "-";
@@ -1163,6 +1196,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         `<tr><th>${tr("llm_chat_model_row")}</th><td>${llm.chat_model || "-"}</td></tr>`,
         `<tr><th>${tr("llm_vision_model_row")}</th><td>${llm.vision_model || "-"}</td></tr>`,
         `<tr><th>${tr("llm_active")}</th><td>${llm.is_active === false ? tr("disabled") : tr("enabled")}</td></tr>`,
+        `<tr><th>${tr("contract_status_row")}</th><td>${escapeHtml(contractStatus)}</td></tr>`,
+        `<tr><th>${tr("psychogram_analysis_row")}</th><td>${formatMultiline(psychogramAnalysis)}</td></tr>`,
+        `<tr><th>${tr("generated_contract_row")}</th><td>${generatedContractDisplay}</td></tr>`,
         `<tr><th>Last Event</th><td>${dashboardLastEvent}${dashboardLastDetail ? ` (${dashboardLastDetail})` : ""}</td></tr>`,
       ].join("");
     }
@@ -1621,15 +1657,14 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         setLocked("complete", true);
         updatePsychogramAvailability();
         updateCompleteReadiness();
-        const briefText = data?.chastity_session?.psychogram_brief || data?.chastity_session?.psychogram_analysis || "";
         dashboardLastEvent = "setup_completed";
         dashboardLastDetail = `status=configured`;
-        await checkActiveSession();
+        activeSession = data?.chastity_session || activeSession;
         refreshDashboard();
         sessionStorage.setItem(
-          "chastease_post_setup_analysis",
+          "chastease_post_setup_bootstrap",
           JSON.stringify({
-            analysis: briefText,
+            setup_session_id: setupSessionId,
             session_id: data?.chastity_session?.session_id || "",
           })
         );
@@ -1863,6 +1898,7 @@ def chat_shell() -> str:
       if (!res.ok) return setStatus(data?.detail || "Session konnte nicht geladen werden.", "err");
       if (!data.has_active_session) return setStatus("Keine aktive Session gefunden.", "err");
       document.getElementById("sessionId").value = data.chastity_session.session_id;
+      await loadTurns();
       setStatus("Aktive Session geladen.");
     }
 
@@ -1875,6 +1911,15 @@ def chat_shell() -> str:
       return `${hh}.${mm}.${ss}`;
     }
 
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
     function addMessage(role, text, ts = null) {
       const wrap = document.createElement("article");
       wrap.className = `msg ${role === "wearer" ? "user" : "assistant"}`;
@@ -1883,11 +1928,33 @@ def chat_shell() -> str:
           <div class="role">${role === "wearer" ? "Wearer" : "Keyholder"}</div>
           <div class="ts">${formatTimestamp(ts)}</div>
         </div>
-        <div>${(text || "").replace(/\\n/g, "<br/>")}</div>
+        <div>${escapeHtml(text || "").replace(/\\n/g, "<br/>")}</div>
       `;
       const box = document.getElementById("messages");
       box.appendChild(wrap);
       box.scrollTop = box.scrollHeight;
+    }
+
+    function renderTurns(turns) {
+      const box = document.getElementById("messages");
+      box.innerHTML = "";
+      (turns || []).forEach((turn) => {
+        const actionText = String(turn.player_action || "");
+        const isSystem = actionText.startsWith("[SYSTEM]");
+        if (!isSystem && actionText) {
+          addMessage("wearer", actionText, turn.created_at);
+        }
+        addMessage("keyholder", turn.ai_narration || "", turn.created_at);
+      });
+    }
+
+    async function loadTurns() {
+      const sessionId = document.getElementById("sessionId").value.trim();
+      if (!sessionId) return;
+      const res = await fetch(`/api/v1/sessions/${encodeURIComponent(sessionId)}/turns`);
+      const data = await safeJson(res);
+      if (!res.ok) return setStatus(data?.detail || "Verlauf konnte nicht geladen werden.", "err");
+      renderTurns(data.turns || []);
     }
 
     async function sendMessage() {
@@ -1908,7 +1975,7 @@ def chat_shell() -> str:
         });
         const data = await safeJson(res);
         if (!res.ok) return setStatus(data?.detail || "Chat-Request fehlgeschlagen.", "err");
-        addMessage("keyholder", data.narration || "");
+        await loadTurns();
         document.getElementById("messageInput").value = "";
         const elapsedMs = Math.max(0, performance.now() - startedAt);
         setStatus(`Antwort erhalten (${(elapsedMs / 1000).toFixed(2)}s).`);
@@ -1921,12 +1988,12 @@ def chat_shell() -> str:
       const params = new URLSearchParams(window.location.search);
       if (params.get("mode") !== "analysis") return;
 
-      addMessage("keyholder", "Analyse in arbeit");
-      setStatus("Analyse in arbeit...");
+      addMessage("keyholder", "Der Vertrag wird generiert...");
+      setStatus("Der Vertrag wird generiert...");
 
       let payload = null;
       try {
-        const raw = sessionStorage.getItem("chastease_post_setup_analysis");
+        const raw = sessionStorage.getItem("chastease_post_setup_bootstrap");
         if (raw) payload = JSON.parse(raw);
       } catch {}
 
@@ -1936,12 +2003,27 @@ def chat_shell() -> str:
         await resolveActiveSession();
       }
 
-      const analysisText = (payload && payload.analysis) || "Analyse abgeschlossen.";
-      setTimeout(() => {
-        addMessage("keyholder", analysisText);
-        setStatus("Analyse abgeschlossen.");
-        sessionStorage.removeItem("chastease_post_setup_analysis");
-      }, 900);
+      const userId = document.getElementById("userId").value.trim();
+      const authToken = document.getElementById("authToken").value.trim();
+      const setupSessionId = payload?.setup_session_id;
+      if (!setupSessionId) {
+        setStatus("Setup Session ID fehlt fuer Vertragsgenerierung.", "err");
+        return;
+      }
+      const res = await fetch(`/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/artifacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, auth_token: authToken }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setStatus(data?.detail || "Vertragsgenerierung fehlgeschlagen.", "err");
+      } else {
+        if (data?.session_id) document.getElementById("sessionId").value = data.session_id;
+        await loadTurns();
+        setStatus("Vertrag und Analyse sind erstellt.");
+      }
+      sessionStorage.removeItem("chastease_post_setup_bootstrap");
     }
 
     document.getElementById("messageInput").addEventListener("keydown", (event) => {
