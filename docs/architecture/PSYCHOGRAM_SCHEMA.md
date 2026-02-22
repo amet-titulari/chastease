@@ -80,10 +80,18 @@ Normierte Wertebereichsskala `0-100`:
 
 - `mode` (enum: `safeword`, `traffic_light`)
 - `safeword` (string, optional wenn `mode=safeword`)
+- `safeword_abort_protocol` (object, optional wenn `mode=safeword`)
+  - `mode` (string, aktuell: `immediate_abort`)
+  - `confirmation_questions_required` (integer, aktuell: `2`)
+  - `reason_required` (boolean, aktuell: `true`)
 - `traffic_light_words` (object, optional wenn `mode=traffic_light`)
   - `green` (string)
   - `yellow` (string)
   - `red` (string)
+- `red_abort_protocol` (object, optional wenn `mode=traffic_light`)
+  - `mode` (string, aktuell: `immediate_abort`)
+  - `confirmation_questions_required` (integer, aktuell: `2`)
+  - `reason_required` (boolean, aktuell: `true`)
 
 ### personal_preferences
 
@@ -95,8 +103,14 @@ Normierte Wertebereichsskala `0-100`:
 2. Fragebogenwerte (`1-10`) werden auf `0-100` normalisiert.  
 3. Harte Limits aus direkten Grenzfragen ueberschreiben abgeleitete Vorschlaege.  
 4. Safety-Validierung:
-- `q10_safety_mode = safeword` erfordert `q10_safeword`
-- `q10_safety_mode = traffic_light` nutzt feste Begriffe (`green/yellow/red`) ohne zusaetzliche Pflichtfelder
+- `q10_safety_mode = safeword` erfordert `q10_safeword` und setzt
+  - `safeword_abort_protocol.mode = immediate_abort`
+  - `confirmation_questions_required = 2`
+  - `reason_required = true`
+- `q10_safety_mode = traffic_light` nutzt feste Begriffe (`green/yellow/red`) und setzt fuer `red`
+  - `red_abort_protocol.mode = immediate_abort`
+  - `confirmation_questions_required = 2`
+  - `reason_required = true`
 
 5. Hard-/Soft-Limits:
 - `hard_limits_text` wird explizit ueber Fragebogen erhoben
@@ -174,6 +188,11 @@ Zweck:
       "green": "green",
       "yellow": "yellow",
       "red": "red"
+    },
+    "red_abort_protocol": {
+      "mode": "immediate_abort",
+      "confirmation_questions_required": 2,
+      "reason_required": true
     }
   },
   "personal_preferences": {

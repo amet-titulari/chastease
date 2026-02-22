@@ -64,6 +64,7 @@ QUESTION_BANK = [
             "de": "Wie wichtig sind dir klare, schriftliche Regeln und genau definierte Erwartungen?",
             "en": "How important are clear written rules and well-defined expectations to you?",
         },
+        "default_values": {"de": 66, "en": 66},
         "weights": {"structure_need": 1.0, "protocol_affinity": 0.4},
     },
     {
@@ -73,6 +74,7 @@ QUESTION_BANK = [
             "de": "Wie stark moechtest du in dieser Session Strenge, Konsequenz und Autoritaet erleben?",
             "en": "How strongly do you want to experience strictness, consequences, and authority in this session?",
         },
+        "default_values": {"de": 76, "en": 76},
         "weights": {"strictness_affinity": 1.0, "accountability_need": 0.3},
     },
     {
@@ -82,6 +84,7 @@ QUESTION_BANK = [
             "de": "Wie sehr brauchst du das Gefuehl, wirklich kontrolliert und ueberwacht zu werden?",
             "en": "How much do you need to feel genuinely controlled and monitored?",
         },
+        "default_values": {"de": 100, "en": 100},
         "weights": {"accountability_need": 1.0, "structure_need": 0.3},
     },
     {
@@ -91,6 +94,7 @@ QUESTION_BANK = [
             "de": "Wie wichtig ist positives Feedback/Anerkennung fuer gutes Verhalten?",
             "en": "How important is positive feedback/recognition for good behavior?",
         },
+        "default_values": {"de": 64, "en": 64},
         "weights": {"praise_affinity": 1.0},
     },
     {
@@ -100,6 +104,7 @@ QUESTION_BANK = [
             "de": "Wie sehr suchst du Abwechslung, neue Aufgaben und ungewohnte Herausforderungen?",
             "en": "How much are you looking for variety, new tasks, and unfamiliar challenges?",
         },
+        "default_values": {"de": 68, "en": 68},
         "weights": {"novelty_affinity": 0.7, "challenge_affinity": 0.7},
     },
     {
@@ -109,6 +114,7 @@ QUESTION_BANK = [
             "de": "Welche Intensitaet passt aktuell am besten?",
             "en": "What intensity fits best right now?",
         },
+        "default_values": {"de": 30, "en": 30},
         "weights": {"strictness_affinity": 0.8, "challenge_affinity": 0.6},
     },
     {
@@ -124,6 +130,7 @@ QUESTION_BANK = [
             {"value": "suggestive", "de": "suggestiv/verfuehrerisch", "en": "suggestive/seductive"},
             {"value": "mixed", "de": "gemischt je nach Situation", "en": "mixed depending on situation"},
         ],
+        "default_values": {"de": "polite_authoritative", "en": "polite_authoritative"},
         "weights": {},
     },
     {
@@ -140,6 +147,7 @@ QUESTION_BANK = [
             {"value": "strong", "de": "stark", "en": "strong"},
             {"value": "aggressive", "de": "aggressiv", "en": "aggressive"},
         ],
+        "default_values": {"de": "moderate", "en": "moderate"},
         "weights": {},
     },
     {
@@ -155,6 +163,7 @@ QUESTION_BANK = [
             {"value": "trimmed", "de": "getrimmt", "en": "trimmed"},
             {"value": "natural", "de": "natuerlich", "en": "natural"},
         ],
+        "default_values": {"de": "clean_shaven", "en": "clean_shaven"},
         "weights": {},
     },
     {
@@ -163,6 +172,10 @@ QUESTION_BANK = [
         "texts": {
             "de": "Welche harten Grenzen sollen verbindlich gelten? (hard_limits_text)",
             "en": "Which hard limits must be treated as binding? (hard_limits_text)",
+        },
+        "default_values": {
+            "de": "Jegliche Form von Scat, Koprophilie und Watersports sowie Urolagnie",
+            "en": "Any form of scat, coprophilia, watersports, and urolagnia.",
         },
         "weights": {},
     },
@@ -200,6 +213,7 @@ QUESTION_BANK = [
             {"value": "safeword", "de": "Safeword", "en": "Safeword"},
             {"value": "traffic_light", "de": "Ampelsystem", "en": "Traffic light"},
         ],
+        "default_values": {"de": "traffic_light", "en": "traffic_light"},
         "weights": {},
     },
     {
@@ -218,6 +232,7 @@ QUESTION_BANK = [
             "de": "Wie erfahren bist du in diesem Kontext?",
             "en": "How experienced are you in this context?",
         },
+        "default_values": {"de": 15, "en": 15},
         "weights": {},
     },
     {
@@ -226,6 +241,10 @@ QUESTION_BANK = [
         "texts": {
             "de": "Gibt es etwas, das ich unbedingt wissen sollte, bevor wir starten? (Offen)",
             "en": "Is there anything I should absolutely know before we start? (Open)",
+        },
+        "default_values": {
+            "de": "Ich haette echt Lust, irgendwann mal von dir zu lernen, wie man eine Frau so ruhig und bestimmt dominiert, dass sie es richtig spuert.",
+            "en": "I would really like to learn from you one day how to dominate a woman calmly and firmly so she truly feels it.",
         },
         "weights": {},
     },
@@ -382,6 +401,12 @@ def _t(lang: str, key: str) -> str:
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _iso_utc(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat()
 
 
 def _b64url_encode(raw: bytes) -> str:
@@ -617,6 +642,19 @@ def _ensure_generated_contract_consent(setup_session: dict) -> dict:
     return consent
 
 
+def _render_contract_with_consent(contract_text: str | None, setup_session: dict) -> str | None:
+    if contract_text is None:
+        return None
+    text = str(contract_text)
+    generated_contract = ((setup_session.get("policy_preview") or {}).get("generated_contract") or {})
+    consent = generated_contract.get("consent", {}) if isinstance(generated_contract, dict) else {}
+    if not bool(consent.get("accepted")):
+        return text
+    accepted_at = str(consent.get("accepted_at") or "").strip() or _now_iso()
+    done_marker = f"[digital consent done ({accepted_at})]"
+    return re.sub(r"\[digital consent (?:ausstehend|pending)\]", done_marker, text, flags=re.IGNORECASE)
+
+
 def _validate_safety_answers(answers: dict[str, int | str]) -> None:
     # Backward compatible: only enforce required safety payload when mode is explicitly answered.
     mode_raw = answers.get("q10_safety_mode")
@@ -686,16 +724,26 @@ def _build_psychogram(setup_session: dict) -> dict:
     if not hard_limits_text:
         hard_limits_text = str(taboo_text or "").strip()
     safety_mode = str(answers.get("q10_safety_mode", "safeword"))
-    safety_profile: dict[str, str | dict[str, str]] = {"mode": safety_mode}
+    safety_profile: dict[str, object] = {"mode": safety_mode}
     if safety_mode == "safeword":
         safeword = str(answers.get("q10_safeword", "")).strip()
         if safeword:
             safety_profile["safeword"] = safeword
+        safety_profile["safeword_abort_protocol"] = {
+            "mode": "immediate_abort",
+            "confirmation_questions_required": 2,
+            "reason_required": True,
+        }
     elif safety_mode == "traffic_light":
         safety_profile["traffic_light_words"] = {"green": "green", "yellow": "yellow", "red": "red"}
+        safety_profile["red_abort_protocol"] = {
+            "mode": "immediate_abort",
+            "confirmation_questions_required": 2,
+            "reason_required": True,
+        }
 
     return {
-        "psychogram_version": "2.5.0",
+        "psychogram_version": "2.6.1",
         "source_questionnaire_version": QUESTIONNAIRE_VERSION,
         "source_model": "bdsmtest-inspired",
         "created_at": _now_iso(),
@@ -1037,11 +1085,18 @@ def _build_ai_context_summary(psychogram: dict, policy: dict) -> str:
 
     safety_mode = safety.get("mode", "safeword")
     safety_text = f"mode={safety_mode}"
+    abort_protocol = None
     if safety_mode == "safeword" and safety.get("safeword"):
         safety_text = f"{safety_text}, safeword={safety.get('safeword')}"
+        abort_protocol = safety.get("safeword_abort_protocol")
     if safety_mode == "traffic_light" and isinstance(safety.get("traffic_light_words"), dict):
         tl = safety.get("traffic_light_words")
         safety_text = f"{safety_text}, tl={tl.get('green','')}/{tl.get('yellow','')}/{tl.get('red','')}"
+        abort_protocol = safety.get("red_abort_protocol")
+    if isinstance(abort_protocol, dict):
+        q_count = int(abort_protocol.get("confirmation_questions_required", 2))
+        reason_required = bool(abort_protocol.get("reason_required", True))
+        safety_text = f"{safety_text}, emergency_abort=immediate_after_{q_count}_checks(reason_required={reason_required})"
 
     return (
         f"summary={psychogram.get('summary', 'n/a')}; "
@@ -1633,9 +1688,53 @@ def _build_contract_template_fields(setup_session: dict) -> dict[str, str]:
     safety_mode = str(safety.get("mode", "safeword"))
     safeword = str(safety.get("safeword", "")) if safety_mode == "safeword" else "-"
     traffic_words = "-"
-    if safety_mode == "traffic_light":
+    traffic_red_protocol_text = ""
+    emergency_abort_suffix = ""
+    emergency_abort_termination = ""
+    if safety_mode == "safeword":
+        safeword_abort = safety.get("safeword_abort_protocol") or {}
+        question_count = int(safeword_abort.get("confirmation_questions_required", 2))
+        if lang == "de":
+            emergency_abort_suffix = (
+                f" Beim Safeword gilt sofortiger Sitzungsabbruch als Notfallprotokoll. "
+                f"Vor der Ausfuehrung sind {question_count} Kontrollfragen Pflicht; "
+                "mindestens eine muss eine Begruendung enthalten."
+            )
+            emergency_abort_termination = (
+                " Safeword-Notfallabbruch erfolgt nach zweistufiger Kontrollabfrage mit Begruendungspflicht."
+            )
+        else:
+            emergency_abort_suffix = (
+                f" On safeword, immediate session abort applies as emergency protocol. "
+                f"Before execution, {question_count} control questions are mandatory; "
+                "at least one must include a reason."
+            )
+            emergency_abort_termination = (
+                " Safeword emergency abort executes after a two-step control check with mandatory reason."
+            )
+    elif safety_mode == "traffic_light":
         tl = safety.get("traffic_light_words") or {"green": "green", "yellow": "yellow", "red": "red"}
         traffic_words = f"{tl.get('green', 'green')}/{tl.get('yellow', 'yellow')}/{tl.get('red', 'red')}"
+        red_abort = safety.get("red_abort_protocol") or {}
+        question_count = int(red_abort.get("confirmation_questions_required", 2))
+        if lang == "de":
+            traffic_red_protocol_text = (
+                f" Bei ROT gilt sofortiger Sitzungsabbruch als Notfallprotokoll. "
+                f"Vor der Ausfuehrung sind {question_count} Kontrollfragen Pflicht; "
+                "mindestens eine muss eine Begruendung enthalten."
+            )
+            emergency_abort_termination = (
+                " ROT-Notfallabbruch erfolgt nach zweistufiger Kontrollabfrage mit Begruendungspflicht."
+            )
+        else:
+            traffic_red_protocol_text = (
+                f" On RED, immediate session abort applies as emergency protocol. "
+                f"Before execution, {question_count} control questions are mandatory; "
+                "at least one must include a reason."
+            )
+            emergency_abort_termination = (
+                " RED emergency abort executes after a two-step control check with mandatory reason."
+            )
 
     hard_limits = str(psychogram.get("hard_limits_text") or psychogram.get("taboo_text") or "").strip()
     if not hard_limits:
@@ -1703,7 +1802,9 @@ def _build_contract_template_fields(setup_session: dict) -> dict[str, str]:
             "Bei Warnzeichen sofort pausieren/abbrechen und Zustand melden."
             if lang == "de"
             else "Immediately pause/stop and report status when warning signs appear."
-        ),
+        )
+        + traffic_red_protocol_text
+        + emergency_abort_suffix,
         "psychogram_summary": str(psychogram.get("summary") or "-"),
         "psychogram_analysis": str(setup_session.get("psychogram_analysis") or psychogram.get("analysis") or "-"),
         "instruction_style": str(interaction.get("instruction_style") or "mixed"),
@@ -1726,7 +1827,8 @@ def _build_contract_template_fields(setup_session: dict) -> dict[str, str]:
             "Ende bei Vertragsdatum, Safety-Stop oder gegenseitiger Einigung."
             if lang == "de"
             else "Ends at contract date, safety stop, or mutual agreement."
-        ),
+        )
+        + emergency_abort_termination,
         "debrief_policy": (
             "Nachbesprechung erfolgt im Session-Verlauf."
             if lang == "de"
@@ -2362,7 +2464,7 @@ def get_session_turns(session_id: str, request: Request) -> dict:
                     "player_action": turn.player_action,
                     "ai_narration": turn.ai_narration,
                     "language": turn.language,
-                    "created_at": turn.created_at.isoformat(),
+                    "created_at": _iso_utc(turn.created_at),
                 }
                 for turn in turns
             ],
@@ -2585,6 +2687,7 @@ def generate_setup_contract(setup_session_id: str, payload: SetupArtifactsReques
     existing_contract = ((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("text")
     if existing_contract and not payload.force:
         consent = _ensure_generated_contract_consent(setup_session)
+        rendered_contract = _render_contract_with_consent(existing_contract, setup_session)
         store = load_sessions()
         store[setup_session_id] = setup_session
         save_sessions(store)
@@ -2593,7 +2696,7 @@ def generate_setup_contract(setup_session_id: str, payload: SetupArtifactsReques
             "setup_session_id": setup_session_id,
             "session_id": active_session_id,
             "status": "ready",
-            "contract_text": existing_contract,
+            "contract_text": rendered_contract,
             "contract_generated_at": setup_session.get("contract_generated_at"),
             "consent": consent,
         }
@@ -2669,7 +2772,10 @@ def generate_setup_contract(setup_session_id: str, payload: SetupArtifactsReques
         "setup_session_id": setup_session_id,
         "session_id": active_session_id,
         "status": "ready",
-        "contract_text": ((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("text"),
+        "contract_text": _render_contract_with_consent(
+            ((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("text"),
+            setup_session,
+        ),
         "contract_generated_at": setup_session.get("contract_generated_at"),
         "consent": ((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("consent"),
     }
@@ -2705,6 +2811,7 @@ def accept_setup_contract(setup_session_id: str, payload: SetupContractConsentRe
     consent["accepted"] = True
     consent["consent_text"] = provided_text
     consent["accepted_at"] = accepted_at
+    generated_contract["text"] = _render_contract_with_consent(generated_contract.get("text"), setup_session)
     setup_session["updated_at"] = accepted_at
     store[setup_session_id] = setup_session
     save_sessions(store)
@@ -2744,6 +2851,7 @@ def accept_setup_contract(setup_session_id: str, payload: SetupContractConsentRe
         "session_id": active_session_id,
         "status": "accepted",
         "consent": consent,
+        "contract_text": generated_contract.get("text"),
     }
 
 
@@ -2768,6 +2876,7 @@ def generate_setup_artifacts(setup_session_id: str, payload: SetupArtifactsReque
     existing_contract = ((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("text")
     if existing_analysis and existing_contract and not payload.force:
         consent = _ensure_generated_contract_consent(setup_session)
+        rendered_contract = _render_contract_with_consent(existing_contract, setup_session)
         store = load_sessions()
         store[setup_session_id] = setup_session
         save_sessions(store)
@@ -2777,7 +2886,7 @@ def generate_setup_artifacts(setup_session_id: str, payload: SetupArtifactsReque
             "session_id": active_session_id,
             "status": "ready",
             "psychogram_analysis": existing_analysis,
-            "contract_text": existing_contract,
+            "contract_text": rendered_contract,
             "contract_generated_at": setup_session.get("contract_generated_at"),
             "consent": consent,
         }
@@ -2871,7 +2980,10 @@ def generate_setup_artifacts(setup_session_id: str, payload: SetupArtifactsReque
         "session_id": active_session_id,
         "status": "ready",
         "psychogram_analysis": setup_session.get("psychogram_analysis"),
-        "contract_text": ((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("text"),
+        "contract_text": _render_contract_with_consent(
+            ((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("text"),
+            setup_session,
+        ),
         "contract_generated_at": setup_session.get("contract_generated_at"),
         "consent": ((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("consent"),
     }

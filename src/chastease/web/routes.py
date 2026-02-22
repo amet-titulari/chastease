@@ -73,142 +73,6 @@ def landing_page() -> str:
 """
 
 
-@web_router.get("/analysis", response_class=HTMLResponse)
-def analysis_shell() -> str:
-    return """
-<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Psychogramm Analyse</title>
-  <style>
-    :root {
-      --bg: #080f1e;
-      --ink: #e9efff;
-      --muted: #9bb0d9;
-      --line: #213255;
-      --panel: #101b33;
-      --brand: #2d8cff;
-      --ok: #35c68b;
-      --danger: #d65a5a;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Avenir Next", "Segoe UI", Arial, sans-serif;
-      color: var(--ink);
-      background:
-        radial-gradient(900px 360px at 85% -10%, #1c2f58 0%, transparent 60%),
-        radial-gradient(800px 360px at -20% 120%, #143a44 0%, transparent 58%),
-        var(--bg);
-    }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 22px; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    .btn {
-      border-radius: 10px;
-      border: 1px solid #2b3f66;
-      background: #111e3b;
-      color: var(--ink);
-      padding: 9px 12px;
-      text-decoration: none;
-      font-weight: 700;
-    }
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
-    .small { color: var(--muted); font-size: 12px; }
-    .status { margin-top: 10px; min-height: 18px; }
-    .ok { color: var(--ok); }
-    .err { color: var(--danger); }
-    .analysis { white-space: pre-wrap; line-height: 1.45; min-height: 220px; border: 1px solid #2a3f67; border-radius: 10px; padding: 12px; background: #0f1830; }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="topbar">
-      <div>
-        <h1 style="margin:0 0 6px;">Psychogramm Analyse</h1>
-        <div class="small">Die KI analysiert dein Profil und schlägt einen vorläufigen Endtermin vor.</div>
-      </div>
-      <div class="actions">
-        <a class="btn" href="/">Home</a>
-        <a class="btn" href="/app">Dashboard</a>
-      </div>
-    </div>
-
-    <section class="card">
-      <div id="analysisBox" class="analysis">Psychogramm wird analysiert. Geduld....</div>
-      <div id="status" class="status small"></div>
-    </section>
-  </div>
-
-  <script>
-    function setStatus(text, kind = "ok") {
-      const node = document.getElementById("status");
-      node.textContent = text;
-      node.className = `status small ${kind === "err" ? "err" : "ok"}`;
-    }
-
-    function authStorageKey() {
-      return "chastease_auth_v1";
-    }
-
-    async function safeJson(res) {
-      try { return await res.json(); }
-      catch {
-        const text = await res.text();
-        return { error: "non-json", body: text, status: res.status };
-      }
-    }
-
-    async function run() {
-      let auth = null;
-      let bootstrap = null;
-      try {
-        auth = JSON.parse(localStorage.getItem(authStorageKey()) || "{}");
-      } catch {}
-      try {
-        bootstrap = JSON.parse(sessionStorage.getItem("chastease_post_setup_bootstrap") || "{}");
-      } catch {}
-
-      const userId = auth?.user_id;
-      const authToken = auth?.auth_token;
-      const setupSessionId = bootstrap?.setup_session_id || new URLSearchParams(window.location.search).get("setup_session_id");
-      if (!userId || !authToken || !setupSessionId) {
-        setStatus("Setup-Kontext fehlt. Bitte Setup erneut abschließen.", "err");
-        return;
-      }
-
-      const res = await fetch(`/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/analysis`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, auth_token: authToken }),
-      });
-      const data = await safeJson(res);
-      if (!res.ok) {
-        setStatus(data?.detail || "Psychogramm-Analyse fehlgeschlagen.", "err");
-        return;
-      }
-
-      const analysis = data?.psychogram_analysis || "Analyse abgeschlossen.";
-      const provisional = data?.proposed_end_date || "KI-entscheidet";
-      document.getElementById("analysisBox").textContent = `${analysis}\n\nVorläufiges Enddatum: ${provisional}`;
-      bootstrap = { ...(bootstrap || {}), setup_session_id: setupSessionId, session_id: data?.session_id || bootstrap?.session_id || "" };
-      sessionStorage.setItem("chastease_post_setup_bootstrap", JSON.stringify(bootstrap));
-      setStatus("Analyse abgeschlossen. Wechsel zu Keuschheitsvertrag...");
-
-      setTimeout(() => {
-        window.location.href = "/contract";
-      }, 900);
-    }
-
-    run();
-  </script>
-</body>
-</html>
-"""
-
-
 @web_router.get("/contract", response_class=HTMLResponse)
 def contract_shell() -> str:
     return """
@@ -541,21 +405,62 @@ def contract_shell() -> str:
         return;
       }
 
-      const res = await fetch(`/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/contract`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, auth_token: authToken }),
-      });
-      const data = await safeJson(res);
-      if (!res.ok) {
-        setStatus(data?.detail || "Keuschheitsvertrag konnte nicht generiert werden.", "err");
+      function saveBootstrap(nextBootstrap) {
+        try {
+          sessionStorage.setItem("chastease_post_setup_bootstrap", JSON.stringify(nextBootstrap || {}));
+        } catch {}
+      }
+
+      function showProgress(lines) {
+        document.getElementById("contractBox").textContent = lines.join("\\n");
+      }
+
+      async function generateContract() {
+        const res = await fetch(`/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/contract`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, auth_token: authToken }),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) {
+          setStatus(data?.detail || "Keuschheitsvertrag konnte nicht generiert werden.", "err");
+          return false;
+        }
+        const contractText = data?.contract_text || "Keuschheitsvertrag erstellt.";
+        document.getElementById("contractBox").innerHTML = renderMarkdownSafe(contractText);
+        renderConsent(data?.consent || null);
+        setStatus("Keuschheitsvertrag erstellt.");
+        return true;
+      }
+
+      if (Boolean(bootstrap?.pending_artifacts)) {
+        showProgress(["Psychogramm wird analysiert. Geduld...."]);
+        setStatus("Psychogramm wird analysiert...");
+        const analysisRes = await fetch(`/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/analysis`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, auth_token: authToken }),
+        });
+        const analysisData = await safeJson(analysisRes);
+        if (!analysisRes.ok) {
+          setStatus(analysisData?.detail || "Psychogramm-Analyse fehlgeschlagen.", "err");
+          return;
+        }
+
+        showProgress([
+          "Psychogramm wird analysiert. Geduld....",
+          "Psychogramm erfolgreich erstellt.",
+          "Der Keuschheitsvertrag wird generiert. Geduld ....",
+        ]);
+        setStatus("Keuschheitsvertrag wird generiert...");
+        const ok = await generateContract();
+        if (!ok) return;
+
+        saveBootstrap({ ...(bootstrap || {}), setup_session_id: setupSessionId, pending_artifacts: false });
         return;
       }
 
-      const contractText = data?.contract_text || "Keuschheitsvertrag erstellt.";
-      document.getElementById("contractBox").innerHTML = renderMarkdownSafe(contractText);
-      renderConsent(data?.consent || null);
-      setStatus("Keuschheitsvertrag erstellt.");
+      await generateContract();
     }
 
     async function acceptContractConsent() {
@@ -580,6 +485,9 @@ def contract_shell() -> str:
       if (!res.ok) {
         setStatus(data?.detail || "Consent konnte nicht gespeichert werden.", "err");
         return;
+      }
+      if (data?.contract_text) {
+        document.getElementById("contractBox").innerHTML = renderMarkdownSafe(data.contract_text);
       }
       renderConsent(data?.consent || { required_text: contractConsentRequiredText, accepted: true, consent_text: consentText });
       setStatus("Digital Consent gespeichert.");
@@ -634,7 +542,29 @@ def app_shell(request: Request) -> str:
       max-width: 100%;
     }
     .setup-item input[type="date"] { max-width: 100%; }
-    .qgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+    .qgrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+    .q-item {
+      display: flex;
+      flex-direction: column;
+      min-height: 168px;
+    }
+    .q-item label {
+      min-height: 74px;
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+    .q-item textarea {
+      min-height: 88px !important;
+    }
+    .q-item select,
+    .q-item input[type="range"] {
+      margin-top: auto;
+    }
     label { display: block; font-size: 13px; color: #a9b9da; margin-bottom: 4px; }
     input, select, button, textarea { border-radius: 8px; border: 1px solid #2b3d63; background: #0f1930; color: #e8eefc; padding: 8px 10px; }
     input[type=range] { width: 100%; padding: 0; }
@@ -724,6 +654,7 @@ def app_shell(request: Request) -> str:
       <p class="small"><a id="landingLink" href="/">Zur Landingpage</a></p>
       <div class="topbar-actions">
         <a class="btn btn-secondary" href="/chat" style="padding:6px 10px;">AI Chat</a>
+        <button id="contractTopBtn" class="ghost hidden" onclick="openContractPage()">Vertrag</button>
         <button id="homeBtn" class="ghost hidden" onclick="showHomeView()">Home</button>
         <button id="dashboardToggleBtn" class="ghost hidden" onclick="toggleDashboard()">Dashboard</button>
         <button id="logoutTopBtn" class="ghost hidden" onclick="logoutUser()">Logout</button>
@@ -762,19 +693,19 @@ def app_shell(request: Request) -> str:
           <div class="acc-body">
             <div class="setup-grid">
               <div class="setup-item"><label id="labelStartDate">Start Date</label><input id="contractStartDate" type="date" /></div>
-              <div class="setup-item"><label id="labelMinDuration">Min Duration (days)</label><input id="contractMinDurationDays" type="number" min="0" max="3650" value="0" /></div>
+              <div class="setup-item"><label id="labelMinDuration">Min Duration (days)</label><input id="contractMinDurationDays" type="number" min="0" max="3650" value="90" /></div>
               <div class="setup-item"><label id="labelMaxEndDate">Max End Date</label><input id="contractMaxEndDate" type="date" /></div>
-              <div class="setup-item"><label id="labelMaxDuration">Max Duration (days)</label><input id="contractMaxDurationDays" type="number" min="0" max="3650" value="30" /></div>
+              <div class="setup-item"><label id="labelMaxDuration">Max Duration (days)</label><input id="contractMaxDurationDays" type="number" min="0" max="3650" value="365" /></div>
               <div class="setup-item"><label></label><div id="durationHint" class="small">If you change date or duration, the other value is auto-calculated. 0 days means AI decides end date.</div></div>
               <div class="setup-item"><label id="labelAutonomyMode">Autonomy Mode</label><select id="autonomy"><option value="execute">execute</option><option value="suggest">suggest</option></select></div>
               <div class="setup-item"><label id="labelLanguage">Language</label><select id="language"><option value="de">Deutsch</option><option value="en">English</option></select></div>
               <div class="setup-item"><label id="labelHardStop">Hard Stop</label><select id="hardStop"><option value="true">enabled</option><option value="false">disabled</option></select></div>
-              <div class="setup-item"><label id="labelPenaltyCaps">Penalty Caps</label><select id="penaltyCapsEnabled"><option value="true">enabled</option><option value="false">disabled</option></select></div>
+              <div class="setup-item"><label id="labelPenaltyCaps">Penalty Caps</label><select id="penaltyCapsEnabled"><option value="true">enabled</option><option value="false" selected>disabled</option></select></div>
               <div id="maxPenaltyDayWrap" class="setup-item"><label id="labelMaxPenaltyDay">Max Penalty / Day (min)</label><input id="maxPenaltyDay" type="number" min="0" max="1440" value="60" /></div>
               <div id="maxPenaltyWeekWrap" class="setup-item"><label id="labelMaxPenaltyWeek">Max Penalty / Week (min)</label><input id="maxPenaltyWeek" type="number" min="0" max="10080" value="240" /></div>
-              <div class="setup-item"><label id="labelOpeningsPeriod">Openings Period</label><select id="openingLimitPeriod"><option value="day">day</option><option value="week">week</option><option value="month">month</option></select></div>
-              <div class="setup-item"><label id="labelMaxOpeningsPeriod">Max Openings / Period</label><input id="maxOpeningsInPeriod" type="number" min="0" max="200" value="1" /></div>
-              <div class="setup-item"><label id="labelOpeningWindow">Opening Window (min)</label><input id="openingWindowMinutes" type="number" min="1" max="240" value="30" /></div>
+              <div class="setup-item"><label id="labelOpeningsPeriod">Openings Period</label><select id="openingLimitPeriod"><option value="day">day</option><option value="week" selected>week</option><option value="month">month</option></select></div>
+              <div class="setup-item"><label id="labelMaxOpeningsPeriod">Max Openings / Period</label><input id="maxOpeningsInPeriod" type="number" min="0" max="200" value="2" /></div>
+              <div class="setup-item"><label id="labelOpeningWindow">Opening Window (min)</label><input id="openingWindowMinutes" type="number" min="1" max="240" value="15" /></div>
             </div>
             <button id="startSetupBtn" onclick="startSetup()">Start Setup</button>
             <p id="setupSessionInfo" class="small"></p>
@@ -789,7 +720,12 @@ def app_shell(request: Request) -> str:
             <div id="trafficLightInfo" class="small hidden" style="margin:8px 0 12px 0;">
               <div><strong>GRUEN</strong> = Alle OK, Steigerung moeglich / gewuenscht</div>
               <div><strong>GELB</strong> = Ich komme langsam an meine Grenze</div>
-              <div><strong>ROT</strong> = Die Grenze wurde uebertreten! Bremsen um Abbruch zu vermeiden</div>
+              <div><strong>ROT</strong> = Sofortiger Sitzungsabbruch (Notfallprotokoll)</div>
+              <div>Vor dem Abbruch: 2 Kontrollfragen, davon 1 mit Begruendungspflicht.</div>
+            </div>
+            <div id="safewordInfo" class="small hidden" style="margin:8px 0 12px 0;">
+              <div><strong>SAFEWORD</strong> = Sofortiger Sitzungsabbruch (Notfallprotokoll)</div>
+              <div>Vor dem Abbruch: 2 Kontrollfragen, davon 1 mit Begruendungspflicht.</div>
             </div>
             <button id="submitAnswersBtn" class="hidden" onclick="submitAnswers()">Submit Answers</button>
             <p id="psychogramSaveInfo" class="small hidden"></p>
@@ -893,6 +829,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         landing_link: "Zur Landingpage",
         home: "Home",
         dashboard: "Dashboard",
+        contract_page: "Vertrag",
         logout: "Logout",
         auth_title: "Login / Register",
         username: "Username",
@@ -934,7 +871,10 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         psychogram_save_failed: "Speichern fehlgeschlagen.",
         traffic_green_line: "Alle OK, Steigerung moeglich / gewuenscht",
         traffic_yellow_line: "Ich komme langsam an meine Grenze",
-        traffic_red_line: "Die Grenze wurde uebertreten! Bremsen um Abbruch zu vermeiden",
+        traffic_red_line: "Sofortiger Sitzungsabbruch (Notfallprotokoll)",
+        traffic_red_confirm_line: "Vor dem Abbruch: 2 Kontrollfragen, davon 1 mit Begruendungspflicht.",
+        safeword_abort_line: "Sofortiger Sitzungsabbruch (Notfallprotokoll)",
+        safeword_abort_confirm_line: "Vor dem Abbruch: 2 Kontrollfragen, davon 1 mit Begruendungspflicht.",
         soft_limits_fixed_text: "Dynamisch waehrend der Sitzung durch sichere Kommunikation.",
         provider: "Provider",
         llm_api_url: "LLM API URL",
@@ -988,9 +928,10 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         llm_vision_model_row: "Vision Modell",
         llm_active: "LLM aktiv",
         psychogram_analysis_row: "Psychogramm-Analyse",
-        generated_contract_row: "Keuschheitsvertrag",
         contract_status_row: "Vertragsstatus",
         contract_consent_row: "Vertragsakzeptanz",
+        contract_page_row: "Vertragsseite",
+        open_contract_link: "Vertrag öffnen",
         proposed_end_date_row: "Vorläufiges Enddatum (KI)",
         ai_defined: "KI-definiert",
         yes: "ja",
@@ -1001,6 +942,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         landing_link: "Back to landing page",
         home: "Home",
         dashboard: "Dashboard",
+        contract_page: "Contract",
         logout: "Logout",
         auth_title: "Login / Register",
         username: "Username",
@@ -1042,7 +984,10 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         psychogram_save_failed: "Saving failed.",
         traffic_green_line: "All OK, escalation possible / desired",
         traffic_yellow_line: "I am slowly reaching my limit",
-        traffic_red_line: "Limit exceeded! Slow down to avoid abort",
+        traffic_red_line: "Immediate session abort (emergency protocol)",
+        traffic_red_confirm_line: "Before abort: 2 control questions, one must include a reason.",
+        safeword_abort_line: "Immediate session abort (emergency protocol)",
+        safeword_abort_confirm_line: "Before abort: 2 control questions, one must include a reason.",
         soft_limits_fixed_text: "Dynamic during the session via safe communication.",
         provider: "Provider",
         llm_api_url: "LLM API URL",
@@ -1096,9 +1041,10 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         llm_vision_model_row: "Vision Model",
         llm_active: "LLM Active",
         psychogram_analysis_row: "Psychogram Analysis",
-        generated_contract_row: "Chastity Contract",
         contract_status_row: "Contract Status",
         contract_consent_row: "Contract Acceptance",
+        contract_page_row: "Contract Page",
+        open_contract_link: "Open Contract",
         proposed_end_date_row: "Provisional End Date (AI)",
         ai_defined: "AI-defined",
         yes: "yes",
@@ -1275,6 +1221,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         wrap.className = "q-item";
         wrap.dataset.questionId = q.question_id;
         const fieldReadOnly = readOnly || q.read_only === true;
+        const qNumMatch = String(q.question_id || "").match(/^q(\\d+)/i);
+        const qPrefix = qNumMatch ? `Q${qNumMatch[1]}: ` : "";
+        const questionLabel = `${qPrefix}${q.text}`;
         if (q.type === "scale_100" || q.type === "scale_10" || q.type === "scale_5") {
           const min = Number(q.scale_min || (q.type === "scale_5" ? 1 : 1));
           const max = Number(q.scale_max || (q.type === "scale_5" ? 5 : 10));
@@ -1283,14 +1232,14 @@ Lob ist selten genug, um Wirkung zu behalten.`;
           const currentValue = Number.isFinite(rawValue) ? Math.max(min, Math.min(max, rawValue)) : mid;
           const left = q.scale_left || q.scale_hint || "";
           const right = q.scale_right || "";
-          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label>
+          wrap.innerHTML = `<label>${questionLabel}</label>
             <input id="q_${q.question_id}" type="range" min="${min}" max="${max}" step="1" value="${currentValue}" ${fieldReadOnly ? "disabled" : ""} />
             <div class="small slider-ends"><span>${left}</span><span>${right}</span></div>`;
         } else if (q.type === "choice") {
           const options = (q.options || []).map((o) => `<option value="${o.value}">${o.label}</option>`).join("");
-          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><select id="q_${q.question_id}" ${fieldReadOnly ? "disabled" : ""}>${options}</select>`;
+          wrap.innerHTML = `<label>${questionLabel}</label><select id="q_${q.question_id}" ${fieldReadOnly ? "disabled" : ""}>${options}</select>`;
         } else {
-          wrap.innerHTML = `<label>${q.text} (${q.question_id})</label><textarea id="q_${q.question_id}" rows="2" style="min-height:56px;" ${fieldReadOnly ? "disabled" : ""}></textarea>`;
+          wrap.innerHTML = `<label>${questionLabel}</label><textarea id="q_${q.question_id}" rows="2" style="min-height:56px;" ${fieldReadOnly ? "disabled" : ""}></textarea>`;
         }
         grid.appendChild(wrap);
         const control = document.getElementById(`q_${q.question_id}`);
@@ -1370,16 +1319,29 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       toggleQuestionVisibility("q10_safeword", showSafeword);
       const info = document.getElementById("trafficLightInfo");
       if (info) info.classList.toggle("hidden", !showTrafficLight);
+      const safewordInfo = document.getElementById("safewordInfo");
+      if (safewordInfo) safewordInfo.classList.toggle("hidden", !showSafeword);
     }
 
     function setContractDefaults() {
       const now = new Date();
       const start = now.toISOString().slice(0, 10);
-      const maxEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const maxEnd = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       document.getElementById("contractStartDate").value = start;
-      document.getElementById("contractMinDurationDays").value = "0";
+      document.getElementById("contractMinDurationDays").value = "90";
       document.getElementById("contractMaxEndDate").value = maxEnd;
-      document.getElementById("contractMaxDurationDays").value = "30";
+      document.getElementById("contractMaxDurationDays").value = "365";
+      document.getElementById("autonomy").value = "execute";
+      document.getElementById("language").value = "de";
+      document.getElementById("hardStop").value = "true";
+      document.getElementById("penaltyCapsEnabled").value = "false";
+      document.getElementById("maxPenaltyDay").value = "60";
+      document.getElementById("maxPenaltyWeek").value = "240";
+      document.getElementById("openingLimitPeriod").value = "week";
+      document.getElementById("maxOpeningsInPeriod").value = "2";
+      document.getElementById("openingWindowMinutes").value = "15";
+      syncMinDurationGuard();
+      updatePenaltyCapsVisibility();
     }
 
     function selectOptionsByValue(id) {
@@ -1410,6 +1372,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       setText("appTitle", "app_title");
       setText("landingLink", "landing_link");
       setText("homeBtn", "home");
+      setText("contractTopBtn", "contract_page");
       setText("dashboardToggleBtn", "dashboard");
       setText("logoutTopBtn", "logout");
       setText("authTitle", "auth_title");
@@ -1456,7 +1419,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       if (trafficInfo) {
         trafficInfo.innerHTML = `<div><strong>${uiLang() === "de" ? "GRUEN" : "GREEN"}</strong> = ${tr("traffic_green_line")}</div>
           <div><strong>${uiLang() === "de" ? "GELB" : "YELLOW"}</strong> = ${tr("traffic_yellow_line")}</div>
-          <div><strong>${uiLang() === "de" ? "ROT" : "RED"}</strong> = ${tr("traffic_red_line")}</div>`;
+          <div><strong>${uiLang() === "de" ? "ROT" : "RED"}</strong> = ${tr("traffic_red_line")}</div>
+          <div>${tr("traffic_red_confirm_line")}</div>`;
+      }
+      const safewordInfo = document.getElementById("safewordInfo");
+      if (safewordInfo) {
+        safewordInfo.innerHTML = `<div><strong>SAFEWORD</strong> = ${tr("safeword_abort_line")}</div>
+          <div>${tr("safeword_abort_confirm_line")}</div>`;
       }
       setText("labelProvider", "provider");
       setText("labelLlmApiUrl", "llm_api_url");
@@ -1845,10 +1814,6 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const llm = currentLlmProfile || {};
       const psychogramAnalysis = psychogram.analysis || "-";
       const contractStatus = generatedContract.status || setupStatus || "-";
-      const generatedContractText = generatedContract.text || "";
-      const generatedContractDisplay = generatedContractText
-        ? formatMarkdownBlock(generatedContractText)
-        : (currentSession ? tr("contract_generating") : "-");
       const consentAccepted = Boolean(contractConsent.accepted);
       const consentText = String(contractConsent.consent_text || "");
       const consentRequired = String(contractConsent.required_text || "");
@@ -1863,6 +1828,10 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const activeStatus = currentSession ? currentSession.status : noSessionText;
       const activeLanguage = currentSession ? currentSession.language : "-";
       const setupIdText = setupSessionId || "-";
+      const contractPageHref = setupIdText && setupIdText !== "-"
+        ? `/contract?setup_session_id=${encodeURIComponent(setupIdText)}`
+        : "/contract";
+      const contractPageLink = `<a href="${contractPageHref}">${tr("open_contract_link")}</a>`;
       const setupStatusText = setupStatus || "draft";
       const dashboardInfo = uiLang() === "de"
         ? `Setup=${setupStatusText} | Active=${activeStatus}`
@@ -1892,8 +1861,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         `<tr><th>${tr("llm_active")}</th><td>${llm.is_active === false ? tr("disabled") : tr("enabled")}</td></tr>`,
         `<tr><th>${tr("contract_status_row")}</th><td>${escapeHtml(contractStatus)}</td></tr>`,
         `<tr><th>${tr("contract_consent_row")}</th><td>${contractConsentDisplay}</td></tr>`,
+        `<tr><th>${tr("contract_page_row")}</th><td>${contractPageLink}</td></tr>`,
         `<tr><th>${tr("psychogram_analysis_row")}</th><td>${formatMultiline(psychogramAnalysis)}</td></tr>`,
-        `<tr><th>${tr("generated_contract_row")}</th><td>${generatedContractDisplay}</td></tr>`,
         `<tr><th>Last Event</th><td>${dashboardLastEvent}${dashboardLastDetail ? ` (${dashboardLastDetail})` : ""}</td></tr>`,
       ].join("");
     }
@@ -1909,6 +1878,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       if (activeSession) loadChatTurns();
     }
 
+    function openContractPage() {
+      const target = setupSessionId
+        ? `/contract?setup_session_id=${encodeURIComponent(setupSessionId)}`
+        : "/contract";
+      window.location.href = target;
+    }
+
     function showDashboard(session, openByDefault = false) {
       activeSession = session;
       renderDashboardSummary(session);
@@ -1918,6 +1894,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       }
       document.getElementById("dashboardToggleBtn").classList.remove("hidden");
       document.getElementById("homeBtn").classList.remove("hidden");
+      document.getElementById("contractTopBtn").classList.remove("hidden");
       document.getElementById("logoutTopBtn").classList.remove("hidden");
       updateChatLock();
       if (openByDefault) {
@@ -2097,6 +2074,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         document.getElementById("userInfo").textContent = `username: ${data.username || data.display_name || "user"}`;
         document.getElementById("authCard").classList.add("hidden");
         document.getElementById("homeBtn").classList.remove("hidden");
+        document.getElementById("contractTopBtn").classList.remove("hidden");
         document.getElementById("dashboardToggleBtn").classList.remove("hidden");
         document.getElementById("logoutTopBtn").classList.remove("hidden");
         setLlmDefaults();
@@ -2204,6 +2182,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("dashboard").classList.add("hidden");
       document.getElementById("dashboardToggleBtn").classList.add("hidden");
       document.getElementById("homeBtn").classList.add("hidden");
+      document.getElementById("contractTopBtn").classList.add("hidden");
       document.getElementById("appFlow").classList.add("hidden");
       document.getElementById("authCard").classList.remove("hidden");
       document.getElementById("logoutTopBtn").classList.add("hidden");
@@ -2361,9 +2340,10 @@ Lob ist selten genug, um Wirkung zu behalten.`;
           JSON.stringify({
             setup_session_id: setupSessionId,
             session_id: data?.chastity_session?.session_id || "",
+            pending_artifacts: true,
           })
         );
-        window.location.href = "/analysis";
+        window.location.href = "/contract";
       }
     }
 
