@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime, timedelta
+import base64
 import json
 import hashlib
 import hmac
@@ -243,6 +244,15 @@ class ChatActionExecuteRequest(BaseModel):
     session_id: str = Field(min_length=1)
     action_type: str = Field(min_length=2)
     payload: dict = Field(default_factory=dict)
+
+
+class ChatVisionReviewRequest(BaseModel):
+    session_id: str = Field(min_length=1)
+    message: str = Field(min_length=1)
+    language: Literal["de", "en"] = "de"
+    picture_name: str = Field(default="image")
+    picture_content_type: str = Field(default="image/jpeg")
+    picture_data_url: str = Field(min_length=20)
 
 
 class SetupStartRequest(BaseModel):
@@ -1174,34 +1184,67 @@ def health() -> dict:
 
 
 def _generate_ai_narration_for_session(
-    db, request: Request, session: ChastitySession, action: str, language: str
+    db, request: Request, session: ChastitySession, action: str, language: str, attachments: list[dict] | None = None
 ) -> str:
     psychogram = json.loads(session.psychogram_snapshot_json)
     policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
     psychogram_summary = _build_ai_context_summary(psychogram, policy)
 
     ai_service = request.app.state.ai_service
+    recent_turns = (
+        db.scalars(
+            select(Turn)
+            .where(Turn.session_id == session.id)
+            .order_by(Turn.turn_no.desc())
+            .limit(6)
+        )
+        .all()
+    )
+    recent_turns = list(reversed(recent_turns))
+    history_lines: list[str] = []
+    for turn in recent_turns:
+        history_lines.append(f"Wearer: {turn.player_action}")
+        history_lines.append(f"Keyholder: {turn.ai_narration}")
+    history_block = "\n".join(history_lines).strip()
+    attachment_names = [str(item.get("name", "file")) for item in (attachments or [])]
+    attachment_hint = f"\nCurrent attachments: {', '.join(attachment_names)}" if attachment_names else ""
+    action_with_context = (
+        (f"Recent dialogue:\n{history_block}\n\nCurrent wearer input: {action}{attachment_hint}")
+        if history_block
+        else f"Current wearer input: {action}{attachment_hint}"
+    )
+
     context = StoryTurnContext(
         session_id=session.id,
-        action=action,
+        action=action_with_context,
         language=language,
         psychogram_summary=psychogram_summary,
     )
     profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == session.user_id))
     if profile is not None and profile.is_active and hasattr(ai_service, "generate_narration_with_profile"):
+        has_images = any(str(item.get("type", "")).startswith("image/") for item in (attachments or []))
+        selected_model = profile.vision_model if has_images and profile.vision_model else profile.chat_model
         api_key = decrypt_secret(profile.api_key_encrypted, request.app.state.config.SECRET_KEY)
         return ai_service.generate_narration_with_profile(
             context,
             api_url=profile.api_url,
             api_key=api_key,
-            chat_model=profile.chat_model,
+            chat_model=selected_model,
             behavior_prompt=profile.behavior_prompt,
+            attachments=attachments or [],
         )
     return ai_service.generate_narration(context)
 
 
 def _generate_ai_narration_for_setup_preview(
-    db, request: Request, user_id: str, action: str, language: str, psychogram: dict, policy: dict
+    db,
+    request: Request,
+    user_id: str,
+    action: str,
+    language: str,
+    psychogram: dict,
+    policy: dict,
+    attachments: list[dict] | None = None,
 ) -> str:
     ai_service = request.app.state.ai_service
     context = StoryTurnContext(
@@ -1212,13 +1255,16 @@ def _generate_ai_narration_for_setup_preview(
     )
     profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == user_id))
     if profile is not None and profile.is_active and hasattr(ai_service, "generate_narration_with_profile"):
+        has_images = any(str(item.get("type", "")).startswith("image/") for item in (attachments or []))
+        selected_model = profile.vision_model if has_images and profile.vision_model else profile.chat_model
         api_key = decrypt_secret(profile.api_key_encrypted, request.app.state.config.SECRET_KEY)
         return ai_service.generate_narration_with_profile(
             context,
             api_url=profile.api_url,
             api_key=api_key,
-            chat_model=profile.chat_model,
+            chat_model=selected_model,
             behavior_prompt=profile.behavior_prompt,
+            attachments=attachments or [],
         )
     return ai_service.generate_narration(context)
 
@@ -1317,11 +1363,7 @@ def setup_chat_preview(setup_session_id: str, payload: SetupChatPreviewRequest, 
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Field 'message' is required.")
-    attachment_hint = ""
-    if payload.attachments:
-        attachment_names = [str(item.get("name", "file")) for item in payload.attachments]
-        attachment_hint = f" Attachments: {', '.join(attachment_names)}."
-    action_text = f"{message}{attachment_hint}"
+    action_text = message
 
     db = _get_db_session(request)
     try:
@@ -1333,6 +1375,7 @@ def setup_chat_preview(setup_session_id: str, payload: SetupChatPreviewRequest, 
             lang,
             setup_session["psychogram"],
             setup_session["policy_preview"],
+            payload.attachments,
         )
     finally:
         db.close()
@@ -1355,12 +1398,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
     if not message:
         raise HTTPException(status_code=400, detail="Field 'message' is required.")
 
-    attachment_hint = ""
-    if payload.attachments:
-        attachment_names = [str(item.get("name", "file")) for item in payload.attachments]
-        attachment_hint = f" Attachments: {', '.join(attachment_names)}."
-
-    action_text = f"{message}{attachment_hint}"
+    action_text = message
 
     db = _get_db_session(request)
     try:
@@ -1368,7 +1406,9 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         if session is None:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
 
-        narration_raw = _generate_ai_narration_for_session(db, request, session, action_text, lang)
+        narration_raw = _generate_ai_narration_for_session(
+            db, request, session, action_text, lang, payload.attachments
+        )
         narration, pending_actions, generated_files = _extract_pending_actions(narration_raw)
 
         current_turn_no = db.scalar(
@@ -1380,6 +1420,70 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
             session_id=session.id,
             turn_no=next_turn_no,
             player_action=action_text,
+            ai_narration=narration,
+            language=lang,
+            created_at=datetime.now(UTC),
+        )
+        session.updated_at = datetime.now(UTC)
+        db.add(turn)
+        db.add(session)
+        db.commit()
+    finally:
+        db.close()
+
+    return {
+        "result": "accepted",
+        "session_id": payload.session_id,
+        "turn_no": next_turn_no,
+        "narration": narration,
+        "pending_actions": pending_actions,
+        "generated_files": generated_files,
+        "next_state": "awaiting_wearer_action",
+    }
+
+
+@api_router.post("/chat/vision-review")
+def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> dict:
+    lang = _lang(payload.language)
+    prompt = payload.message.strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Field 'message' is required.")
+    content_type = payload.picture_content_type.lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="picture_content_type must be image/*")
+    if not payload.picture_data_url.startswith(f"data:{content_type};base64,"):
+        raise HTTPException(status_code=400, detail="Invalid picture_data_url format.")
+    image_b64 = payload.picture_data_url.split(",", 1)[1]
+    try:
+        image_bytes = base64.b64decode(image_b64)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid base64 image payload.") from exc
+    if len(image_bytes) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="picture too large (max 8MB)")
+    attachments = [
+        {
+            "name": payload.picture_name or "image",
+            "type": content_type,
+            "size": len(image_bytes),
+            "data_url": payload.picture_data_url,
+        }
+    ]
+
+    db = _get_db_session(request)
+    try:
+        session = db.get(ChastitySession, payload.session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Chastity session not found.")
+        narration_raw = _generate_ai_narration_for_session(db, request, session, prompt, lang, attachments)
+        narration, pending_actions, generated_files = _extract_pending_actions(narration_raw)
+
+        current_turn_no = db.scalar(select(func.max(Turn.turn_no)).where(Turn.session_id == session.id))
+        next_turn_no = (current_turn_no or 0) + 1
+        turn = Turn(
+            id=str(uuid4()),
+            session_id=session.id,
+            turn_no=next_turn_no,
+            player_action=f"{prompt} [image:{payload.picture_name or 'upload'}]",
             ai_narration=narration,
             language=lang,
             created_at=datetime.now(UTC),

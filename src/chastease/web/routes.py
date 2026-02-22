@@ -287,35 +287,14 @@ def app_shell(request: Request) -> str:
           </div>
         </div>
 
-        <div class="acc-item locked" data-panel="chat">
-          <button class="acc-head" onclick="openPanel('chat')"><span id="panelChatTitle">AI Chat</span><span id="lock_chat" class="acc-lock">locked</span></button>
-          <div class="acc-body">
-            <p id="chatSubtitle" class="small">Schnelltest für Wearer -> Keyholder Turn-Flow.</p>
-            <div class="row">
-              <input id="chatInput" placeholder="Write your action/message..." style="min-width:280px; flex:1;" />
-              <input id="chatFiles" type="file" multiple />
-              <button id="voiceBtn" class="ghost" onclick="startVoiceInput()">Voice</button>
-              <button id="sendBtn" onclick="sendChatTurn()">Send</button>
-              <button id="reloadChatBtn" class="ghost" onclick="loadChatTurns()">Reload</button>
-            </div>
-            <div id="pendingActions" class="small"></div>
-            <textarea id="chatOutput" readonly style="min-height:220px;"></textarea>
-          </div>
-        </div>
-
-        <div class="acc-item locked" data-panel="brief">
-          <button class="acc-head" onclick="openPanel('brief')"><span id="panelBriefTitle">Psychogram Brief</span><span id="lock_brief" class="acc-lock">locked</span></button>
-          <div class="acc-body">
-            <p id="brief" class="small">No evaluation yet.</p>
-          </div>
-        </div>
-
-        <div class="acc-item locked" data-panel="response">
-          <button class="acc-head" onclick="openPanel('response')"><span id="panelResponseTitle">Response</span><span id="lock_response" class="acc-lock">locked</span></button>
-          <div class="acc-body">
-            <textarea id="output" readonly></textarea>
-          </div>
-        </div>
+      </div>
+      <div class="hidden" aria-hidden="true">
+        <textarea id="chatOutput"></textarea>
+        <input id="chatInput" />
+        <input id="chatFiles" type="file" />
+        <div id="pendingActions"></div>
+        <p id="brief"></p>
+        <textarea id="output"></textarea>
       </div>
     </div>
   </div>
@@ -335,8 +314,8 @@ def app_shell(request: Request) -> str:
     let setupContract = null;
     let dashboardLastEvent = "init";
     let dashboardLastDetail = "";
-    const PANELS = ["start", "psychogram", "ai_config", "complete", "chat", "brief", "response"];
-    const LOCKED_INITIAL = new Set(["psychogram", "ai_config", "complete", "chat", "brief", "response"]);
+    const PANELS = ["start", "psychogram", "ai_config", "complete"];
+    const LOCKED_INITIAL = new Set(["psychogram", "ai_config", "complete"]);
 
     const defaultBehaviorPrompt = `Du bist meine ruhige, intelligente und psychologisch dominante Herrin / Keyholderin.
 
@@ -606,7 +585,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     }
 
     function unlockSetupFollowups() {
-      ["psychogram", "ai_config", "complete", "chat", "brief", "response"].forEach((panel) => setLocked(panel, false));
+      ["psychogram", "ai_config", "complete"].forEach((panel) => setLocked(panel, false));
       updatePsychogramAvailability();
     }
 
@@ -651,11 +630,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       setLocked("psychogram", true);
       setLocked("ai_config", true);
       setLocked("complete", true);
-      setLocked("chat", false);
-      setLocked("brief", false);
-      setLocked("response", false);
-      document.getElementById("brief").textContent = tr("analysis_in_progress");
-      openPanel("brief");
+      setOutput({info: tr("analysis_in_progress")});
       await completeSetup();
     }
 
@@ -1108,7 +1083,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       if (activeSession) loadChatTurns();
     }
 
-    function showDashboard(session) {
+    function showDashboard(session, openByDefault = false) {
       activeSession = session;
       renderDashboardSummary(session);
       const analysis = session?.psychogram?.analysis;
@@ -1119,7 +1094,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("homeBtn").classList.remove("hidden");
       document.getElementById("logoutTopBtn").classList.remove("hidden");
       updateChatLock();
-      showHomeView();
+      if (openByDefault) {
+        dashboardVisible = true;
+        document.getElementById("dashboard").classList.remove("hidden");
+        document.getElementById("appFlow").classList.add("hidden");
+      } else {
+        showHomeView();
+      }
     }
 
     function toggleDashboard() {
@@ -1316,17 +1297,28 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         updateCompleteReadiness();
         dashboardLastEvent = "active_session_loaded";
         dashboardLastDetail = `session_id=${activeSession.session_id}`;
-        showDashboard(data.chastity_session);
+        showDashboard(data.chastity_session, true);
       } else if (res.ok) {
         activeSession = null;
         if (!setupStatus) setupStatus = "draft";
-        setLocked("start", false);
-        resetAccordionLocks();
+        if (setupStatus === "configured") {
+          setLocked("start", true);
+          setLocked("psychogram", true);
+          setLocked("ai_config", true);
+          setLocked("complete", true);
+        } else {
+          setLocked("start", false);
+          resetAccordionLocks();
+        }
         updateChatLock();
         updateCompleteReadiness();
         dashboardLastEvent = "no_active_session";
         dashboardLastDetail = `setup=${setupStatus}`;
-        showSetupFlow();
+        if (setupStatus === "configured") {
+          showDashboard(null, true);
+        } else {
+          showSetupFlow();
+        }
       }
       refreshDashboard();
     }
@@ -1527,25 +1519,21 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         setLocked("psychogram", true);
         setLocked("ai_config", true);
         setLocked("complete", true);
-        setLocked("brief", false);
-        setLocked("response", false);
         updatePsychogramAvailability();
         updateCompleteReadiness();
-        const briefText = data?.chastity_session?.psychogram_brief;
-        if (briefText) {
-          document.getElementById("brief").textContent = briefText;
-          openPanel("brief");
-        }
+        const briefText = data?.chastity_session?.psychogram_brief || data?.chastity_session?.psychogram_analysis || "";
         dashboardLastEvent = "setup_completed";
         dashboardLastDetail = `status=configured`;
         await checkActiveSession();
-        if (activeSession) {
-          updateChatLock();
-          openPanel("brief");
-        } else {
-          setLocked("chat", true);
-        }
         refreshDashboard();
+        sessionStorage.setItem(
+          "chastease_post_setup_analysis",
+          JSON.stringify({
+            analysis: briefText,
+            session_id: data?.chastity_session?.session_id || "",
+          })
+        );
+        window.location.href = "/chat?mode=analysis";
       }
     }
 
@@ -1592,7 +1580,7 @@ def chat_shell() -> str:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chastease AI Chat</title>
+  <title>Chastease AI Chat (Text)</title>
   <style>
     :root {
       --bg: #080f1e;
@@ -1643,7 +1631,9 @@ def chat_shell() -> str:
     .messages { overflow: auto; padding: 6px; display: grid; gap: 8px; }
     .msg { border: 1px solid #2a3f67; border-radius: 12px; padding: 10px; background: var(--panel-soft); }
     .msg.user { background: #152748; }
-    .msg .role { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .msg .meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+    .msg .role { font-size: 12px; color: var(--muted); }
+    .msg .ts { font-size: 12px; color: #86a2d4; font-variant-numeric: tabular-nums; }
     .composer { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 12px; }
     textarea {
       width: 100%;
@@ -1656,7 +1646,7 @@ def chat_shell() -> str:
       padding: 10px;
       font-family: inherit;
     }
-    input, select {
+    input {
       width: 100%;
       border-radius: 10px;
       border: 1px solid #2d436d;
@@ -1665,10 +1655,14 @@ def chat_shell() -> str:
       padding: 9px 10px;
     }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-    .file-list { display: grid; gap: 4px; margin-top: 8px; }
-    .file-pill { display: inline-block; border: 1px solid #314c7b; padding: 4px 8px; border-radius: 999px; font-size: 12px; color: #c6d6ff; }
-    .downloads { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
-    .downloads button { border-radius: 8px; border: 1px solid #355183; background: #132445; color: #d8e6ff; padding: 6px 10px; cursor: pointer; }
+    .note {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px dashed #2e4774;
+      color: #a8bde6;
+      font-size: 12px;
+    }
 
     @media (max-width: 980px) {
       .grid { grid-template-columns: 1fr; }
@@ -1681,7 +1675,7 @@ def chat_shell() -> str:
     <div class="topbar">
       <div>
         <h1>AI Chat</h1>
-        <div class="small">Text, Bilder, Screenshots, Sprache und Datei-Antworten</div>
+        <div class="small">Reiner Text-Chat (Prototyp)</div>
       </div>
       <div class="actions">
         <a class="btn ghost" href="/">Home</a>
@@ -1695,11 +1689,11 @@ def chat_shell() -> str:
         <div class="small">Der Chat nutzt deine aktive Session.</div>
         <div style="margin-top:8px;">
           <label class="small">User ID</label>
-          <input id="userId" placeholder="auto via auth token" />
+          <input id="userId" name="chat_user_id" placeholder="auto via auth token" autocomplete="off" data-bwignore="true" data-1p-ignore="true" />
         </div>
         <div style="margin-top:8px;">
           <label class="small">Auth Token</label>
-          <input id="authToken" type="password" placeholder="auto via localStorage" />
+          <input id="authToken" name="chat_auth_token" type="password" placeholder="auto via localStorage" autocomplete="new-password" data-bwignore="true" data-1p-ignore="true" />
         </div>
         <div class="row">
           <button class="btn" onclick="loadAuthFromStorage()">Load Auth</button>
@@ -1707,33 +1701,26 @@ def chat_shell() -> str:
         </div>
         <div style="margin-top:8px;">
           <label class="small">Session ID</label>
-          <input id="sessionId" placeholder="active session id" />
+          <input id="sessionId" name="chat_session_id" placeholder="active session id" autocomplete="off" data-bwignore="true" data-1p-ignore="true" />
         </div>
+        <div class="note">Nur Text aktiviert. Upload, Voice und Datei-Export sind temporär deaktiviert.</div>
         <div class="status small" id="status"></div>
       </section>
 
       <section class="card chat-shell">
         <div id="messages" class="messages"></div>
         <div class="composer">
-          <textarea id="messageInput" placeholder="Schreibe hier deine Nachricht an den Keyholder..."></textarea>
+          <textarea id="messageInput" name="chat_message" placeholder="Schreibe hier deine Nachricht an den Keyholder..." autocomplete="off" data-bwignore="true" data-1p-ignore="true"></textarea>
           <div class="row">
-            <input id="fileInput" type="file" multiple accept="image/*,.pdf,.txt,.md,.json,.csv,.doc,.docx" />
-            <button class="btn" id="voiceBtn" onclick="toggleVoice()">Voice</button>
             <button class="btn primary" onclick="sendMessage()">Senden</button>
-            <button class="btn ghost" onclick="downloadLastAsText()">Antwort als TXT</button>
-            <button class="btn ghost" onclick="downloadLastAsJson()">Antwort als JSON</button>
           </div>
-          <div id="fileList" class="file-list"></div>
-          <div id="downloads" class="downloads"></div>
         </div>
       </section>
     </div>
   </div>
 
   <script>
-    let recognition = null;
-    let voiceOn = false;
-    let lastResponse = null;
+    let sending = false;
 
     function setStatus(text, kind = "ok") {
       const node = document.getElementById("status");
@@ -1779,114 +1766,94 @@ def chat_shell() -> str:
       setStatus("Aktive Session geladen.");
     }
 
-    function readSelectedFiles() {
-      const files = Array.from(document.getElementById("fileInput").files || []);
-      const list = document.getElementById("fileList");
-      list.innerHTML = files.map((f) => `<span class="file-pill">${f.name} (${Math.round(f.size/1024)} KB)</span>`).join("");
-      return files.map((f) => ({ name: f.name, size: f.size, type: f.type || "application/octet-stream" }));
+    function formatTimestamp(dateLike = null) {
+      const d = dateLike ? new Date(dateLike) : new Date();
+      if (Number.isNaN(d.getTime())) return "--.--.--";
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      const ss = String(d.getSeconds()).padStart(2, "0");
+      return `${hh}.${mm}.${ss}`;
     }
 
-    function addMessage(role, text) {
+    function addMessage(role, text, ts = null) {
       const wrap = document.createElement("article");
       wrap.className = `msg ${role === "wearer" ? "user" : "assistant"}`;
-      wrap.innerHTML = `<div class="role">${role === "wearer" ? "Wearer" : "Keyholder"}</div><div>${(text || "").replace(/\\n/g, "<br/>")}</div>`;
+      wrap.innerHTML = `
+        <div class="meta">
+          <div class="role">${role === "wearer" ? "Wearer" : "Keyholder"}</div>
+          <div class="ts">${formatTimestamp(ts)}</div>
+        </div>
+        <div>${(text || "").replace(/\\n/g, "<br/>")}</div>
+      `;
       const box = document.getElementById("messages");
       box.appendChild(wrap);
       box.scrollTop = box.scrollHeight;
     }
 
-    function downloadBlob(name, mimeType, content) {
-      const blob = new Blob([content], { type: mimeType || "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = name || "response.txt";
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1200);
-    }
-
-    function renderGeneratedFiles(files) {
-      const box = document.getElementById("downloads");
-      box.innerHTML = "";
-      if (!files || !files.length) return;
-      files.forEach((f, idx) => {
-        const btn = document.createElement("button");
-        btn.textContent = `Download: ${f.name || `file-${idx + 1}.txt`}`;
-        btn.onclick = () => downloadBlob(f.name, f.mime_type, f.content || "");
-        box.appendChild(btn);
-      });
-    }
-
     async function sendMessage() {
+      if (sending) return;
       const sessionId = document.getElementById("sessionId").value.trim();
       const message = document.getElementById("messageInput").value.trim();
       if (!sessionId) return setStatus("Session ID fehlt.", "err");
       if (!message) return setStatus("Nachricht fehlt.", "err");
-
-      const attachments = readSelectedFiles();
+      const startedAt = performance.now();
       addMessage("wearer", message);
       setStatus("Anfrage laeuft, bitte warten...");
-      const res = await fetch("/api/v1/chat/turn", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, message, language: "de", attachments }),
-      });
-      const data = await safeJson(res);
-      if (!res.ok) return setStatus(data?.detail || "Chat-Request fehlgeschlagen.", "err");
-      lastResponse = data;
-      addMessage("keyholder", data.narration || "");
-      renderGeneratedFiles(data.generated_files || []);
-      document.getElementById("messageInput").value = "";
-      document.getElementById("fileInput").value = "";
-      document.getElementById("fileList").innerHTML = "";
-      setStatus("Antwort erhalten.");
-    }
-
-    function downloadLastAsText() {
-      if (!lastResponse) return setStatus("Noch keine Antwort zum Exportieren.", "err");
-      downloadBlob("ai-response.txt", "text/plain", lastResponse.narration || "");
-    }
-
-    function downloadLastAsJson() {
-      if (!lastResponse) return setStatus("Noch keine Antwort zum Exportieren.", "err");
-      downloadBlob("ai-response.json", "application/json", JSON.stringify(lastResponse, null, 2));
-    }
-
-    function toggleVoice() {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) return setStatus("Voice wird in diesem Browser nicht unterstuetzt.", "err");
-      if (!recognition) {
-        recognition = new SpeechRecognition();
-        recognition.lang = "de-DE";
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.onresult = (event) => {
-          let finalTranscript = "";
-          for (let i = event.resultIndex; i < event.results.length; i += 1) {
-            if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
-          }
-          if (finalTranscript) {
-            const input = document.getElementById("messageInput");
-            input.value = `${input.value} ${finalTranscript}`.trim();
-          }
-        };
-        recognition.onend = () => {
-          if (voiceOn) recognition.start();
-        };
+      sending = true;
+      try {
+        const res = await fetch("/api/v1/chat/turn", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, message, language: "de" }),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) return setStatus(data?.detail || "Chat-Request fehlgeschlagen.", "err");
+        addMessage("keyholder", data.narration || "");
+        document.getElementById("messageInput").value = "";
+        const elapsedMs = Math.max(0, performance.now() - startedAt);
+        setStatus(`Antwort erhalten (${(elapsedMs / 1000).toFixed(2)}s).`);
+      } finally {
+        sending = false;
       }
-      voiceOn = !voiceOn;
-      document.getElementById("voiceBtn").textContent = voiceOn ? "Stop Voice" : "Voice";
-      if (voiceOn) {
-        recognition.start();
-        setStatus("Voice-Aufnahme aktiv.");
+    }
+
+    async function runPostSetupAnalysisFlow() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("mode") !== "analysis") return;
+
+      addMessage("keyholder", "Analyse in arbeit");
+      setStatus("Analyse in arbeit...");
+
+      let payload = null;
+      try {
+        const raw = sessionStorage.getItem("chastease_post_setup_analysis");
+        if (raw) payload = JSON.parse(raw);
+      } catch {}
+
+      if (payload?.session_id) {
+        document.getElementById("sessionId").value = payload.session_id;
       } else {
-        recognition.stop();
-        setStatus("Voice-Aufnahme gestoppt.");
+        await resolveActiveSession();
       }
+
+      const analysisText = (payload && payload.analysis) || "Analyse abgeschlossen.";
+      setTimeout(() => {
+        addMessage("keyholder", analysisText);
+        setStatus("Analyse abgeschlossen.");
+        sessionStorage.removeItem("chastease_post_setup_analysis");
+      }, 900);
     }
 
-    document.getElementById("fileInput").addEventListener("change", readSelectedFiles);
+    document.getElementById("messageInput").addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
+
     loadAuthFromStorage();
+    resolveActiveSession();
+    runPostSetupAnalysisFlow();
   </script>
 </body>
 </html>
