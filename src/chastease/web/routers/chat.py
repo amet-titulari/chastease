@@ -139,20 +139,17 @@ def chat_shell() -> str:
         <div class="small">Reiner Text-Chat (Prototyp)</div>
       </div>
       <div class="actions">
-        <a class="btn ghost" href="/">Landing</a>
+        <a class="btn ghost" href="/app">Home</a>
+        <a class="btn ghost" href="/chat">AI Chat</a>
         <a class="btn ghost" href="/app">Dashboard</a>
         <a class="btn ghost" href="/contract">Vertrag</a>
-        <a class="btn primary" href="/chat">AI Chat</a>
-        <button class="btn ghost icon-btn" onclick="toggleInfoPanel()" title="Session-Info anzeigen/ausblenden" aria-label="Session-Info">
-          (i)
-        </button>
+        <button class="btn ghost" onclick="logoutUser()">Logout</button>
       </div>
     </div>
 
-    <section id="sessionPanel" class="card hidden" style="margin-bottom:12px;">
+    <section id="sessionPanel" class="card" style="margin-bottom:12px;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
         <h2 style="margin:0;">Session</h2>
-        <button class="btn ghost" onclick="toggleInfoPanel(true)">Schliessen</button>
       </div>
       <div class="small">Der Chat nutzt deine aktive Session.</div>
       <div style="margin-top:8px;">
@@ -211,6 +208,11 @@ def chat_shell() -> str:
 
     function authStorageKey() {
       return "chastease_auth_v1";
+    }
+
+    function logoutUser() {
+      localStorage.removeItem(authStorageKey());
+      window.location.href = "/app?mode=login";
     }
 
     function loadAuthFromStorage() {
