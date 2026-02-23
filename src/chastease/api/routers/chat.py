@@ -1,5 +1,6 @@
 ﻿import base64
-from datetime import UTC, datetime
+import json
+from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
@@ -22,6 +23,150 @@ _DURATION_UNIT_SECONDS = {
     "day": 86400,
     "days": 86400,
 }
+
+
+def _to_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _iso_utc(value: datetime) -> str:
+    return _to_utc(value).isoformat()
+
+
+def _parse_iso_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        if "T" in text:
+            return _to_utc(datetime.fromisoformat(text))
+        parsed_date = date.fromisoformat(text)
+        return datetime(parsed_date.year, parsed_date.month, parsed_date.day, 23, 59, 59, tzinfo=UTC)
+    except Exception:
+        return None
+
+
+def _format_contract_date(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return _to_utc(value).date().isoformat()
+
+
+def _seed_timer_from_contract(contract: dict, now: datetime) -> dict:
+    start_at = _parse_iso_dt(contract.get("start_date")) or now
+    end_at = (
+        _parse_iso_dt(contract.get("proposed_end_date"))
+        or _parse_iso_dt(contract.get("end_date"))
+        or _parse_iso_dt(contract.get("max_end_date"))
+        or _parse_iso_dt(contract.get("min_end_date"))
+        or (now + timedelta(days=1))
+    )
+    min_end_at = _parse_iso_dt(contract.get("min_end_date"))
+    max_end_at = _parse_iso_dt(contract.get("max_end_date"))
+    return {
+        "state": "running",
+        "started_at": _iso_utc(start_at),
+        "effective_end_at": _iso_utc(end_at),
+        "min_end_at": _iso_utc(min_end_at) if min_end_at else None,
+        "max_end_at": _iso_utc(max_end_at) if max_end_at else None,
+        "paused_at": None,
+        "last_action": "init",
+        "last_action_at": _iso_utc(now),
+    }
+
+
+def _ensure_timer_state(policy: dict, now: datetime) -> dict:
+    timer = policy.get("runtime_timer") if isinstance(policy.get("runtime_timer"), dict) else {}
+    if not timer or not timer.get("effective_end_at"):
+        contract = policy.get("contract") if isinstance(policy.get("contract"), dict) else {}
+        timer = _seed_timer_from_contract(contract, now)
+    timer.setdefault("state", "running")
+    timer.setdefault("paused_at", None)
+    timer.setdefault("started_at", _iso_utc(now))
+    timer.setdefault("last_action", "init")
+    timer.setdefault("last_action_at", _iso_utc(now))
+    return timer
+
+
+def _remaining_seconds(timer: dict, now: datetime) -> int:
+    end_at = _parse_iso_dt(timer.get("effective_end_at"))
+    if end_at is None:
+        return 0
+    if timer.get("state") == "paused" and timer.get("paused_at"):
+        ref = _parse_iso_dt(timer.get("paused_at")) or now
+    else:
+        ref = now
+    return max(0, int((end_at - ref).total_seconds()))
+
+
+def _apply_timer_action(action_type: str, payload: dict, policy: dict, now: datetime) -> tuple[dict, dict, str]:
+    contract = policy.setdefault("contract", {})
+    timer = _ensure_timer_state(policy, now)
+    action = action_type.strip().lower()
+
+    effective_end_at = _parse_iso_dt(timer.get("effective_end_at")) or now
+    min_end_at = _parse_iso_dt(timer.get("min_end_at"))
+    max_end_at = _parse_iso_dt(timer.get("max_end_at"))
+    paused_at = _parse_iso_dt(timer.get("paused_at"))
+
+    if action == "pause_timer":
+        if timer.get("state") != "paused":
+            timer["state"] = "paused"
+            timer["paused_at"] = _iso_utc(now)
+        timer["last_action"] = "pause_timer"
+        timer["last_action_at"] = _iso_utc(now)
+        message = "Timer paused."
+    elif action == "unpause_timer":
+        if timer.get("state") == "paused" and paused_at is not None:
+            paused_seconds = max(0, int((now - paused_at).total_seconds()))
+            next_end_at = effective_end_at + timedelta(seconds=paused_seconds)
+            if max_end_at is not None and next_end_at > max_end_at:
+                raise HTTPException(status_code=400, detail="Action 'unpause_timer' exceeds max_end_date boundary.")
+            effective_end_at = next_end_at
+            timer["effective_end_at"] = _iso_utc(effective_end_at)
+            if min_end_at is not None:
+                min_end_at = min_end_at + timedelta(seconds=paused_seconds)
+                timer["min_end_at"] = _iso_utc(min_end_at)
+        timer["state"] = "running"
+        timer["paused_at"] = None
+        timer["last_action"] = "unpause_timer"
+        timer["last_action_at"] = _iso_utc(now)
+        message = "Timer resumed."
+    elif action == "add_time":
+        seconds = int(payload.get("seconds", 0))
+        if seconds <= 0:
+            raise HTTPException(status_code=400, detail="Action 'add_time' requires seconds > 0.")
+        next_end_at = effective_end_at + timedelta(seconds=seconds)
+        if max_end_at is not None and next_end_at > max_end_at:
+            raise HTTPException(status_code=400, detail="Action 'add_time' exceeds max_end_date boundary.")
+        effective_end_at = next_end_at
+        timer["effective_end_at"] = _iso_utc(effective_end_at)
+        timer["last_action"] = "add_time"
+        timer["last_action_at"] = _iso_utc(now)
+        message = "Time added."
+    elif action == "reduce_time":
+        seconds = int(payload.get("seconds", 0))
+        if seconds <= 0:
+            raise HTTPException(status_code=400, detail="Action 'reduce_time' requires seconds > 0.")
+        next_end_at = effective_end_at - timedelta(seconds=seconds)
+        if min_end_at is not None and next_end_at < min_end_at:
+            raise HTTPException(status_code=400, detail="Action 'reduce_time' exceeds min_end_date boundary.")
+        effective_end_at = next_end_at
+        timer["effective_end_at"] = _iso_utc(effective_end_at)
+        timer["last_action"] = "reduce_time"
+        timer["last_action_at"] = _iso_utc(now)
+        message = "Time reduced."
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported action_type '{action_type}'.")
+
+    contract["proposed_end_date"] = _format_contract_date(effective_end_at)
+    timer["remaining_seconds"] = _remaining_seconds(timer, now)
+    policy["runtime_timer"] = timer
+    return policy, timer, message
 
 
 def _to_int(value) -> int:
@@ -198,12 +343,23 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
         raise HTTPException(status_code=403, detail=f"Tool '{payload.action_type}' is not allowed for execution.")
     normalized_payload = _normalize_duration_payload(payload.action_type, payload.payload)
 
+    now = datetime.now(UTC)
     db = get_db_session(request)
     try:
         session = db.get(ChastitySession, payload.session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
-        session.updated_at = datetime.now(UTC)
+        policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
+        if not isinstance(policy, dict):
+            policy = {}
+        updated_policy, timer_state, action_message = _apply_timer_action(
+            payload.action_type,
+            normalized_payload,
+            policy,
+            now,
+        )
+        session.policy_snapshot_json = json.dumps(updated_policy)
+        session.updated_at = now
         db.add(session)
         db.commit()
     finally:
@@ -213,5 +369,6 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
         "session_id": payload.session_id,
         "action_type": payload.action_type,
         "payload": normalized_payload,
-        "message": "Action execution placeholder completed.",
+        "timer": timer_state,
+        "message": action_message,
     }
