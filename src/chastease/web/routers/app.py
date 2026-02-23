@@ -24,6 +24,22 @@ def app_shell(request: Request) -> str:
     .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
     .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
     .topbar-actions { display: flex; gap: 8px; align-items: center; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      border: 1px solid #2b3d63;
+      background: #0f1930;
+      color: #e8eefc;
+      padding: 8px 10px;
+      text-decoration: none;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+    .btn:hover { background: #162647; }
+    .btn.ghost { background: transparent; }
+    .btn.primary { background: #2d8cff; border-color: transparent; }
     .setup-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(220px, 1fr));
@@ -177,11 +193,11 @@ def app_shell(request: Request) -> str:
     <div class="topbar">
       <p class="small"><a id="landingLink" href="/">Zur Landingpage</a></p>
       <div class="topbar-actions">
-        <a class="btn btn-secondary" href="/chat" style="padding:6px 10px;">AI Chat</a>
-        <button id="contractTopBtn" class="ghost hidden" onclick="openContractPage()">Vertrag</button>
-        <button id="homeBtn" class="ghost hidden" onclick="showHomeView()">Home</button>
-        <button id="dashboardToggleBtn" class="ghost hidden" onclick="toggleDashboard()">Dashboard</button>
-        <button id="logoutTopBtn" class="ghost hidden" onclick="logoutUser()">Logout</button>
+        <a id="chatTopBtn" class="btn ghost" href="/chat">AI Chat</a>
+        <button id="contractTopBtn" class="btn ghost hidden" onclick="openContractPage()">Vertrag</button>
+        <button id="homeBtn" class="btn ghost hidden" onclick="showHomeView()">Home</button>
+        <button id="dashboardToggleBtn" class="btn ghost hidden" onclick="toggleDashboard()">Dashboard</button>
+        <button id="logoutTopBtn" class="btn ghost hidden" onclick="logoutUser()">Logout</button>
       </div>
     </div>
 
@@ -933,6 +949,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     function applyStaticUiTranslations() {
       setText("appTitle", "app_title");
       setText("landingLink", "landing_link");
+      setText("chatTopBtn", "panel_chat");
       setText("homeBtn", "home");
       setText("contractTopBtn", "contract_page");
       setText("dashboardToggleBtn", "dashboard");

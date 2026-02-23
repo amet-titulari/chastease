@@ -194,8 +194,10 @@ def contract_shell() -> str:
         <div class="small">Der Keuschheitsvertrag wird aus den Session-Daten erstellt.</div>
       </div>
       <div class="actions">
+        <a class="btn" href="/">Landing</a>
         <a class="btn" href="/app">Dashboard</a>
-        <a class="btn primary" href="/chat">AI Chat</a>
+        <a class="btn primary" href="/contract">Vertrag</a>
+        <a class="btn" href="/chat">AI Chat</a>
       </div>
     </div>
 

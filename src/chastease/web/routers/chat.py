@@ -139,11 +139,13 @@ def chat_shell() -> str:
         <div class="small">Reiner Text-Chat (Prototyp)</div>
       </div>
       <div class="actions">
+        <a class="btn ghost" href="/">Landing</a>
+        <a class="btn ghost" href="/app">Dashboard</a>
+        <a class="btn ghost" href="/contract">Vertrag</a>
+        <a class="btn primary" href="/chat">AI Chat</a>
         <button class="btn ghost icon-btn" onclick="toggleInfoPanel()" title="Session-Info anzeigen/ausblenden" aria-label="Session-Info">
           (i)
         </button>
-        <a class="btn ghost" href="/">Home</a>
-        <a class="btn ghost" href="/app">Dashboard</a>
       </div>
     </div>
 
