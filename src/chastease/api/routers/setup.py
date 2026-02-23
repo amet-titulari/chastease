@@ -197,6 +197,7 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
             "hard_stop_enabled": payload.hard_stop_enabled,
             "autonomy_mode": payload.autonomy_mode,
             "integrations": payload.integrations,
+            "integration_config": payload.integration_config,
             "language": lang,
             "blocked_trigger_words": payload.blocked_trigger_words,
             "forbidden_topics": payload.forbidden_topics,
@@ -236,6 +237,8 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
         "status": "setup_in_progress",
         "questionnaire_version": QUESTIONNAIRE_VERSION,
         "language": lang,
+        "integrations": payload.integrations,
+        "integration_config": payload.integration_config,
         "contract": {
             "start_date": contract_start_date,
             "end_date": contract_end_date,
@@ -871,4 +874,3 @@ def get_setup_questionnaire(language: Literal["de", "en"] = "de") -> dict:
 @router.get("/demo")
 def setup_demo_redirect():
     return RedirectResponse(url="/app", status_code=307)
-

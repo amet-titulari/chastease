@@ -51,6 +51,8 @@ def landing_page() -> str:
       text-decoration: none;
       font-weight: 700;
       border: 1px solid transparent;
+      cursor: pointer;
+      font-family: inherit;
     }
     .btn-primary { background: var(--brand); color: #fff; }
     .btn-secondary { background: #fff; border-color: var(--line); color: var(--ink); }
@@ -64,7 +66,6 @@ def landing_page() -> str:
       <div class="actions">
         <a class="btn btn-primary" href="/app?mode=login">Login</a>
         <a class="btn btn-secondary" href="/app?mode=register">Register</a>
-        <a class="btn btn-secondary" href="/chat">AI Chat</a>
       </div>
     </section>
   </div>
@@ -114,6 +115,7 @@ def contract_shell() -> str:
       text-decoration: none;
       font-weight: 700;
     }
+    .btn.ghost { background: transparent; }
     .btn.primary { background: var(--brand); border-color: transparent; }
     .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
     .small { color: var(--muted); font-size: 12px; }
@@ -194,10 +196,11 @@ def contract_shell() -> str:
         <div class="small">Der Keuschheitsvertrag wird aus den Session-Daten erstellt.</div>
       </div>
       <div class="actions">
-        <a class="btn" href="/">Landing</a>
-        <a class="btn" href="/app">Dashboard</a>
-        <a class="btn primary" href="/contract">Vertrag</a>
-        <a class="btn" href="/chat">AI Chat</a>
+        <a class="btn ghost" href="/app">Home</a>
+        <a class="btn ghost" href="/chat">AI Chat</a>
+        <a class="btn ghost" href="/app">Dashboard</a>
+        <a class="btn ghost" href="/contract">Vertrag</a>
+        <button class="btn ghost" onclick="logoutUser()">Logout</button>
       </div>
     </div>
 
@@ -225,6 +228,11 @@ def contract_shell() -> str:
 
     function authStorageKey() {
       return "chastease_auth_v1";
+    }
+
+    function logoutUser() {
+      localStorage.removeItem(authStorageKey());
+      window.location.href = "/app?mode=login";
     }
 
     let contractUserId = null;

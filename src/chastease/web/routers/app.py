@@ -61,6 +61,14 @@ def app_shell(request: Request) -> str:
       min-width: 0;
       max-width: 100%;
     }
+    .setup-item-full { grid-column: 1 / -1; }
+    .ttlock-device-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 10px 12px;
+      max-width: 100%;
+      margin: 0;
+    }
     .setup-item input[type="date"] { max-width: 100%; }
     .qgrid {
       display: grid;
@@ -237,6 +245,9 @@ def app_shell(request: Request) -> str:
         grid-template-columns: 1fr;
         max-width: 100%;
       }
+      .ttlock-device-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -272,7 +283,7 @@ def app_shell(request: Request) -> str:
     <div id="dashboard" class="card hidden">
       <h2 id="dashboardTitle">Dashboard</h2>
       <p id="dashboardSubtitle" class="small">Countdown bis zum voraussichtlichen Endtermin.</p>
-      <div class="dashboard-timer">
+      <div id="dashboardTimerCard" class="dashboard-timer">
         <div class="dashboard-timer-head">
           <p id="dashboardTimerSummary" class="dashboard-timer-summary">-</p>
         </div>
@@ -352,6 +363,56 @@ def app_shell(request: Request) -> str:
             </div>
             <button id="startSetupBtn" onclick="startSetup()">Start Setup</button>
             <p id="setupSessionInfo" class="small"></p>
+          </div>
+        </div>
+
+        <div class="acc-item" data-panel="ttlock">
+          <button class="acc-head" onclick="openPanel('ttlock')"><span id="panelTtlockTitle">TT-Lock Integration</span><span id="lock_ttlock" class="acc-lock hidden">locked</span></button>
+          <div class="acc-body">
+            <div class="setup-grid">
+              <div class="setup-item">
+                <label id="labelTtlockEnabled">TT-Lock Integration</label>
+                <select id="ttlockIntegrationEnabled">
+                  <option value="false" selected>no</option>
+                  <option value="true">yes</option>
+                </select>
+              </div>
+            </div>
+            <div id="ttlockConfigFields" class="setup-grid hidden">
+              <div class="setup-item">
+                <label id="labelTtlockUser">TT-Lock Username</label>
+                <input id="ttlockUser" placeholder="email or account" />
+              </div>
+              <div class="setup-item">
+                <label id="labelTtlockPassword">TT-Lock Password</label>
+                <input id="ttlockPassword" type="password" placeholder="password" autocomplete="current-password" />
+              </div>
+              <div class="setup-item setup-item-full">
+                <div class="row" style="margin-bottom:0;">
+                  <button id="ttlockDiscoverBtn" type="button" class="ghost" onclick="discoverTtlockDevices()">Geraete erkennen</button>
+                </div>
+              </div>
+              <div class="setup-item setup-item-full">
+                <div class="ttlock-device-grid">
+                  <div class="setup-item">
+                    <label id="labelTtlockGatewayId">Gateway</label>
+                    <select id="ttlockGatewayId">
+                      <option value="">-</option>
+                    </select>
+                  </div>
+                  <div class="setup-item">
+                    <label id="labelTtlockLockId">Lock</label>
+                    <select id="ttlockLockId">
+                      <option value="">-</option>
+                    </select>
+                    <div id="ttlockSaveCredsWrap" class="row hidden" style="margin-top:8px; margin-bottom:0;">
+                      <button id="ttlockSaveCredsBtn" type="button" class="ghost" onclick="saveTtlockCredentials()">Zugang speichern</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p id="ttlockDiscoverInfo" class="small hidden"></p>
           </div>
         </div>
 
@@ -451,7 +512,9 @@ def app_shell(request: Request) -> str:
     let dashboardLastEvent = "init";
     let dashboardLastDetail = "";
     let dashboardCountdownInterval = null;
-    const PANELS = ["start", "psychogram", "ai_config", "complete"];
+    let ttlockPasswordMd5Cached = "";
+    let ttlockUserCached = "";
+    const PANELS = ["start", "ttlock", "psychogram", "ai_config", "complete"];
     const LOCKED_INITIAL = new Set(["psychogram", "ai_config", "complete"]);
 
     const defaultBehaviorPrompt = `Du bist meine ruhige, intelligente und psychologisch dominante Herrin / Keyholderin.
@@ -501,6 +564,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         dashboard_setup_title: "Setup",
         kill_session: "Session KILL",
         panel_start: "Start Setup Session",
+        panel_ttlock: "TT-Lock Integration",
         panel_psychogram: "Psychogram",
         panel_ai_config: "AI Configuration",
         panel_complete: "Complete Setup",
@@ -522,6 +586,19 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         openings_period: "Öffnungs-Zeitraum",
         max_openings_period: "Max Öffnungen / Zeitraum",
         opening_window: "Öffnungsfenster (min)",
+        ttlock_enabled: "TT-Lock Integration gewünscht",
+        ttlock_user: "TT-Lock Benutzername",
+        ttlock_password: "TT-Lock Passwort",
+        ttlock_save_creds: "Zugang speichern",
+        ttlock_creds_saved: "TT-Lock Zugang lokal gespeichert.",
+        ttlock_discover: "Geraete erkennen",
+        ttlock_discover_loading: "Lade Gateways und Schloesser...",
+        ttlock_discover_success: "{locks} Schloesser, {gateways} Gateways gefunden.",
+        ttlock_discover_failed: "Geraeteabfrage fehlgeschlagen.",
+        ttlock_user_pass_required: "TT-Lock Benutzername und Passwort sind erforderlich.",
+        ttlock_discover_required: "Bitte zuerst 'Geraete erkennen' ausfuehren, damit die Lock-Auswahl gespeichert werden kann.",
+        ttlock_gateway_id: "Gateway",
+        ttlock_lock_id: "Lock",
         start_setup: "Setup starten",
         psychogram_hint: "Starte zuerst Setup Session, um das Psychogramm zu laden.",
         psychogram_readonly: "Psychogramm der aktiven Session (nur Lesen). Änderungen sind gesperrt.",
@@ -625,6 +702,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         dashboard_setup_title: "Setup",
         kill_session: "Session KILL",
         panel_start: "Start Setup Session",
+        panel_ttlock: "TT-Lock Integration",
         panel_psychogram: "Psychogram",
         panel_ai_config: "AI Configuration",
         panel_complete: "Complete Setup",
@@ -646,6 +724,19 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         openings_period: "Openings Period",
         max_openings_period: "Max Openings / Period",
         opening_window: "Opening Window (min)",
+        ttlock_enabled: "Enable TT-Lock integration",
+        ttlock_user: "TT-Lock username",
+        ttlock_password: "TT-Lock password",
+        ttlock_save_creds: "Save credentials",
+        ttlock_creds_saved: "TT-Lock credentials saved locally.",
+        ttlock_discover: "Discover devices",
+        ttlock_discover_loading: "Loading gateways and locks...",
+        ttlock_discover_success: "{locks} locks, {gateways} gateways found.",
+        ttlock_discover_failed: "Device discovery failed.",
+        ttlock_user_pass_required: "TT-Lock username and password are required.",
+        ttlock_discover_required: "Please run 'Discover devices' first so the lock selection can be saved.",
+        ttlock_gateway_id: "Gateway",
+        ttlock_lock_id: "Lock",
         start_setup: "Start Setup",
         psychogram_hint: "Start Setup Session first to load the questionnaire.",
         psychogram_readonly: "Psychogram of the active session (read-only). Changes are locked.",
@@ -833,6 +924,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     async function confirmCompleteSetup() {
       document.getElementById("completeConfirmBox").classList.add("hidden");
       setLocked("start", true);
+      setLocked("ttlock", true);
       setLocked("psychogram", true);
       setLocked("ai_config", true);
       setLocked("complete", true);
@@ -1019,8 +1111,22 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("openingLimitPeriod").value = "week";
       document.getElementById("maxOpeningsInPeriod").value = "2";
       document.getElementById("openingWindowMinutes").value = "15";
+      document.getElementById("ttlockIntegrationEnabled").value = "false";
+      document.getElementById("ttlockUser").value = "";
+      document.getElementById("ttlockPassword").value = "";
+      ttlockPasswordMd5Cached = "";
+      ttlockUserCached = "";
+      document.getElementById("ttlockGatewayId").innerHTML = '<option value="">-</option>';
+      document.getElementById("ttlockLockId").innerHTML = '<option value="">-</option>';
+      const ttlockInfo = document.getElementById("ttlockDiscoverInfo");
+      if (ttlockInfo) {
+        ttlockInfo.textContent = "";
+        ttlockInfo.classList.add("hidden");
+        ttlockInfo.classList.remove("status-ok", "status-error");
+      }
       syncMinDurationGuard();
       updatePenaltyCapsVisibility();
+      updateTtlockConfigVisibility();
     }
 
     function selectOptionsByValue(id) {
@@ -1040,6 +1146,14 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     function tr(key) {
       const lang = uiLang();
       return UI_TEXTS[lang][key] || key;
+    }
+
+    function trFormat(key, replacements = {}) {
+      let text = tr(key);
+      Object.entries(replacements).forEach(([token, value]) => {
+        text = text.replaceAll(`{${token}}`, String(value));
+      });
+      return text;
     }
 
     function setText(id, key) {
@@ -1071,6 +1185,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       setText("timerSecsLabel", "timer_secs");
       setText("killSessionBtn", "kill_session");
       setText("panelStartTitle", "panel_start");
+      setText("panelTtlockTitle", "panel_ttlock");
       setText("panelPsychogramTitle", "panel_psychogram");
       setText("panelAiConfigTitle", "panel_ai_config");
       setText("panelCompleteTitle", "panel_complete");
@@ -1078,6 +1193,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       setText("panelBriefTitle", "panel_brief");
       setText("panelResponseTitle", "panel_response");
       setText("lock_start", "locked");
+      setText("lock_ttlock", "locked");
       setText("lock_psychogram", "locked");
       setText("lock_ai_config", "locked");
       setText("lock_complete", "locked");
@@ -1097,6 +1213,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       setText("labelOpeningsPeriod", "openings_period");
       setText("labelMaxOpeningsPeriod", "max_openings_period");
       setText("labelOpeningWindow", "opening_window");
+      setText("labelTtlockEnabled", "ttlock_enabled");
+      setText("labelTtlockUser", "ttlock_user");
+      setText("labelTtlockPassword", "ttlock_password");
+      setText("labelTtlockGatewayId", "ttlock_gateway_id");
+      setText("labelTtlockLockId", "ttlock_lock_id");
+      setText("ttlockSaveCredsBtn", "ttlock_save_creds");
+      setText("ttlockDiscoverBtn", "ttlock_discover");
       setText("startSetupBtn", "start_setup");
       setText("psychogramHint", "psychogram_hint");
       setText("submitAnswersBtn", "submit_answers");
@@ -1141,6 +1264,191 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("maxPenaltyWeekWrap").classList.toggle("hidden", !enabled);
     }
 
+    function updateTtlockConfigVisibility() {
+      const enabled = document.getElementById("ttlockIntegrationEnabled").value === "true";
+      document.getElementById("ttlockConfigFields").classList.toggle("hidden", !enabled);
+      updateTtlockSaveVisibility();
+    }
+
+    function updateTtlockSaveVisibility() {
+      const lockSelected = Boolean(document.getElementById("ttlockLockId").value.trim());
+      document.getElementById("ttlockSaveCredsWrap").classList.toggle("hidden", !lockSelected);
+    }
+
+    function populateTtlockSelect(selectId, items, valueKey, labelKey) {
+      const select = document.getElementById(selectId);
+      if (!select) return;
+      const currentValue = select.value;
+      const options = ['<option value="">-</option>'];
+      (items || []).forEach((item) => {
+        const value = String(item[valueKey] || "").trim();
+        if (!value) return;
+        const label = String(item[labelKey] || value);
+        options.push(`<option value="${value}">${label}</option>`);
+      });
+      select.innerHTML = options.join("");
+      if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+        select.value = currentValue;
+      }
+    }
+
+    function saveTtlockCredentials() {
+      const info = document.getElementById("ttlockDiscoverInfo");
+      const user = document.getElementById("ttlockUser").value.trim();
+      const pass = document.getElementById("ttlockPassword").value;
+      const passMd5 = pass ? md5(pass) : ttlockPasswordMd5Cached;
+      if (!user || !passMd5) {
+        if (info) {
+          info.textContent = tr("ttlock_user_pass_required");
+          info.classList.remove("hidden", "status-ok");
+          info.classList.add("status-error");
+        }
+        return;
+      }
+      ttlockUserCached = user;
+      ttlockPasswordMd5Cached = passMd5;
+      if (pass) document.getElementById("ttlockPassword").value = "";
+      if (info) {
+        info.textContent = tr("ttlock_creds_saved");
+        info.classList.remove("hidden", "status-error");
+        info.classList.add("status-ok");
+      }
+    }
+
+    async function discoverTtlockDevices() {
+      if (!userId || !authToken) return setOutput({error: "Login/Register first."});
+      const ttlockInfo = document.getElementById("ttlockDiscoverInfo");
+      const btn = document.getElementById("ttlockDiscoverBtn");
+      const inputUser = document.getElementById("ttlockUser").value.trim();
+      const inputPass = document.getElementById("ttlockPassword").value;
+      const ttlUser = inputUser || ttlockUserCached;
+      const ttlPassMd5 = inputPass ? md5(inputPass) : ttlockPasswordMd5Cached;
+      if (!ttlUser || !ttlPassMd5) {
+        if (ttlockInfo) {
+          ttlockInfo.textContent = tr("ttlock_user_pass_required");
+          ttlockInfo.classList.remove("hidden", "status-ok");
+          ttlockInfo.classList.add("status-error");
+        }
+        return;
+      }
+      if (ttlockInfo) {
+        ttlockInfo.textContent = tr("ttlock_discover_loading");
+        ttlockInfo.classList.remove("hidden", "status-ok", "status-error");
+      }
+      if (btn) btn.disabled = true;
+      try {
+        const requestPayload = {
+          user_id: userId,
+          auth_token: authToken,
+          ttl_user: ttlUser,
+          ttl_pass_md5: ttlPassMd5,
+        };
+        const res = await fetch("/api/v1/setup/ttlock/discover", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(requestPayload),
+        });
+        const data = await safeJson(res);
+        if (!res.ok || !data.success) {
+          if (ttlockInfo) {
+            ttlockInfo.textContent = `${tr("ttlock_discover_failed")} ${data.detail || data.error || ""}`.trim();
+            ttlockInfo.classList.remove("status-ok");
+            ttlockInfo.classList.add("status-error");
+          }
+          return;
+        }
+        const gateways = Array.isArray(data.gateways) ? data.gateways : [];
+        const locks = Array.isArray(data.locks) ? data.locks : [];
+        ttlockUserCached = ttlUser;
+        ttlockPasswordMd5Cached = String(data.ttl_pass_md5 || ttlPassMd5 || "").trim().toLowerCase();
+        if (inputPass) document.getElementById("ttlockPassword").value = "";
+        populateTtlockSelect("ttlockGatewayId", gateways, "gatewayId", "gatewayName");
+        populateTtlockSelect("ttlockLockId", locks, "lockId", "lockAlias");
+        updateTtlockSaveVisibility();
+        if (ttlockInfo) {
+          ttlockInfo.textContent = trFormat("ttlock_discover_success", {
+            locks: locks.length,
+            gateways: gateways.length,
+          });
+          ttlockInfo.classList.remove("status-error");
+          ttlockInfo.classList.add("status-ok");
+        }
+      } catch (error) {
+        if (ttlockInfo) {
+          ttlockInfo.textContent = `${tr("ttlock_discover_failed")} ${error?.message || ""}`.trim();
+          ttlockInfo.classList.remove("status-ok");
+          ttlockInfo.classList.add("status-error");
+        }
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function collectTtlockIntegrationConfig() {
+      const enabled = document.getElementById("ttlockIntegrationEnabled").value === "true";
+      if (!enabled) {
+        return { integrations: [], integration_config: {}, requires_discovery: false };
+      }
+      const ttlockConfig = {};
+      const user = document.getElementById("ttlockUser").value.trim() || ttlockUserCached;
+      const gatewayId = document.getElementById("ttlockGatewayId").value.trim();
+      const lockId = document.getElementById("ttlockLockId").value.trim();
+      const hasPasswordInput = Boolean(document.getElementById("ttlockPassword").value);
+      if (user) ttlockConfig.ttl_user = user;
+      if (ttlockPasswordMd5Cached) ttlockConfig.ttl_pass_md5 = ttlockPasswordMd5Cached;
+      if (gatewayId) ttlockConfig.ttl_gateway_id = gatewayId;
+      if (lockId) ttlockConfig.ttl_lock_id = lockId;
+      return {
+        integrations: ["ttlock"],
+        integration_config: { ttlock: ttlockConfig },
+        requires_discovery: hasPasswordInput && !ttlockPasswordMd5Cached,
+      };
+    }
+
+    // Minimal MD5 (from blueimp, trimmed) for TT-Lock password hashing in browser.
+    function md5(str) {
+      function cmn(q, a, b, x, s, t) { a = (a + q + x + t) | 0; return ((a << s) | (a >>> (32 - s))) + b; }
+      function ff(a, b, c, d, x, s, t) { return cmn((b & c) | (~b & d), a, b, x, s, t); }
+      function gg(a, b, c, d, x, s, t) { return cmn((b & d) | (c & ~d), a, b, x, s, t); }
+      function hh(a, b, c, d, x, s, t) { return cmn(b ^ c ^ d, a, b, x, s, t); }
+      function ii(a, b, c, d, x, s, t) { return cmn(c ^ (b | ~d), a, b, x, s, t); }
+      function toWords(input) {
+        var n = (((input.length + 8) >>> 6) + 1) * 16, words = new Array(n), i;
+        for (i = 0; i < n; i++) words[i] = 0;
+        for (i = 0; i < input.length; i++) words[i >> 2] |= input.charCodeAt(i) << ((i % 4) * 8);
+        words[i >> 2] |= 0x80 << ((i % 4) * 8);
+        words[n - 2] = input.length * 8;
+        return words;
+      }
+      function toHex(num) {
+        var s = "", v;
+        for (var i = 0; i < 4; i++) { v = (num >> (i * 8)) & 255; s += ("0" + v.toString(16)).slice(-2); }
+        return s;
+      }
+      var x = toWords(unescape(encodeURIComponent(str))), a = 1732584193, b = -271733879, c = -1732584194, d = 271733878;
+      for (var i = 0; i < x.length; i += 16) {
+        var oa = a, ob = b, oc = c, od = d;
+        a = ff(a, b, c, d, x[i + 0], 7, -680876936); d = ff(d, a, b, c, x[i + 1], 12, -389564586); c = ff(c, d, a, b, x[i + 2], 17, 606105819); b = ff(b, c, d, a, x[i + 3], 22, -1044525330);
+        a = ff(a, b, c, d, x[i + 4], 7, -176418897); d = ff(d, a, b, c, x[i + 5], 12, 1200080426); c = ff(c, d, a, b, x[i + 6], 17, -1473231341); b = ff(b, c, d, a, x[i + 7], 22, -45705983);
+        a = ff(a, b, c, d, x[i + 8], 7, 1770035416); d = ff(d, a, b, c, x[i + 9], 12, -1958414417); c = ff(c, d, a, b, x[i + 10], 17, -42063); b = ff(b, c, d, a, x[i + 11], 22, -1990404162);
+        a = ff(a, b, c, d, x[i + 12], 7, 1804603682); d = ff(d, a, b, c, x[i + 13], 12, -40341101); c = ff(c, d, a, b, x[i + 14], 17, -1502002290); b = ff(b, c, d, a, x[i + 15], 22, 1236535329);
+        a = gg(a, b, c, d, x[i + 1], 5, -165796510); d = gg(d, a, b, c, x[i + 6], 9, -1069501632); c = gg(c, d, a, b, x[i + 11], 14, 643717713); b = gg(b, c, d, a, x[i + 0], 20, -373897302);
+        a = gg(a, b, c, d, x[i + 5], 5, -701558691); d = gg(d, a, b, c, x[i + 10], 9, 38016083); c = gg(c, d, a, b, x[i + 15], 14, -660478335); b = gg(b, c, d, a, x[i + 4], 20, -405537848);
+        a = gg(a, b, c, d, x[i + 9], 5, 568446438); d = gg(d, a, b, c, x[i + 14], 9, -1019803690); c = gg(c, d, a, b, x[i + 3], 14, -187363961); b = gg(b, c, d, a, x[i + 8], 20, 1163531501);
+        a = gg(a, b, c, d, x[i + 13], 5, -1444681467); d = gg(d, a, b, c, x[i + 2], 9, -51403784); c = gg(c, d, a, b, x[i + 7], 14, 1735328473); b = gg(b, c, d, a, x[i + 12], 20, -1926607734);
+        a = hh(a, b, c, d, x[i + 5], 4, -378558); d = hh(d, a, b, c, x[i + 8], 11, -2022574463); c = hh(c, d, a, b, x[i + 11], 16, 1839030562); b = hh(b, c, d, a, x[i + 14], 23, -35309556);
+        a = hh(a, b, c, d, x[i + 1], 4, -1530992060); d = hh(d, a, b, c, x[i + 4], 11, 1272893353); c = hh(c, d, a, b, x[i + 7], 16, -155497632); b = hh(b, c, d, a, x[i + 10], 23, -1094730640);
+        a = hh(a, b, c, d, x[i + 13], 4, 681279174); d = hh(d, a, b, c, x[i + 0], 11, -358537222); c = hh(c, d, a, b, x[i + 3], 16, -722521979); b = hh(b, c, d, a, x[i + 6], 23, 76029189);
+        a = hh(a, b, c, d, x[i + 9], 4, -640364487); d = hh(d, a, b, c, x[i + 12], 11, -421815835); c = hh(c, d, a, b, x[i + 15], 16, 530742520); b = hh(b, c, d, a, x[i + 2], 23, -995338651);
+        a = ii(a, b, c, d, x[i + 0], 6, -198630844); d = ii(d, a, b, c, x[i + 7], 10, 1126891415); c = ii(c, d, a, b, x[i + 14], 15, -1416354905); b = ii(b, c, d, a, x[i + 5], 21, -57434055);
+        a = ii(a, b, c, d, x[i + 12], 6, 1700485571); d = ii(d, a, b, c, x[i + 3], 10, -1894986606); c = ii(c, d, a, b, x[i + 10], 15, -1051523); b = ii(b, c, d, a, x[i + 1], 21, -2054922799);
+        a = ii(a, b, c, d, x[i + 8], 6, 1873313359); d = ii(d, a, b, c, x[i + 15], 10, -30611744); c = ii(c, d, a, b, x[i + 6], 15, -1560198380); b = ii(b, c, d, a, x[i + 13], 21, 1309151649);
+        a = ii(a, b, c, d, x[i + 4], 6, -145523070); d = ii(d, a, b, c, x[i + 11], 10, -1120210379); c = ii(c, d, a, b, x[i + 2], 15, 718787259); b = ii(b, c, d, a, x[i + 9], 21, -343485551);
+        a = (a + oa) | 0; b = (b + ob) | 0; c = (c + oc) | 0; d = (d + od) | 0;
+      }
+      return (toHex(a) + toHex(b) + toHex(c) + toHex(d)).toLowerCase();
+    }
+
     function applySetupTranslations() {
       const t = {
         execute: tr("execute"),
@@ -1165,6 +1473,10 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       penaltyCaps.true.textContent = t.enabled;
       penaltyCaps.false.textContent = t.disabled;
 
+      const ttlockEnabled = selectOptionsByValue("ttlockIntegrationEnabled");
+      ttlockEnabled.true.textContent = tr("yes");
+      ttlockEnabled.false.textContent = tr("no");
+
       const openingPeriod = selectOptionsByValue("openingLimitPeriod");
       openingPeriod.day.textContent = t.day;
       openingPeriod.week.textContent = t.week;
@@ -1173,6 +1485,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("durationHint").textContent = t.duration_hint;
       applyStaticUiTranslations();
       updatePenaltyCapsVisibility();
+      updateTtlockConfigVisibility();
       refreshDashboard();
     }
 
@@ -1245,6 +1558,14 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("contractMinDurationDays").addEventListener("input", syncMinDurationGuard);
       document.getElementById("language").addEventListener("change", applySetupTranslations);
       document.getElementById("penaltyCapsEnabled").addEventListener("change", updatePenaltyCapsVisibility);
+      document.getElementById("ttlockIntegrationEnabled").addEventListener("change", updateTtlockConfigVisibility);
+      document.getElementById("ttlockLockId").addEventListener("change", updateTtlockSaveVisibility);
+      document.getElementById("ttlockUser").addEventListener("input", () => {
+        ttlockUserCached = "";
+      });
+      document.getElementById("ttlockPassword").addEventListener("input", () => {
+        ttlockPasswordMd5Cached = "";
+      });
     }
 
     function setLlmDefaults() {
@@ -1542,6 +1863,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
 
     function showSetupFlow() {
       document.getElementById("dashboard").classList.remove("hidden");
+      setSetupOnlyMode(true);
       const configItem = document.getElementById("dashboardConfigAccordion");
       const configChevron = document.getElementById("dashboardConfigChevron");
       if (configItem) configItem.classList.remove("active");
@@ -1552,6 +1874,17 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       if (setupChevron) setupChevron.textContent = "+";
       openPanel("start");
       refreshDashboard();
+    }
+
+    function setSetupOnlyMode(enabled) {
+      document.getElementById("dashboardTitle").classList.toggle("hidden", enabled);
+      document.getElementById("dashboardSubtitle").classList.toggle("hidden", enabled);
+      document.getElementById("dashboardTimerCard").classList.toggle("hidden", enabled);
+      document.getElementById("dashboardInfo").classList.toggle("hidden", enabled);
+      document.getElementById("dashboardConfigAccordion").classList.toggle("hidden", enabled);
+      document.getElementById("killSessionBtn").classList.toggle("hidden", enabled);
+      const setupItem = document.getElementById("dashboardSetupAccordion");
+      if (setupItem && enabled) setupItem.classList.add("active");
     }
 
     function escapeHtml(value) {
@@ -1758,6 +2091,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
 
     function showHomeView() {
       document.getElementById("dashboard").classList.remove("hidden");
+      setSetupOnlyMode(!activeSession);
       const configItem = document.getElementById("dashboardConfigAccordion");
       const configChevron = document.getElementById("dashboardConfigChevron");
       if (configItem) configItem.classList.remove("active");
@@ -1780,6 +2114,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
 
     function showDashboard(session, openByDefault = false) {
       activeSession = session;
+      setSetupOnlyMode(false);
       renderDashboardSummary(session);
       const analysis = session?.psychogram?.analysis;
       if (analysis) {
@@ -1798,6 +2133,15 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     }
 
     function toggleDashboard() {
+      if (!activeSession) {
+        showSetupFlow();
+        const dashboard = document.getElementById("dashboard");
+        if (dashboard) {
+          dashboard.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        return;
+      }
+      setSetupOnlyMode(false);
       document.getElementById("dashboard").classList.remove("hidden");
       renderDashboardSummary(activeSession);
       const configItem = document.getElementById("dashboardConfigAccordion");
@@ -2018,11 +2362,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         updateCompleteReadiness();
         dashboardLastEvent = "no_active_session";
         dashboardLastDetail = `setup=${setupStatus}`;
-        if (setupStatus === "configured") {
-          showDashboard(null, true);
-        } else {
-          showSetupFlow();
-        }
+        showSetupFlow();
       }
       refreshDashboard();
     }
@@ -2128,6 +2468,10 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     async function startSetup() {
       if (!userId || !authToken) return setOutput({error: "Login/Register first."});
       const penaltyEnabled = document.getElementById("penaltyCapsEnabled").value === "true";
+      const integrationSelection = collectTtlockIntegrationConfig();
+      if (integrationSelection.requires_discovery) {
+        return setOutput({ error: tr("ttlock_discover_required") });
+      }
       syncMinDurationGuard();
       const computedMinEndDate = computeEndDateFromDuration("contractMinDurationDays");
       const payload = {
@@ -2136,7 +2480,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         autonomy_mode: document.getElementById("autonomy").value,
         hard_stop_enabled: document.getElementById("hardStop").value === "true",
         language: document.getElementById("language").value,
-        integrations: ["ttlock"],
+        integrations: integrationSelection.integrations,
+        integration_config: integrationSelection.integration_config,
         contract_start_date: document.getElementById("contractStartDate").value,
         contract_min_end_date: computedMinEndDate,
         contract_max_end_date: Number(document.getElementById("contractMaxDurationDays").value) === 0

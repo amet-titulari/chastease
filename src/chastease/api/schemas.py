@@ -49,6 +49,7 @@ class SetupStartRequest(BaseModel):
     hard_stop_enabled: bool = True
     autonomy_mode: Literal["execute", "suggest"] = "execute"
     integrations: list[Literal["ttlock", "chaster", "emlalock"]] = Field(default_factory=list)
+    integration_config: dict[str, dict[str, str]] = Field(default_factory=dict)
     language: Literal["de", "en"] = "de"
     blocked_trigger_words: list[str] = Field(default_factory=list)
     forbidden_topics: list[str] = Field(default_factory=list)
@@ -139,4 +140,3 @@ class SetupContractConsentRequest(BaseModel):
     user_id: str = Field(min_length=1)
     auth_token: str = Field(min_length=8)
     consent_text: str = Field(min_length=3)
-

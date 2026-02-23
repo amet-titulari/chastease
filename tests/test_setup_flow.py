@@ -251,6 +251,37 @@ def test_setup_start_contract_dates_and_limits_are_persisted(client):
     assert data["contract"]["opening_window_minutes"] == 25
 
 
+def test_setup_start_persists_ttlock_integration_config(client):
+    auth = _register(client, "ttlock-config-user", "TTLock Config User")
+    user_id = auth["user_id"]
+    payload = {
+        "user_id": user_id,
+        "auth_token": auth["auth_token"],
+        "integrations": ["ttlock"],
+        "integration_config": {
+            "ttlock": {
+                "ttl_user": "wearer@example.com",
+                "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                "ttl_gateway_id": "gw-1",
+                "ttl_lock_id": "lock-1",
+            }
+        },
+    }
+    start_response = client.post("/api/v1/setup/sessions", json=payload)
+    assert start_response.status_code == 200
+    start_data = start_response.json()
+    assert start_data["integrations"] == ["ttlock"]
+    assert start_data["integration_config"]["ttlock"]["ttl_user"] == "wearer@example.com"
+    assert start_data["integration_config"]["ttlock"]["ttl_lock_id"] == "lock-1"
+
+    setup_session_id = start_data["setup_session_id"]
+    get_response = client.get(f"/api/v1/setup/sessions/{setup_session_id}")
+    assert get_response.status_code == 200
+    session = get_response.json()
+    assert session["integrations"] == ["ttlock"]
+    assert session["integration_config"]["ttlock"]["ttl_gateway_id"] == "gw-1"
+
+
 def test_setup_start_rejects_end_before_start(client):
     auth = _register(client, "contract-invalid-user", "Contract Invalid User")
     user_id = auth["user_id"]

@@ -390,6 +390,7 @@ def _build_policy(setup_session: dict, psychogram: dict) -> dict:
         "hard_stop_enabled": setup_session["hard_stop_enabled"],
         "autonomy_mode": setup_session["autonomy_mode"],
         "integrations": setup_session["integrations"],
+        "integration_config": setup_session.get("integration_config", {}),
         "limits": {
             "max_intensity_level": default_limits.get(
                 "max_intensity_level", max(1, min(5, round(traits["strictness_affinity"] / 20)))
@@ -472,7 +473,8 @@ def _create_draft_setup_session(user_id: str, language: str = "de") -> dict:
         "status": "draft",
         "hard_stop_enabled": True,
         "autonomy_mode": "execute",
-        "integrations": ["ttlock"],
+        "integrations": [],
+        "integration_config": {},
         "language": _lang(language),
         "blocked_trigger_words": [],
         "forbidden_topics": [],

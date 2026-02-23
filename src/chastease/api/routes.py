@@ -1342,6 +1342,7 @@ from chastease.api.routers import (
     setup_router,
     story_router,
     system_router,
+    ttlock_router,
     users_router,
 )
 
@@ -1351,6 +1352,6 @@ api_router.include_router(users_router)
 api_router.include_router(story_router)
 api_router.include_router(chat_router)
 api_router.include_router(setup_router)
+api_router.include_router(ttlock_router)
 api_router.include_router(sessions_router)
 api_router.include_router(system_router)
-

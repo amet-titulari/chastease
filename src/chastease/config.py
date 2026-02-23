@@ -27,3 +27,6 @@ class Config:
         self.ENABLE_SESSION_KILL = _env_bool("ENABLE_SESSION_KILL", False)
         self.AUTH_TOKEN_TTL_DAYS = max(1, _env_int("AUTH_TOKEN_TTL_DAYS", 30))
         self.IMAGE_VERIFICATION_DIR = os.getenv("IMAGE_VERIFICATION_DIR", "data/image_verifications")
+        self.TTL_API_BASE = os.getenv("TTL_API_BASE", "https://euapi.ttlock.com")
+        self.TTL_CLIENT_ID = os.getenv("TTL_CLIENT_ID", "")
+        self.TTL_CLIENT_SECRET = os.getenv("TTL_CLIENT_SECRET", "")

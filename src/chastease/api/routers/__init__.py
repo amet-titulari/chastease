@@ -5,6 +5,7 @@ from .setup import router as setup_router
 from .sessions import router as sessions_router
 from .story import router as story_router
 from .system import router as system_router
+from .ttlock import router as ttlock_router
 from .users import router as users_router
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "users_router",
     "story_router",
     "system_router",
+    "ttlock_router",
 ]
