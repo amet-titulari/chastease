@@ -51,7 +51,18 @@ def chat_shell() -> str:
     }
     .btn.primary { background: var(--brand); border-color: transparent; }
     .btn.ghost { background: transparent; }
-    .grid { display: grid; grid-template-columns: 300px 1fr; gap: 12px; }
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
     .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
     .small { color: var(--muted); font-size: 12px; }
     h1 { margin: 0; font-size: clamp(2rem, 4vw, 2.8rem); }
@@ -95,9 +106,9 @@ def chat_shell() -> str:
       color: #a8bde6;
       font-size: 12px;
     }
+    .hidden { display: none !important; }
 
     @media (max-width: 980px) {
-      .grid { grid-template-columns: 1fr; }
       .chat-shell { min-height: 62vh; }
     }
   </style>
@@ -110,38 +121,44 @@ def chat_shell() -> str:
         <div class="small">Reiner Text-Chat (Prototyp)</div>
       </div>
       <div class="actions">
+        <button class="btn ghost icon-btn" onclick="toggleInfoPanel()" title="Session-Info anzeigen/ausblenden" aria-label="Session-Info">
+          (i)
+        </button>
         <a class="btn ghost" href="/">Home</a>
         <a class="btn ghost" href="/app">Dashboard</a>
       </div>
     </div>
 
-    <div class="grid">
-      <section class="card">
-        <h2>Session</h2>
-        <div class="small">Der Chat nutzt deine aktive Session.</div>
-        <div style="margin-top:8px;">
-          <label class="small">User ID</label>
-          <input id="userId" name="chat_user_id" placeholder="auto via auth token" autocomplete="off" data-bwignore="true" data-1p-ignore="true" />
-        </div>
-        <div style="margin-top:8px;">
-          <label class="small">Auth Token</label>
-          <input id="authToken" name="chat_auth_token" type="password" placeholder="auto via localStorage" autocomplete="new-password" data-bwignore="true" data-1p-ignore="true" />
-        </div>
-        <div class="row">
-          <button class="btn" onclick="loadAuthFromStorage()">Load Auth</button>
-          <button class="btn" onclick="resolveActiveSession()">Load Session</button>
-        </div>
-        <div style="margin-top:8px;">
-          <label class="small">Session ID</label>
-          <input id="sessionId" name="chat_session_id" placeholder="active session id" autocomplete="off" data-bwignore="true" data-1p-ignore="true" />
-        </div>
-        <div class="note">Nur Text aktiviert. Upload, Voice und Datei-Export sind temporär deaktiviert.</div>
-        <div class="status small" id="status"></div>
-      </section>
+    <section id="sessionPanel" class="card hidden" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <h2 style="margin:0;">Session</h2>
+        <button class="btn ghost" onclick="toggleInfoPanel(true)">Schliessen</button>
+      </div>
+      <div class="small">Der Chat nutzt deine aktive Session.</div>
+      <div style="margin-top:8px;">
+        <label class="small">User ID</label>
+        <input id="userId" name="chat_user_id" placeholder="auto via auth token" autocomplete="off" data-bwignore="true" data-1p-ignore="true" />
+      </div>
+      <div style="margin-top:8px;">
+        <label class="small">Auth Token</label>
+        <input id="authToken" name="chat_auth_token" type="password" placeholder="auto via localStorage" autocomplete="new-password" data-bwignore="true" data-1p-ignore="true" />
+      </div>
+      <div class="row">
+        <button class="btn" onclick="loadAuthFromStorage()">Load Auth</button>
+        <button class="btn" onclick="resolveActiveSession()">Load Session</button>
+      </div>
+      <div style="margin-top:8px;">
+        <label class="small">Session ID</label>
+        <input id="sessionId" name="chat_session_id" placeholder="active session id" autocomplete="off" data-bwignore="true" data-1p-ignore="true" />
+      </div>
+      <div class="note">Nur Text aktiviert. Upload, Voice und Datei-Export sind temporär deaktiviert.</div>
+    </section>
 
+    <div class="grid">
       <section class="card chat-shell">
         <div id="messages" class="messages"></div>
         <div class="composer">
+          <div class="status small" id="status"></div>
           <textarea id="messageInput" name="chat_message" placeholder="Schreibe hier deine Nachricht an den Keyholder..." autocomplete="off" data-bwignore="true" data-1p-ignore="true"></textarea>
           <div class="row">
             <button class="btn primary" onclick="sendMessage()">Senden</button>
@@ -153,6 +170,16 @@ def chat_shell() -> str:
 
   <script>
     let sending = false;
+    let infoOpen = false;
+
+    function toggleInfoPanel(forceClose = false) {
+      if (forceClose) {
+        infoOpen = false;
+      } else {
+        infoOpen = !infoOpen;
+      }
+      document.getElementById("sessionPanel").classList.toggle("hidden", !infoOpen);
+    }
 
     function setStatus(text, kind = "ok") {
       const node = document.getElementById("status");
@@ -257,12 +284,15 @@ def chat_shell() -> str:
     async function sendMessage() {
       if (sending) return;
       const sessionId = document.getElementById("sessionId").value.trim();
-      const message = document.getElementById("messageInput").value.trim();
+      const input = document.getElementById("messageInput");
+      const message = input.value.trim();
       if (!sessionId) return setStatus("Session ID fehlt.", "err");
       if (!message) return setStatus("Nachricht fehlt.", "err");
+      const startedAtWallclock = new Date();
       const startedAt = performance.now();
       addMessage("wearer", message);
-      setStatus("Anfrage laeuft, bitte warten...");
+      input.value = "";
+      setStatus(`Anfrage gestellt (${formatTimestamp(startedAtWallclock)}). Bitte warten...`);
       sending = true;
       try {
         const res = await fetch("/api/v1/chat/turn", {
@@ -273,9 +303,8 @@ def chat_shell() -> str:
         const data = await safeJson(res);
         if (!res.ok) return setStatus(data?.detail || "Chat-Request fehlgeschlagen.", "err");
         await loadTurns();
-        document.getElementById("messageInput").value = "";
         const elapsedMs = Math.max(0, performance.now() - startedAt);
-        setStatus(`Antwort erhalten (${(elapsedMs / 1000).toFixed(2)}s).`);
+        setStatus(`Antwort erhalten. Antwortzeit: ${(elapsedMs / 1000).toFixed(2)}s.`);
       } finally {
         sending = false;
       }

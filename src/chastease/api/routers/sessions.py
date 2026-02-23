@@ -71,7 +71,9 @@ def kill_active_chastity_session(
         )
         deleted = False
         killed_session_id = None
+        inferred_setup_session_id = None
         if session is not None:
+            inferred_setup_session_id = find_setup_session_id_for_active_session(user_id, session.id)
             turns = db.scalars(select(Turn).where(Turn.session_id == session.id)).all()
             for turn in turns:
                 db.delete(turn)
@@ -81,11 +83,12 @@ def kill_active_chastity_session(
         db.commit()
 
         deleted_setup_session = False
-        if setup_session_id:
+        target_setup_session_id = setup_session_id or inferred_setup_session_id
+        if target_setup_session_id:
             store = load_sessions()
-            setup_session = store.get(setup_session_id)
+            setup_session = store.get(target_setup_session_id)
             if setup_session and setup_session.get("user_id") == user_id:
-                del store[setup_session_id]
+                del store[target_setup_session_id]
                 save_sessions(store)
                 deleted_setup_session = True
 

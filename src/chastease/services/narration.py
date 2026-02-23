@@ -320,6 +320,16 @@ def _looks_like_contract_text(text: str, lang: str) -> bool:
 
 
 def _build_contract_fallback_text(setup_session: dict) -> str:
+    # Reuse the existing strict template renderer so all {{placeholders}} are filled.
+    try:
+        from chastease.api import routes as legacy_routes
+
+        rendered = str(legacy_routes._render_contract_template(setup_session) or "").strip()
+        if rendered:
+            return rendered
+    except Exception:
+        pass
+
     lang = _lang(setup_session.get("language", "de"))
     template_path = _contract_template_path(lang)
     try:
@@ -379,4 +389,3 @@ def generate_contract_for_setup(db, request: Request, setup_session: dict) -> st
         return raw.strip()
     except Exception:
         return draft
-
