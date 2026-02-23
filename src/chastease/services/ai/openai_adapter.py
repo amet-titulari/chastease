@@ -195,7 +195,10 @@ class OpenAIAdapter:
             "Do not use [Suggest: ...] and do not use free-text pseudo actions."
             "Payload rules are strict: "
             "for add_time/reduce_time always send {\"seconds\": <positive_integer>}; "
-            "for pause_timer/unpause_timer always send {} and no duration fields."
+            "for pause_timer/unpause_timer always send {} and no duration fields. "
+            "For image_verification send a payload with at least "
+            "{\"request\": \"...\", \"verification_instruction\": \"...\"}. "
+            "Before requesting image_verification, explain briefly what image should be provided and how you will verify it."
         )
         if behavior_prompt.strip():
             system_prompt = f"{system_prompt}\n\nBehavior profile:\n{behavior_prompt.strip()}"

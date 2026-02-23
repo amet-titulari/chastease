@@ -93,6 +93,8 @@ def chat_shell() -> str:
       word-break: break-word;
     }
     .action-buttons { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .action-upload-input { display: none; }
+    .action-hint { margin-top: 6px; color: #a8bde6; font-size: 12px; }
     .btn.danger { border-color: #7e3844; background: #4a1e27; }
     .btn.success { border-color: #2d7f60; background: #1a4f3e; }
     .composer { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 12px; }
@@ -168,7 +170,7 @@ def chat_shell() -> str:
         <label class="small">Session ID</label>
         <input id="sessionId" name="chat_session_id" placeholder="active session id" autocomplete="off" data-bwignore="true" data-1p-ignore="true" />
       </div>
-      <div class="note">Nur Text aktiviert. Upload, Voice und Datei-Export sind temporär deaktiviert.</div>
+      <div class="note">Action-Karten können je nach AI-Request zusätzliche Eingaben erfordern (z. B. Bildverifikation).</div>
     </section>
 
     <div class="grid">
@@ -305,6 +307,7 @@ def chat_shell() -> str:
         reduce_time: "Zeit reduzieren",
         pause_timer: "Timer pausieren",
         unpause_timer: "Timer fortsetzen",
+        image_verification: "Bildverifikation",
       };
       return map[String(actionType || "").toLowerCase()] || String(actionType || "Aktion");
     }
@@ -364,6 +367,15 @@ def chat_shell() -> str:
 
     function actionDetailText(actionType, payload) {
       const type = String(actionType || "").toLowerCase();
+      if (type === "image_verification") {
+        const requestText = String(
+          payload?.request || payload?.message || payload?.prompt || payload?.task || "Bitte Bild zur Verifikation bereitstellen."
+        ).trim();
+        const planText = String(
+          payload?.verification_instruction || payload?.verification_plan || payload?.control_instruction || payload?.criteria || ""
+        ).trim();
+        return planText ? `Anforderung: ${requestText}\\nPruefplan: ${planText}` : `Anforderung: ${requestText}`;
+      }
       if (type === "add_time" || type === "reduce_time") {
         const seconds = parseDurationSeconds(payload);
         if (seconds !== null && Number.isFinite(seconds)) {
@@ -385,6 +397,27 @@ def chat_shell() -> str:
       const actionTitle = `${titlePrefix}: ${prettyActionType(actionType)}`;
       const msgText = String(message || detail || "").trim();
       const detailText = actionDetailText(actionType, payload);
+      const normalizedType = String(actionType || "").toLowerCase();
+      const isImageVerification = normalizedType === "image_verification";
+      const actionButtons = interactive
+        ? (isImageVerification
+            ? `
+              <div class="action-buttons">
+                <button class="btn success" id="action-camera-${effectiveCardId}">Foto aufnehmen</button>
+                <button class="btn" id="action-upload-${effectiveCardId}">Bild hochladen</button>
+                <button class="btn danger" id="action-reject-${effectiveCardId}">Ablehnen</button>
+                <input class="action-upload-input" id="action-camera-input-${effectiveCardId}" type="file" accept="image/*" capture="environment" />
+                <input class="action-upload-input" id="action-upload-input-${effectiveCardId}" type="file" accept="image/*" />
+              </div>
+              <div class="action-hint">Das Foto kann direkt von der Kamera kommen und muss nicht lokal gespeichert werden.</div>
+            `
+            : `
+              <div class="action-buttons">
+                <button class="btn success" id="action-accept-${effectiveCardId}">Akzeptieren</button>
+                <button class="btn danger" id="action-reject-${effectiveCardId}">Ablehnen</button>
+              </div>
+            `)
+        : "";
       wrap.innerHTML = `
         <div class="meta">
           <div class="role">Action</div>
@@ -393,28 +426,124 @@ def chat_shell() -> str:
         <div class="action-title">${escapeHtml(actionTitle)}</div>
         <div>${escapeHtml(msgText || (mode === "suggest" ? "Diese Aktion kann ausgeführt werden." : "Aktion verarbeitet."))}</div>
         <div class="action-detail">${escapeHtml(detailText)}</div>
-        ${interactive ? `
-          <div class="action-buttons">
-            <button class="btn success" id="action-accept-${effectiveCardId}">Akzeptieren</button>
-            <button class="btn danger" id="action-reject-${effectiveCardId}">Ablehnen</button>
-          </div>
-        ` : ""}
+        ${actionButtons}
       `;
       const box = document.getElementById("messages");
       box.appendChild(wrap);
       box.scrollTop = box.scrollHeight;
       if (interactive) {
-        document.getElementById(`action-accept-${effectiveCardId}`).addEventListener("click", () => acceptSuggestedAction(effectiveCardId));
-        document.getElementById(`action-reject-${effectiveCardId}`).addEventListener("click", () => rejectSuggestedAction(effectiveCardId));
+        if (isImageVerification) {
+          const cameraBtn = document.getElementById(`action-camera-${effectiveCardId}`);
+          const uploadBtn = document.getElementById(`action-upload-${effectiveCardId}`);
+          const rejectBtn = document.getElementById(`action-reject-${effectiveCardId}`);
+          const cameraInput = document.getElementById(`action-camera-input-${effectiveCardId}`);
+          const uploadInput = document.getElementById(`action-upload-input-${effectiveCardId}`);
+          if (cameraBtn && cameraInput) cameraBtn.addEventListener("click", () => cameraInput.click());
+          if (uploadBtn && uploadInput) uploadBtn.addEventListener("click", () => uploadInput.click());
+          if (cameraInput) {
+            cameraInput.addEventListener("change", async () => {
+              const file = cameraInput.files && cameraInput.files[0];
+              if (file) await submitImageVerification(effectiveCardId, file, "camera");
+              cameraInput.value = "";
+            });
+          }
+          if (uploadInput) {
+            uploadInput.addEventListener("change", async () => {
+              const file = uploadInput.files && uploadInput.files[0];
+              if (file) await submitImageVerification(effectiveCardId, file, "upload");
+              uploadInput.value = "";
+            });
+          }
+          if (rejectBtn) rejectBtn.addEventListener("click", () => rejectSuggestedAction(effectiveCardId));
+        } else {
+          document.getElementById(`action-accept-${effectiveCardId}`).addEventListener("click", () => acceptSuggestedAction(effectiveCardId));
+          document.getElementById(`action-reject-${effectiveCardId}`).addEventListener("click", () => rejectSuggestedAction(effectiveCardId));
+        }
       }
       return effectiveCardId;
     }
 
     function setCardButtonsDisabled(cardId, disabled) {
       const accept = document.getElementById(`action-accept-${cardId}`);
+      const camera = document.getElementById(`action-camera-${cardId}`);
+      const upload = document.getElementById(`action-upload-${cardId}`);
       const reject = document.getElementById(`action-reject-${cardId}`);
       if (accept) accept.disabled = disabled;
+      if (camera) camera.disabled = disabled;
+      if (upload) upload.disabled = disabled;
       if (reject) reject.disabled = disabled;
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Bild konnte nicht gelesen werden."));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function submitImageVerification(cardId, file, source) {
+      const state = actionCardState[cardId];
+      if (!state) return;
+      if (!file) return;
+      const card = document.getElementById(`action-card-${cardId}`);
+      setCardButtonsDisabled(cardId, true);
+      try {
+        const pictureDataUrl = await fileToDataUrl(file);
+        const payload = state.payload || {};
+        const verificationInstruction = String(
+          payload.verification_instruction || payload.verification_plan || payload.control_instruction || payload.criteria || ""
+        ).trim();
+        const requestMessage = String(
+          payload.request || payload.message || payload.prompt || payload.task || "Bitte pruefe dieses Bild gemaess der Verifikationsanweisung."
+        ).trim();
+        const res = await fetch("/api/v1/chat/vision-review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: state.sessionId,
+            message: requestMessage,
+            language: "de",
+            picture_name: file.name || "capture.jpg",
+            picture_content_type: file.type || "image/jpeg",
+            picture_data_url: pictureDataUrl,
+            verification_instruction: verificationInstruction || null,
+            verification_action_payload: payload,
+            source,
+          }),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) {
+          if (card) card.className = "msg action error";
+          if (card) {
+            const msg = card.querySelector(".action-title");
+            if (msg) msg.textContent = `Fehler: ${prettyActionType(state.actionType)}`;
+            const body = card.querySelectorAll("div")[2];
+            if (body) body.textContent = String(data?.detail || "Bildverifikation fehlgeschlagen.");
+          }
+          setStatus(data?.detail || "Bildverifikation fehlgeschlagen.", "err");
+          setCardButtonsDisabled(cardId, false);
+          return;
+        }
+        if (card) card.className = "msg action executed";
+        if (card) {
+          const msg = card.querySelector(".action-title");
+          if (msg) msg.textContent = `Ausgeführt: ${prettyActionType(state.actionType)}`;
+          const body = card.querySelectorAll("div")[2];
+          if (body) body.textContent = "Bild wurde übermittelt und durch die AI bewertet.";
+          const buttons = card.querySelector(".action-buttons");
+          if (buttons) buttons.remove();
+        }
+        await loadTurns();
+        renderActionCardsFromResponse(state.sessionId, data);
+        setStatus("Bildverifikation erfolgreich übermittelt.");
+      } catch (err) {
+        setStatus(String(err?.message || "Bildverifikation fehlgeschlagen."), "err");
+        setCardButtonsDisabled(cardId, false);
+      } finally {
+        delete actionCardState[cardId];
+      }
     }
 
     async function acceptSuggestedAction(cardId) {

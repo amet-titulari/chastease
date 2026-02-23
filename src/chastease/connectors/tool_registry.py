@@ -42,6 +42,7 @@ def build_default_tool_registry() -> ToolRegistry:
     registry.register("update_session_settings", ToolPolicy(allow_execute=True, allow_suggest=True))
     registry.register("ttlock_open", ToolPolicy(allow_execute=True, allow_suggest=True))
     registry.register("ttlock_close", ToolPolicy(allow_execute=True, allow_suggest=True))
+    registry.register("image_verification", ToolPolicy(allow_execute=False, allow_suggest=True))
     registry.register("chaster_open", ToolPolicy(allow_execute=False, allow_suggest=True))
     registry.register("emlalock_open", ToolPolicy(allow_execute=False, allow_suggest=True))
     return registry

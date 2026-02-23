@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 from time import sleep
 
 
@@ -267,3 +268,57 @@ def test_pause_keeps_remaining_seconds_stable(client):
     runtime_timer = session_fetch.json()["policy"]["runtime_timer"]
     remaining_after = int(runtime_timer["remaining_seconds"])
     assert abs(remaining_after - remaining_before) <= 1
+
+
+def test_chat_turn_keeps_image_verification_as_pending_action(client):
+    auth = _register(client, username="chat-user-image-pending")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        'Bitte sende ein Bild.\n[[REQUEST:image_verification|{"request":"Zeige das Schloss frontal.","verification_instruction":"Pruefe, ob Schloss sichtbar und geschlossen ist."}]]'
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Bitte pruefen.", "language": "de"},
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["executed_actions"] == []
+    assert data["failed_actions"] == []
+    assert len(data["pending_actions"]) == 1
+    assert data["pending_actions"][0]["action_type"] == "image_verification"
+
+
+def test_chat_vision_review_saves_uploaded_image(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("IMAGE_VERIFICATION_DIR", str(tmp_path / "image_reviews"))
+    auth = _register(client, username="chat-user-vision")
+    session_id = _create_active_session(client, auth)
+
+    picture_data_url = (
+        "data:image/png;base64,"
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AApMBgS9x+h0AAAAASUVORK5CYII="
+    )
+    review = client.post(
+        "/api/v1/chat/vision-review",
+        json={
+            "session_id": session_id,
+            "message": "Bitte pruefe dieses Bild.",
+            "language": "de",
+            "picture_name": "proof.png",
+            "picture_content_type": "image/png",
+            "picture_data_url": picture_data_url,
+            "verification_instruction": "Pruefe, ob das Schloss sichtbar und geschlossen ist.",
+            "verification_action_payload": {
+                "request": "Zeige das Schloss frontal.",
+                "verification_instruction": "Pruefe, ob das Schloss sichtbar und geschlossen ist.",
+            },
+            "source": "upload",
+        },
+    )
+    assert review.status_code == 200
+    data = review.json()
+    assert data["result"] == "accepted"
+    assert "narration" in data
+    saved_path = data.get("saved_image_path")
+    assert isinstance(saved_path, str) and saved_path
+    assert Path(saved_path).exists()

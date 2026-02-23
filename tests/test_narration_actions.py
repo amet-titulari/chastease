@@ -43,3 +43,17 @@ def test_extract_pending_actions_parses_request_call_format() -> None:
     assert actions[0]["action_type"] == "add_time"
     assert actions[0]["payload"] == {"seconds": 3600}
     assert "[REQUEST:" not in cleaned
+
+
+def test_extract_pending_actions_parses_image_verification_request() -> None:
+    narration = (
+        "Bitte Bild senden.\n"
+        '[[REQUEST:image_verification|{"request":"Zeige das Schloss frontal.","verification_instruction":"Pruefe sichtbares geschlossenes Schloss."}]]'
+    )
+    cleaned, actions, _ = extract_pending_actions(narration)
+
+    assert len(actions) == 1
+    assert actions[0]["action_type"] == "image_verification"
+    assert actions[0]["payload"]["request"] == "Zeige das Schloss frontal."
+    assert actions[0]["payload"]["verification_instruction"] == "Pruefe sichtbares geschlossenes Schloss."
+    assert "[[REQUEST:" not in cleaned

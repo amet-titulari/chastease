@@ -26,3 +26,4 @@ class Config:
         self.DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/chastease.db")
         self.ENABLE_SESSION_KILL = _env_bool("ENABLE_SESSION_KILL", False)
         self.AUTH_TOKEN_TTL_DAYS = max(1, _env_int("AUTH_TOKEN_TTL_DAYS", 30))
+        self.IMAGE_VERIFICATION_DIR = os.getenv("IMAGE_VERIFICATION_DIR", "data/image_verifications")

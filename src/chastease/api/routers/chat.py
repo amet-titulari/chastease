@@ -1,5 +1,7 @@
 ﻿import base64
 import json
+import re
+from pathlib import Path
 from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
@@ -29,6 +31,9 @@ _ACTION_ALIASES = {
     "reducetime": "reduce_time",
     "pausetimer": "pause_timer",
     "unpausetimer": "unpause_timer",
+    "imageverification": "image_verification",
+    "verifyimage": "image_verification",
+    "visionreview": "image_verification",
 }
 _ACTION_WRAPPERS = {"suggest", "request", "execute", "tool", "action"}
 _DURATION_PATTERN = {
@@ -54,6 +59,15 @@ _DURATION_PATTERN = {
     "stunden": 3600,
     "tag": 86400,
     "tage": 86400,
+}
+_IMAGE_EXTENSIONS = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/heic": ".heic",
+    "image/heif": ".heif",
 }
 
 
@@ -250,6 +264,43 @@ def _unwrap_action_request(action_type: str, payload: dict) -> tuple[str, dict]:
     return normalized_action, normalized_payload
 
 
+def _safe_stem(name: str) -> str:
+    stem = Path(str(name or "image")).stem
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "_", stem).strip("_")
+    return cleaned[:60] or "image"
+
+
+def _extension_from_content_type(content_type: str, picture_name: str) -> str:
+    ext = _IMAGE_EXTENSIONS.get(str(content_type).lower())
+    if ext:
+        return ext
+    suffix = Path(str(picture_name or "")).suffix.strip().lower()
+    if suffix.startswith(".") and len(suffix) <= 10:
+        return suffix
+    return ".jpg"
+
+
+def _save_verification_image(
+    *,
+    request: Request,
+    session_id: str,
+    picture_name: str,
+    picture_content_type: str,
+    image_bytes: bytes,
+) -> str:
+    configured_dir = str(getattr(request.app.state.config, "IMAGE_VERIFICATION_DIR", "data/image_verifications"))
+    base_dir = Path(configured_dir)
+    if not base_dir.is_absolute():
+        base_dir = Path.cwd() / base_dir
+    target_dir = base_dir / session_id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    filename = f"{stamp}_{_safe_stem(picture_name)}{_extension_from_content_type(picture_content_type, picture_name)}"
+    target_path = target_dir / filename
+    target_path.write_bytes(image_bytes)
+    return str(target_path)
+
+
 def _normalize_pending_actions(pending_actions: list[dict]) -> list[dict]:
     normalized: list[dict] = []
     for action in pending_actions:
@@ -339,6 +390,11 @@ def _execute_action_with_policy(
             "timer": timer_state,
             "message": action_message,
         }
+    if normalized_action == "image_verification":
+        raise HTTPException(
+            status_code=400,
+            detail="Action 'image_verification' requires user submission from the chat action card.",
+        )
     raise HTTPException(status_code=400, detail=f"Unsupported action_type '{normalized_action}'.")
 
 
@@ -493,13 +549,34 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
             "data_url": payload.picture_data_url,
         }
     ]
+    saved_image_path = _save_verification_image(
+        request=request,
+        session_id=payload.session_id,
+        picture_name=payload.picture_name,
+        picture_content_type=content_type,
+        image_bytes=image_bytes,
+    )
+    verification_instruction = str(payload.verification_instruction or "").strip()
+    action_payload = payload.verification_action_payload if isinstance(payload.verification_action_payload, dict) else {}
+    action_payload_json = json.dumps(action_payload, ensure_ascii=True)
+    enriched_prompt = prompt
+    if verification_instruction:
+        enriched_prompt = (
+            f"{enriched_prompt}\n\nVerification instruction:\n{verification_instruction}\n"
+            "Please briefly describe what is visible in the image first, then evaluate if the verification instruction is fulfilled."
+        )
+    if action_payload:
+        enriched_prompt = f"{enriched_prompt}\n\nVerification payload: {action_payload_json}"
+    enriched_prompt = f"{enriched_prompt}\n\nImage source: {payload.source}"
 
     db = get_db_session(request)
     try:
         session = db.get(ChastitySession, payload.session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
-        narration_raw = generate_ai_narration_for_session(db, request, session, prompt, request_lang, attachments)
+        narration_raw = generate_ai_narration_for_session(
+            db, request, session, enriched_prompt, request_lang, attachments
+        )
         narration, pending_actions, generated_files = extract_pending_actions(narration_raw)
         policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
         if not isinstance(policy, dict):
@@ -518,7 +595,10 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
             id=str(uuid4()),
             session_id=session.id,
             turn_no=next_turn_no,
-            player_action=f"{prompt} [image:{payload.picture_name or 'upload'}]",
+            player_action=(
+                f"{prompt} [image:{payload.picture_name or 'upload'}]"
+                f" [source:{payload.source}] [stored:{saved_image_path}]"
+            ),
             ai_narration=narration,
             language=request_lang,
             created_at=datetime.now(UTC),
@@ -539,6 +619,7 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
         "executed_actions": executed_actions,
         "failed_actions": failed_actions,
         "generated_files": generated_files,
+        "saved_image_path": saved_image_path,
         "next_state": "awaiting_wearer_action",
     }
 

@@ -37,6 +37,9 @@ class ChatVisionReviewRequest(BaseModel):
     picture_name: str = Field(default="image")
     picture_content_type: str = Field(default="image/jpeg")
     picture_data_url: str = Field(min_length=20)
+    verification_instruction: str | None = None
+    verification_action_payload: dict = Field(default_factory=dict)
+    source: Literal["camera", "upload"] = "upload"
 
 
 class SetupStartRequest(BaseModel):
@@ -136,5 +139,4 @@ class SetupContractConsentRequest(BaseModel):
     user_id: str = Field(min_length=1)
     auth_token: str = Field(min_length=8)
     consent_text: str = Field(min_length=3)
-
 
