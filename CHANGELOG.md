@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.1 - 2026-02-23
+
+- TT-Lock-Integration von Setup bis Ausfuehrung erweitert:
+  - Setup-Card fuer TT-Lock mit Discover-Flow (Gateways/Locks) und Persistenz von `integration_config`.
+  - Neuer API-Endpoint fuer Device-Discovery: `POST /api/v1/setup/ttlock/discover`.
+  - Reale Action-Ausfuehrung fuer `ttlock_open`/`ttlock_close` in `chat/actions/execute`.
+- Bildverifikations-UX in der Chat-Action-Card verbessert:
+  - Upload-Option entfernt, nur noch Fotoaufnahme.
+  - Nach Bilduebermittlung werden Buttons ausgeblendet und Status "Pruefung laeuft" angezeigt.
+- Dashboard/Setup-Flow korrigiert:
+  - Ohne aktive Session wird nur der Setup-Bereich angezeigt.
+  - Nach Session-Kill kein Dashboard-Hin-und-her mehr.
+- Provider-Stabilitaet/Observability gehaertet:
+  - Erweitertes Fehler-Logging fuer Upstream-Timeouts/HTTP-Fehler inkl. Diagnosekontext.
+  - Retry/Backoff-Strategie fuer LLM-Calls verbessert (inkl. `Retry-After`-Beruecksichtigung).
+  - TT-Lock API-Calls mit robusteren Retries und laengeren Action-Timeouts.
+- Regressionstests erweitert fuer Setup-, Discover-, Chat- und TT-Lock-Pfade.
+
 ## 0.1.0 - 2026-02-23
 
 - R1 Refactoring-Milestone erreicht.

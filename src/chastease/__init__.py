@@ -11,7 +11,7 @@ from .services.ai.factory import build_ai_service
 
 def create_app(config_object: type[Config] = Config) -> FastAPI:
     load_dotenv()
-    app = FastAPI(title="chastease-api", version="0.1.0")
+    app = FastAPI(title="chastease-api", version="0.1.1")
     app.state.config = config_object()
     app.state.engine = build_engine(app.state.config.DATABASE_URL)
     app.state.db_session_factory = build_session_factory(app.state.engine)

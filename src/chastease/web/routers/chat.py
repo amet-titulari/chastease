@@ -404,12 +404,10 @@ def chat_shell() -> str:
             ? `
               <div class="action-buttons">
                 <button class="btn success" id="action-camera-${effectiveCardId}">Foto aufnehmen</button>
-                <button class="btn" id="action-upload-${effectiveCardId}">Bild hochladen</button>
                 <button class="btn danger" id="action-reject-${effectiveCardId}">Ablehnen</button>
                 <input class="action-upload-input" id="action-camera-input-${effectiveCardId}" type="file" accept="image/*" capture="environment" />
-                <input class="action-upload-input" id="action-upload-input-${effectiveCardId}" type="file" accept="image/*" />
               </div>
-              <div class="action-hint">Das Foto kann direkt von der Kamera kommen und muss nicht lokal gespeichert werden.</div>
+              <div class="action-hint" id="action-hint-${effectiveCardId}">Das Foto kann direkt von der Kamera kommen und muss nicht lokal gespeichert werden.</div>
             `
             : `
               <div class="action-buttons">
@@ -434,24 +432,14 @@ def chat_shell() -> str:
       if (interactive) {
         if (isImageVerification) {
           const cameraBtn = document.getElementById(`action-camera-${effectiveCardId}`);
-          const uploadBtn = document.getElementById(`action-upload-${effectiveCardId}`);
           const rejectBtn = document.getElementById(`action-reject-${effectiveCardId}`);
           const cameraInput = document.getElementById(`action-camera-input-${effectiveCardId}`);
-          const uploadInput = document.getElementById(`action-upload-input-${effectiveCardId}`);
           if (cameraBtn && cameraInput) cameraBtn.addEventListener("click", () => cameraInput.click());
-          if (uploadBtn && uploadInput) uploadBtn.addEventListener("click", () => uploadInput.click());
           if (cameraInput) {
             cameraInput.addEventListener("change", async () => {
               const file = cameraInput.files && cameraInput.files[0];
               if (file) await submitImageVerification(effectiveCardId, file, "camera");
               cameraInput.value = "";
-            });
-          }
-          if (uploadInput) {
-            uploadInput.addEventListener("change", async () => {
-              const file = uploadInput.files && uploadInput.files[0];
-              if (file) await submitImageVerification(effectiveCardId, file, "upload");
-              uploadInput.value = "";
             });
           }
           if (rejectBtn) rejectBtn.addEventListener("click", () => rejectSuggestedAction(effectiveCardId));
@@ -466,11 +454,9 @@ def chat_shell() -> str:
     function setCardButtonsDisabled(cardId, disabled) {
       const accept = document.getElementById(`action-accept-${cardId}`);
       const camera = document.getElementById(`action-camera-${cardId}`);
-      const upload = document.getElementById(`action-upload-${cardId}`);
       const reject = document.getElementById(`action-reject-${cardId}`);
       if (accept) accept.disabled = disabled;
       if (camera) camera.disabled = disabled;
-      if (upload) upload.disabled = disabled;
       if (reject) reject.disabled = disabled;
     }
 
@@ -489,6 +475,12 @@ def chat_shell() -> str:
       if (!file) return;
       const card = document.getElementById(`action-card-${cardId}`);
       setCardButtonsDisabled(cardId, true);
+      const cameraBtn = document.getElementById(`action-camera-${cardId}`);
+      const rejectBtn = document.getElementById(`action-reject-${cardId}`);
+      const hint = document.getElementById(`action-hint-${cardId}`);
+      if (cameraBtn) cameraBtn.classList.add("hidden");
+      if (rejectBtn) rejectBtn.classList.add("hidden");
+      if (hint) hint.textContent = "Bild übermittelt. Prüfung läuft...";
       try {
         const pictureDataUrl = await fileToDataUrl(file);
         const payload = state.payload || {};
@@ -523,6 +515,9 @@ def chat_shell() -> str:
             if (body) body.textContent = String(data?.detail || "Bildverifikation fehlgeschlagen.");
           }
           setStatus(data?.detail || "Bildverifikation fehlgeschlagen.", "err");
+          if (cameraBtn) cameraBtn.classList.remove("hidden");
+          if (rejectBtn) rejectBtn.classList.remove("hidden");
+          if (hint) hint.textContent = "Bildverifikation fehlgeschlagen. Bitte erneut Foto aufnehmen.";
           setCardButtonsDisabled(cardId, false);
           return;
         }
@@ -534,6 +529,8 @@ def chat_shell() -> str:
           if (body) body.textContent = "Bild wurde übermittelt und durch die AI bewertet.";
           const buttons = card.querySelector(".action-buttons");
           if (buttons) buttons.remove();
+          const successHint = card.querySelector(".action-hint");
+          if (successHint) successHint.textContent = "Prüfung abgeschlossen.";
         }
         await loadTurns();
         renderActionCardsFromResponse(state.sessionId, data);

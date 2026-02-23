@@ -1,8 +1,15 @@
 import httpx
+import logging
+import random
+import time
+from datetime import datetime, UTC
 from typing import Any
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 
 from .base import StoryTurnContext
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIAdapter:
@@ -107,6 +114,29 @@ class OpenAIAdapter:
             if (endpoint, kind) not in candidates:
                 candidates.append((endpoint, kind))
         return candidates
+
+    @staticmethod
+    def _retry_delay_seconds(attempt: int, retry_after_header: str | None = None) -> float:
+        if retry_after_header:
+            raw = str(retry_after_header).strip()
+            if raw:
+                try:
+                    seconds = float(raw)
+                    if seconds > 0:
+                        return min(seconds, 12.0)
+                except ValueError:
+                    try:
+                        dt = parsedate_to_datetime(raw)
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=UTC)
+                        wait = (dt - datetime.now(UTC)).total_seconds()
+                        if wait > 0:
+                            return min(wait, 12.0)
+                    except Exception:
+                        pass
+        base = min(0.5 * (2 ** max(0, attempt - 1)), 4.0)
+        jitter = random.uniform(0.0, 0.25)
+        return base + jitter
 
     @staticmethod
     def _extract_reply_text(data: dict[str, Any]) -> str:
@@ -253,29 +283,42 @@ class OpenAIAdapter:
         }
 
         has_image_payload = bool(attachment_content)
-        timeout = (
-            httpx.Timeout(connect=5.0, read=35.0, write=20.0, pool=5.0)
-            if has_image_payload
-            else httpx.Timeout(connect=5.0, read=25.0, write=20.0, pool=5.0)
+        attempt_timeouts = (
+            [
+                httpx.Timeout(connect=4.0, read=20.0, write=15.0, pool=4.0),
+                httpx.Timeout(connect=5.0, read=30.0, write=20.0, pool=5.0),
+            ]
+            if not has_image_payload
+            else [
+                httpx.Timeout(connect=5.0, read=35.0, write=20.0, pool=5.0),
+                httpx.Timeout(connect=6.0, read=50.0, write=25.0, pool=6.0),
+                httpx.Timeout(connect=6.0, read=65.0, write=25.0, pool=6.0),
+            ]
         )
-        retry_timeout = (
-            httpx.Timeout(connect=6.0, read=50.0, write=25.0, pool=6.0)
-            if has_image_payload
-            else httpx.Timeout(connect=6.0, read=35.0, write=20.0, pool=6.0)
-        )
+        provider_ctx = {
+            "session_id": context.session_id,
+            "model": chat_model,
+            "api_url": api_url,
+            "has_image_payload": has_image_payload,
+            "attachments": len(attachments or []),
+            "language": context.language,
+        }
+        retryable_statuses = {408, 409, 421, 425, 429, 500, 502, 503, 504}
         try:
             candidates = self._candidate_llm_urls(api_url)
             last_error = "unknown"
             attempted: list[str] = []
             for target_url, kind in candidates:
-                attempts = (1, 2) if has_image_payload else (1,)
-                for attempt in attempts:
+                max_attempts = len(attempt_timeouts)
+                for attempt in range(1, max_attempts + 1):
                     attempted.append(f"{target_url} ({kind})")
                     request_payload = dict(responses_payload if kind == "responses" else payload)
                     token_key = "max_output_tokens" if kind == "responses" else "max_tokens"
-                    if attempt == 2 and token_key in request_payload:
+                    if attempt >= 2 and token_key in request_payload:
                         request_payload[token_key] = max(128, int(request_payload[token_key] * 0.6))
+                    timeout = attempt_timeouts[min(attempt - 1, len(attempt_timeouts) - 1)]
                     try:
+                        started = time.perf_counter()
                         response = self._post_json_once(
                             url=target_url,
                             headers=headers,
@@ -289,28 +332,102 @@ class OpenAIAdapter:
                         data = response.json()
                         text = self._extract_reply_text(data)
                         if text:
+                            elapsed_ms = int((time.perf_counter() - started) * 1000)
+                            logger.info(
+                                "LLM provider call succeeded (attempt=%s, kind=%s, url=%s, elapsed_ms=%s, session=%s, model=%s)",
+                                attempt,
+                                kind,
+                                target_url,
+                                elapsed_ms,
+                                context.session_id,
+                                chat_model,
+                            )
                             return text
                         last_error = f"empty response from {target_url}"
+                        if attempt < max_attempts:
+                            delay = self._retry_delay_seconds(attempt)
+                            time.sleep(delay)
                     except httpx.TimeoutException:
                         last_error = f"timeout at {target_url}"
-                        if attempt == 1:
+                        logger.warning(
+                            "LLM provider timeout (attempt=%s, kind=%s, url=%s, session=%s, model=%s, has_image=%s)",
+                            attempt,
+                            kind,
+                            target_url,
+                            context.session_id,
+                            chat_model,
+                            has_image_payload,
+                        )
+                        if attempt < max_attempts:
+                            delay = self._retry_delay_seconds(attempt)
+                            time.sleep(delay)
                             continue
                     except httpx.HTTPStatusError as exc:
                         status = exc.response.status_code if exc.response is not None else "unknown"
                         body = (exc.response.text[:220] if exc.response is not None else "").strip()
+                        request_id = ""
+                        retry_after = ""
+                        if exc.response is not None:
+                            request_id = (
+                                exc.response.headers.get("x-request-id")
+                                or exc.response.headers.get("request-id")
+                                or ""
+                            )
+                            retry_after = (
+                                exc.response.headers.get("retry-after")
+                                or exc.response.headers.get("x-ratelimit-reset")
+                                or ""
+                            )
                         last_error = f"http {status} at {target_url}{(': ' + body) if body else ''}"
-                        # Auth/quota/compatibility failures should fail fast.
-                        # Keep 421 as fallback-eligible because some providers require switching chat<->responses.
-                        if status in (400, 401, 402, 403, 422, 429):
+                        logger.warning(
+                            "LLM provider HTTP error (attempt=%s, kind=%s, status=%s, url=%s, request_id=%s, retry_after=%s, body=%s, session=%s, model=%s)",
+                            attempt,
+                            kind,
+                            status,
+                            target_url,
+                            request_id or "-",
+                            retry_after or "-",
+                            body or "-",
+                            context.session_id,
+                            chat_model,
+                        )
+                        if status in (400, 401, 402, 403, 422):
                             raise RuntimeError(last_error)
+                        if status in retryable_statuses and attempt < max_attempts:
+                            delay = self._retry_delay_seconds(attempt, retry_after)
+                            time.sleep(delay)
+                            continue
                         break
                     except Exception as exc:
                         last_error = f"{exc.__class__.__name__} at {target_url}"
+                        logger.exception(
+                            "LLM provider unexpected error (attempt=%s, kind=%s, url=%s, session=%s, model=%s)",
+                            attempt,
+                            kind,
+                            target_url,
+                            context.session_id,
+                            chat_model,
+                        )
+                        if attempt < max_attempts:
+                            delay = self._retry_delay_seconds(attempt)
+                            time.sleep(delay)
+                            continue
                         break
             attempted_hint = ", ".join(dict.fromkeys(attempted))
+            logger.error(
+                "LLM provider attempts exhausted (last_error=%s, tried=%s, context=%s)",
+                last_error,
+                attempted_hint,
+                provider_ctx,
+            )
             raise RuntimeError(f"{last_error}; tried={attempted_hint}")
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code if exc.response is not None else "unknown"
+            logger.warning(
+                "LLM provider rejected request (status=%s, context=%s)",
+                status,
+                provider_ctx,
+            )
             if context.language == "en":
                 return (
                     f"Provider rejected the request (HTTP {status}). "
@@ -321,6 +438,11 @@ class OpenAIAdapter:
                 "Bitte pruefe Endpoint/Modell/API-Key-Kompatibilitaet."
             )
         except RuntimeError as exc:
+            logger.error(
+                "LLM provider runtime failure: %s | context=%s",
+                str(exc),
+                provider_ctx,
+            )
             if context.language == "en":
                 return (
                     f"Provider request failed ({str(exc)}). "
@@ -330,27 +452,8 @@ class OpenAIAdapter:
                 f"Provider-Anfrage fehlgeschlagen ({str(exc)}). "
                 "Bitte Endpoint/Modell/API-Key-Kompatibilitaet pruefen."
             )
-        except httpx.TimeoutException:
-            try:
-                response = self._post_json_once(
-                    url=api_url,
-                    headers=headers,
-                    payload=payload,
-                    timeout=retry_timeout,
-                )
-                response.raise_for_status()
-                data = response.json()
-                text = self._extract_reply_text(data)
-                return text if text else "Provider timeout."
-            except Exception:
-                if context.language == "en":
-                    return (
-                        "Provider timeout. Please retry; for image analysis use a smaller image."
-                    )
-                return (
-                    "Provider-Timeout. Bitte erneut versuchen; fuer Bildanalyse ggf. kleineres Bild nutzen."
-                )
         except Exception:
+            logger.exception("LLM provider request failed unexpectedly. context=%s", provider_ctx)
             if self._wants_image_review(context.action):
                 if self._has_image_attachment(attachments):
                     if context.language == "en":

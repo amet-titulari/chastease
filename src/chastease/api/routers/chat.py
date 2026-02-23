@@ -1,10 +1,13 @@
 ﻿import base64
 import json
+import logging
 import re
+import time
 from pathlib import Path
 from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import func, select
 
@@ -14,6 +17,7 @@ from chastease.models import ChastitySession, Turn
 from chastease.services.narration import extract_pending_actions, generate_ai_narration_for_session
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+logger = logging.getLogger(__name__)
 
 _DURATION_UNIT_SECONDS = {
     "second": 1,
@@ -26,6 +30,7 @@ _DURATION_UNIT_SECONDS = {
     "days": 86400,
 }
 _TIMER_ACTIONS = {"pause_timer", "unpause_timer", "add_time", "reduce_time"}
+_TTLOCK_ACTIONS = {"ttlock_open", "ttlock_close"}
 _ACTION_ALIASES = {
     "addtime": "add_time",
     "reducetime": "reduce_time",
@@ -368,11 +373,208 @@ def _normalize_duration_payload(action_type: str, payload: dict) -> dict:
     )
 
 
+def _ttlock_from_policy(policy: dict) -> dict:
+    integration_config = policy.get("integration_config")
+    if not isinstance(integration_config, dict):
+        return {}
+    ttlock = integration_config.get("ttlock")
+    return ttlock if isinstance(ttlock, dict) else {}
+
+
+def _retry_delay_seconds(attempt: int, retry_after_header: str | None = None) -> float:
+    if retry_after_header:
+        raw = str(retry_after_header).strip()
+        if raw:
+            try:
+                seconds = float(raw)
+                if seconds > 0:
+                    return min(seconds, 10.0)
+            except ValueError:
+                pass
+    base = min(0.6 * (2 ** max(0, attempt - 1)), 4.0)
+    jitter = 0.1 * attempt
+    return base + jitter
+
+
+def _ttlock_access_token(
+    *,
+    base_url: str,
+    client_id: str,
+    client_secret: str,
+    ttl_user: str,
+    ttl_pass_md5: str,
+) -> str:
+    url = f"{base_url.rstrip('/')}/oauth2/token"
+    data = {
+        "grant_type": "password",
+        "clientId": client_id,
+        "clientSecret": client_secret,
+        "username": ttl_user,
+        "password": ttl_pass_md5,
+    }
+    timeout = httpx.Timeout(connect=5.0, read=20.0, write=15.0, pool=5.0)
+    retryable = {408, 409, 421, 425, 429, 500, 502, 503, 504}
+    last_error = "TT-Lock auth failed"
+    for attempt in range(1, 4):
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                resp = client.post(url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"})
+            if resp.status_code >= 400:
+                body_text = resp.text[:220].strip()
+                if resp.status_code in retryable and attempt < 3:
+                    delay = _retry_delay_seconds(attempt, resp.headers.get("retry-after"))
+                    time.sleep(delay)
+                    continue
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"TT-Lock auth HTTP {resp.status_code}{(': ' + body_text) if body_text else ''}",
+                )
+            body = resp.json()
+            if body.get("errcode", 0) not in (0, "0"):
+                last_error = f"TT-Lock auth failed: {body.get('errmsg', 'unknown error')}"
+                if attempt < 3:
+                    time.sleep(_retry_delay_seconds(attempt))
+                    continue
+                raise HTTPException(status_code=400, detail=last_error)
+            token = str(body.get("access_token") or "").strip()
+            if token:
+                return token
+            last_error = "TT-Lock auth returned no access_token."
+        except httpx.TimeoutException:
+            last_error = "TT-Lock auth timeout."
+            if attempt < 3:
+                time.sleep(_retry_delay_seconds(attempt))
+                continue
+        except httpx.HTTPError as exc:
+            last_error = f"TT-Lock auth transport error: {exc.__class__.__name__}"
+            if attempt < 3:
+                time.sleep(_retry_delay_seconds(attempt))
+                continue
+    raise HTTPException(status_code=400, detail=last_error)
+
+
+def _ttlock_command(
+    *,
+    base_url: str,
+    client_id: str,
+    access_token: str,
+    lock_id: str,
+    command: str,
+) -> dict:
+    endpoint = "unlock" if command == "open" else "lock"
+    url = f"{base_url.rstrip('/')}/v3/lock/{endpoint}"
+    timeout = httpx.Timeout(connect=5.0, read=35.0, write=20.0, pool=5.0)
+    retryable = {408, 409, 421, 425, 429, 500, 502, 503, 504}
+    last_error = f"TT-Lock {endpoint} failed"
+    for attempt in range(1, 4):
+        params = {
+            "clientId": client_id,
+            "accessToken": access_token,
+            "lockId": lock_id,
+            "date": int(time.time() * 1000),
+        }
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                resp = client.get(url, params=params)
+            if resp.status_code >= 400:
+                body_text = resp.text[:220].strip()
+                if resp.status_code in retryable and attempt < 3:
+                    delay = _retry_delay_seconds(attempt, resp.headers.get("retry-after"))
+                    time.sleep(delay)
+                    continue
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"TT-Lock {endpoint} HTTP {resp.status_code}{(': ' + body_text) if body_text else ''}",
+                )
+            body = resp.json()
+            if body.get("errcode", 0) not in (0, "0"):
+                last_error = f"TT-Lock {endpoint} failed: {body.get('errmsg', 'unknown error')}"
+                if attempt < 3:
+                    time.sleep(_retry_delay_seconds(attempt))
+                    continue
+                raise HTTPException(status_code=400, detail=last_error)
+            return body
+        except httpx.TimeoutException:
+            last_error = f"TT-Lock {endpoint} timeout."
+            if attempt < 3:
+                time.sleep(_retry_delay_seconds(attempt))
+                continue
+        except httpx.HTTPError as exc:
+            last_error = f"TT-Lock {endpoint} transport error: {exc.__class__.__name__}"
+            if attempt < 3:
+                time.sleep(_retry_delay_seconds(attempt))
+                continue
+    raise HTTPException(status_code=400, detail=last_error)
+
+
+def _execute_ttlock_action(
+    *,
+    action_type: str,
+    payload: dict,
+    policy: dict,
+    request: Request,
+) -> tuple[dict, dict]:
+    config = _ttlock_from_policy(policy)
+    integrations = [str(x).strip().lower() for x in (policy.get("integrations") or []) if str(x).strip()]
+    if "ttlock" not in integrations and not config:
+        raise HTTPException(status_code=400, detail="TT-Lock integration is not enabled in this session policy.")
+
+    ttl_user = str(config.get("ttl_user") or "").strip()
+    ttl_pass_md5 = str(config.get("ttl_pass_md5") or "").strip().lower()
+    lock_id = str(payload.get("ttl_lock_id") or payload.get("lock_id") or config.get("ttl_lock_id") or "").strip()
+    gateway_id = str(config.get("ttl_gateway_id") or "").strip() or None
+    if not ttl_user or not ttl_pass_md5 or not lock_id:
+        raise HTTPException(
+            status_code=400,
+            detail="TT-Lock configuration incomplete. Required: ttl_user, ttl_pass_md5, ttl_lock_id.",
+        )
+
+    client_id = str(getattr(request.app.state.config, "TTL_CLIENT_ID", "") or "").strip()
+    client_secret = str(getattr(request.app.state.config, "TTL_CLIENT_SECRET", "") or "").strip()
+    base_url = str(getattr(request.app.state.config, "TTL_API_BASE", "https://euapi.ttlock.com") or "").strip()
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=400, detail="TT-Lock server config missing: TTL_CLIENT_ID / TTL_CLIENT_SECRET.")
+
+    command = "open" if action_type == "ttlock_open" else "close"
+    access_token = _ttlock_access_token(
+        base_url=base_url,
+        client_id=client_id,
+        client_secret=client_secret,
+        ttl_user=ttl_user,
+        ttl_pass_md5=ttl_pass_md5,
+    )
+    result_payload = _ttlock_command(
+        base_url=base_url,
+        client_id=client_id,
+        access_token=access_token,
+        lock_id=lock_id,
+        command=command,
+    )
+    logger.info(
+        "TT-Lock command executed: action=%s lock_id=%s gateway_id=%s",
+        action_type,
+        lock_id,
+        gateway_id or "-",
+    )
+    return policy, {
+        "action_type": action_type,
+        "payload": {"lock_id": lock_id},
+        "ttlock": {
+            "command": command,
+            "lock_id": lock_id,
+            "gateway_id": gateway_id,
+            "response": result_payload,
+        },
+        "message": "TT-Lock opened." if command == "open" else "TT-Lock closed.",
+    }
+
+
 def _execute_action_with_policy(
     *,
     action_type: str,
     payload: dict,
     policy: dict,
+    request: Request,
     now: datetime,
 ) -> tuple[dict, dict]:
     normalized_action, unwrapped_payload = _unwrap_action_request(action_type, payload)
@@ -390,6 +592,13 @@ def _execute_action_with_policy(
             "timer": timer_state,
             "message": action_message,
         }
+    if normalized_action in _TTLOCK_ACTIONS:
+        return _execute_ttlock_action(
+            action_type=normalized_action,
+            payload=normalized_payload,
+            policy=policy,
+            request=request,
+        )
     if normalized_action == "image_verification":
         raise HTTPException(
             status_code=400,
@@ -451,6 +660,7 @@ def _auto_execute_pending_actions(
                 action_type=normalized_action,
                 payload=payload_dict,
                 policy=updated_policy,
+                request=request,
                 now=now,
             )
             executed_actions.append(executed)
@@ -644,6 +854,7 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
             action_type=normalized_action,
             payload=payload.payload,
             policy=policy,
+            request=request,
             now=now,
         )
         session.policy_snapshot_json = json.dumps(updated_policy)
@@ -658,5 +869,6 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
         "action_type": result["action_type"],
         "payload": result["payload"],
         "timer": result.get("timer"),
+        "ttlock": result.get("ttlock"),
         "message": result["message"],
     }

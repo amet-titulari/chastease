@@ -2,6 +2,8 @@ from datetime import datetime
 from pathlib import Path
 from time import sleep
 
+from chastease.api.routers import chat as chat_router
+
 
 def _register(client, username="chat-user", password="demo-pass-123"):
     response = client.post(
@@ -287,6 +289,53 @@ def test_chat_turn_keeps_image_verification_as_pending_action(client):
     assert data["failed_actions"] == []
     assert len(data["pending_actions"]) == 1
     assert data["pending_actions"][0]["action_type"] == "image_verification"
+
+
+def test_chat_action_execute_ttlock_open_success(client, monkeypatch):
+    auth = _register(client, username="chat-user-ttlock-open")
+    session_id = _create_active_session(
+        client,
+        auth,
+        integrations=["ttlock"],
+        integration_config={
+            "ttlock": {
+                "ttl_user": "wearer@example.com",
+                "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                "ttl_lock_id": "12345",
+            }
+        },
+    )
+    client.app.state.config.TTL_CLIENT_ID = "demo-client"
+    client.app.state.config.TTL_CLIENT_SECRET = "demo-secret"
+
+    monkeypatch.setattr(chat_router, "_ttlock_access_token", lambda **_kwargs: "access-token")
+    monkeypatch.setattr(
+        chat_router,
+        "_ttlock_command",
+        lambda **_kwargs: {"errcode": 0, "errmsg": "ok", "lockId": "12345"},
+    )
+
+    execute = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "ttlock_open", "payload": {}},
+    )
+    assert execute.status_code == 200
+    data = execute.json()
+    assert data["executed"] is True
+    assert data["action_type"] == "ttlock_open"
+    assert data["ttlock"]["command"] == "open"
+    assert data["ttlock"]["lock_id"] == "12345"
+
+
+def test_chat_action_execute_ttlock_fails_without_integration_config(client):
+    auth = _register(client, username="chat-user-ttlock-missing")
+    session_id = _create_active_session(client, auth)
+    execute = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "ttlock_open", "payload": {}},
+    )
+    assert execute.status_code == 400
+    assert "TT-Lock integration" in str(execute.json().get("detail", ""))
 
 
 def test_chat_vision_review_saves_uploaded_image(client, monkeypatch, tmp_path):
