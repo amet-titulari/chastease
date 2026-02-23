@@ -1197,6 +1197,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       return parseDashboardDate(candidate);
     }
 
+    function resolveDashboardReferenceNow(session) {
+      const runtimeTimer = session?.policy?.runtime_timer || {};
+      const isPaused = String(runtimeTimer.state || "").toLowerCase() === "paused";
+      if (!isPaused) return null;
+      return parseDashboardDate(runtimeTimer.paused_at || null);
+    }
+
     function renderDashboardCountdown(session) {
       const timerValue = document.getElementById("dashboardTimerValue");
       const timerTarget = document.getElementById("dashboardTimerTarget");
@@ -1208,9 +1215,11 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         timerTarget.textContent = "-";
         return;
       }
+      const fixedNow = resolveDashboardReferenceNow(session);
       timerTarget.textContent = `${tr("dashboard_target_label")}: ${formatDashboardTarget(expectedEnd)}`;
       const tick = () => {
-        const seconds = Math.floor((expectedEnd.getTime() - Date.now()) / 1000);
+        const nowMs = fixedNow ? fixedNow.getTime() : Date.now();
+        const seconds = Math.floor((expectedEnd.getTime() - nowMs) / 1000);
         if (seconds <= 0) {
           timerValue.textContent = tr("dashboard_timer_expired");
           return;
@@ -1218,7 +1227,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         timerValue.textContent = formatDashboardRemaining(seconds);
       };
       tick();
-      dashboardCountdownInterval = window.setInterval(tick, 1000);
+      if (!fixedNow) {
+        dashboardCountdownInterval = window.setInterval(tick, 1000);
+      }
     }
 
     function markLlmTestDirty() {

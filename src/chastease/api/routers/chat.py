@@ -157,12 +157,9 @@ def _apply_timer_action(action_type: str, payload: dict, policy: dict, now: date
             paused_seconds = max(0, int((now - paused_at).total_seconds()))
             next_end_at = effective_end_at + timedelta(seconds=paused_seconds)
             if max_end_at is not None and next_end_at > max_end_at:
-                raise HTTPException(status_code=400, detail="Action 'unpause_timer' exceeds max_end_date boundary.")
+                next_end_at = max_end_at
             effective_end_at = next_end_at
             timer["effective_end_at"] = _iso_utc(effective_end_at)
-            if min_end_at is not None:
-                min_end_at = min_end_at + timedelta(seconds=paused_seconds)
-                timer["min_end_at"] = _iso_utc(min_end_at)
         timer["state"] = "running"
         timer["paused_at"] = None
         timer["last_action"] = "unpause_timer"
@@ -174,7 +171,7 @@ def _apply_timer_action(action_type: str, payload: dict, policy: dict, now: date
             raise HTTPException(status_code=400, detail="Action 'add_time' requires seconds > 0.")
         next_end_at = effective_end_at + timedelta(seconds=seconds)
         if max_end_at is not None and next_end_at > max_end_at:
-            raise HTTPException(status_code=400, detail="Action 'add_time' exceeds max_end_date boundary.")
+            next_end_at = max_end_at
         effective_end_at = next_end_at
         timer["effective_end_at"] = _iso_utc(effective_end_at)
         timer["last_action"] = "add_time"

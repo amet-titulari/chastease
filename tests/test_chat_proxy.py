@@ -115,8 +115,10 @@ def test_chat_add_time_respects_max_end_date_boundary(client):
         "/api/v1/chat/actions/execute",
         json={"session_id": session_id, "action_type": "add_time", "payload": {"seconds": 1}},
     )
-    assert execute_add_time.status_code == 400
-    assert "max_end_date boundary" in execute_add_time.json()["detail"]
+    assert execute_add_time.status_code == 200
+    timer = execute_add_time.json()["timer"]
+    effective_end = datetime.fromisoformat(timer["effective_end_at"]).date().isoformat()
+    assert effective_end == "2026-01-02"
 
 
 def test_chat_unpause_respects_max_end_date_boundary(client):
@@ -142,8 +144,11 @@ def test_chat_unpause_respects_max_end_date_boundary(client):
         "/api/v1/chat/actions/execute",
         json={"session_id": session_id, "action_type": "unpause_timer", "payload": {}},
     )
-    assert unpause.status_code == 400
-    assert "max_end_date boundary" in unpause.json()["detail"]
+    assert unpause.status_code == 200
+    timer = unpause.json()["timer"]
+    assert timer["state"] == "running"
+    effective_end = datetime.fromisoformat(timer["effective_end_at"]).date().isoformat()
+    assert effective_end == "2026-01-02"
 
 
 def test_chat_turn_auto_executes_request_actions_in_execute_mode(client):
@@ -244,3 +249,21 @@ def test_unpause_adds_elapsed_pause_time_to_effective_end(client):
     end_after_unpause = datetime.fromisoformat(unpause.json()["timer"]["effective_end_at"])
     delta = int((end_after_unpause - end_before_pause).total_seconds())
     assert 1 <= delta <= 4
+
+
+def test_pause_keeps_remaining_seconds_stable(client):
+    auth = _register(client, username="chat-user-pause-stable")
+    session_id = _create_active_session(client, auth)
+
+    pause = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "pause_timer", "payload": {}},
+    )
+    assert pause.status_code == 200
+    remaining_before = int(pause.json()["timer"]["remaining_seconds"])
+    sleep(2)
+    session_fetch = client.get(f"/api/v1/sessions/{session_id}")
+    assert session_fetch.status_code == 200
+    runtime_timer = session_fetch.json()["policy"]["runtime_timer"]
+    remaining_after = int(runtime_timer["remaining_seconds"])
+    assert abs(remaining_after - remaining_before) <= 1
