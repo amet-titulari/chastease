@@ -140,6 +140,26 @@ def app_shell(request: Request) -> str:
     .acc-lock { font-size: 12px; color: #8aa0c8; }
     .acc-body { display: none; padding: 16px; }
     .acc-item.active .acc-body { display: block; }
+    .dashboard-timer {
+      margin: 8px 0 12px;
+      padding: 12px;
+      border: 1px solid #2a3f67;
+      border-radius: 10px;
+      background: #0c162d;
+    }
+    .dashboard-timer-value {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin: 6px 0 4px;
+      color: #b8d4ff;
+    }
+    .dashboard-acc-item { margin-top: 12px; }
+    .dashboard-acc-head {
+      font-size: 18px;
+      font-weight: 600;
+      padding: 12px 14px;
+    }
     .status-ok { color: #87f7bf; }
     .status-error { color: #ff9aa4; }
 
@@ -182,11 +202,24 @@ def app_shell(request: Request) -> str:
 
     <div id="dashboard" class="card hidden">
       <h2 id="dashboardTitle">Dashboard</h2>
-      <p id="dashboardSubtitle" class="small">Konfigurationsübersicht der aktiven Session.</p>
+      <p id="dashboardSubtitle" class="small">Countdown bis zum voraussichtlichen Endtermin.</p>
+      <div class="dashboard-timer">
+        <p id="dashboardTimerLabel" class="small">Verbleibende Zeit</p>
+        <p id="dashboardTimerValue" class="dashboard-timer-value">-</p>
+        <p id="dashboardTimerTarget" class="small">-</p>
+      </div>
       <p id="dashboardInfo" class="small"></p>
-      <table id="dashboardContractTable">
-        <tbody id="dashboardContract"></tbody>
-      </table>
+      <div id="dashboardConfigAccordion" class="acc-item dashboard-acc-item">
+        <button class="acc-head dashboard-acc-head" onclick="toggleDashboardConfig()">
+          <span id="dashboardConfigTitle">Konfigurationsübersicht</span>
+          <span id="dashboardConfigChevron" class="acc-lock">+</span>
+        </button>
+        <div class="acc-body">
+          <table id="dashboardContractTable">
+            <tbody id="dashboardContract"></tbody>
+          </table>
+        </div>
+      </div>
       <button id="killSessionBtn" class="__KILL_BUTTON_CLASS__" onclick="killActiveSession()">Session KILL</button>
     </div>
 
@@ -292,6 +325,7 @@ def app_shell(request: Request) -> str:
 
   <script>
     let userId = null;
+    let userDisplayName = null;
     let authToken = null;
     let setupSessionId = null;
     let setupStatus = null;
@@ -307,6 +341,7 @@ def app_shell(request: Request) -> str:
     let setupContract = null;
     let dashboardLastEvent = "init";
     let dashboardLastDetail = "";
+    let dashboardCountdownInterval = null;
     const PANELS = ["start", "psychogram", "ai_config", "complete"];
     const LOCKED_INITIAL = new Set(["psychogram", "ai_config", "complete"]);
 
@@ -345,7 +380,12 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         login: "Login",
         register: "Register",
         dashboard_title: "Dashboard",
-        dashboard_subtitle: "Konfigurationsübersicht der aktiven Session.",
+        dashboard_subtitle: "Countdown bis zum voraussichtlichen Endtermin.",
+        dashboard_timer_label: "Verbleibende Zeit",
+        dashboard_timer_no_end: "Kein Endtermin verfügbar.",
+        dashboard_timer_expired: "Abgelaufen",
+        dashboard_target_label: "Voraussichtliches Ende",
+        dashboard_config_title: "Konfigurationsübersicht",
         kill_session: "Session KILL",
         panel_start: "Start Setup Session",
         panel_psychogram: "Psychogram",
@@ -460,7 +500,12 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         login: "Login",
         register: "Register",
         dashboard_title: "Dashboard",
-        dashboard_subtitle: "Configuration overview of the active session.",
+        dashboard_subtitle: "Countdown to the expected end date.",
+        dashboard_timer_label: "Remaining time",
+        dashboard_timer_no_end: "No end date available.",
+        dashboard_timer_expired: "Expired",
+        dashboard_target_label: "Expected end",
+        dashboard_config_title: "Configuration overview",
         kill_session: "Session KILL",
         panel_start: "Start Setup Session",
         panel_psychogram: "Psychogram",
@@ -568,7 +613,14 @@ Lob ist selten genug, um Wirkung zu behalten.`;
 
     function saveAuth() {
       if (userId && authToken) {
-        localStorage.setItem(authStorageKey(), JSON.stringify({ user_id: userId, auth_token: authToken }));
+        localStorage.setItem(
+          authStorageKey(),
+          JSON.stringify({
+            user_id: userId,
+            auth_token: authToken,
+            display_name: userDisplayName || null,
+          })
+        );
       }
     }
 
@@ -894,6 +946,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       setText("registerBtn", "register");
       setText("dashboardTitle", "dashboard_title");
       setText("dashboardSubtitle", "dashboard_subtitle");
+      setText("dashboardTimerLabel", "dashboard_timer_label");
+      setText("dashboardConfigTitle", "dashboard_config_title");
       setText("killSessionBtn", "kill_session");
       setText("panelStartTitle", "panel_start");
       setText("panelPsychogramTitle", "panel_psychogram");
@@ -998,6 +1052,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("durationHint").textContent = t.duration_hint;
       applyStaticUiTranslations();
       updatePenaltyCapsVisibility();
+      refreshDashboard();
     }
 
     function parseDateInput(id) {
@@ -1075,6 +1130,95 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       if (!document.getElementById("llmBehaviorPrompt").value) {
         document.getElementById("llmBehaviorPrompt").value = defaultBehaviorPrompt;
       }
+    }
+
+    function toggleDashboardConfig() {
+      const item = document.getElementById("dashboardConfigAccordion");
+      const chevron = document.getElementById("dashboardConfigChevron");
+      if (!item || !chevron) return;
+      item.classList.toggle("active");
+      chevron.textContent = item.classList.contains("active") ? "-" : "+";
+    }
+
+    function stopDashboardCountdown() {
+      if (dashboardCountdownInterval) {
+        clearInterval(dashboardCountdownInterval);
+        dashboardCountdownInterval = null;
+      }
+    }
+
+    function parseDashboardDate(raw) {
+      if (!raw) return null;
+      const value = String(raw).trim();
+      if (!value) return null;
+      if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) {
+        const dateOnly = new Date(`${value}T23:59:59`);
+        return Number.isNaN(dateOnly.getTime()) ? null : dateOnly;
+      }
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function formatDashboardTarget(date) {
+      if (!date) return "-";
+      try {
+        return new Intl.DateTimeFormat(uiLang() === "de" ? "de-DE" : "en-US", {
+          dateStyle: "medium",
+          timeStyle: "medium",
+        }).format(date);
+      } catch {
+        return date.toISOString();
+      }
+    }
+
+    function formatDashboardRemaining(totalSeconds) {
+      const safe = Math.max(0, Number(totalSeconds) || 0);
+      const days = Math.floor(safe / 86400);
+      const hours = Math.floor((safe % 86400) / 3600);
+      const minutes = Math.floor((safe % 3600) / 60);
+      const seconds = safe % 60;
+      if (uiLang() === "de") {
+        return `${days}T ${hours}Std ${minutes}Min ${seconds}Sek`;
+      }
+      return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+    }
+
+    function resolveDashboardExpectedEnd(session) {
+      const policy = session?.policy || {};
+      const runtimeTimer = policy.runtime_timer || {};
+      const contract = policy.contract || {};
+      const setupEnd = setupContract?.end_date || null;
+      const candidate =
+        runtimeTimer.effective_end_at ||
+        contract.end_date ||
+        contract.proposed_end_date ||
+        setupEnd ||
+        null;
+      return parseDashboardDate(candidate);
+    }
+
+    function renderDashboardCountdown(session) {
+      const timerValue = document.getElementById("dashboardTimerValue");
+      const timerTarget = document.getElementById("dashboardTimerTarget");
+      if (!timerValue || !timerTarget) return;
+      stopDashboardCountdown();
+      const expectedEnd = resolveDashboardExpectedEnd(session);
+      if (!expectedEnd) {
+        timerValue.textContent = tr("dashboard_timer_no_end");
+        timerTarget.textContent = "-";
+        return;
+      }
+      timerTarget.textContent = `${tr("dashboard_target_label")}: ${formatDashboardTarget(expectedEnd)}`;
+      const tick = () => {
+        const seconds = Math.floor((expectedEnd.getTime() - Date.now()) / 1000);
+        if (seconds <= 0) {
+          timerValue.textContent = tr("dashboard_timer_expired");
+          return;
+        }
+        timerValue.textContent = formatDashboardRemaining(seconds);
+      };
+      tick();
+      dashboardCountdownInterval = window.setInterval(tick, 1000);
     }
 
     function markLlmTestDirty() {
@@ -1410,8 +1554,9 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         ? `Setup=${setupStatusText} | Active=${activeStatus}`
         : `Setup=${setupStatusText} | Active=${activeStatus}`;
       document.getElementById("dashboardInfo").textContent = dashboardInfo;
+      renderDashboardCountdown(currentSession);
       document.getElementById("dashboardContract").innerHTML = [
-        `<tr><th>User ID</th><td>${userId || "-"}</td></tr>`,
+        `<tr><th>User</th><td>${escapeHtml(userDisplayName || userId || "-")}</td></tr>`,
         `<tr><th>Setup Session ID</th><td>${setupIdText}</td></tr>`,
         `<tr><th>Setup Status</th><td>${setupStatusText}</td></tr>`,
         `<tr><th>Answered Questions</th><td>${answeredQuestions}</td></tr>`,
@@ -1446,6 +1591,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
 
     function showHomeView() {
       dashboardVisible = false;
+      stopDashboardCountdown();
       document.getElementById("dashboard").classList.add("hidden");
       document.getElementById("appFlow").classList.remove("hidden");
       if (activeSession) loadChatTurns();
@@ -1483,6 +1629,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       dashboardVisible = !dashboardVisible;
       if (dashboardVisible) {
         renderDashboardSummary(activeSession);
+      } else {
+        stopDashboardCountdown();
       }
       document.getElementById("dashboard").classList.toggle("hidden", !dashboardVisible);
       document.getElementById("appFlow").classList.toggle("hidden", dashboardVisible);
@@ -1636,6 +1784,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     function unlockFlow(data) {
       if (data.user_id && data.auth_token) {
         userId = data.user_id;
+        userDisplayName = String(data.display_name || data.username || "").trim() || null;
         authToken = data.auth_token;
         setupSessionId = data.setup_session_id || setupSessionId;
         setupStatus = data.setup_status || setupStatus;
@@ -1735,6 +1884,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
 
     function logoutUser() {
       userId = null;
+      userDisplayName = null;
       authToken = null;
       setupSessionId = null;
       setupStatus = null;
@@ -1757,6 +1907,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       llmLiveTestPassed = false;
       llmTestRunning = false;
       dashboardVisible = false;
+      stopDashboardCountdown();
       document.getElementById("dashboard").classList.add("hidden");
       document.getElementById("dashboardToggleBtn").classList.add("hidden");
       document.getElementById("homeBtn").classList.add("hidden");
@@ -1959,5 +2110,3 @@ Lob ist selten genug, um Wirkung zu behalten.`;
 </html>
 """
     return html.replace("__KILL_BUTTON_CLASS__", kill_button_class)
-
-

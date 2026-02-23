@@ -191,6 +191,7 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
         {
             "setup_session_id": setup_session_id,
             "user_id": payload.user_id,
+            "user_display_name": str(user.display_name or "").strip() or payload.user_id,
             "character_id": payload.character_id,
             "status": "setup_in_progress",
             "hard_stop_enabled": payload.hard_stop_enabled,
@@ -870,5 +871,4 @@ def get_setup_questionnaire(language: Literal["de", "en"] = "de") -> dict:
 @router.get("/demo")
 def setup_demo_redirect():
     return RedirectResponse(url="/app", status_code=307)
-
 

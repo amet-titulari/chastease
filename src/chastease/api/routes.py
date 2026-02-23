@@ -286,8 +286,42 @@ def _ensure_generated_contract_consent(setup_session: dict) -> dict:
 def _render_contract_with_consent(contract_text: str | None, setup_session: dict) -> str | None:
     if contract_text is None:
         return None
-    # Keep the rendered contract text stable and store consent exclusively in JSON metadata.
-    return str(contract_text)
+    rendered = str(contract_text)
+    fields = _build_contract_template_fields(setup_session)
+
+    signature_date_sub = str(fields.get("signature_date_sub") or "-")
+    signature_sub = str(fields.get("signature_sub") or "-")
+
+    rendered = re.sub(
+        r"(^\s*-\s*(?:Datum|Date):\s*\*\*\*)[^*\n]*(\*\*\*\s*$)",
+        lambda m: f"{m.group(1)}{signature_date_sub}{m.group(2)}",
+        rendered,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    rendered = re.sub(
+        r"(^\s*-\s*(?:Unterschrift\s*Sub|Sub signature):\s*\*\*\*)[^*\n]*(\*\*\*\s*$)",
+        lambda m: f"{m.group(1)}{signature_sub}{m.group(2)}",
+        rendered,
+        count=1,
+        flags=re.MULTILINE,
+    )
+
+    footer_updates = {
+        "consent_accepted": str(fields.get("consent_accepted") or "false"),
+        "consent_text": str(fields.get("consent_text") or "-"),
+        "consent_accepted_at": str(fields.get("consent_accepted_at") or "-"),
+    }
+    for key, value in footer_updates.items():
+        escaped = json.dumps(value, ensure_ascii=False)[1:-1]
+        rendered = re.sub(
+            rf'("{re.escape(key)}"\s*:\s*")[^"]*(")',
+            lambda m: f'{m.group(1)}{escaped}{m.group(2)}',
+            rendered,
+            count=1,
+        )
+
+    return rendered
 
 
 def _validate_safety_answers(answers: dict[str, int | str]) -> None:
@@ -1018,6 +1052,15 @@ def _days_between(start_raw: str | None, end_raw: str | None) -> int:
         return 0
 
 
+def _setup_user_display_name(setup_session: dict) -> str:
+    for key in ("user_display_name", "display_name", "username"):
+        value = str(setup_session.get(key) or "").strip()
+        if value:
+            return value
+    fallback = str(setup_session.get("user_id") or "").strip()
+    return fallback or "sub"
+
+
 def _build_contract_template_fields(setup_session: dict) -> dict[str, str]:
     lang = _lang(setup_session.get("language", "de"))
     policy = setup_session.get("policy_preview") or {}
@@ -1105,6 +1148,7 @@ def _build_contract_template_fields(setup_session: dict) -> dict[str, str]:
     )
     if not contract.get("ai_controls_end_date"):
         end_control_mode = "fixed/manual" if lang == "en" else "fix/manuell"
+    user_display_name = _setup_user_display_name(setup_session)
 
     fields: dict[str, str] = {
         "session_id": str(setup_session.get("active_session_id") or "-"),
@@ -1183,8 +1227,8 @@ def _build_contract_template_fields(setup_session: dict) -> dict[str, str]:
             if lang == "de"
             else "Debrief is handled during the session flow."
         ),
-        "sub_name": str(setup_session.get("user_id") or "sub"),
-        "user_name": str(setup_session.get("user_id") or "sub"),
+        "sub_name": user_display_name,
+        "user_name": user_display_name,
         "keyholder_name": "AI Keyholder",
         "signature_date_sub": (
             consent_accepted_at[:10]
@@ -1309,6 +1353,4 @@ api_router.include_router(chat_router)
 api_router.include_router(setup_router)
 api_router.include_router(sessions_router)
 api_router.include_router(system_router)
-
-
 

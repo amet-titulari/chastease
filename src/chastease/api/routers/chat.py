@@ -23,6 +23,38 @@ _DURATION_UNIT_SECONDS = {
     "day": 86400,
     "days": 86400,
 }
+_TIMER_ACTIONS = {"pause_timer", "unpause_timer", "add_time", "reduce_time"}
+_ACTION_ALIASES = {
+    "addtime": "add_time",
+    "reducetime": "reduce_time",
+    "pausetimer": "pause_timer",
+    "unpausetimer": "unpause_timer",
+}
+_ACTION_WRAPPERS = {"suggest", "request", "execute", "tool", "action"}
+_DURATION_PATTERN = {
+    "s": 1,
+    "sec": 1,
+    "secs": 1,
+    "second": 1,
+    "seconds": 1,
+    "m": 60,
+    "min": 60,
+    "mins": 60,
+    "minute": 60,
+    "minutes": 60,
+    "h": 3600,
+    "hr": 3600,
+    "hrs": 3600,
+    "hour": 3600,
+    "hours": 3600,
+    "d": 86400,
+    "day": 86400,
+    "days": 86400,
+    "stunde": 3600,
+    "stunden": 3600,
+    "tag": 86400,
+    "tage": 86400,
+}
 
 
 def _to_utc(value: datetime) -> datetime:
@@ -179,8 +211,67 @@ def _to_int(value) -> int:
     raise ValueError("duration value must be integer-like")
 
 
+def _normalize_action_type(action_type: str) -> str:
+    raw = str(action_type or "").strip().lower()
+    if not raw:
+        return ""
+    return _ACTION_ALIASES.get(raw, raw)
+
+
+def _parse_duration_seconds(raw_value: str) -> int | None:
+    text = str(raw_value or "").strip().lower()
+    if not text:
+        return None
+    import re
+
+    match = re.match(
+        r"^(?P<amount>\d+)\s*(?P<unit>s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|stunde|stunden|tag|tage)?$",
+        text,
+    )
+    if not match:
+        return None
+    amount = int(match.group("amount"))
+    unit = match.group("unit") or "s"
+    return amount * _DURATION_PATTERN.get(unit, 1)
+
+
+def _unwrap_action_request(action_type: str, payload: dict) -> tuple[str, dict]:
+    normalized_action = _normalize_action_type(action_type)
+    normalized_payload = dict(payload or {})
+    if normalized_action in _ACTION_WRAPPERS:
+        nested = (
+            normalized_payload.get("action_type")
+            or normalized_payload.get("action")
+            or normalized_payload.get("tool")
+            or normalized_payload.get("request")
+        )
+        resolved = _normalize_action_type(str(nested or ""))
+        if resolved:
+            normalized_action = resolved
+            for key in ("action_type", "action", "tool", "request"):
+                normalized_payload.pop(key, None)
+    return normalized_action, normalized_payload
+
+
+def _normalize_pending_actions(pending_actions: list[dict]) -> list[dict]:
+    normalized: list[dict] = []
+    for action in pending_actions:
+        raw_action_type = str((action or {}).get("action_type") or "")
+        payload = (action or {}).get("payload")
+        payload_dict = dict(payload) if isinstance(payload, dict) else {}
+        normalized_action, normalized_payload = _unwrap_action_request(raw_action_type, payload_dict)
+        normalized.append(
+            {
+                "action_type": normalized_action or raw_action_type,
+                "payload": normalized_payload,
+                "requires_execute_call": bool((action or {}).get("requires_execute_call", True)),
+            }
+        )
+    return normalized
+
+
 def _normalize_duration_payload(action_type: str, payload: dict) -> dict:
-    action = str(action_type or "").strip().lower()
+    action = _normalize_action_type(action_type)
     if action not in {"add_time", "reduce_time"}:
         return dict(payload or {})
 
@@ -206,6 +297,12 @@ def _normalize_duration_payload(action_type: str, payload: dict) -> dict:
         return {"seconds": seconds}
 
     # Backward-compatible convenience fields accepted from AI payloads.
+    if "duration" in data:
+        seconds = _parse_duration_seconds(str(data.get("duration") or ""))
+        if seconds is None or seconds <= 0:
+            raise HTTPException(status_code=400, detail=f"Action '{action}' requires a valid duration.")
+        return {"seconds": seconds}
+
     for key in ("minutes", "hours", "days"):
         if key in data:
             amount = _to_int(data.get(key))
@@ -221,6 +318,95 @@ def _normalize_duration_payload(action_type: str, payload: dict) -> dict:
             "Use either {seconds} or {amount, unit} with unit in seconds/minutes/hours/days."
         ),
     )
+
+
+def _execute_action_with_policy(
+    *,
+    action_type: str,
+    payload: dict,
+    policy: dict,
+    now: datetime,
+) -> tuple[dict, dict]:
+    normalized_action, unwrapped_payload = _unwrap_action_request(action_type, payload)
+    normalized_payload = _normalize_duration_payload(normalized_action, unwrapped_payload)
+    if normalized_action in _TIMER_ACTIONS:
+        updated_policy, timer_state, action_message = _apply_timer_action(
+            normalized_action,
+            normalized_payload,
+            policy,
+            now,
+        )
+        return updated_policy, {
+            "action_type": normalized_action,
+            "payload": normalized_payload,
+            "timer": timer_state,
+            "message": action_message,
+        }
+    raise HTTPException(status_code=400, detail=f"Unsupported action_type '{normalized_action}'.")
+
+
+def _autonomy_mode_from_policy(policy: dict) -> str:
+    mode = str((policy or {}).get("autonomy_mode") or "execute").strip().lower()
+    return "execute" if mode == "execute" else "suggest"
+
+
+def _auto_execute_pending_actions(
+    *,
+    request: Request,
+    policy: dict,
+    pending_actions: list[dict],
+) -> tuple[list[dict], list[dict], list[dict], dict]:
+    normalized_pending = _normalize_pending_actions(pending_actions)
+    mode = _autonomy_mode_from_policy(policy)
+    if not normalized_pending:
+        return normalized_pending, [], [], policy
+
+    registry = getattr(request.app.state, "tool_registry", None)
+    now = datetime.now(UTC)
+    remaining_actions: list[dict] = []
+    executed_actions: list[dict] = []
+    failed_actions: list[dict] = []
+    updated_policy = dict(policy)
+
+    for action in normalized_pending:
+        normalized_action = _normalize_action_type(str((action or {}).get("action_type") or ""))
+        payload = (action or {}).get("payload")
+        payload_dict = dict(payload) if isinstance(payload, dict) else {}
+        force_execute = normalized_action in _TIMER_ACTIONS
+        should_execute = mode == "execute" or force_execute
+
+        if not normalized_action:
+            failed_actions.append({"action_type": "", "payload": payload_dict, "detail": "Missing action_type."})
+            continue
+        if not should_execute:
+            remaining_actions.append(action)
+            continue
+        if registry is not None and not registry.is_allowed(normalized_action, mode="execute"):
+            if registry.is_allowed(normalized_action, mode="suggest"):
+                remaining_actions.append(action)
+            else:
+                failed_actions.append(
+                    {
+                        "action_type": normalized_action,
+                        "payload": payload_dict,
+                        "detail": f"Tool '{normalized_action}' is not allowed for execution.",
+                    }
+                )
+            continue
+        try:
+            updated_policy, executed = _execute_action_with_policy(
+                action_type=normalized_action,
+                payload=payload_dict,
+                policy=updated_policy,
+                now=now,
+            )
+            executed_actions.append(executed)
+        except HTTPException as exc:
+            failed_actions.append(
+                {"action_type": normalized_action, "payload": payload_dict, "detail": str(exc.detail)}
+            )
+
+    return remaining_actions, executed_actions, failed_actions, updated_policy
 
 
 @router.post("/turn")
@@ -242,6 +428,16 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
             db, request, session, action_text, request_lang, payload.attachments
         )
         narration, pending_actions, generated_files = extract_pending_actions(narration_raw)
+        policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
+        if not isinstance(policy, dict):
+            policy = {}
+        pending_actions, executed_actions, failed_actions, updated_policy = _auto_execute_pending_actions(
+            request=request,
+            policy=policy,
+            pending_actions=pending_actions,
+        )
+        if executed_actions:
+            session.policy_snapshot_json = json.dumps(updated_policy)
 
         current_turn_no = db.scalar(select(func.max(Turn.turn_no)).where(Turn.session_id == session.id))
         next_turn_no = (current_turn_no or 0) + 1
@@ -267,6 +463,8 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         "turn_no": next_turn_no,
         "narration": narration,
         "pending_actions": pending_actions,
+        "executed_actions": executed_actions,
+        "failed_actions": failed_actions,
         "generated_files": generated_files,
         "next_state": "awaiting_wearer_action",
     }
@@ -306,6 +504,16 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
             raise HTTPException(status_code=404, detail="Chastity session not found.")
         narration_raw = generate_ai_narration_for_session(db, request, session, prompt, request_lang, attachments)
         narration, pending_actions, generated_files = extract_pending_actions(narration_raw)
+        policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
+        if not isinstance(policy, dict):
+            policy = {}
+        pending_actions, executed_actions, failed_actions, updated_policy = _auto_execute_pending_actions(
+            request=request,
+            policy=policy,
+            pending_actions=pending_actions,
+        )
+        if executed_actions:
+            session.policy_snapshot_json = json.dumps(updated_policy)
 
         current_turn_no = db.scalar(select(func.max(Turn.turn_no)).where(Turn.session_id == session.id))
         next_turn_no = (current_turn_no or 0) + 1
@@ -331,6 +539,8 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
         "turn_no": next_turn_no,
         "narration": narration,
         "pending_actions": pending_actions,
+        "executed_actions": executed_actions,
+        "failed_actions": failed_actions,
         "generated_files": generated_files,
         "next_state": "awaiting_wearer_action",
     }
@@ -338,10 +548,10 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
 
 @router.post("/actions/execute")
 def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> dict:
+    normalized_action = _normalize_action_type(payload.action_type)
     registry = getattr(request.app.state, "tool_registry", None)
-    if registry is not None and not registry.is_allowed(payload.action_type, mode="execute"):
-        raise HTTPException(status_code=403, detail=f"Tool '{payload.action_type}' is not allowed for execution.")
-    normalized_payload = _normalize_duration_payload(payload.action_type, payload.payload)
+    if registry is not None and not registry.is_allowed(normalized_action, mode="execute"):
+        raise HTTPException(status_code=403, detail=f"Tool '{normalized_action}' is not allowed for execution.")
 
     now = datetime.now(UTC)
     db = get_db_session(request)
@@ -352,11 +562,11 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
         policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
         if not isinstance(policy, dict):
             policy = {}
-        updated_policy, timer_state, action_message = _apply_timer_action(
-            payload.action_type,
-            normalized_payload,
-            policy,
-            now,
+        updated_policy, result = _execute_action_with_policy(
+            action_type=normalized_action,
+            payload=payload.payload,
+            policy=policy,
+            now=now,
         )
         session.policy_snapshot_json = json.dumps(updated_policy)
         session.updated_at = now
@@ -367,8 +577,8 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
     return {
         "executed": True,
         "session_id": payload.session_id,
-        "action_type": payload.action_type,
-        "payload": normalized_payload,
-        "timer": timer_state,
-        "message": action_message,
+        "action_type": result["action_type"],
+        "payload": result["payload"],
+        "timer": result.get("timer"),
+        "message": result["message"],
     }

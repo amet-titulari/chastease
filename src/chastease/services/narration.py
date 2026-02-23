@@ -8,16 +8,69 @@ from sqlalchemy import select
 
 from chastease.api.setup_domain import _fixed_soft_limits_text, _lang, _required_contract_consent_text
 from chastease.connectors import generate_narration_with_optional_profile
-from chastease.models import ChastitySession, Turn
+from chastease.models import ChastitySession, Turn, User
 from chastease.services.ai.base import StoryTurnContext
 
 
 def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]]:
     pattern = re.compile(r"\[\[ACTION:(?P<kind>[a-zA-Z0-9_\-]+)\|(?P<payload>\{.*?\})\]\]")
+    request_json_pattern = re.compile(r"\[\[REQUEST:(?P<kind>[a-zA-Z0-9_\-]+)\|(?P<payload>\{.*?\})\]\]")
+    request_call_pattern = re.compile(r"\[REQUEST:\s*(?P<kind>[a-zA-Z0-9_\-]+)\((?P<args>.*?)\)\]", re.IGNORECASE)
+    suggest_pattern = re.compile(r"\[Suggest:\s*(?P<kind>[a-zA-Z0-9_\-]+)\((?P<args>.*?)\)\]", re.IGNORECASE)
     file_pattern = re.compile(r"\[\[FILE\|(?P<payload>\{.*?\})\]\]")
     actions: list[dict] = []
     generated_files: list[dict] = []
     cleaned = narration
+
+    def _parse_suggest_args(raw_args: str) -> dict[str, str]:
+        parsed: dict[str, str] = {}
+        for match in re.finditer(r"([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(\"[^\"]*\"|'[^']*'|[^,]+)", raw_args):
+            key = str(match.group(1) or "").strip().lower()
+            value = str(match.group(2) or "").strip()
+            if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+                value = value[1:-1]
+            if key:
+                parsed[key] = value.strip()
+        return parsed
+
+    def _parse_duration_seconds(raw_value: str) -> int | None:
+        text = str(raw_value or "").strip().lower()
+        if not text:
+            return None
+        match = re.match(
+            r"^(?P<amount>\d+)\s*(?P<unit>s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|stunde|stunden|tag|tage)?$",
+            text,
+        )
+        if not match:
+            return None
+        amount = int(match.group("amount"))
+        unit = match.group("unit") or "s"
+        factor = {
+            "s": 1,
+            "sec": 1,
+            "secs": 1,
+            "second": 1,
+            "seconds": 1,
+            "m": 60,
+            "min": 60,
+            "mins": 60,
+            "minute": 60,
+            "minutes": 60,
+            "h": 3600,
+            "hr": 3600,
+            "hrs": 3600,
+            "hour": 3600,
+            "hours": 3600,
+            "d": 86400,
+            "day": 86400,
+            "days": 86400,
+            "stunde": 3600,
+            "stunden": 3600,
+            "tag": 86400,
+            "tage": 86400,
+        }.get(unit, 1)
+        return amount * factor
+
     for match in pattern.finditer(narration):
         action_type = match.group("kind")
         payload_text = match.group("payload")
@@ -26,6 +79,51 @@ def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]
         except Exception:
             payload = {"raw": payload_text}
         actions.append({"action_type": action_type, "payload": payload, "requires_execute_call": True})
+        cleaned = cleaned.replace(match.group(0), "").strip()
+    for match in request_json_pattern.finditer(narration):
+        action_type = str(match.group("kind") or "").strip().lower()
+        payload_text = match.group("payload")
+        try:
+            payload = json.loads(payload_text)
+        except Exception:
+            payload = {"raw": payload_text}
+        actions.append({"action_type": action_type, "payload": payload, "requires_execute_call": True})
+        cleaned = cleaned.replace(match.group(0), "").strip()
+    for match in request_call_pattern.finditer(narration):
+        action_type = str(match.group("kind") or "").strip().lower()
+        args_text = str(match.group("args") or "")
+        args = _parse_suggest_args(args_text)
+        payload: dict[str, object] = dict(args)
+        normalized_type = {
+            "addtime": "add_time",
+            "time_add": "add_time",
+            "extend_time": "add_time",
+            "reducetime": "reduce_time",
+            "time_reduce": "reduce_time",
+        }.get(action_type, action_type)
+        if normalized_type in {"add_time", "reduce_time"}:
+            seconds = _parse_duration_seconds(str(args.get("duration") or args.get("seconds") or ""))
+            if seconds is not None and seconds > 0:
+                payload = {"seconds": seconds}
+        actions.append({"action_type": normalized_type, "payload": payload, "requires_execute_call": True})
+        cleaned = cleaned.replace(match.group(0), "").strip()
+    for match in suggest_pattern.finditer(narration):
+        action_type = str(match.group("kind") or "").strip().lower()
+        args_text = str(match.group("args") or "")
+        args = _parse_suggest_args(args_text)
+        payload: dict[str, object] = dict(args)
+        normalized_type = {
+            "addtime": "add_time",
+            "time_add": "add_time",
+            "extend_time": "add_time",
+            "reducetime": "reduce_time",
+            "time_reduce": "reduce_time",
+        }.get(action_type, action_type)
+        if normalized_type in {"add_time", "reduce_time"}:
+            seconds = _parse_duration_seconds(str(args.get("duration") or args.get("seconds") or ""))
+            if seconds is not None and seconds > 0:
+                payload = {"seconds": seconds}
+        actions.append({"action_type": normalized_type, "payload": payload, "requires_execute_call": True})
         cleaned = cleaned.replace(match.group(0), "").strip()
     for match in file_pattern.finditer(narration):
         payload_text = match.group("payload")
@@ -107,7 +205,30 @@ def _available_tools_summary(request: Request) -> str:
         return "-"
     execute_tools = registry.list_tools(mode="execute")
     suggest_tools = registry.list_tools(mode="suggest")
-    return f"execute={','.join(execute_tools) or '-'}; suggest={','.join(suggest_tools) or '-'}"
+    return (
+        f"execute={','.join(execute_tools) or '-'}; "
+        f"suggest={','.join(suggest_tools) or '-'}; "
+        "payload_rules=add_time/reduce_time require {seconds:int>0}; "
+        "pause_timer/unpause_timer require {}"
+    )
+
+
+def _resolve_setup_user_display_name(db, setup_session: dict) -> str:
+    cached = str(
+        setup_session.get("user_display_name")
+        or setup_session.get("display_name")
+        or setup_session.get("username")
+        or ""
+    ).strip()
+    if cached:
+        return cached
+    user_id = str(setup_session.get("user_id") or "").strip()
+    if not user_id:
+        return "sub"
+    user = db.get(User, user_id)
+    resolved = str((user.display_name if user is not None else "") or "").strip() or user_id
+    setup_session["user_display_name"] = resolved
+    return resolved
 
 
 def generate_ai_narration_for_session(
@@ -351,6 +472,7 @@ def _build_contract_fallback_text(setup_session: dict) -> str:
 
 
 def generate_contract_for_setup(db, request: Request, setup_session: dict) -> str:
+    setup_session["user_display_name"] = _resolve_setup_user_display_name(db, setup_session)
     psychogram = setup_session.get("psychogram") or {}
     policy = setup_session.get("policy_preview") or {}
     lang = _lang(setup_session.get("language", "de"))

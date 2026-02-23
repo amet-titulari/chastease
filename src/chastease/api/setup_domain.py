@@ -1,4 +1,5 @@
 ﻿from datetime import UTC, date, datetime, timedelta
+import json
 import re
 from uuid import uuid4
 
@@ -161,8 +162,55 @@ def _ensure_generated_contract_consent(setup_session: dict) -> dict:
 def _render_contract_with_consent(contract_text: str | None, setup_session: dict) -> str | None:
     if contract_text is None:
         return None
-    # Keep the rendered contract text stable and store consent exclusively in JSON metadata.
-    return str(contract_text)
+    rendered = str(contract_text)
+    lang = _lang(setup_session.get("language", "de"))
+    policy = setup_session.get("policy_preview") or {}
+    contract = policy.get("contract") or {}
+    consent = ((policy.get("generated_contract") or {}).get("consent") or {})
+    consent_accepted = bool(consent.get("accepted"))
+    consent_text = str(consent.get("consent_text") or "").strip() or "-"
+    consent_accepted_at = str(consent.get("accepted_at") or "").strip() or "-"
+    signature_date_sub = (
+        str(consent_accepted_at[:10])
+        if consent_accepted and consent_accepted_at != "-"
+        else str(contract.get("start_date") or date.today().isoformat())
+    )
+    signature_sub = (
+        ("[digitally signed]" if lang == "en" else "[digital signiert]")
+        if consent_accepted
+        else ("[signature pending]" if lang == "en" else "[signatur ausstehend]")
+    )
+
+    rendered = re.sub(
+        r"(^\s*-\s*(?:Datum|Date):\s*\*\*\*)[^*\n]*(\*\*\*\s*$)",
+        lambda m: f"{m.group(1)}{signature_date_sub}{m.group(2)}",
+        rendered,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    rendered = re.sub(
+        r"(^\s*-\s*(?:Unterschrift\s*Sub|Sub signature):\s*\*\*\*)[^*\n]*(\*\*\*\s*$)",
+        lambda m: f"{m.group(1)}{signature_sub}{m.group(2)}",
+        rendered,
+        count=1,
+        flags=re.MULTILINE,
+    )
+
+    footer_updates = {
+        "consent_accepted": "true" if consent_accepted else "false",
+        "consent_text": consent_text,
+        "consent_accepted_at": consent_accepted_at,
+    }
+    for key, value in footer_updates.items():
+        escaped = json.dumps(value, ensure_ascii=False)[1:-1]
+        rendered = re.sub(
+            rf'("{re.escape(key)}"\s*:\s*")[^"]*(")',
+            lambda m: f'{m.group(1)}{escaped}{m.group(2)}',
+            rendered,
+            count=1,
+        )
+
+    return rendered
 
 def _validate_safety_answers(answers: dict[str, int | str]) -> None:
     # Backward compatible: only enforce required safety payload when mode is explicitly answered.
@@ -453,4 +501,3 @@ def _create_draft_setup_session(user_id: str, language: str = "de") -> dict:
         "created_at": now,
         "updated_at": now,
     }
-

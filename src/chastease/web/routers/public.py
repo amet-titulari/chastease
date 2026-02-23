@@ -129,6 +129,9 @@ def contract_shell() -> str:
       background: #0f1830;
       overflow-wrap: anywhere;
     }
+    .contract.progress-text {
+      white-space: pre-line;
+    }
     .contract h1, .contract h2, .contract h3, .contract h4, .contract h5, .contract h6 {
       margin: 0 0 10px;
       line-height: 1.2;
@@ -223,6 +226,7 @@ def contract_shell() -> str:
     }
 
     let contractUserId = null;
+    let contractUserDisplayName = null;
     let contractAuthToken = null;
     let contractSetupSessionId = null;
     let contractConsentRequiredText = "Ich akzeptiere diesen Vertrag";
@@ -388,7 +392,8 @@ def contract_shell() -> str:
         input.value = consentText || required;
         input.disabled = true;
         button.disabled = true;
-        info.textContent = `Ich, ${contractUserId || "user"}, habe den Vertrag am ${acceptedAt || "-"} akzeptiert und halte mich daran.`;
+        const signer = contractUserDisplayName || contractUserId || "user";
+        info.textContent = `Ich, ${signer}, habe den Vertrag am ${acceptedAt || "-"} akzeptiert und halte mich daran.`;
         info.className = "status small ok";
       } else {
         requiredNode.classList.remove("hidden");
@@ -419,8 +424,32 @@ def contract_shell() -> str:
         bootstrap = JSON.parse(sessionStorage.getItem("chastease_post_setup_bootstrap") || "{}");
       } catch {}
 
-      const userId = auth?.user_id;
+      let userId = String(auth?.user_id || "").trim();
       const authToken = auth?.auth_token;
+      contractUserDisplayName = String(auth?.display_name || auth?.username || "").trim() || null;
+
+      if (authToken) {
+        const meRes = await fetch(`/api/v1/auth/me?auth_token=${encodeURIComponent(authToken)}`);
+        const meData = await safeJson(meRes);
+        if (meRes.ok) {
+          const meUserId = String(meData?.user_id || "").trim();
+          const meDisplayName = String(meData?.display_name || "").trim();
+          if (meUserId) userId = meUserId;
+          if (meDisplayName) contractUserDisplayName = meDisplayName;
+          try {
+            localStorage.setItem(
+              authStorageKey(),
+              JSON.stringify({
+                ...(auth || {}),
+                user_id: userId,
+                auth_token: authToken,
+                display_name: contractUserDisplayName || null,
+              })
+            );
+          } catch {}
+        }
+      }
+
       let setupSessionId = bootstrap?.setup_session_id || new URLSearchParams(window.location.search).get("setup_session_id");
       if (!setupSessionId && userId && authToken) {
         const activeRes = await fetch(
@@ -446,7 +475,9 @@ def contract_shell() -> str:
       }
 
       function showProgress(lines) {
-        document.getElementById("contractBox").textContent = lines.join("\\n");
+        const box = document.getElementById("contractBox");
+        box.classList.add("progress-text");
+        box.textContent = lines.join("\\n");
       }
 
       async function generateContract() {
@@ -462,7 +493,9 @@ def contract_shell() -> str:
         }
         const contractText = String(data?.contract_text || "");
         contractIsReadyForConsent = looksLikeGeneratedContract(contractText);
-        document.getElementById("contractBox").innerHTML = renderMarkdownSafe(contractText || "Keuschheitsvertrag erstellt.");
+        const box = document.getElementById("contractBox");
+        box.classList.remove("progress-text");
+        box.innerHTML = renderMarkdownSafe(contractText || "Keuschheitsvertrag erstellt.");
         renderConsent(data?.consent || null);
         setStatus(contractIsReadyForConsent ? "Keuschheitsvertrag erstellt." : "Vertrag noch nicht im finalen Format.");
         return true;
@@ -524,7 +557,9 @@ def contract_shell() -> str:
       if (data?.contract_text) {
         const contractText = String(data.contract_text || "");
         contractIsReadyForConsent = looksLikeGeneratedContract(contractText);
-        document.getElementById("contractBox").innerHTML = renderMarkdownSafe(contractText);
+        const box = document.getElementById("contractBox");
+        box.classList.remove("progress-text");
+        box.innerHTML = renderMarkdownSafe(contractText);
       }
       renderConsent(data?.consent || { required_text: contractConsentRequiredText, accepted: true, consent_text: consentText });
       setStatus("Digital Consent gespeichert.");
@@ -535,5 +570,3 @@ def contract_shell() -> str:
 </body>
 </html>
 """
-
-

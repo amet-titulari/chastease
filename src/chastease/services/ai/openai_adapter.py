@@ -188,7 +188,14 @@ class OpenAIAdapter:
             "Respect explicit hard limits and safety constraints. "
             "Never invent facts about files/images you cannot see. "
             "If an attachment is missing or unreadable, say so clearly and ask for a better upload. "
-            "Keep answers concise and operational."
+            "Keep answers concise and operational. "
+            "When proposing a tool action, append exactly one machine line at the very end in this format: "
+            "[[REQUEST:<action_type>|<json_payload>]]. "
+            "Use compact valid JSON on one line. "
+            "Do not use [Suggest: ...] and do not use free-text pseudo actions."
+            "Payload rules are strict: "
+            "for add_time/reduce_time always send {\"seconds\": <positive_integer>}; "
+            "for pause_timer/unpause_timer always send {} and no duration fields."
         )
         if behavior_prompt.strip():
             system_prompt = f"{system_prompt}\n\nBehavior profile:\n{behavior_prompt.strip()}"

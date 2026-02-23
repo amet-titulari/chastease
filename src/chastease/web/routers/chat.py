@@ -77,6 +77,24 @@ def chat_shell() -> str:
     .msg .meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
     .msg .role { font-size: 12px; color: var(--muted); }
     .msg .ts { font-size: 12px; color: #86a2d4; font-variant-numeric: tabular-nums; }
+    .msg.action { border-style: dashed; }
+    .msg.action.suggest { border-color: #32548a; background: #12213f; }
+    .msg.action.executed { border-color: #2c8c67; background: #102a26; }
+    .msg.action.error { border-color: #9d4747; background: #2d161b; }
+    .action-title { font-weight: 700; margin-bottom: 6px; }
+    .action-detail {
+      margin-top: 6px;
+      border: 1px solid #2a3f67;
+      border-radius: 8px;
+      padding: 8px;
+      background: #0b1630;
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .action-buttons { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .btn.danger { border-color: #7e3844; background: #4a1e27; }
+    .btn.success { border-color: #2d7f60; background: #1a4f3e; }
     .composer { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 12px; }
     textarea {
       width: 100%;
@@ -171,6 +189,8 @@ def chat_shell() -> str:
   <script>
     let sending = false;
     let infoOpen = false;
+    let actionCardSeq = 0;
+    const actionCardState = {};
 
     function toggleInfoPanel(forceClose = false) {
       if (forceClose) {
@@ -257,11 +277,243 @@ def chat_shell() -> str:
       const box = document.getElementById("messages");
       box.appendChild(wrap);
       box.scrollTop = box.scrollHeight;
+      requestAnimationFrame(() => {
+        box.scrollTop = box.scrollHeight;
+      });
+    }
+
+    function keepViewAtBottom() {
+      const box = document.getElementById("messages");
+      if (box) box.scrollTop = box.scrollHeight;
+      requestAnimationFrame(() => {
+        if (box) box.scrollTop = box.scrollHeight;
+        const target = Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight
+        );
+        window.scrollTo(0, target);
+      });
+    }
+
+    function prettyActionType(actionType) {
+      const map = {
+        add_time: "Zeit hinzufügen",
+        reduce_time: "Zeit reduzieren",
+        pause_timer: "Timer pausieren",
+        unpause_timer: "Timer fortsetzen",
+      };
+      return map[String(actionType || "").toLowerCase()] || String(actionType || "Aktion");
+    }
+
+    function payloadToText(payload) {
+      try {
+        return JSON.stringify(payload || {}, null, 2);
+      } catch {
+        return String(payload || "{}");
+      }
+    }
+
+    function pluralize(value, singular, plural) {
+      return `${value} ${value === 1 ? singular : plural}`;
+    }
+
+    function parseDurationSeconds(payload) {
+      const p = payload || {};
+      if (Number.isFinite(Number(p.seconds))) return Number(p.seconds);
+      if (Number.isFinite(Number(p.amount)) && String(p.unit || "").trim()) {
+        const unit = String(p.unit || "").trim().toLowerCase();
+        const factor = {
+          second: 1, seconds: 1, sec: 1, secs: 1, s: 1,
+          minute: 60, minutes: 60, min: 60, mins: 60, m: 60,
+          hour: 3600, hours: 3600, hr: 3600, hrs: 3600, h: 3600,
+          day: 86400, days: 86400, d: 86400,
+          stunde: 3600, stunden: 3600, tag: 86400, tage: 86400,
+        }[unit];
+        if (factor) return Number(p.amount) * factor;
+      }
+      const duration = String(p.duration || "").trim().toLowerCase();
+      const match = duration.match(/^(\\d+)\\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|stunde|stunden|tag|tage)?$/);
+      if (!match) return null;
+      const amount = Number(match[1]);
+      const unit = match[2] || "s";
+      const factor = {
+        s: 1, sec: 1, secs: 1, second: 1, seconds: 1,
+        m: 60, min: 60, mins: 60, minute: 60, minutes: 60,
+        h: 3600, hr: 3600, hrs: 3600, hour: 3600, hours: 3600,
+        d: 86400, day: 86400, days: 86400, stunde: 3600, stunden: 3600, tag: 86400, tage: 86400,
+      }[unit];
+      if (!factor) return null;
+      return amount * factor;
+    }
+
+    function formatDurationText(secondsRaw) {
+      const total = Math.max(0, Math.floor(Number(secondsRaw || 0)));
+      const days = Math.floor(total / 86400);
+      const hours = Math.floor((total % 86400) / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const parts = [];
+      if (days > 0) parts.push(pluralize(days, "Tag", "Tage"));
+      parts.push(pluralize(hours, "Stunde", "Stunden"));
+      parts.push(pluralize(minutes, "Minute", "Minuten"));
+      return parts.join(", ");
+    }
+
+    function actionDetailText(actionType, payload) {
+      const type = String(actionType || "").toLowerCase();
+      if (type === "add_time" || type === "reduce_time") {
+        const seconds = parseDurationSeconds(payload);
+        if (seconds !== null && Number.isFinite(seconds)) {
+          return `Dauer: ${formatDurationText(seconds)}`;
+        }
+      }
+      const entries = Object.entries(payload || {}).filter(([k]) => !["action", "action_type", "tool"].includes(String(k)));
+      if (!entries.length) return "Keine Zusatzdaten.";
+      return entries.map(([k, v]) => `${k}: ${String(v)}`).join(" | ");
+    }
+
+    function addActionCard({ mode, actionType, payload, message, detail, ts = null, interactive = false, cardId = null }) {
+      const effectiveCardId = cardId || `a-${++actionCardSeq}`;
+      const wrap = document.createElement("article");
+      const cls = mode === "executed" ? "executed" : (mode === "error" ? "error" : "suggest");
+      wrap.className = `msg action ${cls}`;
+      wrap.id = `action-card-${effectiveCardId}`;
+      const titlePrefix = mode === "executed" ? "Ausgeführt" : (mode === "error" ? "Fehler" : "Vorschlag");
+      const actionTitle = `${titlePrefix}: ${prettyActionType(actionType)}`;
+      const msgText = String(message || detail || "").trim();
+      const detailText = actionDetailText(actionType, payload);
+      wrap.innerHTML = `
+        <div class="meta">
+          <div class="role">Action</div>
+          <div class="ts">${formatTimestamp(ts)}</div>
+        </div>
+        <div class="action-title">${escapeHtml(actionTitle)}</div>
+        <div>${escapeHtml(msgText || (mode === "suggest" ? "Diese Aktion kann ausgeführt werden." : "Aktion verarbeitet."))}</div>
+        <div class="action-detail">${escapeHtml(detailText)}</div>
+        ${interactive ? `
+          <div class="action-buttons">
+            <button class="btn success" id="action-accept-${effectiveCardId}">Akzeptieren</button>
+            <button class="btn danger" id="action-reject-${effectiveCardId}">Ablehnen</button>
+          </div>
+        ` : ""}
+      `;
+      const box = document.getElementById("messages");
+      box.appendChild(wrap);
+      box.scrollTop = box.scrollHeight;
+      if (interactive) {
+        document.getElementById(`action-accept-${effectiveCardId}`).addEventListener("click", () => acceptSuggestedAction(effectiveCardId));
+        document.getElementById(`action-reject-${effectiveCardId}`).addEventListener("click", () => rejectSuggestedAction(effectiveCardId));
+      }
+      return effectiveCardId;
+    }
+
+    function setCardButtonsDisabled(cardId, disabled) {
+      const accept = document.getElementById(`action-accept-${cardId}`);
+      const reject = document.getElementById(`action-reject-${cardId}`);
+      if (accept) accept.disabled = disabled;
+      if (reject) reject.disabled = disabled;
+    }
+
+    async function acceptSuggestedAction(cardId) {
+      const state = actionCardState[cardId];
+      if (!state) return;
+      setCardButtonsDisabled(cardId, true);
+      const card = document.getElementById(`action-card-${cardId}`);
+      try {
+        const res = await fetch("/api/v1/chat/actions/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: state.sessionId,
+            action_type: state.actionType,
+            payload: state.payload || {},
+          }),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) {
+          if (card) card.className = "msg action error";
+          if (card) {
+            const msg = card.querySelector(".action-title");
+            if (msg) msg.textContent = `Fehler: ${prettyActionType(state.actionType)}`;
+            const body = card.querySelectorAll("div")[2];
+            if (body) body.textContent = String(data?.detail || "Ausführung fehlgeschlagen.");
+          }
+          setStatus(data?.detail || "Aktion konnte nicht ausgeführt werden.", "err");
+          return;
+        }
+        if (card) card.className = "msg action executed";
+        if (card) {
+          const msg = card.querySelector(".action-title");
+          if (msg) msg.textContent = `Ausgeführt: ${prettyActionType(state.actionType)}`;
+          const body = card.querySelectorAll("div")[2];
+          if (body) body.textContent = String(data?.message || "Aktion erfolgreich ausgeführt.");
+          const buttons = card.querySelector(".action-buttons");
+          if (buttons) buttons.remove();
+        }
+        setStatus(`Aktion ausgeführt: ${prettyActionType(state.actionType)}.`);
+      } finally {
+        delete actionCardState[cardId];
+      }
+    }
+
+    function rejectSuggestedAction(cardId) {
+      const state = actionCardState[cardId];
+      if (!state) return;
+      const card = document.getElementById(`action-card-${cardId}`);
+      if (card) {
+        card.className = "msg action";
+        const msg = card.querySelector(".action-title");
+        if (msg) msg.textContent = `Abgelehnt: ${prettyActionType(state.actionType)}`;
+        const body = card.querySelectorAll("div")[2];
+        if (body) body.textContent = "Aktion wurde abgelehnt.";
+        const buttons = card.querySelector(".action-buttons");
+        if (buttons) buttons.remove();
+      }
+      delete actionCardState[cardId];
+      setStatus(`Aktion abgelehnt: ${prettyActionType(state.actionType)}.`);
+    }
+
+    function renderActionCardsFromResponse(sessionId, data) {
+      const pending = Array.isArray(data?.pending_actions) ? data.pending_actions : [];
+      const executed = Array.isArray(data?.executed_actions) ? data.executed_actions : [];
+      const failed = Array.isArray(data?.failed_actions) ? data.failed_actions : [];
+
+      executed.forEach((item) => {
+        addActionCard({
+          mode: "executed",
+          actionType: item?.action_type,
+          payload: item?.payload || {},
+          message: item?.message || "Aktion automatisch ausgeführt.",
+        });
+      });
+      failed.forEach((item) => {
+        addActionCard({
+          mode: "error",
+          actionType: item?.action_type,
+          payload: item?.payload || {},
+          detail: item?.detail || "Aktion konnte nicht ausgeführt werden.",
+        });
+      });
+      pending.forEach((item) => {
+        const cardId = addActionCard({
+          mode: "suggest",
+          actionType: item?.action_type,
+          payload: item?.payload || {},
+          message: "Vorgeschlagene Aktion. Bitte bestätigen oder ablehnen.",
+          interactive: true,
+        });
+        actionCardState[cardId] = {
+          sessionId,
+          actionType: String(item?.action_type || ""),
+          payload: item?.payload || {},
+        };
+      });
+      keepViewAtBottom();
     }
 
     function renderTurns(turns) {
       const box = document.getElementById("messages");
       box.innerHTML = "";
+      Object.keys(actionCardState).forEach((key) => delete actionCardState[key]);
       (turns || []).forEach((turn) => {
         const actionText = String(turn.player_action || "");
         const isSystem = actionText.startsWith("[SYSTEM]");
@@ -270,6 +522,7 @@ def chat_shell() -> str:
         }
         addMessage("keyholder", turn.ai_narration || "", turn.created_at);
       });
+      keepViewAtBottom();
     }
 
     async function loadTurns() {
@@ -303,6 +556,8 @@ def chat_shell() -> str:
         const data = await safeJson(res);
         if (!res.ok) return setStatus(data?.detail || "Chat-Request fehlgeschlagen.", "err");
         await loadTurns();
+        renderActionCardsFromResponse(sessionId, data);
+        keepViewAtBottom();
         const elapsedMs = Math.max(0, performance.now() - startedAt);
         setStatus(`Antwort erhalten. Antwortzeit: ${(elapsedMs / 1000).toFixed(2)}s.`);
       } finally {
@@ -366,5 +621,3 @@ def chat_shell() -> str:
 </body>
 </html>
 """
-
-

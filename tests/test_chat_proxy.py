@@ -144,3 +144,103 @@ def test_chat_unpause_respects_max_end_date_boundary(client):
     )
     assert unpause.status_code == 400
     assert "max_end_date boundary" in unpause.json()["detail"]
+
+
+def test_chat_turn_auto_executes_request_actions_in_execute_mode(client):
+    auth = _register(client, username="chat-user-auto-exec")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        'Verstanden.\n[[REQUEST:add_time|{"amount":1,"unit":"hour","reason":"test"}]]'
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Bitte fuege 1 Stunde hinzu.", "language": "de"},
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["pending_actions"] == []
+    assert len(data["executed_actions"]) == 1
+    assert data["executed_actions"][0]["action_type"] == "add_time"
+    assert data["executed_actions"][0]["payload"]["seconds"] == 3600
+    assert data["failed_actions"] == []
+
+
+def test_chat_turn_auto_executes_timer_request_actions_in_suggest_mode(client):
+    auth = _register(client, username="chat-user-suggest-mode")
+    session_id = _create_active_session(client, auth, autonomy_mode="suggest")
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        'Verstanden.\n[[REQUEST:add_time|{"amount":1,"unit":"hour","reason":"test"}]]'
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Bitte fuege 1 Stunde hinzu.", "language": "de"},
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["pending_actions"] == []
+    assert len(data["executed_actions"]) == 1
+    assert data["executed_actions"][0]["action_type"] == "add_time"
+    assert data["executed_actions"][0]["payload"] == {"seconds": 3600}
+
+
+def test_chat_turn_unwraps_suggest_wrapper_in_execute_mode(client):
+    auth = _register(client, username="chat-user-wrapper-exec")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        'Gerne.\n[[REQUEST:suggest|{"action":"add_time","duration":"1h","reason":"Tooltest"}]]'
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Bitte fuehre aus.", "language": "de"},
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["failed_actions"] == []
+    assert data["pending_actions"] == []
+    assert len(data["executed_actions"]) == 1
+    assert data["executed_actions"][0]["action_type"] == "add_time"
+    assert data["executed_actions"][0]["payload"] == {"seconds": 3600}
+
+
+def test_chat_turn_unwraps_and_executes_timer_wrapper_in_suggest_mode(client):
+    auth = _register(client, username="chat-user-wrapper-suggest")
+    session_id = _create_active_session(client, auth, autonomy_mode="suggest")
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        'Vorschlag.\n[[REQUEST:suggest|{"action":"add_time","duration":"1h","reason":"Tooltest"}]]'
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Bitte vorschlagen.", "language": "de"},
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert len(data["executed_actions"]) == 1
+    assert data["executed_actions"][0]["action_type"] == "add_time"
+    assert data["executed_actions"][0]["payload"] == {"seconds": 3600}
+    assert data["failed_actions"] == []
+    assert data["pending_actions"] == []
+
+
+def test_unpause_adds_elapsed_pause_time_to_effective_end(client):
+    auth = _register(client, username="chat-user-unpause-delta")
+    session_id = _create_active_session(client, auth)
+
+    pause = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "pause_timer", "payload": {}},
+    )
+    assert pause.status_code == 200
+    end_before_pause = datetime.fromisoformat(pause.json()["timer"]["effective_end_at"])
+    sleep(2)
+    unpause = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "unpause_timer", "payload": {}},
+    )
+    assert unpause.status_code == 200
+    end_after_unpause = datetime.fromisoformat(unpause.json()["timer"]["effective_end_at"])
+    delta = int((end_after_unpause - end_before_pause).total_seconds())
+    assert 1 <= delta <= 4
