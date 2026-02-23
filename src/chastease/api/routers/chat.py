@@ -5,32 +5,33 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import func, select
 
-from chastease.api import routes as legacy
+from chastease.api.runtime import get_db_session, lang
 from chastease.api.schemas import ChatActionExecuteRequest, ChatTurnRequest, ChatVisionReviewRequest
 from chastease.models import ChastitySession, Turn
+from chastease.services.narration import extract_pending_actions, generate_ai_narration_for_session
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 @router.post("/turn")
 def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
-    lang = legacy._lang(payload.language)
+    request_lang = lang(payload.language)
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Field 'message' is required.")
 
     action_text = message
 
-    db = legacy._get_db_session(request)
+    db = get_db_session(request)
     try:
         session = db.get(ChastitySession, payload.session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
 
-        narration_raw = legacy._generate_ai_narration_for_session(
-            db, request, session, action_text, lang, payload.attachments
+        narration_raw = generate_ai_narration_for_session(
+            db, request, session, action_text, request_lang, payload.attachments
         )
-        narration, pending_actions, generated_files = legacy._extract_pending_actions(narration_raw)
+        narration, pending_actions, generated_files = extract_pending_actions(narration_raw)
 
         current_turn_no = db.scalar(select(func.max(Turn.turn_no)).where(Turn.session_id == session.id))
         next_turn_no = (current_turn_no or 0) + 1
@@ -40,7 +41,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
             turn_no=next_turn_no,
             player_action=action_text,
             ai_narration=narration,
-            language=lang,
+            language=request_lang,
             created_at=datetime.now(UTC),
         )
         session.updated_at = datetime.now(UTC)
@@ -63,7 +64,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
 
 @router.post("/vision-review")
 def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> dict:
-    lang = legacy._lang(payload.language)
+    request_lang = lang(payload.language)
     prompt = payload.message.strip()
     if not prompt:
         raise HTTPException(status_code=400, detail="Field 'message' is required.")
@@ -88,13 +89,13 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
         }
     ]
 
-    db = legacy._get_db_session(request)
+    db = get_db_session(request)
     try:
         session = db.get(ChastitySession, payload.session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
-        narration_raw = legacy._generate_ai_narration_for_session(db, request, session, prompt, lang, attachments)
-        narration, pending_actions, generated_files = legacy._extract_pending_actions(narration_raw)
+        narration_raw = generate_ai_narration_for_session(db, request, session, prompt, request_lang, attachments)
+        narration, pending_actions, generated_files = extract_pending_actions(narration_raw)
 
         current_turn_no = db.scalar(select(func.max(Turn.turn_no)).where(Turn.session_id == session.id))
         next_turn_no = (current_turn_no or 0) + 1
@@ -104,7 +105,7 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
             turn_no=next_turn_no,
             player_action=f"{prompt} [image:{payload.picture_name or 'upload'}]",
             ai_narration=narration,
-            language=lang,
+            language=request_lang,
             created_at=datetime.now(UTC),
         )
         session.updated_at = datetime.now(UTC)
@@ -127,7 +128,11 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
 
 @router.post("/actions/execute")
 def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> dict:
-    db = legacy._get_db_session(request)
+    registry = getattr(request.app.state, "tool_registry", None)
+    if registry is not None and not registry.is_allowed(payload.action_type, mode="execute"):
+        raise HTTPException(status_code=403, detail=f"Tool '{payload.action_type}' is not allowed for execution.")
+
+    db = get_db_session(request)
     try:
         session = db.get(ChastitySession, payload.session_id)
         if session is None:

@@ -4,7 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
-from chastease.api import routes as legacy
+from chastease.api.runtime import get_db_session
 from chastease.api.schemas import CharacterCreateRequest, UserCreateRequest
 from chastease.models import Character, User
 
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 @router.post("")
 def create_user(payload: UserCreateRequest, request: Request) -> dict:
-    db = legacy._get_db_session(request)
+    db = get_db_session(request)
     try:
         existing = db.scalar(select(User).where(User.email == payload.email.strip().lower()))
         if existing is not None:
@@ -45,7 +45,7 @@ def create_user(payload: UserCreateRequest, request: Request) -> dict:
 
 @router.get("/{user_id}")
 def get_user(user_id: str, request: Request) -> dict:
-    db = legacy._get_db_session(request)
+    db = get_db_session(request)
     try:
         user = db.get(User, user_id)
         if user is None:
@@ -75,7 +75,7 @@ def get_user(user_id: str, request: Request) -> dict:
 
 @router.post("/{user_id}/characters")
 def create_character(user_id: str, payload: CharacterCreateRequest, request: Request) -> dict:
-    db = legacy._get_db_session(request)
+    db = get_db_session(request)
     try:
         user = db.get(User, user_id)
         if user is None:

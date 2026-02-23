@@ -4,7 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
-from chastease.api import routes as legacy
+from chastease.api.runtime import get_db_session, require_user_token, serialize_llm_profile
 from chastease.api.schemas import LLMProfileTestRequest, LLMProfileUpsertRequest
 from chastease.models import LLMProfile
 from chastease.services.ai.base import StoryTurnContext
@@ -15,22 +15,22 @@ router = APIRouter(prefix="/llm", tags=["llm"])
 
 @router.get("/profile")
 def get_llm_profile(user_id: str, auth_token: str, request: Request) -> dict:
-    db = legacy._get_db_session(request)
+    db = get_db_session(request)
     try:
-        legacy._require_user_token(user_id, auth_token, db, request)
+        require_user_token(user_id, auth_token, db, request)
         profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == user_id))
         if profile is None:
             return {"configured": False}
-        return {"configured": True, "profile": legacy._serialize_llm_profile(profile)}
+        return {"configured": True, "profile": serialize_llm_profile(profile)}
     finally:
         db.close()
 
 
 @router.post("/profile")
 def upsert_llm_profile(payload: LLMProfileUpsertRequest, request: Request) -> dict:
-    db = legacy._get_db_session(request)
+    db = get_db_session(request)
     try:
-        legacy._require_user_token(payload.user_id, payload.auth_token, db, request)
+        require_user_token(payload.user_id, payload.auth_token, db, request)
         profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == payload.user_id))
         now = datetime.now(UTC)
         encrypted_key = (
@@ -68,16 +68,16 @@ def upsert_llm_profile(payload: LLMProfileUpsertRequest, request: Request) -> di
             profile.updated_at = now
             db.add(profile)
         db.commit()
-        return {"configured": True, "profile": legacy._serialize_llm_profile(profile)}
+        return {"configured": True, "profile": serialize_llm_profile(profile)}
     finally:
         db.close()
 
 
 @router.post("/test")
 def test_llm_profile(payload: LLMProfileTestRequest, request: Request) -> dict:
-    db = legacy._get_db_session(request)
+    db = get_db_session(request)
     try:
-        legacy._require_user_token(payload.user_id, payload.auth_token, db, request)
+        require_user_token(payload.user_id, payload.auth_token, db, request)
         profile = db.scalar(select(LLMProfile).where(LLMProfile.user_id == payload.user_id))
 
         provider_name = (

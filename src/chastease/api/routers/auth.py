@@ -4,22 +4,30 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import func, select
 
-from chastease.api import routes as legacy
+from chastease.api.runtime import (
+    auth_tokens,
+    find_or_create_draft_setup_session,
+    get_db_session,
+    hash_password,
+    mint_auth_token,
+    normalize_email,
+    resolve_user_id_from_token,
+    verify_password,
+)
 from chastease.api.schemas import LoginRequest, RegisterRequest
 from chastease.models import User
-from chastease.repositories.setup_store import load_sessions, save_sessions
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register")
 def register(payload: RegisterRequest, request: Request) -> dict:
-    db = legacy._get_db_session(request)
+    db = get_db_session(request)
     try:
         username = payload.username.strip()
         if not username:
             raise HTTPException(status_code=400, detail="Username is required.")
-        email = legacy._normalize_email(payload.email)
+        email = normalize_email(payload.email)
         display_name = username
         existing_email = db.scalar(select(User).where(User.email == email))
         if existing_email is not None:
@@ -32,21 +40,15 @@ def register(payload: RegisterRequest, request: Request) -> dict:
             id=str(uuid4()),
             email=email,
             display_name=display_name,
-            password_hash=legacy._hash_password(payload.password),
+            password_hash=hash_password(payload.password),
             created_at=datetime.now(UTC),
         )
         db.add(user)
         db.commit()
 
-        token = legacy._mint_auth_token(user.id, request.app.state.config.SECRET_KEY)
-        legacy.auth_tokens[token] = user.id
-        store = load_sessions()
-        draft_id, draft_session = legacy._find_user_setup_session(store, user.id, {"draft", "setup_in_progress"})
-        if draft_session is None:
-            draft_session = legacy._create_draft_setup_session(user.id, "de")
-            draft_id = draft_session["setup_session_id"]
-            store[draft_id] = draft_session
-            save_sessions(store)
+        token = mint_auth_token(user.id, request.app.state.config.SECRET_KEY)
+        auth_tokens[token] = user.id
+        draft_id, draft_session = find_or_create_draft_setup_session(user.id, "de")
         return {
             "user_id": user.id,
             "username": username,
@@ -62,24 +64,18 @@ def register(payload: RegisterRequest, request: Request) -> dict:
 
 @router.post("/login")
 def login(payload: LoginRequest, request: Request) -> dict:
-    db = legacy._get_db_session(request)
+    db = get_db_session(request)
     try:
         username = payload.username.strip()
         if not username:
             raise HTTPException(status_code=400, detail="Username is required.")
         user = db.scalar(select(User).where(func.lower(User.display_name) == username.lower()))
-        if user is None or not legacy._verify_password(payload.password, user.password_hash):
+        if user is None or not verify_password(payload.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials.")
 
-        token = legacy._mint_auth_token(user.id, request.app.state.config.SECRET_KEY)
-        legacy.auth_tokens[token] = user.id
-        store = load_sessions()
-        draft_id, draft_session = legacy._find_user_setup_session(store, user.id, {"draft", "setup_in_progress"})
-        if draft_session is None:
-            draft_session = legacy._create_draft_setup_session(user.id, "de")
-            draft_id = draft_session["setup_session_id"]
-            store[draft_id] = draft_session
-            save_sessions(store)
+        token = mint_auth_token(user.id, request.app.state.config.SECRET_KEY)
+        auth_tokens[token] = user.id
+        draft_id, draft_session = find_or_create_draft_setup_session(user.id, "de")
         return {
             "user_id": user.id,
             "username": user.display_name,
@@ -95,11 +91,11 @@ def login(payload: LoginRequest, request: Request) -> dict:
 
 @router.get("/me")
 def auth_me(auth_token: str, request: Request) -> dict:
-    user_id = legacy._resolve_user_id_from_token(auth_token, request)
+    user_id = resolve_user_id_from_token(auth_token, request)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid auth token.")
 
-    db = legacy._get_db_session(request)
+    db = get_db_session(request)
     try:
         user = db.get(User, user_id)
         if user is None:

@@ -31,8 +31,13 @@ Meilenstein R1 (naechster testbarer Stand):
 - Zielkorridor: ca. 1-2 Arbeitstage ab aktuellem Stand (bei stabiler Umgebung und ohne Scope-Erweiterung).
 
 R1-Status:
-- Erreicht am 2026-02-23 (Testlauf in `.venv312`: `26 passed`).
+- Erreicht am 2026-02-23 (Testlauf in `.venv312`: `27 passed`).
 - Naechster Schritt: Release-Preparing fuer Version `0.1.0` (Version-Bump, Changelog, Tag/Release-Notizen).
+
+P0.5-Status (ohne Docker):
+- Architektur-Refactoring abgeschlossen (API/Web-Router entkoppelt, gemeinsame Runtime-Helfer extrahiert).
+- Frontend/Backend-Trennung im Monorepo vorbereitet (`src/chastease/frontend`, `src/chastease/backend`).
+- Tool-/Connector-Schicht eingefuehrt (`src/chastease/connectors/tool_registry.py`, `src/chastease/connectors/llm_connector.py`).
 
 1. Basis (abgeschlossen/gestartet)
 - Python API Grundgeruest (FastAPI)
