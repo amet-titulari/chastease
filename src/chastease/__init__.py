@@ -10,7 +10,7 @@ from .web.routes import web_router
 
 def create_app(config_object: type[Config] = Config) -> FastAPI:
     load_dotenv()
-    app = FastAPI(title="chastease-api", version="0.0.5")
+    app = FastAPI(title="chastease-api", version="0.1.0")
     app.state.config = config_object()
     app.state.engine = build_engine(app.state.config.DATABASE_URL)
     app.state.db_session_factory = build_session_factory(app.state.engine)

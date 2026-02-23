@@ -72,3 +72,30 @@ def test_llm_test_dry_run(client):
     data = test_response.json()
     assert data["ok"] is True
     assert data["dry_run"] is True
+
+
+def test_llm_test_dry_run_with_unsaved_payload(client):
+    auth = _register(client, username="llm-payload-user")
+    user_id = auth["user_id"]
+    token = auth["auth_token"]
+
+    test_response = client.post(
+        "/api/v1/llm/test",
+        json={
+            "user_id": user_id,
+            "auth_token": token,
+            "dry_run": True,
+            "provider_name": "custom",
+            "api_url": "https://api.example.com/v1/chat/completions",
+            "chat_model": "test-model",
+            "api_key": "key-xyz",
+            "behavior_prompt": "test prompt",
+            "is_active": True,
+        },
+    )
+    assert test_response.status_code == 200
+    data = test_response.json()
+    assert data["ok"] is True
+    assert data["dry_run"] is True
+    assert data["profile"]["api_url"] == "https://api.example.com/v1/chat/completions"
+    assert data["profile"]["chat_model"] == "test-model"

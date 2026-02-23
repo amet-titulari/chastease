@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.0 - 2026-02-23
+
+- R1 Refactoring-Milestone erreicht.
+- API-Refactoring umgesetzt:
+  - Request-Schemas ausgelagert nach `src/chastease/api/schemas.py`.
+  - Questionnaire/Translations ausgelagert nach `src/chastease/api/questionnaire.py`.
+  - Feature-Router physisch getrennt unter `src/chastease/api/routers/` (`auth`, `llm`, `users`, `story`, `chat`, `sessions`, `setup`, `system`).
+- Setup-Entkopplung umgesetzt:
+  - Setup-Domain-Regeln in `src/chastease/api/setup_domain.py`.
+  - Infrastruktur-/AI-Ports fuer Setup in `src/chastease/api/setup_infra.py` und `src/chastease/api/setup_ai.py`.
+  - Setup-Endpunkte in `src/chastease/api/routers/setup.py` konsolidiert.
+- Web-Refactoring umgesetzt:
+  - Web-Router aufgeteilt in `src/chastease/web/routers/public.py`, `src/chastease/web/routers/app.py`, `src/chastease/web/routers/chat.py`.
+  - `src/chastease/web/routes.py` auf Router-Aggregation reduziert.
+- Test-Gate erreicht:
+  - Testlauf in Python-3.12-venv (`.venv312`) erfolgreich: `27 passed`.
+- Vertrags-/Consent-Flow stabilisiert:
+  - Vertragstext bleibt stabil, Consent wird als technische Information im JSON gepflegt.
+  - Contract-Seite: Consent erst bei vorhandenem Vertrag sichtbar, nach Akzeptanz nur kompakte Bestaetigungsnotiz.
+  - Dashboard/Contract-Navigation repariert (Setup-Session-Fallback ueber aktive Session).
+
 ## 0.0.10 - 2026-02-21
 
 - Neue dedizierte Seite `/chat` mit modernem Chat-Layout eingefuehrt (inspiriert von ChatGPT/Perplexity/Gemini-Flow).

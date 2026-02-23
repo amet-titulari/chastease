@@ -1,4 +1,4 @@
-# Projektplan (MVP)
+﻿# Projektplan (MVP)
 
 ## Ziel des MVP
 
@@ -8,7 +8,31 @@ Ein spielbarer vertikaler Slice:
 - KI erzeugt Reaktion/Narration
 - Ergebnis wird als Sessionzustand gespeichert
 
+## Priorisierung (Stand 2026-02-23)
+
+1. Architektur-Refactoring als naechste Prioritaet
+2. Containerisierung (Docker/Compose)
+3. Async Jobs/Worker + Observability-Basis
+4. Weitere Feature-Entwicklung (Inventar/Quests etc.)
+
 ## Phasen
+
+0. Architektur-Refactoring (naechste Prioritaet)
+- Frontend und Backend strukturell trennen (bei Monorepo-Beibehaltung)
+- Modulgrenzen im Backend schaerfen (modularer Monolith)
+- Routen-Dateien aufbrechen in klar getrennte Module/Use-Cases
+- Tool-/Connector-Schicht mit klaren Interfaces vorbereiten
+- Grundlage fuer Docker-Deploy, Worker und Observability schaffen
+
+Meilenstein R1 (naechster testbarer Stand):
+- Setup-Router ist funktional entkoppelt (Domain/Infra-Helfer in eigenen Modulen, keine breite `legacy.routes`-Kopplung).
+- API/Web-Router-Split ist stabil und durchgaengig eingebunden.
+- Test-Gate: `python -m pytest` gruen in der Projekt-venv + kurzer API-Smoke-Run.
+- Zielkorridor: ca. 1-2 Arbeitstage ab aktuellem Stand (bei stabiler Umgebung und ohne Scope-Erweiterung).
+
+R1-Status:
+- Erreicht am 2026-02-23 (Testlauf in `.venv312`: `26 passed`).
+- Naechster Schritt: Release-Preparing fuer Version `0.1.0` (Version-Bump, Changelog, Tag/Release-Notizen).
 
 1. Basis (abgeschlossen/gestartet)
 - Python API Grundgeruest (FastAPI)
@@ -34,7 +58,7 @@ Ein spielbarer vertikaler Slice:
 - Integrations-Provisioning (Chaster/Emlalock Sessionanlage im Setup, falls API-seitig moeglich)
 
 4. Gameplay-Kern
-- Charakterwerte (z. B. Stärke, Intelligenz, Charisma)
+- Charakterwerte (z. B. Staerke, Intelligenz, Charisma)
 - einfacher Skill-Check
 - Inventar-Basis
 

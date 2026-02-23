@@ -111,6 +111,10 @@ Technischer Footer:
   "setup_session_id": "{{setup_session_id}}",
   "version": "{{contract_version}}",
   "generated_at": "{{generated_at_iso}}",
-  "generated_by": "{{generated_by}}"
+  "generated_by": "{{generated_by}}",
+  "consent_required_text": "{{consent_required_text}}",
+  "consent_accepted": "{{consent_accepted}}",
+  "consent_text": "{{consent_text}}",
+  "consent_accepted_at": "{{consent_accepted_at}}"
 }
 ```

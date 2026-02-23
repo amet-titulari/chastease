@@ -50,7 +50,11 @@
     "signature_date_sub",
     "signature_sub",
     "signature_date_keyholder",
-    "signature_keyholder"
+    "signature_keyholder",
+    "consent_required_text",
+    "consent_accepted",
+    "consent_text",
+    "consent_accepted_at"
   ],
   "optional_fields": [
     "safeword",
