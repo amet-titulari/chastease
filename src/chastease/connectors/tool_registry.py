@@ -25,10 +25,21 @@ class ToolRegistry:
             return policy.allow_suggest
         return policy.allow_execute
 
+    def list_tools(self, mode: str = "execute") -> list[str]:
+        names: list[str] = []
+        for name in sorted(self._tools.keys()):
+            if self.is_allowed(name, mode=mode):
+                names.append(name)
+        return names
+
 
 def build_default_tool_registry() -> ToolRegistry:
     registry = ToolRegistry()
     registry.register("pause_timer", ToolPolicy(allow_execute=True, allow_suggest=True))
+    registry.register("unpause_timer", ToolPolicy(allow_execute=True, allow_suggest=True))
+    registry.register("add_time", ToolPolicy(allow_execute=True, allow_suggest=True))
+    registry.register("reduce_time", ToolPolicy(allow_execute=True, allow_suggest=True))
+    registry.register("update_session_settings", ToolPolicy(allow_execute=True, allow_suggest=True))
     registry.register("ttlock_open", ToolPolicy(allow_execute=True, allow_suggest=True))
     registry.register("ttlock_close", ToolPolicy(allow_execute=True, allow_suggest=True))
     registry.register("chaster_open", ToolPolicy(allow_execute=False, allow_suggest=True))

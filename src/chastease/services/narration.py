@@ -101,6 +101,15 @@ def _build_ai_context_summary(psychogram: dict, policy: dict) -> str:
     )
 
 
+def _available_tools_summary(request: Request) -> str:
+    registry = getattr(request.app.state, "tool_registry", None)
+    if registry is None or not hasattr(registry, "list_tools"):
+        return "-"
+    execute_tools = registry.list_tools(mode="execute")
+    suggest_tools = registry.list_tools(mode="suggest")
+    return f"execute={','.join(execute_tools) or '-'}; suggest={','.join(suggest_tools) or '-'}"
+
+
 def generate_ai_narration_for_session(
     db, request: Request, session: ChastitySession, action: str, language: str, attachments: list[dict] | None = None
 ) -> str:
@@ -125,11 +134,13 @@ def generate_ai_narration_for_session(
     history_block = "\n".join(history_lines).strip()
     attachment_names = [str(item.get("name", "file")) for item in (attachments or [])]
     attachment_hint = f"\nCurrent attachments: {', '.join(attachment_names)}" if attachment_names else ""
+    tools_summary = _available_tools_summary(request)
     action_with_context = (
         (f"Recent dialogue:\n{history_block}\n\nCurrent wearer input: {action}{attachment_hint}")
         if history_block
         else f"Current wearer input: {action}{attachment_hint}"
     )
+    action_with_context = f"{action_with_context}\n\nAvailable tools: {tools_summary}"
 
     context = StoryTurnContext(
         session_id=session.id,
@@ -158,7 +169,7 @@ def generate_ai_narration_for_setup_preview(
 ) -> str:
     context = StoryTurnContext(
         session_id="setup-preview",
-        action=action,
+        action=f"{action}\n\nAvailable tools: {_available_tools_summary(request)}",
         language=language,
         psychogram_summary=_build_ai_context_summary(psychogram, policy),
     )

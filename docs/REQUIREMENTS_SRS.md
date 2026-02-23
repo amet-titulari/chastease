@@ -77,10 +77,11 @@ Anforderung an Datennutzung:
 
 Beispielaktionen:
 - Hygieneoeffnung
-- Zeit anhalten
-- Zeit fortsetzen
-- Zeitstrafe hinzufuegen
-- Zeitgutschrift gewaehren
+- Timer pausieren (`pause_timer`)
+- Timer fortsetzen (`unpause_timer`)
+- Zeit zur Endzeit addieren (`add_time`)
+- Zeit von der Endzeit abziehen (`reduce_time`)
+- Sitzungseinstellungen aendern (`update_session_settings`)
 - Kontrollbild anfordern
 - Kontrollbild pruefen und bewerten
 - Chaster/Emlalock-Aktion ausfuehren
@@ -98,6 +99,64 @@ Regeln:
   - `autonomy_profile=suggest_first`
   - `autonomy_bias=80`
   - `max_penalty_per_day_minutes=20`
+
+### 4.1 Timer- und Endzeit-Semantik (verbindlich)
+
+Timer-Grundlage:
+- In jeder aktiven Session existieren mindestens:
+  - `start_time`
+  - `contract_min_end_time`
+  - `current_end_time`
+- Ein Countdown laeuft auf Basis von `current_end_time` rueckwaerts.
+
+Aktion `pause_timer`:
+- stoppt den Countdown sofort.
+- Session-Status wechselt auf `paused`.
+- Waehrend Pause bleibt `contract_min_end_time` unveraendert.
+- Solange pausiert ist, gilt `current_end_time` als vorlaeufig (nicht finalisiert) und wird bei Resume korrigiert.
+
+Aktion `unpause_timer`:
+- setzt den Countdown fort.
+- Session-Status wechselt auf `active`.
+- Die gesamte Pausendauer seit `pause_timer` wird auf `current_end_time` addiert.
+- Dadurch wird die neue Endzeit fixiert und der Countdown laeuft von dort weiter.
+
+Aktion `add_time`:
+- erhoeht `current_end_time` um die angeforderte Dauer (z. B. Minuten).
+- ist in `active` und `paused` erlaubt.
+- muss Policy-Limits (z. B. max. Penalty pro Tag/Woche) einhalten.
+- API-Kanonik: Backend verarbeitet intern immer `seconds`.
+- Eingabe erlaubt:
+  - direkt `seconds`
+  - oder `amount` + `unit` (`seconds|minutes|hours|days`), welches serverseitig nach Sekunden normalisiert wird.
+
+Aktion `reduce_time`:
+- reduziert `current_end_time` um die angeforderte Dauer.
+- ist in `active` und `paused` erlaubt.
+- darf nie unter `contract_min_end_time` reduzieren.
+- API-Kanonik: Backend verarbeitet intern immer `seconds`.
+- Eingabe erlaubt:
+  - direkt `seconds`
+  - oder `amount` + `unit` (`seconds|minutes|hours|days`), welches serverseitig nach Sekunden normalisiert wird.
+
+Aktion `update_session_settings`:
+- erlaubt autonome Aenderungen durch die KI an freigegebenen Sessionparametern.
+- die KI entscheidet selbststaendig, ob und wann Aenderungen erforderlich sind.
+- Aenderungen muessen gegen Policy validiert und auditierbar persistiert werden.
+- Sperrregeln fuer Setup-Lock bleiben unveraendert (kein Ruecksprung in Setup-Konfiguration).
+
+Erlaubte Felder fuer `update_session_settings`:
+- Psychogramm-nahe Felder, z. B. Interaktionsstil/Tonfall/Eskalationssteuerung innerhalb definierter Policy-Grenzen.
+- Sessionvorgaben ohne Sicherheitskritikalitaet, z. B. Kontrollfrequenz-Hinweise, reward/penalty-Feintuning innerhalb vorhandener Caps.
+
+Explizit verbotene Felder fuer `update_session_settings`:
+- `contract_max_end_date` (Max-Enddatum)
+- `safety_mode`
+- `safeword`
+- `traffic_light_words` (Ampelsystem)
+
+Zusatzregel:
+- Sicherheitsrelevante Parameter duerfen nicht durch KI-Aktion geaendert werden; sie bleiben nur durch expliziten Wearer-Setup-Pfad aenderbar.
 
 ## 5. Bildverarbeitung
 

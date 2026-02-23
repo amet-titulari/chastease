@@ -14,10 +14,11 @@ Dieses Dokument definiert, welche Keyholder-Aktionen in welchen Modi erlaubt sin
 |---|---|---|---|---|---|---|---|
 | `chat_reply` | ja | ja | nein | aktive Session | KI-Charakterprofil + Session-Policy | n/a | keine |
 | `hygiene_open` | ja | ja | nein | aktive Session, Oeffnung in Policy erlaubt | max. Oeffnungsdauer laut Policy | ja | optional (TTLock/chaster/emlalock je nach Setup) |
-| `pause_time` | ja | ja | nein | aktive Session | nur wenn nicht bereits pausiert | ja | optional |
-| `resume_time` | ja | ja | nein | pausierte Session | Wiederverschluss nur bei Wearer-Bereitschaft | ja | optional |
-| `add_time_penalty` | ja | ja | nein | aktive Session | Tages-/Wochenobergrenzen aus Policy | ja | optional |
-| `grant_time_credit` | ja | ja | nein | aktive Session | Gutschriftgrenzen aus Policy | ja | optional |
+| `pause_timer` | ja | ja | nein | aktive Session | nur wenn nicht bereits pausiert; Endzeit-Korrektur erfolgt bei Resume | ja | keine |
+| `unpause_timer` | ja | ja | nein | pausierte Session | Pausendauer wird auf Endzeit addiert; neue Endzeit wird fixiert | ja | keine |
+| `add_time` | ja | ja | nein | aktive oder pausierte Session | Normalisierung auf `seconds`; Input: `seconds` oder `amount+unit`; erhoeht Endzeit innerhalb Policy-Grenzen | ja | keine |
+| `reduce_time` | ja | ja | nein | aktive oder pausierte Session | Normalisierung auf `seconds`; Input: `seconds` oder `amount+unit`; reduziert Endzeit, aber nie unter Min-Endzeit | ja | keine |
+| `update_session_settings` | ja | ja | nein | aktive oder pausierte Session | KI entscheidet autonom; nur freigegebene Felder, strikt policy-validiert; Verbot: `contract_max_end_date`, `safeword`, `traffic_light_words`, `safety_mode` | ja | optional |
 | `request_control_image` | ja | ja | nein | aktive Session | Frequenz durch KI, Rahmen durch Policy | ja | keine |
 | `review_control_image` | ja | ja | nein | Bild vorhanden, nicht geloescht | Kriterien aus Policy (z. B. kein Gesicht) | ja | keine |
 | `ttlock_open` | ja | ja | ja | TTLock verbunden, aktive/pausierte Session | nur bei gueltiger Freigabe | ja | TTLock |

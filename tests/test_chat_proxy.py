@@ -57,3 +57,18 @@ def test_chat_proxy_turn_and_execute_action_endpoint(client):
     exec_data = execute.json()
     assert exec_data["executed"] is True
     assert exec_data["action_type"] == "pause_timer"
+
+    execute_add_time = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "add_time", "payload": {"amount": 15, "unit": "minutes"}},
+    )
+    assert execute_add_time.status_code == 200
+    assert execute_add_time.json()["action_type"] == "add_time"
+    assert execute_add_time.json()["payload"]["seconds"] == 900
+
+    execute_reduce_time = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "reduce_time", "payload": {"seconds": 120}},
+    )
+    assert execute_reduce_time.status_code == 200
+    assert execute_reduce_time.json()["payload"]["seconds"] == 120
