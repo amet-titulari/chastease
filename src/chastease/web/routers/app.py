@@ -373,15 +373,15 @@ def app_shell(request: Request) -> str:
               <div class="setup-item">
                 <label id="labelTtlockEnabled">TT-Lock Integration</label>
                 <select id="ttlockIntegrationEnabled">
-                  <option value="false" selected>no</option>
-                  <option value="true">yes</option>
+                  <option value="false">no</option>
+                  <option value="true" selected>yes</option>
                 </select>
               </div>
             </div>
             <div id="ttlockConfigFields" class="setup-grid hidden">
               <div class="setup-item">
                 <label id="labelTtlockUser">TT-Lock Username</label>
-                <input id="ttlockUser" placeholder="email or account" />
+                <input id="ttlockUser" placeholder="email or account" value="eritque.clausus@gmx.net" />
               </div>
               <div class="setup-item">
                 <label id="labelTtlockPassword">TT-Lock Password</label>
@@ -465,6 +465,7 @@ def app_shell(request: Request) -> str:
           <button class="acc-head" onclick="openPanel('complete')"><span id="panelCompleteTitle">Complete Setup</span><span id="lock_complete" class="acc-lock">locked</span></button>
           <div class="acc-body">
             <button id="completeSetupBtn" onclick="openCompleteConfirmation()" disabled>Complete Setup</button>
+            <button id="completeOpenContractBtn" class="ghost hidden" onclick="openContractPage()" style="margin-left:8px;">Vertrag öffnen</button>
             <p id="completeSetupHint" class="small"></p>
             <div id="completeConfirmBox" class="card hidden" style="margin-top:10px;">
               <p id="completeConfirmText" class="small" style="margin-bottom:10px;">
@@ -599,7 +600,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         ttlock_discover_required: "Bitte zuerst 'Geraete erkennen' ausfuehren, damit die Lock-Auswahl gespeichert werden kann.",
         ttlock_gateway_id: "Gateway",
         ttlock_lock_id: "Lock",
-        start_setup: "Setup starten",
+        start_setup: "Speichern",
         psychogram_hint: "Starte zuerst Setup Session, um das Psychogramm zu laden.",
         psychogram_readonly: "Psychogramm der aktiven Session (nur Lesen). Änderungen sind gesperrt.",
         submit_answers: "Antworten senden",
@@ -626,6 +627,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         complete_setup: "Setup abschließen",
         complete_ready: "Alle Prüfungen erfüllt. Setup kann abgeschlossen werden.",
         complete_not_ready: "Bitte beantworte zuerst das Psychogramm vollständig.",
+        complete_configured: "Setup ist abgeschlossen. Die Vertragsgenerierung kannst du im Vertragsbereich fortsetzen.",
         complete_confirm:
           "Achtung: Durch die Bestätigung sind keine Änderungen mehr möglich! Bist du einverstanden die Konfiguration zu speichern?",
         complete_ok: "OK Speichert",
@@ -737,7 +739,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         ttlock_discover_required: "Please run 'Discover devices' first so the lock selection can be saved.",
         ttlock_gateway_id: "Gateway",
         ttlock_lock_id: "Lock",
-        start_setup: "Start Setup",
+        start_setup: "Save",
         psychogram_hint: "Start Setup Session first to load the questionnaire.",
         psychogram_readonly: "Psychogram of the active session (read-only). Changes are locked.",
         submit_answers: "Submit Answers",
@@ -764,6 +766,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         complete_setup: "Complete Setup",
         complete_ready: "All checks passed. Setup can be completed.",
         complete_not_ready: "Please complete the psychogram first.",
+        complete_configured: "Setup is completed. Continue contract generation on the contract page.",
         complete_confirm:
           "Warning: After confirmation no further changes are possible. Do you want to save this configuration?",
         complete_ok: "OK Save",
@@ -870,8 +873,25 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     }
 
     function unlockSetupFollowups() {
-      ["psychogram", "ai_config", "complete"].forEach((panel) => setLocked(panel, false));
+      ["ttlock", "psychogram", "ai_config", "complete"].forEach((panel) => setLocked(panel, false));
       updatePsychogramAvailability();
+    }
+
+    function applySetupEditability() {
+      const editable = !activeSession && (setupStatus === "draft" || setupStatus === "setup_in_progress");
+      if (editable) {
+        lockContractInputs(false);
+        setLocked("start", false);
+        unlockSetupFollowups();
+        return;
+      }
+      if (!activeSession && setupStatus === "configured") {
+        setLocked("start", true);
+        setLocked("ttlock", true);
+        setLocked("psychogram", true);
+        setLocked("ai_config", true);
+        setLocked("complete", true);
+      }
     }
 
     function updateChatLock() {
@@ -882,7 +902,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     function updatePsychogramAvailability() {
       const hint = document.getElementById("psychogramHint");
       const submit = document.getElementById("submitAnswersBtn");
-      const canAnswer = setupStatus === "setup_in_progress";
+      const canAnswer = setupStatus === "draft" || setupStatus === "setup_in_progress";
       if (canAnswer) {
         hint.classList.add("hidden");
         submit.classList.remove("hidden");
@@ -899,10 +919,22 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     }
 
     function updateCompleteReadiness() {
-      const ready = setupStatus === "setup_in_progress" && answeredQuestions >= 6;
       const btn = document.getElementById("completeSetupBtn");
+      const openContractBtn = document.getElementById("completeOpenContractBtn");
       const hint = document.getElementById("completeSetupHint");
       if (!btn || !hint) return;
+      if (setupStatus === "configured") {
+        btn.disabled = true;
+        btn.classList.remove("success");
+        if (openContractBtn) openContractBtn.classList.remove("hidden");
+        document.getElementById("completeConfirmBox").classList.add("hidden");
+        hint.textContent = tr("complete_configured");
+        hint.classList.add("status-ok");
+        hint.classList.remove("status-error");
+        return;
+      }
+      if (openContractBtn) openContractBtn.classList.add("hidden");
+      const ready = setupStatus === "setup_in_progress" && answeredQuestions >= 6;
       btn.disabled = !ready;
       btn.classList.toggle("success", ready);
       if (!ready) document.getElementById("completeConfirmBox").classList.add("hidden");
@@ -1075,6 +1107,101 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       renderQuestions(derivePsychogramAnswersFromSession(session), true);
     }
 
+    async function hydrateSetupSessionState() {
+      if (!setupSessionId || activeSession) return;
+      const res = await fetch(`/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}`);
+      const data = await safeJson(res);
+      if (!res.ok || !data) return;
+      setupStatus = data.status || setupStatus || "draft";
+
+      if (data.language) document.getElementById("language").value = data.language;
+      if (data.autonomy_mode) document.getElementById("autonomy").value = data.autonomy_mode;
+      if (typeof data.hard_stop_enabled === "boolean") {
+        document.getElementById("hardStop").value = data.hard_stop_enabled ? "true" : "false";
+      }
+      if (data.contract_start_date) document.getElementById("contractStartDate").value = data.contract_start_date;
+      if (data.contract_max_end_date) document.getElementById("contractMaxEndDate").value = data.contract_max_end_date;
+      if (data.contract_min_end_date && data.contract_start_date) {
+        const startDate = new Date(`${data.contract_start_date}T00:00:00`);
+        const minDate = new Date(`${data.contract_min_end_date}T00:00:00`);
+        if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(minDate.getTime())) {
+          const days = Math.max(0, Math.round((minDate.getTime() - startDate.getTime()) / 86400000));
+          document.getElementById("contractMinDurationDays").value = String(days);
+        }
+      }
+      if (data.contract_max_end_date && data.contract_start_date) {
+        const startDate = new Date(`${data.contract_start_date}T00:00:00`);
+        const maxDate = new Date(`${data.contract_max_end_date}T00:00:00`);
+        if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(maxDate.getTime())) {
+          const days = Math.max(0, Math.round((maxDate.getTime() - startDate.getTime()) / 86400000));
+          document.getElementById("contractMaxDurationDays").value = String(days);
+        }
+      }
+      if (typeof data.max_penalty_per_day_minutes === "number") {
+        document.getElementById("maxPenaltyDay").value = String(data.max_penalty_per_day_minutes);
+      }
+      if (typeof data.max_penalty_per_week_minutes === "number") {
+        document.getElementById("maxPenaltyWeek").value = String(data.max_penalty_per_week_minutes);
+      }
+      document.getElementById("penaltyCapsEnabled").value =
+        (Number(data.max_penalty_per_day_minutes || 0) > 0 || Number(data.max_penalty_per_week_minutes || 0) > 0)
+          ? "true"
+          : "false";
+      if (data.opening_limit_period) document.getElementById("openingLimitPeriod").value = data.opening_limit_period;
+      if (typeof data.max_openings_in_period === "number") {
+        document.getElementById("maxOpeningsInPeriod").value = String(data.max_openings_in_period);
+      }
+      if (typeof data.opening_window_minutes === "number") {
+        document.getElementById("openingWindowMinutes").value = String(data.opening_window_minutes);
+      }
+
+      const integrations = Array.isArray(data.integrations) ? data.integrations.map((x) => String(x).toLowerCase()) : [];
+      const ttlockEnabled = integrations.includes("ttlock");
+      document.getElementById("ttlockIntegrationEnabled").value = ttlockEnabled ? "true" : "false";
+      const ttlockCfg = (data.integration_config && data.integration_config.ttlock) || {};
+      if (ttlockCfg.ttl_user) {
+        document.getElementById("ttlockUser").value = String(ttlockCfg.ttl_user);
+        ttlockUserCached = String(ttlockCfg.ttl_user);
+      }
+      if (ttlockCfg.ttl_pass_md5) ttlockPasswordMd5Cached = String(ttlockCfg.ttl_pass_md5);
+      if (ttlockCfg.ttl_gateway_id) {
+        const gateway = document.getElementById("ttlockGatewayId");
+        gateway.innerHTML = `<option value="">-</option><option value="${String(ttlockCfg.ttl_gateway_id)}">${String(ttlockCfg.ttl_gateway_id)}</option>`;
+        gateway.value = String(ttlockCfg.ttl_gateway_id);
+      }
+      if (ttlockCfg.ttl_lock_id) {
+        const lock = document.getElementById("ttlockLockId");
+        lock.innerHTML = `<option value="">-</option><option value="${String(ttlockCfg.ttl_lock_id)}">${String(ttlockCfg.ttl_lock_id)}</option>`;
+        lock.value = String(ttlockCfg.ttl_lock_id);
+      }
+      updateTtlockConfigVisibility();
+      updateTtlockSaveVisibility();
+      updatePenaltyCapsVisibility();
+      syncMinDurationGuard();
+      applySetupTranslations();
+
+      const qRes = await fetch(`/api/v1/setup/questionnaire?language=${encodeURIComponent(document.getElementById("language").value || "de")}`);
+      const qData = await safeJson(qRes);
+      if (qRes.ok && Array.isArray(qData.questions)) {
+        questions = qData.questions;
+      }
+      const prefill = {};
+      const answers = Array.isArray(data.answers) ? data.answers : [];
+      answers.forEach((entry) => {
+        if (!entry || !entry.question_id) return;
+        prefill[String(entry.question_id)] = entry.value;
+      });
+      answeredQuestions = answers.length;
+      renderQuestions(prefill, false);
+      setupContract = {
+        start_date: data.contract_start_date || null,
+        min_end_date: data.contract_min_end_date || null,
+        max_end_date: data.contract_max_end_date || null,
+        end_date: data.contract_end_date || null,
+      };
+      updateCompleteReadiness();
+    }
+
     function toggleQuestionVisibility(questionId, visible) {
       const node = document.querySelector(`.q-item[data-question-id="${questionId}"]`);
       if (!node) return;
@@ -1111,8 +1238,8 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       document.getElementById("openingLimitPeriod").value = "week";
       document.getElementById("maxOpeningsInPeriod").value = "2";
       document.getElementById("openingWindowMinutes").value = "15";
-      document.getElementById("ttlockIntegrationEnabled").value = "false";
-      document.getElementById("ttlockUser").value = "";
+      document.getElementById("ttlockIntegrationEnabled").value = "true";
+      document.getElementById("ttlockUser").value = "eritque.clausus@gmx.net";
       document.getElementById("ttlockPassword").value = "";
       ttlockPasswordMd5Cached = "";
       ttlockUserCached = "";
@@ -1398,10 +1525,11 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       if (ttlockPasswordMd5Cached) ttlockConfig.ttl_pass_md5 = ttlockPasswordMd5Cached;
       if (gatewayId) ttlockConfig.ttl_gateway_id = gatewayId;
       if (lockId) ttlockConfig.ttl_lock_id = lockId;
+      const missingRequired = !user || !ttlockPasswordMd5Cached || !lockId;
       return {
         integrations: ["ttlock"],
         integration_config: { ttlock: ttlockConfig },
-        requires_discovery: hasPasswordInput && !ttlockPasswordMd5Cached,
+        requires_discovery: missingRequired || (hasPasswordInput && !ttlockPasswordMd5Cached),
       };
     }
 
@@ -1872,6 +2000,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
       const setupChevron = document.getElementById("dashboardSetupChevron");
       if (setupItem) setupItem.classList.remove("active");
       if (setupChevron) setupChevron.textContent = "+";
+      applySetupEditability();
       openPanel("start");
       refreshDashboard();
     }
@@ -2338,6 +2467,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         setupStatus = "configured";
         await loadConfiguredPsychogramSnapshot(activeSession);
         setLocked("start", true);
+        setLocked("ttlock", true);
         setLocked("psychogram", true);
         setLocked("ai_config", true);
         setLocked("complete", true);
@@ -2348,15 +2478,25 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         showDashboard(data.chastity_session, true);
       } else if (res.ok) {
         activeSession = null;
+        if (data.setup_session_id) {
+          setupSessionId = data.setup_session_id;
+        }
+        if (data.setup_status) {
+          setupStatus = data.setup_status;
+        }
+        if (setupSessionId) {
+          await hydrateSetupSessionState();
+        }
         if (!setupStatus) setupStatus = "draft";
         if (setupStatus === "configured") {
           setLocked("start", true);
+          setLocked("ttlock", true);
           setLocked("psychogram", true);
           setLocked("ai_config", true);
           setLocked("complete", true);
         } else {
-          setLocked("start", false);
           resetAccordionLocks();
+          applySetupEditability();
         }
         updateChatLock();
         updateCompleteReadiness();
@@ -2506,7 +2646,7 @@ Lob ist selten genug, um Wirkung zu behalten.`;
         setupContract = data.contract || null;
         questions = data.questions || [];
         renderQuestions();
-        lockContractInputs(true);
+        lockContractInputs(false);
         unlockSetupFollowups();
         const maxEnd = data.contract.max_end_date || "AI-decided";
         const minEnd = data.contract.min_end_date || "-";
@@ -2522,7 +2662,13 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     }
 
     async function submitAnswers() {
-      if (!setupSessionId || setupStatus !== "setup_in_progress") return setOutput({error: "Start setup first."});
+      if (!setupSessionId) return setOutput({error: "Start setup first."});
+      if (setupStatus === "draft") {
+        await startSetup();
+        if (setupStatus !== "setup_in_progress") return setOutput({error: "Setup could not be saved."});
+        return setOutput({info: "Setup saved. Please review questionnaire answers and submit again."});
+      }
+      if (setupStatus !== "setup_in_progress") return setOutput({error: "Start setup first."});
       const answers = questions.map((q) => ({
         question_id: q.question_id,
         value: (q.type === "scale_100" || q.type === "scale_10" || q.type === "scale_5")
@@ -2585,7 +2731,10 @@ Lob ist selten genug, um Wirkung zu behalten.`;
             pending_artifacts: true,
           })
         );
-        window.location.href = "/contract";
+        const contractUrl = setupSessionId
+          ? `/contract?setup_session_id=${encodeURIComponent(setupSessionId)}&pending_artifacts=1`
+          : "/contract?pending_artifacts=1";
+        window.location.href = contractUrl;
       }
     }
 

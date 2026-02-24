@@ -1,8 +1,11 @@
-from datetime import datetime
+import json
+from datetime import UTC, datetime
 from pathlib import Path
 from time import sleep
+from uuid import uuid4
 
 from chastease.api.routers import chat as chat_router
+from chastease.models import ChastitySession
 
 
 def _register(client, username="chat-user", password="demo-pass-123"):
@@ -21,8 +24,9 @@ def _create_active_session(client, auth, **start_overrides):
         "/api/v1/setup/sessions",
         json=payload,
     )
+    assert start.status_code == 200
     sid = start.json()["setup_session_id"]
-    client.post(
+    answers = client.post(
         f"/api/v1/setup/sessions/{sid}/answers",
         json={
             "answers": [
@@ -35,8 +39,29 @@ def _create_active_session(client, auth, **start_overrides):
             ]
         },
     )
-    complete = client.post(f"/api/v1/setup/sessions/{sid}/complete")
-    return complete.json()["chastity_session"]["session_id"]
+    assert answers.status_code == 200
+    answers_data = answers.json()
+
+    session_id = str(uuid4())
+    db = client.app.state.db_session_factory()
+    try:
+        db.add(
+            ChastitySession(
+                id=session_id,
+                user_id=auth["user_id"],
+                character_id=None,
+                status="active",
+                language=str(payload.get("language") or "en"),
+                policy_snapshot_json=json.dumps(answers_data["policy_preview"]),
+                psychogram_snapshot_json=json.dumps(answers_data["psychogram_preview"]),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    return session_id
 
 
 def test_chat_proxy_turn_and_execute_action_endpoint(client):
@@ -174,7 +199,7 @@ def test_chat_turn_auto_executes_request_actions_in_execute_mode(client):
     assert data["failed_actions"] == []
 
 
-def test_chat_turn_auto_executes_timer_request_actions_in_suggest_mode(client):
+def test_chat_turn_keeps_timer_request_actions_pending_in_suggest_mode(client):
     auth = _register(client, username="chat-user-suggest-mode")
     session_id = _create_active_session(client, auth, autonomy_mode="suggest")
     client.app.state.ai_service.generate_narration = lambda _context: (
@@ -187,10 +212,11 @@ def test_chat_turn_auto_executes_timer_request_actions_in_suggest_mode(client):
     )
     assert turn.status_code == 200
     data = turn.json()
-    assert data["pending_actions"] == []
-    assert len(data["executed_actions"]) == 1
-    assert data["executed_actions"][0]["action_type"] == "add_time"
-    assert data["executed_actions"][0]["payload"] == {"seconds": 3600}
+    assert data["executed_actions"] == []
+    assert data["failed_actions"] == []
+    assert len(data["pending_actions"]) == 1
+    assert data["pending_actions"][0]["action_type"] == "add_time"
+    assert data["pending_actions"][0]["payload"] == {"seconds": 3600}
 
 
 def test_chat_turn_unwraps_suggest_wrapper_in_execute_mode(client):
@@ -213,7 +239,7 @@ def test_chat_turn_unwraps_suggest_wrapper_in_execute_mode(client):
     assert data["executed_actions"][0]["payload"] == {"seconds": 3600}
 
 
-def test_chat_turn_unwraps_and_executes_timer_wrapper_in_suggest_mode(client):
+def test_chat_turn_unwraps_timer_wrapper_and_keeps_pending_in_suggest_mode(client):
     auth = _register(client, username="chat-user-wrapper-suggest")
     session_id = _create_active_session(client, auth, autonomy_mode="suggest")
     client.app.state.ai_service.generate_narration = lambda _context: (
@@ -226,11 +252,11 @@ def test_chat_turn_unwraps_and_executes_timer_wrapper_in_suggest_mode(client):
     )
     assert turn.status_code == 200
     data = turn.json()
-    assert len(data["executed_actions"]) == 1
-    assert data["executed_actions"][0]["action_type"] == "add_time"
-    assert data["executed_actions"][0]["payload"] == {"seconds": 3600}
+    assert data["executed_actions"] == []
     assert data["failed_actions"] == []
-    assert data["pending_actions"] == []
+    assert len(data["pending_actions"]) == 1
+    assert data["pending_actions"][0]["action_type"] == "add_time"
+    assert data["pending_actions"][0]["payload"] == {"seconds": 3600}
 
 
 def test_unpause_adds_elapsed_pause_time_to_effective_end(client):
@@ -291,7 +317,7 @@ def test_chat_turn_keeps_image_verification_as_pending_action(client):
     assert data["pending_actions"][0]["action_type"] == "image_verification"
 
 
-def test_chat_action_execute_ttlock_open_success(client, monkeypatch):
+def test_chat_action_execute_hygiene_open_success(client, monkeypatch):
     auth = _register(client, username="chat-user-ttlock-open")
     session_id = _create_active_session(
         client,
@@ -317,25 +343,36 @@ def test_chat_action_execute_ttlock_open_success(client, monkeypatch):
 
     execute = client.post(
         "/api/v1/chat/actions/execute",
-        json={"session_id": session_id, "action_type": "ttlock_open", "payload": {}},
+        json={"session_id": session_id, "action_type": "hygiene_open", "payload": {}},
     )
     assert execute.status_code == 200
     data = execute.json()
     assert data["executed"] is True
-    assert data["action_type"] == "ttlock_open"
+    assert data["action_type"] == "hygiene_open"
     assert data["ttlock"]["command"] == "open"
     assert data["ttlock"]["lock_id"] == "12345"
 
 
-def test_chat_action_execute_ttlock_fails_without_integration_config(client):
+def test_chat_action_execute_hygiene_fails_without_integration_config(client):
     auth = _register(client, username="chat-user-ttlock-missing")
+    session_id = _create_active_session(client, auth)
+    execute = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "hygiene_open", "payload": {}},
+    )
+    assert execute.status_code == 400
+    assert "TT-Lock integration" in str(execute.json().get("detail", ""))
+
+
+def test_chat_action_execute_ttlock_open_is_reserved(client):
+    auth = _register(client, username="chat-user-ttlock-reserved")
     session_id = _create_active_session(client, auth)
     execute = client.post(
         "/api/v1/chat/actions/execute",
         json={"session_id": session_id, "action_type": "ttlock_open", "payload": {}},
     )
-    assert execute.status_code == 400
-    assert "TT-Lock integration" in str(execute.json().get("detail", ""))
+    assert execute.status_code == 403
+    assert "not allowed for execution" in str(execute.json().get("detail", ""))
 
 
 def test_chat_vision_review_saves_uploaded_image(client, monkeypatch, tmp_path):

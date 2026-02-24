@@ -80,5 +80,7 @@ Detaildiagramme liegen unter `/Users/swisi/Repos/privat/chastease/docs/architect
     *   `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_DOMAIN_MODEL.md`
 *   UML Story Turn Sequence:
     *   `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_SEQUENCE_STORY_TURN.md`
+*   UML Setup Lifecycle Sequence:
+    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_SEQUENCE_SETUP_LIFECYCLE.md`
 *   ADR API Framework:
     *   `/Users/swisi/Repos/privat/chastease/docs/adr/ADR-002-api-framework.md`

@@ -1,5 +1,6 @@
 ﻿import json
 from datetime import UTC, datetime
+import re
 from typing import Literal
 from uuid import uuid4
 
@@ -53,6 +54,11 @@ from chastease.api.setup_infra import (
 router = APIRouter(prefix="/setup", tags=["setup"])
 
 
+def _is_llm_timeout_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "timeout at" in text or "provider timeout" in text
+
+
 def _consent_technical_info(setup_session: dict) -> dict:
     consent = (
         (((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("consent"))
@@ -64,6 +70,37 @@ def _consent_technical_info(setup_session: dict) -> dict:
         "consent_text": str(consent.get("consent_text") or "") or None,
         "accepted_at": str(consent.get("accepted_at") or "") or None,
     }
+
+
+def _validate_ttlock_config(integrations: list[str], integration_config: dict[str, dict[str, str]]) -> None:
+    normalized_integrations = [str(item).strip().lower() for item in (integrations or []) if str(item).strip()]
+    if "ttlock" not in normalized_integrations:
+        return
+    ttlock_cfg = integration_config.get("ttlock") if isinstance(integration_config, dict) else None
+    if not isinstance(ttlock_cfg, dict):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "TT-Lock integration requires integration_config.ttlock with "
+                "ttl_user, ttl_pass_md5 and ttl_lock_id."
+            ),
+        )
+    ttl_user = str(ttlock_cfg.get("ttl_user") or "").strip()
+    ttl_pass_md5 = str(ttlock_cfg.get("ttl_pass_md5") or "").strip().lower()
+    ttl_lock_id = str(ttlock_cfg.get("ttl_lock_id") or "").strip()
+    if not ttl_user or not ttl_pass_md5 or not ttl_lock_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "TT-Lock integration requires ttl_user, ttl_pass_md5 and ttl_lock_id "
+                "in integration_config.ttlock."
+            ),
+        )
+    if re.fullmatch(r"[0-9a-f]{32}", ttl_pass_md5) is None:
+        raise HTTPException(
+            status_code=400,
+            detail="integration_config.ttlock.ttl_pass_md5 must be a lowercase 32-char md5 hex string.",
+        )
 
 
 def _system_note(lang: str, key: str, **kwargs) -> str:
@@ -95,6 +132,29 @@ def _system_note(lang: str, key: str, **kwargs) -> str:
             else f"System note: Digital consent granted ({accepted_at})."
         )
     return "System note."
+
+
+def _ensure_active_session_from_setup(db, setup_session: dict) -> str:
+    existing_id = str(setup_session.get("active_session_id") or "").strip()
+    if existing_id:
+        existing = db.get(ChastitySession, existing_id)
+        if existing is not None:
+            return existing_id
+    session_id = str(uuid4())
+    db_session = ChastitySession(
+        id=session_id,
+        user_id=setup_session["user_id"],
+        character_id=setup_session.get("character_id"),
+        status="active",
+        language=setup_session["language"],
+        policy_snapshot_json=json.dumps(setup_session.get("policy_preview") or {}),
+        psychogram_snapshot_json=json.dumps(setup_session.get("psychogram") or {}),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    db.add(db_session)
+    setup_session["active_session_id"] = session_id
+    return session_id
 
 
 @router.post("/sessions/{setup_session_id}/chat-preview")
@@ -158,6 +218,7 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
     if payload.max_openings_per_day is not None:
         opening_limit_period = "day"
         max_openings_in_period = payload.max_openings_per_day
+    _validate_ttlock_config(payload.integrations, payload.integration_config)
     db = get_db_session(request)
     try:
         token_user_id = resolve_user_id_from_token(payload.auth_token, request)
@@ -228,6 +289,7 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
     setup_session.setdefault("answers", [])
     setup_session.setdefault("psychogram", None)
     setup_session.setdefault("policy_preview", None)
+    store[setup_session_id] = setup_session
     save_sessions(store)
 
     return {
@@ -358,39 +420,20 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
 
     setup_session["status"] = "configured"
     setup_session["updated_at"] = _now_iso()
-    session_id = str(uuid4())
-    setup_session["active_session_id"] = session_id
-    store[setup_session_id] = setup_session
-    save_sessions(store)
-
-    db = get_db_session(request)
-    try:
-        db_session = ChastitySession(
-            id=session_id,
-            user_id=setup_session["user_id"],
-            character_id=setup_session.get("character_id"),
-            status="active",
-            language=setup_session["language"],
-            policy_snapshot_json=json.dumps(setup_session["policy_preview"]),
-            psychogram_snapshot_json=json.dumps(setup_session["psychogram"]),
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        db.add(db_session)
-        db.commit()
-    finally:
-        db.close()
+    setup_session["active_session_id"] = None
     store[setup_session_id] = setup_session
     save_sessions(store)
 
     return {
         "setup_session_id": setup_session_id,
         "status": "configured",
+        "artifacts_status": "pending",
+        "artifacts_error": None,
         "chastity_session": {
-            "session_id": session_id,
+            "session_id": None,
             "user_id": setup_session["user_id"],
             "character_id": setup_session.get("character_id"),
-            "status": "active",
+            "status": "pending_activation",
             "policy": setup_session["policy_preview"],
             "psychogram": setup_session["psychogram"],
             "psychogram_brief": _psychogram_brief(setup_session["psychogram"], setup_session["policy_preview"]),
@@ -413,8 +456,6 @@ def generate_setup_analysis(setup_session_id: str, payload: SetupArtifactsReques
     if setup_session.get("status") != "configured":
         raise HTTPException(status_code=409, detail="Setup session must be configured first.")
     active_session_id = setup_session.get("active_session_id")
-    if not active_session_id:
-        raise HTTPException(status_code=409, detail="No active session linked to setup session.")
 
     existing_analysis = setup_session.get("psychogram_analysis") or (setup_session.get("psychogram") or {}).get("analysis")
     existing_proposed_end = ((setup_session.get("policy_preview") or {}).get("contract") or {}).get("proposed_end_date")
@@ -454,33 +495,33 @@ def generate_setup_analysis(setup_session_id: str, payload: SetupArtifactsReques
         store[setup_session_id] = setup_session
         save_sessions(store)
 
-        db_session = db.get(ChastitySession, active_session_id)
-        if db_session is None:
-            raise HTTPException(status_code=404, detail="Chastity session not found.")
-        sync_setup_snapshot_to_active_session_db(db, setup_session)
-
-        system_turn_exists = db.scalar(
-            select(Turn)
-            .where(Turn.session_id == active_session_id)
-            .where(Turn.player_action == "[SYSTEM] psychogram_analysis")
-            .limit(1)
-        )
-        if system_turn_exists is None:
-            current_turn_no = db.scalar(select(func.max(Turn.turn_no)).where(Turn.session_id == active_session_id))
-            next_turn_no = (current_turn_no or 0) + 1
-            end_line = proposed_end_date or ("AI-decides" if _lang(setup_session.get("language", "de")) == "en" else "KI-entscheidet")
-            summary_message = _system_note(_lang(setup_session.get("language", "de")), "psychogram_ready", end_date=end_line)
-            db.add(
-                Turn(
-                    id=str(uuid4()),
-                    session_id=active_session_id,
-                    turn_no=next_turn_no,
-                    player_action="[SYSTEM] psychogram_analysis",
-                    ai_narration=summary_message,
-                    language=_lang(setup_session.get("language", "de")),
-                    created_at=datetime.now(UTC),
+        active_session_id = setup_session.get("active_session_id")
+        if active_session_id:
+            db_session = db.get(ChastitySession, active_session_id)
+            if db_session is not None:
+                sync_setup_snapshot_to_active_session_db(db, setup_session)
+                system_turn_exists = db.scalar(
+                    select(Turn)
+                    .where(Turn.session_id == active_session_id)
+                    .where(Turn.player_action == "[SYSTEM] psychogram_analysis")
+                    .limit(1)
                 )
-            )
+                if system_turn_exists is None:
+                    current_turn_no = db.scalar(select(func.max(Turn.turn_no)).where(Turn.session_id == active_session_id))
+                    next_turn_no = (current_turn_no or 0) + 1
+                    end_line = proposed_end_date or ("AI-decides" if _lang(setup_session.get("language", "de")) == "en" else "KI-entscheidet")
+                    summary_message = _system_note(_lang(setup_session.get("language", "de")), "psychogram_ready", end_date=end_line)
+                    db.add(
+                        Turn(
+                            id=str(uuid4()),
+                            session_id=active_session_id,
+                            turn_no=next_turn_no,
+                            player_action="[SYSTEM] psychogram_analysis",
+                            ai_narration=summary_message,
+                            language=_lang(setup_session.get("language", "de")),
+                            created_at=datetime.now(UTC),
+                        )
+                    )
         db.commit()
     except HTTPException:
         raise
@@ -519,8 +560,6 @@ def generate_setup_contract(setup_session_id: str, payload: SetupArtifactsReques
     if setup_session.get("psychogram_analysis_status") not in {"ready"}:
         raise HTTPException(status_code=409, detail="Psychogram analysis must be generated first.")
     active_session_id = setup_session.get("active_session_id")
-    if not active_session_id:
-        raise HTTPException(status_code=409, detail="No active session linked to setup session.")
 
     existing_contract = ((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("text")
     if existing_contract and not payload.force:
@@ -529,10 +568,16 @@ def generate_setup_contract(setup_session_id: str, payload: SetupArtifactsReques
         generated_contract.setdefault("technical_info", {})
         generated_contract["technical_info"]["consent"] = _consent_technical_info(setup_session)
         rendered_contract = _render_contract_with_consent(existing_contract, setup_session)
+        db = get_db_session(request)
+        try:
+            active_session_id = _ensure_active_session_from_setup(db, setup_session)
+            sync_setup_snapshot_to_active_session_db(db, setup_session)
+            db.commit()
+        finally:
+            db.close()
         store = load_sessions()
         store[setup_session_id] = setup_session
         save_sessions(store)
-        sync_setup_snapshot_to_active_session(request, setup_session)
         return {
             "setup_session_id": setup_session_id,
             "session_id": active_session_id,
@@ -571,10 +616,10 @@ def generate_setup_contract(setup_session_id: str, payload: SetupArtifactsReques
         store = load_sessions()
         store[setup_session_id] = setup_session
         save_sessions(store)
-
-        db_session = db.get(ChastitySession, active_session_id)
-        if db_session is None:
-            raise HTTPException(status_code=404, detail="Chastity session not found.")
+        active_session_id = _ensure_active_session_from_setup(db, setup_session)
+        store = load_sessions()
+        store[setup_session_id] = setup_session
+        save_sessions(store)
         sync_setup_snapshot_to_active_session_db(db, setup_session)
 
         system_turn_exists = db.scalar(
@@ -606,7 +651,8 @@ def generate_setup_contract(setup_session_id: str, payload: SetupArtifactsReques
         store = load_sessions()
         store[setup_session_id] = setup_session
         save_sessions(store)
-        raise HTTPException(status_code=500, detail=f"Contract generation failed: {exc}") from exc
+        status = 504 if _is_llm_timeout_error(exc) else 500
+        raise HTTPException(status_code=status, detail=f"Contract generation failed: {exc}") from exc
     finally:
         db.close()
 
@@ -707,8 +753,6 @@ def generate_setup_artifacts(setup_session_id: str, payload: SetupArtifactsReque
     if setup_session.get("status") != "configured":
         raise HTTPException(status_code=409, detail="Setup session must be configured first.")
     active_session_id = setup_session.get("active_session_id")
-    if not active_session_id:
-        raise HTTPException(status_code=409, detail="No active session linked to setup session.")
 
     existing_analysis = setup_session.get("psychogram_analysis") or (setup_session.get("psychogram") or {}).get("analysis")
     existing_contract = ((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("text")
@@ -721,7 +765,16 @@ def generate_setup_artifacts(setup_session_id: str, payload: SetupArtifactsReque
         store = load_sessions()
         store[setup_session_id] = setup_session
         save_sessions(store)
-        sync_setup_snapshot_to_active_session(request, setup_session)
+        db = get_db_session(request)
+        try:
+            active_session_id = _ensure_active_session_from_setup(db, setup_session)
+            sync_setup_snapshot_to_active_session_db(db, setup_session)
+            db.commit()
+        finally:
+            db.close()
+        store = load_sessions()
+        store[setup_session_id] = setup_session
+        save_sessions(store)
         return {
             "setup_session_id": setup_session_id,
             "session_id": active_session_id,
@@ -772,10 +825,10 @@ def generate_setup_artifacts(setup_session_id: str, payload: SetupArtifactsReque
         store = load_sessions()
         store[setup_session_id] = setup_session
         save_sessions(store)
-
-        db_session = db.get(ChastitySession, active_session_id)
-        if db_session is None:
-            raise HTTPException(status_code=404, detail="Chastity session not found.")
+        active_session_id = _ensure_active_session_from_setup(db, setup_session)
+        store = load_sessions()
+        store[setup_session_id] = setup_session
+        save_sessions(store)
         sync_setup_snapshot_to_active_session_db(db, setup_session)
 
         system_turn_exists = db.scalar(
@@ -813,7 +866,8 @@ def generate_setup_artifacts(setup_session_id: str, payload: SetupArtifactsReque
         store = load_sessions()
         store[setup_session_id] = setup_session
         save_sessions(store)
-        raise HTTPException(status_code=500, detail=f"Contract generation failed: {exc}") from exc
+        status = 504 if _is_llm_timeout_error(exc) else 500
+        raise HTTPException(status_code=status, detail=f"Contract generation failed: {exc}") from exc
     finally:
         db.close()
 

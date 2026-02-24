@@ -192,6 +192,7 @@ def chat_shell() -> str:
     let infoOpen = false;
     let actionCardSeq = 0;
     const actionCardState = {};
+    const actionCardCountdowns = {};
 
     function toggleInfoPanel(forceClose = false) {
       if (forceClose) {
@@ -308,6 +309,8 @@ def chat_shell() -> str:
         pause_timer: "Timer pausieren",
         unpause_timer: "Timer fortsetzen",
         image_verification: "Bildverifikation",
+        hygiene_open: "Hygieneöffnung starten",
+        hygiene_close: "Hygieneöffnung beenden",
       };
       return map[String(actionType || "").toLowerCase()] || String(actionType || "Aktion");
     }
@@ -382,9 +385,66 @@ def chat_shell() -> str:
           return `Dauer: ${formatDurationText(seconds)}`;
         }
       }
+      if (type === "hygiene_open") {
+        const secs = Number(payload?.opening_window_seconds || 0);
+        if (Number.isFinite(secs) && secs > 0) {
+          return `Öffnungsfenster: ${formatDurationText(secs)}`;
+        }
+      }
       const entries = Object.entries(payload || {}).filter(([k]) => !["action", "action_type", "tool"].includes(String(k)));
       if (!entries.length) return "Keine Zusatzdaten.";
       return entries.map(([k, v]) => `${k}: ${String(v)}`).join(" | ");
+    }
+
+    function clearActionCountdown(cardId) {
+      const timer = actionCardCountdowns[cardId];
+      if (timer) {
+        clearInterval(timer);
+        delete actionCardCountdowns[cardId];
+      }
+    }
+
+    function actionBodyNode(card) {
+      if (!card) return null;
+      return card.querySelectorAll("div")[2] || null;
+    }
+
+    function setActionBodyText(card, text) {
+      const body = actionBodyNode(card);
+      if (body) body.textContent = String(text || "");
+    }
+
+    function attachActionCountdown(cardId, endAtIso) {
+      if (!endAtIso) return;
+      const card = document.getElementById(`action-card-${cardId}`);
+      if (!card) return;
+      let hint = card.querySelector(`#action-hint-${cardId}`);
+      if (!hint) {
+        hint = document.createElement("div");
+        hint.className = "action-hint";
+        hint.id = `action-hint-${cardId}`;
+        card.appendChild(hint);
+      }
+      const endMs = new Date(endAtIso).getTime();
+      if (!Number.isFinite(endMs)) return;
+      clearActionCountdown(cardId);
+      const tick = () => {
+        const remaining = Math.max(0, Math.floor((endMs - Date.now()) / 1000));
+        if (remaining <= 0) {
+          hint.textContent = "Öffnungsfenster überschritten.";
+          clearActionCountdown(cardId);
+          const card = document.getElementById(`action-card-${cardId}`);
+          if (card) {
+            const sessionId = String(card.dataset.hygieneSessionId || "").trim();
+            const openingWindowSeconds = Number(card.dataset.hygieneWindowSeconds || 0);
+            if (sessionId) applyHygieneTimeoutPenalty(cardId, sessionId, openingWindowSeconds);
+          }
+          return;
+        }
+        hint.textContent = `Hygieneöffnung aktiv. Restzeit: ${formatDurationText(remaining)}.`;
+      };
+      tick();
+      actionCardCountdowns[cardId] = window.setInterval(tick, 1000);
     }
 
     function addActionCard({ mode, actionType, payload, message, detail, ts = null, interactive = false, cardId = null }) {
@@ -454,10 +514,123 @@ def chat_shell() -> str:
     function setCardButtonsDisabled(cardId, disabled) {
       const accept = document.getElementById(`action-accept-${cardId}`);
       const camera = document.getElementById(`action-camera-${cardId}`);
+      const close = document.getElementById(`action-close-${cardId}`);
       const reject = document.getElementById(`action-reject-${cardId}`);
       if (accept) accept.disabled = disabled;
       if (camera) camera.disabled = disabled;
+      if (close) close.disabled = disabled;
       if (reject) reject.disabled = disabled;
+    }
+
+    async function continueSessionAfterHygieneResolution(sessionId, outcomeText) {
+      try {
+        const res = await fetch("/api/v1/chat/turn", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            language: "de",
+            message: `System: Hygieneoeffnung abgeschlossen (${String(outcomeText || "status_unbekannt")}). Fahre mit der Sitzung fort; du kannst bei Bedarf eine Verifikation anfordern.`,
+          }),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) return;
+        await loadTurns();
+        renderActionCardsFromResponse(sessionId, data);
+      } catch {
+      }
+    }
+
+    async function applyHygieneTimeoutPenalty(cardId, sessionId, openingWindowSeconds) {
+      const card = document.getElementById(`action-card-${cardId}`);
+      if (!card) return;
+      if (card.dataset.penaltyApplied === "true") return;
+      card.dataset.penaltyApplied = "true";
+      const penaltySeconds = Math.max(60, Number(openingWindowSeconds || 0));
+      setActionBodyText(card, "Öffnungsfenster überschritten. Strafe wird ausgeführt...");
+      try {
+        const res = await fetch("/api/v1/chat/actions/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            action_type: "add_time",
+            payload: { seconds: penaltySeconds },
+          }),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) {
+          card.className = "msg action error";
+          const msg = card.querySelector(".action-title");
+          if (msg) msg.textContent = "Fehler: Strafzeit";
+          setActionBodyText(card, String(data?.detail || "Strafe konnte nicht angewendet werden."));
+          return;
+        }
+        setActionBodyText(card, `Öffnungsfenster überschritten. Strafe ausgeführt (+${formatDurationText(penaltySeconds)}).`);
+        await continueSessionAfterHygieneResolution(sessionId, "countdown_ueberschritten_strafe_ausgefuehrt");
+      } catch {
+        card.className = "msg action error";
+        const msg = card.querySelector(".action-title");
+        if (msg) msg.textContent = "Fehler: Strafzeit";
+        setActionBodyText(card, "Strafe konnte nicht angewendet werden.");
+      }
+    }
+
+    function renderHygieneCloseButton(cardId, sessionId, payload, openingWindowSeconds) {
+      const card = document.getElementById(`action-card-${cardId}`);
+      if (!card) return;
+      card.dataset.hygieneSessionId = String(sessionId || "");
+      card.dataset.hygieneWindowSeconds = String(Number(openingWindowSeconds || 0));
+      let buttons = card.querySelector(".action-buttons");
+      if (!buttons) {
+        buttons = document.createElement("div");
+        buttons.className = "action-buttons";
+        card.appendChild(buttons);
+      } else {
+        buttons.innerHTML = "";
+      }
+      const closeBtn = document.createElement("button");
+      closeBtn.className = "btn success";
+      closeBtn.id = `action-close-${cardId}`;
+      closeBtn.textContent = "Hygieneöffnung beenden";
+      buttons.appendChild(closeBtn);
+
+      closeBtn.addEventListener("click", async () => {
+        setCardButtonsDisabled(cardId, true);
+        setActionBodyText(card, "Hygieneoeffnung wird beendet...");
+        try {
+          const res = await fetch("/api/v1/chat/actions/execute", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              session_id: sessionId,
+              action_type: "hygiene_close",
+              payload: payload || {},
+            }),
+          });
+          const data = await safeJson(res);
+          if (!res.ok) {
+            card.className = "msg action error";
+            const msg = card.querySelector(".action-title");
+            if (msg) msg.textContent = "Fehler: Hygieneöffnung beenden";
+            setActionBodyText(card, String(data?.detail || "Schliessen fehlgeschlagen."));
+            return;
+          }
+          clearActionCountdown(cardId);
+          card.className = "msg action executed";
+          const msg = card.querySelector(".action-title");
+          if (msg) msg.textContent = "Ausgeführt: Hygieneöffnung beenden";
+          setActionBodyText(card, String(data?.message || "Hygieneöffnung beendet."));
+          const btnWrap = card.querySelector(".action-buttons");
+          if (btnWrap) btnWrap.remove();
+          await continueSessionAfterHygieneResolution(sessionId, "vor_ablauf_beendet");
+        } catch {
+          card.className = "msg action error";
+          const msg = card.querySelector(".action-title");
+          if (msg) msg.textContent = "Fehler: Hygieneöffnung beenden";
+          setActionBodyText(card, "Schliessen fehlgeschlagen.");
+        }
+      });
     }
 
     function fileToDataUrl(file) {
@@ -548,6 +721,12 @@ def chat_shell() -> str:
       if (!state) return;
       setCardButtonsDisabled(cardId, true);
       const card = document.getElementById(`action-card-${cardId}`);
+      const normalized = String(state.actionType || "").toLowerCase();
+      if (normalized === "hygiene_open" && card) {
+        const buttons = card.querySelector(".action-buttons");
+        if (buttons) buttons.remove();
+        setActionBodyText(card, "Oeffnung wird ausgefuehrt...");
+      }
       try {
         const res = await fetch("/api/v1/chat/actions/execute", {
           method: "POST",
@@ -564,8 +743,7 @@ def chat_shell() -> str:
           if (card) {
             const msg = card.querySelector(".action-title");
             if (msg) msg.textContent = `Fehler: ${prettyActionType(state.actionType)}`;
-            const body = card.querySelectorAll("div")[2];
-            if (body) body.textContent = String(data?.detail || "Ausführung fehlgeschlagen.");
+            setActionBodyText(card, String(data?.detail || "Ausführung fehlgeschlagen."));
           }
           setStatus(data?.detail || "Aktion konnte nicht ausgeführt werden.", "err");
           return;
@@ -574,13 +752,23 @@ def chat_shell() -> str:
         if (card) {
           const msg = card.querySelector(".action-title");
           if (msg) msg.textContent = `Ausgeführt: ${prettyActionType(state.actionType)}`;
-          const body = card.querySelectorAll("div")[2];
-          if (body) body.textContent = String(data?.message || "Aktion erfolgreich ausgeführt.");
+          setActionBodyText(card, String(data?.message || "Aktion erfolgreich ausgeführt."));
           const buttons = card.querySelector(".action-buttons");
           if (buttons) buttons.remove();
         }
+        if (normalized === "hygiene_open") {
+          const responsePayload = data?.payload || {};
+          attachActionCountdown(cardId, responsePayload.window_end_at || null);
+          renderHygieneCloseButton(
+            cardId,
+            state.sessionId,
+            { lock_id: responsePayload.lock_id || state.payload?.lock_id || "" },
+            Number(responsePayload.opening_window_seconds || 0),
+          );
+        }
         setStatus(`Aktion ausgeführt: ${prettyActionType(state.actionType)}.`);
       } finally {
+        if (normalized !== "hygiene_open") clearActionCountdown(cardId);
         delete actionCardState[cardId];
       }
     }
@@ -599,6 +787,7 @@ def chat_shell() -> str:
         if (buttons) buttons.remove();
       }
       delete actionCardState[cardId];
+      clearActionCountdown(cardId);
       setStatus(`Aktion abgelehnt: ${prettyActionType(state.actionType)}.`);
     }
 
@@ -644,6 +833,7 @@ def chat_shell() -> str:
       const box = document.getElementById("messages");
       box.innerHTML = "";
       Object.keys(actionCardState).forEach((key) => delete actionCardState[key]);
+      Object.keys(actionCardCountdowns).forEach((key) => clearActionCountdown(key));
       (turns || []).forEach((turn) => {
         const actionText = String(turn.player_action || "");
         const isSystem = actionText.startsWith("[SYSTEM]");

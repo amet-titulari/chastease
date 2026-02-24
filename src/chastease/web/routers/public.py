@@ -460,7 +460,9 @@ def contract_shell() -> str:
         }
       }
 
-      let setupSessionId = bootstrap?.setup_session_id || new URLSearchParams(window.location.search).get("setup_session_id");
+      const search = new URLSearchParams(window.location.search);
+      let setupSessionId = bootstrap?.setup_session_id || search.get("setup_session_id");
+      let pendingArtifacts = Boolean(bootstrap?.pending_artifacts) || search.get("pending_artifacts") === "1";
       if (!setupSessionId && userId && authToken) {
         const activeRes = await fetch(
           `/api/v1/sessions/active?user_id=${encodeURIComponent(userId)}&auth_token=${encodeURIComponent(authToken)}`
@@ -490,6 +492,15 @@ def contract_shell() -> str:
         box.textContent = lines.join("\\n");
       }
 
+      async function needsArtifactsGeneration() {
+        const res = await fetch(`/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}`);
+        const data = await safeJson(res);
+        if (!res.ok) return true;
+        const analysisReady = String(data?.psychogram_analysis_status || "").trim().toLowerCase() === "ready";
+        const contractText = String(data?.policy_preview?.generated_contract?.text || "");
+        return !analysisReady || !contractText.trim();
+      }
+
       async function generateContract() {
         const res = await fetch(`/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/contract`, {
           method: "POST",
@@ -511,7 +522,11 @@ def contract_shell() -> str:
         return true;
       }
 
-      if (Boolean(bootstrap?.pending_artifacts)) {
+      if (!pendingArtifacts) {
+        pendingArtifacts = await needsArtifactsGeneration();
+      }
+
+      if (pendingArtifacts) {
         showProgress(["Psychogramm wird analysiert. Geduld...."]);
         setStatus("Psychogramm wird analysiert...");
         const analysisRes = await fetch(`/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/analysis`, {
@@ -535,6 +550,11 @@ def contract_shell() -> str:
         if (!ok) return;
 
         saveBootstrap({ ...(bootstrap || {}), setup_session_id: setupSessionId, pending_artifacts: false });
+        if (search.get("pending_artifacts") === "1") {
+          search.delete("pending_artifacts");
+          const next = `${window.location.pathname}?${search.toString()}`;
+          window.history.replaceState({}, "", next.endsWith("?") ? window.location.pathname : next);
+        }
         return;
       }
 

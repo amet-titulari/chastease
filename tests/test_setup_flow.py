@@ -282,6 +282,20 @@ def test_setup_start_persists_ttlock_integration_config(client):
     assert session["integration_config"]["ttlock"]["ttl_gateway_id"] == "gw-1"
 
 
+def test_setup_start_rejects_incomplete_ttlock_integration_config(client):
+    auth = _register(client, "ttlock-incomplete-user", "TTLock Incomplete User")
+    user_id = auth["user_id"]
+    payload = {
+        "user_id": user_id,
+        "auth_token": auth["auth_token"],
+        "integrations": ["ttlock"],
+        "integration_config": {"ttlock": {"ttl_user": "wearer@example.com"}},
+    }
+    response = client.post("/api/v1/setup/sessions", json=payload)
+    assert response.status_code == 400
+    assert "ttl_user, ttl_pass_md5 and ttl_lock_id" in response.json()["detail"]
+
+
 def test_setup_start_rejects_end_before_start(client):
     auth = _register(client, "contract-invalid-user", "Contract Invalid User")
     user_id = auth["user_id"]

@@ -15,6 +15,23 @@ from chastease.repositories.setup_store import load_sessions, save_sessions
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
+def _latest_setup_session_for_user(user_id: str) -> tuple[str, dict] | tuple[None, None]:
+    store = load_sessions()
+    candidates = []
+    for sid, sess in store.items():
+        if not isinstance(sess, dict):
+            continue
+        if sess.get("user_id") != user_id:
+            continue
+        if sess.get("status") not in {"draft", "setup_in_progress", "configured"}:
+            continue
+        candidates.append((sid, sess))
+    if not candidates:
+        return (None, None)
+    candidates.sort(key=lambda item: item[1].get("updated_at", item[1].get("created_at", "")), reverse=True)
+    return candidates[0]
+
+
 @router.get("/active")
 def get_active_chastity_session(user_id: str, auth_token: str, request: Request) -> dict:
     token_user_id = resolve_user_id_from_token(auth_token, request)
@@ -34,7 +51,19 @@ def get_active_chastity_session(user_id: str, auth_token: str, request: Request)
             .order_by(ChastitySession.created_at.desc())
         )
         if session is None:
-            return {"has_active_session": False}
+            existing_setup_id, existing_setup = _latest_setup_session_for_user(user_id)
+            if existing_setup is not None:
+                return {
+                    "has_active_session": False,
+                    "setup_session_id": existing_setup_id,
+                    "setup_status": existing_setup.get("status", "draft"),
+                }
+            draft_id, draft_session = find_or_create_draft_setup_session(user_id, "de")
+            return {
+                "has_active_session": False,
+                "setup_session_id": draft_id,
+                "setup_status": draft_session["status"],
+            }
 
         setup_session_id = find_setup_session_id_for_active_session(user_id, session.id)
         return {

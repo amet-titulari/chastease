@@ -20,6 +20,7 @@ def _env_int(name: str, default: int) -> int:
 
 class Config:
     def __init__(self) -> None:
+        self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").strip().upper()
         self.SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
         self.OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")

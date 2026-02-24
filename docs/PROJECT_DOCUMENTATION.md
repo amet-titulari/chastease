@@ -25,6 +25,7 @@ Das System soll modular, testbar und langfristig erweiterbar sein.
 - `/Users/swisi/Repos/privat/chastease/docs/architecture/PSYCHOGRAM_SCHEMA.md`
 - `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_DOMAIN_MODEL.md`
 - `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_SEQUENCE_STORY_TURN.md`
+- `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_SEQUENCE_SETUP_LIFECYCLE.md`
 
 3. Architekturentscheidungen (ADR)
 - `/Users/swisi/Repos/privat/chastease/docs/adr/ADR-001-modular-monolith.md`

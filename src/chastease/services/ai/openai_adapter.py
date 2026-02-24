@@ -101,8 +101,12 @@ class OpenAIAdapter:
         candidates: list[tuple[str, str]] = []
         if base_path:
             kind = "responses" if base_path.endswith("/responses") else "chat"
-            # If the user configured an explicit endpoint path, trust it to avoid double-timeouts.
+            # If an explicit endpoint path is configured, prefer it but keep one protocol fallback.
             candidates.append((url, kind))
+            if kind == "chat":
+                candidates.append((f"{base}/v1/responses", "responses"))
+            else:
+                candidates.append((f"{base}/v1/chat/completions", "chat"))
             return candidates
         for endpoint, kind in [
             (f"{base}/v1/chat/completions", "chat"),
@@ -149,7 +153,7 @@ class OpenAIAdapter:
             if isinstance(content, list):
                 parts: list[str] = []
                 for chunk in content:
-                    if isinstance(chunk, dict) and chunk.get("type") == "text":
+                    if isinstance(chunk, dict) and chunk.get("type") in {"text", "output_text", "input_text"}:
                         text = str(chunk.get("text") or "").strip()
                         if text:
                             parts.append(text)
@@ -161,7 +165,53 @@ class OpenAIAdapter:
         output_text = data.get("output_text")
         if isinstance(output_text, str):
             return output_text.strip()
+        output = data.get("output")
+        if isinstance(output, list):
+            parts: list[str] = []
+            for item in output:
+                if not isinstance(item, dict):
+                    continue
+                content = item.get("content")
+                if isinstance(content, str) and content.strip():
+                    parts.append(content.strip())
+                    continue
+                if not isinstance(content, list):
+                    continue
+                for chunk in content:
+                    if not isinstance(chunk, dict):
+                        continue
+                    if chunk.get("type") not in {"text", "output_text", "input_text"}:
+                        continue
+                    text = str(chunk.get("text") or "").strip()
+                    if text:
+                        parts.append(text)
+            if parts:
+                return "\n".join(parts).strip()
         return ""
+
+    @staticmethod
+    def _is_setup_preview_contract_request(context: StoryTurnContext) -> bool:
+        if context.session_id != "setup-preview":
+            return False
+        action = (context.action or "").lower()
+        contract_tokens = (
+            "draft contract",
+            "vertrags-entwurf",
+            "rewrite the contract",
+            "schreibe den vertrag",
+            "generated chastity contract",
+            "keuschheitsvertrag",
+            "article 1",
+            "artikel 1",
+        )
+        return any(token in action for token in contract_tokens)
+
+    @staticmethod
+    def _is_setup_preview_analysis_request(context: StoryTurnContext) -> bool:
+        if context.session_id != "setup-preview":
+            return False
+        action = (context.action or "").lower()
+        return "psychogram" in action
 
     def generate_narration(self, context: StoryTurnContext) -> str:
         if self._is_analysis_request(context.action, context.language):
@@ -265,6 +315,10 @@ class OpenAIAdapter:
                 "role": "user",
                 "content": [{"type": "text", "text": user_prompt}, *attachment_content],
             }
+        is_setup_contract = self._is_setup_preview_contract_request(context)
+        is_setup_analysis = self._is_setup_preview_analysis_request(context)
+        max_tokens = 1800 if is_setup_contract else (650 if is_setup_analysis else 350)
+
         payload = {
             "model": chat_model,
             "messages": [
@@ -273,34 +327,48 @@ class OpenAIAdapter:
             ],
             "temperature": 0.3,
             "top_p": 0.9,
-            "max_tokens": 350,
+            "max_tokens": max_tokens,
         }
         responses_payload = {
             "model": chat_model,
             "input": user_prompt,
             "temperature": 0.3,
-            "max_output_tokens": 350,
+            "max_output_tokens": max_tokens,
         }
 
         has_image_payload = bool(attachment_content)
-        attempt_timeouts = (
-            [
-                httpx.Timeout(connect=4.0, read=20.0, write=15.0, pool=4.0),
-                httpx.Timeout(connect=5.0, read=30.0, write=20.0, pool=5.0),
-            ]
-            if not has_image_payload
-            else [
+        if has_image_payload:
+            attempt_timeouts = [
                 httpx.Timeout(connect=5.0, read=35.0, write=20.0, pool=5.0),
                 httpx.Timeout(connect=6.0, read=50.0, write=25.0, pool=6.0),
                 httpx.Timeout(connect=6.0, read=65.0, write=25.0, pool=6.0),
             ]
-        )
+        elif is_setup_contract:
+            attempt_timeouts = [
+                httpx.Timeout(connect=4.0, read=45.0, write=20.0, pool=4.0),
+                httpx.Timeout(connect=5.0, read=85.0, write=25.0, pool=5.0),
+            ]
+        elif is_setup_analysis:
+            attempt_timeouts = [
+                httpx.Timeout(connect=3.0, read=14.0, write=12.0, pool=3.0),
+                httpx.Timeout(connect=4.0, read=20.0, write=14.0, pool=4.0),
+            ]
+        else:
+            # Keep standard chat responsive.
+            attempt_timeouts = [
+                httpx.Timeout(connect=3.0, read=16.0, write=12.0, pool=3.0),
+                httpx.Timeout(connect=4.0, read=24.0, write=16.0, pool=4.0),
+            ]
+
         provider_ctx = {
             "session_id": context.session_id,
             "model": chat_model,
             "api_url": api_url,
             "has_image_payload": has_image_payload,
+            "setup_contract": is_setup_contract,
+            "setup_analysis": is_setup_analysis,
             "attachments": len(attachments or []),
+            "max_tokens": max_tokens,
             "language": context.language,
         }
         retryable_statuses = {408, 409, 421, 425, 429, 500, 502, 503, 504}
@@ -317,6 +385,20 @@ class OpenAIAdapter:
                     if attempt >= 2 and token_key in request_payload:
                         request_payload[token_key] = max(128, int(request_payload[token_key] * 0.6))
                     timeout = attempt_timeouts[min(attempt - 1, len(attempt_timeouts) - 1)]
+                    logger.debug(
+                        "LLM provider attempt start (attempt=%s/%s, kind=%s, url=%s, timeout_connect=%s, timeout_read=%s, timeout_write=%s, timeout_pool=%s, token_budget=%s, session=%s, model=%s)",
+                        attempt,
+                        max_attempts,
+                        kind,
+                        target_url,
+                        timeout.connect,
+                        timeout.read,
+                        timeout.write,
+                        timeout.pool,
+                        request_payload.get(token_key),
+                        context.session_id,
+                        chat_model,
+                    )
                     try:
                         started = time.perf_counter()
                         response = self._post_json_once(
@@ -358,8 +440,27 @@ class OpenAIAdapter:
                             chat_model,
                             has_image_payload,
                         )
+                        logger.debug(
+                            "LLM provider timeout details (attempt=%s/%s, kind=%s, url=%s, timeout_connect=%s, timeout_read=%s, timeout_write=%s, timeout_pool=%s, session=%s)",
+                            attempt,
+                            max_attempts,
+                            kind,
+                            target_url,
+                            timeout.connect,
+                            timeout.read,
+                            timeout.write,
+                            timeout.pool,
+                            context.session_id,
+                        )
                         if attempt < max_attempts:
                             delay = self._retry_delay_seconds(attempt)
+                            logger.debug(
+                                "LLM provider retry scheduled after timeout (attempt=%s, delay_seconds=%.2f, url=%s, session=%s)",
+                                attempt,
+                                delay,
+                                target_url,
+                                context.session_id,
+                            )
                             time.sleep(delay)
                             continue
                     except httpx.HTTPStatusError as exc:
@@ -438,18 +539,36 @@ class OpenAIAdapter:
                 "Bitte pruefe Endpoint/Modell/API-Key-Kompatibilitaet."
             )
         except RuntimeError as exc:
+            err_text = str(exc)
+            lower_err = err_text.lower()
             logger.error(
                 "LLM provider runtime failure: %s | context=%s",
-                str(exc),
+                err_text,
                 provider_ctx,
             )
+            is_timeout_like = (
+                ("timeout" in lower_err)
+                or ("timed out" in lower_err)
+                or ("attempts exhausted" in lower_err)
+                or ("provider timeout" in lower_err)
+            )
+            if is_timeout_like:
+                if context.language == "en":
+                    return (
+                        "The provider is currently slow/unreachable. "
+                        "Please retry in a moment."
+                    )
+                return (
+                    "Der Provider ist aktuell langsam/nicht erreichbar. "
+                    "Bitte versuche es gleich erneut."
+                )
             if context.language == "en":
                 return (
-                    f"Provider request failed ({str(exc)}). "
+                    f"Provider request failed ({err_text}). "
                     "Please verify endpoint/model/API key compatibility."
                 )
             return (
-                f"Provider-Anfrage fehlgeschlagen ({str(exc)}). "
+                f"Provider-Anfrage fehlgeschlagen ({err_text}). "
                 "Bitte Endpoint/Modell/API-Key-Kompatibilitaet pruefen."
             )
         except Exception:

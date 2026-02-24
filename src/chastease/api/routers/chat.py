@@ -31,11 +31,14 @@ _DURATION_UNIT_SECONDS = {
 }
 _TIMER_ACTIONS = {"pause_timer", "unpause_timer", "add_time", "reduce_time"}
 _TTLOCK_ACTIONS = {"ttlock_open", "ttlock_close"}
+_HYGIENE_ACTIONS = {"hygiene_open", "hygiene_close"}
 _ACTION_ALIASES = {
     "addtime": "add_time",
     "reducetime": "reduce_time",
     "pausetimer": "pause_timer",
     "unpausetimer": "unpause_timer",
+    "hygieneopen": "hygiene_open",
+    "hygieneclose": "hygiene_close",
     "imageverification": "image_verification",
     "verifyimage": "image_verification",
     "visionreview": "image_verification",
@@ -535,7 +538,7 @@ def _execute_ttlock_action(
     if not client_id or not client_secret:
         raise HTTPException(status_code=400, detail="TT-Lock server config missing: TTL_CLIENT_ID / TTL_CLIENT_SECRET.")
 
-    command = "open" if action_type == "ttlock_open" else "close"
+    command = "open" if str(action_type).endswith("_open") else "close"
     access_token = _ttlock_access_token(
         base_url=base_url,
         client_id=client_id,
@@ -556,16 +559,34 @@ def _execute_ttlock_action(
         lock_id,
         gateway_id or "-",
     )
+    limits = policy.get("limits") if isinstance(policy.get("limits"), dict) else {}
+    opening_window_minutes = int(limits.get("opening_window_minutes") or 15)
+    opening_window_minutes = max(1, min(opening_window_minutes, 240))
+    opening_window_seconds = opening_window_minutes * 60
+    window_end_at = (
+        _iso_utc(datetime.now(UTC) + timedelta(seconds=opening_window_seconds))
+        if command == "open"
+        else None
+    )
     return policy, {
         "action_type": action_type,
-        "payload": {"lock_id": lock_id},
+        "payload": {
+            "lock_id": lock_id,
+            "opening_window_minutes": opening_window_minutes,
+            "opening_window_seconds": opening_window_seconds,
+            "window_end_at": window_end_at,
+        },
         "ttlock": {
             "command": command,
             "lock_id": lock_id,
             "gateway_id": gateway_id,
             "response": result_payload,
         },
-        "message": "TT-Lock opened." if command == "open" else "TT-Lock closed.",
+        "message": (
+            f"TT-Lock opened. Hygiene window: {opening_window_minutes} minute(s)."
+            if command == "open"
+            else "TT-Lock closed."
+        ),
     }
 
 
@@ -593,6 +614,14 @@ def _execute_action_with_policy(
             "message": action_message,
         }
     if normalized_action in _TTLOCK_ACTIONS:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Action '{normalized_action}' is reserved for system-managed session lifecycle. "
+                "Use 'hygiene_open' or 'hygiene_close' for interactive hygiene flows."
+            ),
+        )
+    if normalized_action in _HYGIENE_ACTIONS:
         return _execute_ttlock_action(
             action_type=normalized_action,
             payload=normalized_payload,
@@ -634,8 +663,7 @@ def _auto_execute_pending_actions(
         normalized_action = _normalize_action_type(str((action or {}).get("action_type") or ""))
         payload = (action or {}).get("payload")
         payload_dict = dict(payload) if isinstance(payload, dict) else {}
-        force_execute = normalized_action in _TIMER_ACTIONS
-        should_execute = mode == "execute" or force_execute
+        should_execute = mode == "execute"
 
         if not normalized_action:
             failed_actions.append({"action_type": "", "payload": payload_dict, "detail": "Missing action_type."})

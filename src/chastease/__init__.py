@@ -6,13 +6,16 @@ from .config import Config
 from .db import build_engine, build_session_factory, init_db
 from .connectors import build_default_tool_registry
 from .frontend import build_frontend_router
+from .logging_utils import configure_logging
 from .services.ai.factory import build_ai_service
 
 
 def create_app(config_object: type[Config] = Config) -> FastAPI:
     load_dotenv()
-    app = FastAPI(title="chastease-api", version="0.1.1")
-    app.state.config = config_object()
+    config = config_object()
+    configure_logging(config.LOG_LEVEL)
+    app = FastAPI(title="chastease-api", version="0.1.3")
+    app.state.config = config
     app.state.engine = build_engine(app.state.config.DATABASE_URL)
     app.state.db_session_factory = build_session_factory(app.state.engine)
     init_db(app.state.engine)

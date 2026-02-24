@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.3 - 2026-02-24
+
+- Hygiene-Flow und TT-Lock-Aktionen klar getrennt:
+  - `hygiene_open`/`hygiene_close` fuer Hygieneoeffnung in Chat-Aktionen eingefuehrt.
+  - `ttlock_open`/`ttlock_close` im Chat-Flow reserviert und gegen direkte Ausfuehrung abgesichert.
+- Setup-Validierung fuer TT-Lock verschaerft:
+  - Start wird mit klarer Fehlermeldung abgelehnt, wenn `ttl_user`, `ttl_pass_md5` oder `ttl_lock_id` fehlen.
+- Chat-UX fuer Hygieneoeffnung ueberarbeitet:
+  - Bestaetigung, Ausfuehrungsstatus, Countdown, manuelles Beenden und Timeout-Strafe konsistent abgebildet.
+  - AI-Follow-up erfolgt erst nach `hygiene_close` oder Timeout.
+- x.ai Response-Parsing robuster gemacht und durch Regressionstests abgesichert.
+
+## 0.1.2 - 2026-02-24
+
+- Setup-Prozess funktioniert korrekt und stabil im End-to-End-Flow (Analyse, Vertragsentwurf, Rueckgabe).
+- Vertragsgenerierung auf strukturierte Abschnitts-Edits umgestellt:
+  - LLM liefert JSON-Edits statt kompletten Vertragstext.
+  - Signatur- und Footer-Bereich bleiben strukturell geschuetzt.
+  - Gueltige Edits werden gezielt auf Template-Abschnitte angewendet.
+- Erweiterte DEBUG-Logs fuer Contract-Edits:
+  - Eingehende Edit-Payload, akzeptierte Edits und angewendete Abschnittsaenderungen werden nachvollziehbar geloggt.
+
 ## 0.1.1 - 2026-02-23
 
 - TT-Lock-Integration von Setup bis Ausfuehrung erweitert:

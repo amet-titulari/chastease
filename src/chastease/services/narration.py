@@ -1,5 +1,7 @@
 import json
+import logging
 import re
+import unicodedata
 from datetime import date
 from pathlib import Path
 
@@ -10,6 +12,8 @@ from chastease.api.setup_domain import _fixed_soft_limits_text, _lang, _required
 from chastease.connectors import generate_narration_with_optional_profile
 from chastease.models import ChastitySession, Turn, User
 from chastease.services.ai.base import StoryTurnContext
+
+logger = logging.getLogger(__name__)
 
 
 def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]]:
@@ -442,13 +446,185 @@ def _strip_front_matter(text: str) -> str:
     return text[end_idx + 5 :].lstrip()
 
 
-def _looks_like_contract_text(text: str, lang: str) -> bool:
-    content = (text or "").strip()
-    if len(content) < 350:
-        return False
-    if _lang(lang) == "en":
-        return ("Article 1" in content) and ("Signature" in content)
-    return ("Artikel 1" in content) and ("Signatur" in content)
+def _limit_text(text: str, max_chars: int) -> str:
+    raw = str(text or "")
+    if len(raw) <= max_chars:
+        return raw
+    return raw[:max_chars].rstrip() + "\n\n[... gekuerzt ...]"
+
+
+def _preview_line(text: str, max_chars: int = 140) -> str:
+    single = " ".join(str(text or "").split())
+    return single if len(single) <= max_chars else (single[: max_chars - 3] + "...")
+
+
+def _slugify_heading(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(text or ""))
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii").lower()
+    slug = re.sub(r"[^a-z0-9]+", "_", ascii_text).strip("_")
+    return slug or "section"
+
+
+def _extract_json_payload(raw: str) -> dict | None:
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    candidates = [text]
+    fenced = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.IGNORECASE | re.DOTALL)
+    candidates.extend(fenced)
+    first = text.find("{")
+    last = text.rfind("}")
+    if first != -1 and last != -1 and last > first:
+        candidates.append(text[first : last + 1])
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            continue
+    return None
+
+
+def _contract_edit_targets(contract_text: str, lang: str) -> tuple[dict[str, dict[str, int]], list[str]]:
+    text = str(contract_text or "")
+    heading_pattern = re.compile(r"^(##|###)\s+(.+?)\s*$", re.MULTILINE)
+    headings = list(heading_pattern.finditer(text))
+    if not headings:
+        return {}, []
+
+    signature_start = len(text)
+    for match in headings:
+        level, title = match.group(1), match.group(2).strip().lower()
+        if level == "##" and title in {"signature", "signatur"}:
+            signature_start = match.start()
+            break
+
+    targets: dict[str, dict[str, int]] = {}
+    order: list[str] = []
+    parent_slug = ""
+    parent_label = ""
+
+    for index, match in enumerate(headings):
+        if match.start() >= signature_start:
+            break
+        level = 2 if match.group(1) == "##" else 3
+        title = match.group(2).strip()
+        body_start = match.end()
+        if body_start < len(text) and text[body_start] == "\n":
+            body_start += 1
+
+        body_end = signature_start
+        for next_match in headings[index + 1 :]:
+            if next_match.start() >= signature_start:
+                break
+            next_level = 2 if next_match.group(1) == "##" else 3
+            if next_level <= level:
+                body_end = next_match.start()
+                break
+
+        if level == 2:
+            parent_slug = _slugify_heading(title)
+            parent_label = title
+            target = f"h2_{parent_slug}"
+        else:
+            child_slug = _slugify_heading(title)
+            target = f"h3_{parent_slug}__{child_slug}" if parent_slug else f"h3_{child_slug}"
+
+        targets[target] = {
+            "start": body_start,
+            "end": body_end,
+            "level": level,
+        }
+        label = f"{target} -> {title}" if level == 2 else f"{target} -> {parent_label} / {title}"
+        order.append(label)
+    return targets, order
+
+
+def _apply_contract_edits(
+    contract_text: str,
+    edits: list[dict],
+    targets: dict[str, dict[str, int]],
+) -> tuple[str, int]:
+    replacements_by_target: dict[str, dict[str, int | str]] = {}
+    requested_debug: list[dict[str, str | int | bool]] = []
+    for edit in edits:
+        target = str(edit.get("target", "")).strip()
+        op = str(edit.get("op", "")).strip().lower()
+        text = str(edit.get("text", "")).strip()
+        accepted = target in targets and op in {"replace", "append", "prepend"} and bool(text)
+        requested_debug.append(
+            {
+                "target": target or "-",
+                "op": op or "-",
+                "chars": len(text),
+                "accepted_basic": accepted,
+                "text_preview": _preview_line(text),
+            }
+        )
+        if not accepted:
+            continue
+        if len(text) > 4000:
+            text = text[:4000].rstrip()
+        base = targets[target]
+        start = int(base["start"])
+        end = int(base["end"])
+        current = str(contract_text[start:end]).strip()
+        if op == "replace":
+            updated = text
+        elif op == "append":
+            updated = f"{current}\n\n{text}" if current else text
+        else:
+            updated = f"{text}\n\n{current}" if current else text
+        replacements_by_target[target] = {
+            "start": start,
+            "end": end,
+            "updated": updated,
+            "span": end - start,
+            "level": int(base["level"]),
+            "target": target,
+            "op": op,
+            "before_preview": _preview_line(current),
+            "after_preview": _preview_line(updated),
+        }
+
+    logger.debug("Contract edit requests parsed: %s", requested_debug)
+
+    replacements = sorted(
+        replacements_by_target.values(),
+        key=lambda item: (int(item["span"]), -int(item["level"])),
+    )
+    accepted: list[dict[str, int | str]] = []
+    for candidate in replacements:
+        c_start = int(candidate["start"])
+        c_end = int(candidate["end"])
+        overlaps = any(
+            not (c_end <= int(existing["start"]) or c_start >= int(existing["end"]))
+            for existing in accepted
+        )
+        if not overlaps:
+            accepted.append(candidate)
+    logger.debug(
+        "Contract edits accepted after overlap-filter: %s",
+        [
+            {
+                "target": str(item.get("target", "-")),
+                "op": str(item.get("op", "-")),
+                "before": str(item.get("before_preview", "")),
+                "after": str(item.get("after_preview", "")),
+            }
+            for item in accepted
+        ],
+    )
+
+    updated = contract_text
+    for candidate in sorted(accepted, key=lambda item: int(item["start"]), reverse=True):
+        start = int(candidate["start"])
+        end = int(candidate["end"])
+        body = str(candidate["updated"]).strip()
+        replacement = f"{body}\n" if body else "\n"
+        updated = f"{updated[:start]}{replacement}{updated[end:]}"
+    return updated, len(accepted)
 
 
 def _build_contract_fallback_text(setup_session: dict) -> str:
@@ -481,44 +657,70 @@ def generate_contract_for_setup(db, request: Request, setup_session: dict) -> st
     draft = _build_contract_fallback_text(setup_session)
     if not draft.strip():
         return "Contract draft unavailable."
+    analysis_for_prompt = _limit_text(analysis, 2000)
+    draft_for_prompt = _limit_text(draft, 12000)
+    targets, target_labels = _contract_edit_targets(draft, lang)
+    if not targets:
+        logger.warning("No editable contract targets detected. using unmodified template draft.")
+        return draft.strip()
+    allowed_targets = "\n".join(f"- {line}" for line in target_labels)
+    max_edits = min(24, len(targets))
 
     action = (
         (
-            "You are revising a generated chastity contract draft. "
-            "You may refine wording and add short useful clarifications when necessary. "
-            "Do not remove safety rules, contract dates, or article structure. "
-            "Keep markdown and keep headings/articles intact. "
-            f"The provisional end date is {contract.get('proposed_end_date') or 'AI-decides'} and may be adjusted by the keyholder within min/max bounds. "
-            f"Psychogram analysis context: {analysis}\n\n"
-            "DRAFT CONTRACT:\n"
-            f"{draft}"
+            "You are editing a generated chastity contract draft via structured section edits only. "
+            "Do NOT output a contract. Output JSON only with this shape: "
+            '{"edits":[{"target":"...","op":"replace|append|prepend","text":"..."}]}. '
+            f"You may return 0 to {max_edits} edits. "
+            "You may adjust wording freely across all editable sections, but never touch signature/footer blocks. "
+            "Keep safety-critical intent and contract dates intact.\n\n"
+            "Allowed targets:\n"
+            f"{allowed_targets}\n\n"
+            f"Provisional end date: {contract.get('proposed_end_date') or 'AI-decides'}.\n"
+            f"Psychogram analysis context:\n{analysis_for_prompt}\n\n"
+            "DRAFT CONTRACT (for context, do not rewrite fully):\n"
+            f"{draft_for_prompt}"
         )
         if lang == "en"
         else (
-            "Du ueberarbeitest einen erzeugten Keuschheitsvertrag-Entwurf. "
-            "Du darfst Formulierungen verbessern und bei Bedarf kurze sinnvolle Klarstellungen ergaenzen. "
-            "Sicherheitsregeln, Vertragsdaten und Artikelstruktur duerfen nicht entfernt werden. "
-            "Markdown beibehalten, Ueberschriften/Artikel intakt lassen. "
-            f"Das vorlaeufige Enddatum ist {contract.get('proposed_end_date') or 'KI-entscheidet'} und darf durch die Keyholderin innerhalb der Min/Max-Grenzen angepasst werden. "
-            f"Kontext Psychogramm-Analyse: {analysis}\n\n"
-            "VERTRAGS-ENTWURF:\n"
-            f"{draft}"
+            "Du bearbeitest einen erzeugten Keuschheitsvertrag-Entwurf nur ueber strukturierte Abschnitts-Edits. "
+            "Gib KEINEN kompletten Vertrag aus. Gib nur JSON in diesem Format aus: "
+            '{"edits":[{"target":"...","op":"replace|append|prepend","text":"..."}]}. '
+            f"Du darfst 0 bis {max_edits} Edits liefern. "
+            "Du darfst Formulierungen in allen erlaubten Abschnitten frei anpassen, aber niemals Signatur- oder Footer-Bloecke anfassen. "
+            "Safety-Kernabsicht und Vertragsdaten muessen erhalten bleiben.\n\n"
+            "Erlaubte Targets:\n"
+            f"{allowed_targets}\n\n"
+            f"Vorlaeufiges Enddatum: {contract.get('proposed_end_date') or 'KI-entscheidet'}.\n"
+            f"Kontext Psychogramm-Analyse:\n{analysis_for_prompt}\n\n"
+            "VERTRAGS-ENTWURF (nur Kontext, nicht komplett neu schreiben):\n"
+            f"{draft_for_prompt}"
         )
     )
-    try:
-        raw = generate_ai_narration_for_setup_preview(
-            db,
-            request,
-            setup_session["user_id"],
-            action,
-            lang,
-            psychogram,
-            policy,
-        )
-        if _is_provider_error_text(raw):
-            raise RuntimeError(str(raw))
-        if not _looks_like_contract_text(raw, lang):
-            raise RuntimeError("contract format validation failed")
-        return raw.strip()
-    except Exception:
-        return draft
+    raw = generate_ai_narration_for_setup_preview(
+        db,
+        request,
+        setup_session["user_id"],
+        action,
+        lang,
+        psychogram,
+        policy,
+    )
+    if _is_provider_error_text(raw):
+        raise RuntimeError(str(raw))
+    payload = _extract_json_payload(raw)
+    if not payload:
+        logger.warning("Contract edit payload could not be parsed. using unmodified template draft.")
+        return draft.strip()
+    logger.debug("Contract edit payload raw JSON keys: %s", list(payload.keys()))
+    edits = payload.get("edits")
+    if not isinstance(edits, list):
+        logger.warning("Contract edit payload missing 'edits' list. using unmodified template draft.")
+        return draft.strip()
+    logger.debug("Contract edit payload received edits=%s", len(edits))
+    edited_contract, applied_count = _apply_contract_edits(draft, edits, targets)
+    if applied_count == 0:
+        logger.warning("Contract edit payload produced no applicable edits. using unmodified template draft.")
+        return draft.strip()
+    logger.info("Contract edits applied successfully. applied=%s requested=%s", applied_count, len(edits))
+    return edited_contract.strip()

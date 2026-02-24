@@ -1269,12 +1269,20 @@ def _render_contract_template(setup_session: dict) -> str:
 
 
 def _looks_like_contract_text(text: str, lang: str) -> bool:
-    content = (text or "").strip()
+    content = str(text or "").strip()
+    lower = content.lower()
     if len(content) < 350:
         return False
     if _lang(lang) == "en":
-        return ("Article 1" in content) and ("Signature" in content)
-    return ("Artikel 1" in content) and ("Signatur" in content)
+        has_article = bool(re.search(r"\barticle\s*1\b", lower))
+        has_signature = ("## signature" in lower) or ("sub signature" in lower) or ("mistress signature" in lower)
+        has_footer = "technical footer" in lower
+    else:
+        has_article = bool(re.search(r"\bartikel\s*1\b", lower))
+        has_signature = ("## signatur" in lower) or ("unterschrift sub" in lower) or ("unterschrift herrin" in lower)
+        has_footer = "technischer footer" in lower
+    has_json_footer = all(key in lower for key in ('"template_id"', '"setup_session_id"', '"consent_accepted"'))
+    return has_article and has_signature and has_footer and has_json_footer
 
 
 def _build_contract_fallback_text(setup_session: dict) -> str:
