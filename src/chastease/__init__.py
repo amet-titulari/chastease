@@ -14,7 +14,7 @@ def create_app(config_object: type[Config] = Config) -> FastAPI:
     load_dotenv()
     config = config_object()
     configure_logging(config.LOG_LEVEL)
-    app = FastAPI(title="chastease-api", version="0.1.3")
+    app = FastAPI(title="chastease-api", version="0.1.4")
     app.state.config = config
     app.state.engine = build_engine(app.state.config.DATABASE_URL)
     app.state.db_session_factory = build_session_factory(app.state.engine)

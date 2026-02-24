@@ -18,6 +18,16 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value.strip())
+    except ValueError:
+        return default
+
+
 class Config:
     def __init__(self) -> None:
         self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").strip().upper()
@@ -31,3 +41,13 @@ class Config:
         self.TTL_API_BASE = os.getenv("TTL_API_BASE", "https://euapi.ttlock.com")
         self.TTL_CLIENT_ID = os.getenv("TTL_CLIENT_ID", "")
         self.TTL_CLIENT_SECRET = os.getenv("TTL_CLIENT_SECRET", "")
+        self.LLM_STRICT_EXPLICIT_ENDPOINT = _env_bool("LLM_STRICT_EXPLICIT_ENDPOINT", True)
+        self.LLM_CHAT_HISTORY_TURNS = max(1, _env_int("LLM_CHAT_HISTORY_TURNS", 3))
+        self.LLM_CHAT_HISTORY_CHARS_PER_TURN = max(80, _env_int("LLM_CHAT_HISTORY_CHARS_PER_TURN", 280))
+        self.LLM_CHAT_INCLUDE_TOOLS_SUMMARY = _env_bool("LLM_CHAT_INCLUDE_TOOLS_SUMMARY", False)
+        self.LLM_CHAT_MAX_TOKENS = max(64, _env_int("LLM_CHAT_MAX_TOKENS", 220))
+        self.LLM_CHAT_RETRY_ATTEMPTS = max(1, _env_int("LLM_CHAT_RETRY_ATTEMPTS", 1))
+        self.LLM_CHAT_TIMEOUT_CONNECT = max(1.0, _env_float("LLM_CHAT_TIMEOUT_CONNECT", 3.0))
+        self.LLM_CHAT_TIMEOUT_READ = max(3.0, _env_float("LLM_CHAT_TIMEOUT_READ", 10.0))
+        self.LLM_CHAT_TIMEOUT_WRITE = max(1.0, _env_float("LLM_CHAT_TIMEOUT_WRITE", 10.0))
+        self.LLM_CHAT_TIMEOUT_POOL = max(1.0, _env_float("LLM_CHAT_TIMEOUT_POOL", 3.0))

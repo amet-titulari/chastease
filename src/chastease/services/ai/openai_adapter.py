@@ -15,9 +15,16 @@ logger = logging.getLogger(__name__)
 class OpenAIAdapter:
     """First OpenAI adapter with deterministic fallback for local/dev usage."""
 
-    def __init__(self, model: str, api_key: str = ""):
+    def __init__(self, model: str, api_key: str = "", config: Any | None = None):
         self.model = model
         self.api_key = api_key
+        self.strict_explicit_endpoint = bool(getattr(config, "LLM_STRICT_EXPLICIT_ENDPOINT", True))
+        self.chat_max_tokens = int(getattr(config, "LLM_CHAT_MAX_TOKENS", 220))
+        self.chat_retry_attempts = int(getattr(config, "LLM_CHAT_RETRY_ATTEMPTS", 1))
+        self.chat_timeout_connect = float(getattr(config, "LLM_CHAT_TIMEOUT_CONNECT", 3.0))
+        self.chat_timeout_read = float(getattr(config, "LLM_CHAT_TIMEOUT_READ", 10.0))
+        self.chat_timeout_write = float(getattr(config, "LLM_CHAT_TIMEOUT_WRITE", 10.0))
+        self.chat_timeout_pool = float(getattr(config, "LLM_CHAT_TIMEOUT_POOL", 3.0))
 
     @staticmethod
     def _post_json_once(
@@ -91,7 +98,7 @@ class OpenAIAdapter:
         )
 
     @staticmethod
-    def _candidate_llm_urls(raw_url: str) -> list[tuple[str, str]]:
+    def _candidate_llm_urls(raw_url: str, *, strict_explicit_endpoint: bool = True) -> list[tuple[str, str]]:
         url = (raw_url or "").strip()
         if not url:
             return []
@@ -101,12 +108,13 @@ class OpenAIAdapter:
         candidates: list[tuple[str, str]] = []
         if base_path:
             kind = "responses" if base_path.endswith("/responses") else "chat"
-            # If an explicit endpoint path is configured, prefer it but keep one protocol fallback.
+            # If an explicit endpoint path is configured, keep it strict unless compatibility fallback is requested.
             candidates.append((url, kind))
-            if kind == "chat":
-                candidates.append((f"{base}/v1/responses", "responses"))
-            else:
-                candidates.append((f"{base}/v1/chat/completions", "chat"))
+            if not strict_explicit_endpoint:
+                if kind == "chat":
+                    candidates.append((f"{base}/v1/responses", "responses"))
+                else:
+                    candidates.append((f"{base}/v1/chat/completions", "chat"))
             return candidates
         for endpoint, kind in [
             (f"{base}/v1/chat/completions", "chat"),
@@ -317,7 +325,7 @@ class OpenAIAdapter:
             }
         is_setup_contract = self._is_setup_preview_contract_request(context)
         is_setup_analysis = self._is_setup_preview_analysis_request(context)
-        max_tokens = 1800 if is_setup_contract else (650 if is_setup_analysis else 350)
+        max_tokens = 1800 if is_setup_contract else (650 if is_setup_analysis else self.chat_max_tokens)
 
         payload = {
             "model": chat_model,
@@ -355,10 +363,18 @@ class OpenAIAdapter:
             ]
         else:
             # Keep standard chat responsive.
-            attempt_timeouts = [
-                httpx.Timeout(connect=3.0, read=16.0, write=12.0, pool=3.0),
-                httpx.Timeout(connect=4.0, read=24.0, write=16.0, pool=4.0),
-            ]
+            attempts = max(1, self.chat_retry_attempts)
+            attempt_timeouts = []
+            for attempt_idx in range(attempts):
+                growth = 1.0 + (0.25 * attempt_idx)
+                attempt_timeouts.append(
+                    httpx.Timeout(
+                        connect=max(1.0, self.chat_timeout_connect + (0.5 * attempt_idx)),
+                        read=max(3.0, self.chat_timeout_read * growth),
+                        write=max(1.0, self.chat_timeout_write * growth),
+                        pool=max(1.0, self.chat_timeout_pool + (0.5 * attempt_idx)),
+                    )
+                )
 
         provider_ctx = {
             "session_id": context.session_id,
@@ -373,7 +389,10 @@ class OpenAIAdapter:
         }
         retryable_statuses = {408, 409, 421, 425, 429, 500, 502, 503, 504}
         try:
-            candidates = self._candidate_llm_urls(api_url)
+            candidates = self._candidate_llm_urls(
+                api_url,
+                strict_explicit_endpoint=self.strict_explicit_endpoint,
+            )
             last_error = "unknown"
             attempted: list[str] = []
             for target_url, kind in candidates:

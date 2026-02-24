@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.4 - 2026-02-24
+
+- LLM-Defaults fuer Setup/Profil aktualisiert:
+  - Chat-Default auf `grok-4-1-fast-non-reasoning`.
+  - Vision-Default auf `grok-4-latest`.
+- Setup-Defaults fuer TT-Lock angepasst:
+  - Integration standardmaessig auf `yes`.
+  - Benutzername standardmaessig mit `eritque.clausus@gmx.net` vorbelegt.
+- Provider-Robustheit verbessert:
+  - LLM Timeout/Retry-Defaults erweitert und in `.env.example` dokumentiert.
+- Chat UX verbessert:
+  - Bildverifikation zeigt KI-Narration direkt nach erfolgreicher Pruefung.
+  - Sekundaerer Refresh-Fehler ueberschreibt den Erfolg nicht mehr.
+  - Neuer Floating-Button fuer schnellen Sprung nach oben im langen Chat.
+- Action-Parsing gehaertet:
+  - `[[REQUEST:...]]`/`[[ACTION:...]]`/`[[FILE|...]]` werden jetzt auch mit mehrzeiligem JSON robust erkannt.
+  - Regressionstest fuer mehrzeiligen `image_verification`-Request hinzugefuegt.
+
 ## 0.1.3 - 2026-02-24
 
 - Hygiene-Flow und TT-Lock-Aktionen klar getrennt:

@@ -17,11 +17,20 @@ logger = logging.getLogger(__name__)
 
 
 def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]]:
-    pattern = re.compile(r"\[\[ACTION:(?P<kind>[a-zA-Z0-9_\-]+)\|(?P<payload>\{.*?\})\]\]")
-    request_json_pattern = re.compile(r"\[\[REQUEST:(?P<kind>[a-zA-Z0-9_\-]+)\|(?P<payload>\{.*?\})\]\]")
-    request_call_pattern = re.compile(r"\[REQUEST:\s*(?P<kind>[a-zA-Z0-9_\-]+)\((?P<args>.*?)\)\]", re.IGNORECASE)
-    suggest_pattern = re.compile(r"\[Suggest:\s*(?P<kind>[a-zA-Z0-9_\-]+)\((?P<args>.*?)\)\]", re.IGNORECASE)
-    file_pattern = re.compile(r"\[\[FILE\|(?P<payload>\{.*?\})\]\]")
+    pattern = re.compile(r"\[\[ACTION:(?P<kind>[a-zA-Z0-9_\-]+)\|(?P<payload>\{.*?\})\]\]", re.DOTALL)
+    request_json_pattern = re.compile(
+        r"\[\[REQUEST:(?P<kind>[a-zA-Z0-9_\-]+)\|(?P<payload>\{.*?\})\]\]",
+        re.DOTALL,
+    )
+    request_call_pattern = re.compile(
+        r"\[REQUEST:\s*(?P<kind>[a-zA-Z0-9_\-]+)\((?P<args>.*?)\)\]",
+        re.IGNORECASE | re.DOTALL,
+    )
+    suggest_pattern = re.compile(
+        r"\[Suggest:\s*(?P<kind>[a-zA-Z0-9_\-]+)\((?P<args>.*?)\)\]",
+        re.IGNORECASE | re.DOTALL,
+    )
+    file_pattern = re.compile(r"\[\[FILE\|(?P<payload>\{.*?\})\]\]", re.DOTALL)
     actions: list[dict] = []
     generated_files: list[dict] = []
     cleaned = narration
@@ -242,30 +251,41 @@ def generate_ai_narration_for_session(
     policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
     psychogram_summary = _build_ai_context_summary(psychogram, policy)
 
+    config = request.app.state.config
+    history_turn_limit = max(1, int(getattr(config, "LLM_CHAT_HISTORY_TURNS", 3)))
+    history_chars = max(80, int(getattr(config, "LLM_CHAT_HISTORY_CHARS_PER_TURN", 280)))
+    include_tools_summary = bool(getattr(config, "LLM_CHAT_INCLUDE_TOOLS_SUMMARY", False))
+
+    def _trim(text: str) -> str:
+        compact = " ".join(str(text or "").split())
+        if len(compact) <= history_chars:
+            return compact
+        return compact[: max(1, history_chars - 3)].rstrip() + "..."
+
     recent_turns = (
         db.scalars(
             select(Turn)
             .where(Turn.session_id == session.id)
             .order_by(Turn.turn_no.desc())
-            .limit(6)
+            .limit(history_turn_limit)
         )
         .all()
     )
     recent_turns = list(reversed(recent_turns))
     history_lines: list[str] = []
     for turn in recent_turns:
-        history_lines.append(f"Wearer: {turn.player_action}")
-        history_lines.append(f"Keyholder: {turn.ai_narration}")
+        history_lines.append(f"Wearer: {_trim(turn.player_action)}")
+        history_lines.append(f"Keyholder: {_trim(turn.ai_narration)}")
     history_block = "\n".join(history_lines).strip()
     attachment_names = [str(item.get("name", "file")) for item in (attachments or [])]
     attachment_hint = f"\nCurrent attachments: {', '.join(attachment_names)}" if attachment_names else ""
-    tools_summary = _available_tools_summary(request)
     action_with_context = (
         (f"Recent dialogue:\n{history_block}\n\nCurrent wearer input: {action}{attachment_hint}")
         if history_block
         else f"Current wearer input: {action}{attachment_hint}"
     )
-    action_with_context = f"{action_with_context}\n\nAvailable tools: {tools_summary}"
+    if include_tools_summary:
+        action_with_context = f"{action_with_context}\n\nAvailable tools: {_available_tools_summary(request)}"
 
     context = StoryTurnContext(
         session_id=session.id,

@@ -443,7 +443,7 @@ def app_shell(request: Request) -> str:
               <div class="setup-item"><label id="labelProvider">Provider</label><input id="llmProviderName" value="custom" /></div>
               <div class="setup-item"><label id="labelLlmApiUrl">LLM API URL</label><input id="llmApiUrl" value="https://api.x.ai/v1/chat/completions" /></div>
               <div class="setup-item"><label id="labelLlmApiKey">LLM API Key</label><input id="llmApiKey" type="password" value="" placeholder="leave empty to keep existing key" /></div>
-              <div class="setup-item"><label id="labelLlmChatModel">LLM Model (Chat)</label><input id="llmChatModel" value="grok-4-latest" /></div>
+              <div class="setup-item"><label id="labelLlmChatModel">LLM Model (Chat)</label><input id="llmChatModel" value="grok-4-1-fast-non-reasoning" /></div>
               <div class="setup-item"><label id="labelLlmVisionModel">LLM Model (Vision)</label><input id="llmVisionModel" value="grok-4-latest" /></div>
               <div class="setup-item"><label id="labelProfileActive">Profile active</label><select id="llmIsActive"><option value="true">enabled</option><option value="false">disabled</option></select></div>
             </div>
@@ -518,6 +518,8 @@ def app_shell(request: Request) -> str:
     const PANELS = ["start", "ttlock", "psychogram", "ai_config", "complete"];
     const LOCKED_INITIAL = new Set(["psychogram", "ai_config", "complete"]);
 
+    const defaultLlmChatModel = "grok-4-1-fast-non-reasoning";
+    const defaultLlmVisionModel = "grok-4-latest";
     const defaultBehaviorPrompt = `Du bist meine ruhige, intelligente und psychologisch dominante Herrin / Keyholderin.
 
 Deine Dominanz ist kontrolliert, leise und absolut praesent. Du brauchst keine Lautstaerke, keine Beleidigungen und keine platte Grausamkeit - deine Macht liegt in Praezision, Geduld und Timing.
@@ -1697,6 +1699,12 @@ Lob ist selten genug, um Wirkung zu behalten.`;
     }
 
     function setLlmDefaults() {
+      if (!document.getElementById("llmChatModel").value) {
+        document.getElementById("llmChatModel").value = defaultLlmChatModel;
+      }
+      if (!document.getElementById("llmVisionModel").value) {
+        document.getElementById("llmVisionModel").value = defaultLlmVisionModel;
+      }
       if (!document.getElementById("llmBehaviorPrompt").value) {
         document.getElementById("llmBehaviorPrompt").value = defaultBehaviorPrompt;
       }

@@ -57,3 +57,20 @@ def test_extract_pending_actions_parses_image_verification_request() -> None:
     assert actions[0]["payload"]["request"] == "Zeige das Schloss frontal."
     assert actions[0]["payload"]["verification_instruction"] == "Pruefe sichtbares geschlossenes Schloss."
     assert "[[REQUEST:" not in cleaned
+
+
+def test_extract_pending_actions_parses_multiline_request_payload() -> None:
+    narration = (
+        "Ich pruefe das.\n"
+        "[[REQUEST:image_verification|{\n"
+        '"request":"geschlossener Lock mit Uhrzeit",\n'
+        '"verification_instruction":"Pruefe Lock und Rasur."\n'
+        "}]]"
+    )
+    cleaned, actions, _ = extract_pending_actions(narration)
+
+    assert len(actions) == 1
+    assert actions[0]["action_type"] == "image_verification"
+    assert actions[0]["payload"]["request"] == "geschlossener Lock mit Uhrzeit"
+    assert actions[0]["payload"]["verification_instruction"] == "Pruefe Lock und Rasur."
+    assert "[[REQUEST:" not in cleaned

@@ -127,6 +127,23 @@ def chat_shell() -> str:
       font-size: 12px;
     }
     .hidden { display: none !important; }
+    .scroll-top-btn {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
+      border: 1px solid #375897;
+      background: #1f4c9a;
+      color: #ffffff;
+      font-size: 24px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+      z-index: 50;
+    }
+    .scroll-top-btn:hover { background: #2a5fb9; }
 
     @media (max-width: 980px) {
       .chat-shell { min-height: 62vh; }
@@ -186,6 +203,7 @@ def chat_shell() -> str:
       </section>
     </div>
   </div>
+  <button id="scrollTopBtn" class="scroll-top-btn" onclick="scrollToTop()" title="Zum Menü nach oben">↑</button>
 
   <script>
     let sending = false;
@@ -201,6 +219,10 @@ def chat_shell() -> str:
         infoOpen = !infoOpen;
       }
       document.getElementById("sessionPanel").classList.toggle("hidden", !infoOpen);
+    }
+
+    function scrollToTop() {
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
     function setStatus(text, kind = "ok") {
@@ -705,7 +727,13 @@ def chat_shell() -> str:
           const successHint = card.querySelector(".action-hint");
           if (successHint) successHint.textContent = "Prüfung abgeschlossen.";
         }
-        await loadTurns();
+        const narrationText = String(data?.narration || "").trim();
+        if (narrationText) addMessage("keyholder", narrationText);
+        try {
+          await loadTurns();
+        } catch {
+          console.warn("loadTurns failed after successful vision review");
+        }
         renderActionCardsFromResponse(state.sessionId, data);
         setStatus("Bildverifikation erfolgreich übermittelt.");
       } catch (err) {
