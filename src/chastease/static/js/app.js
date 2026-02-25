@@ -4,10 +4,10 @@ document.addEventListener('DOMContentLoaded', function () {
   const userInfo = document.getElementById('userInfo');
 
   if (loginBtn) loginBtn.addEventListener('click', () => {
-    chastease_common.setStatus(userInfo, 'Login clicked');
+    handleLoginClick();
   });
   if (registerBtn) registerBtn.addEventListener('click', () => {
-    chastease_common.setStatus(userInfo, 'Register clicked');
+    handleRegisterClick();
   });
 });
 
@@ -24,12 +24,55 @@ function openContractPage() {
 
 function handleLoginClick() {
   const username = document.getElementById('username')?.value || '';
-  chastease_common.setStatus(document.getElementById('userInfo'), `Logged in as ${username}`);
-  try { localStorage.setItem(chastease_common.authStorageKey(), JSON.stringify({ user_id: username, auth_token: 'devtoken' })); } catch (e) {}
+  const password = document.getElementById('password')?.value || '';
+  const infoEl = document.getElementById('userInfo');
+  if (!username || !password) {
+    chastease_common.setStatus(infoEl, 'Username and password required', 'err');
+    return;
+  }
+  chastease_common.setStatus(infoEl, 'Logging in...');
+  fetch('/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: username, password: password }),
+  })
+    .then(res => res.json().then(body => ({ status: res.status, body })))
+    .then(({ status, body }) => {
+      if (status === 200) {
+        try { localStorage.setItem(chastease_common.authStorageKey(), JSON.stringify({ user_id: body.user_id, auth_token: body.auth_token })); } catch (e) {}
+        chastease_common.setStatus(infoEl, `Logged in as ${body.user_id}`);
+      } else {
+        chastease_common.setStatus(infoEl, body.detail || 'Login failed', 'err');
+      }
+    })
+    .catch(err => chastease_common.setStatus(infoEl, 'Login request failed', 'err'));
 }
 
 function handleRegisterClick() {
-  chastease_common.setStatus(document.getElementById('userInfo'), 'Register flow not implemented (demo)');
+  const username = document.getElementById('username')?.value || '';
+  const email = document.getElementById('email')?.value || `${username}@example.com`;
+  const password = document.getElementById('password')?.value || '';
+  const infoEl = document.getElementById('userInfo');
+  if (!username || !password) {
+    chastease_common.setStatus(infoEl, 'Username and password required for register', 'err');
+    return;
+  }
+  chastease_common.setStatus(infoEl, 'Registering...');
+  fetch('/api/v1/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: username, email: email, display_name: username, password: password }),
+  })
+    .then(res => res.json().then(body => ({ status: res.status, body })))
+    .then(({ status, body }) => {
+      if (status === 200) {
+        try { localStorage.setItem(chastease_common.authStorageKey(), JSON.stringify({ user_id: body.user_id, auth_token: body.auth_token })); } catch (e) {}
+        chastease_common.setStatus(infoEl, `Registered as ${body.user_id}`);
+      } else {
+        chastease_common.setStatus(infoEl, body.detail || 'Register failed', 'err');
+      }
+    })
+    .catch(err => chastease_common.setStatus(infoEl, 'Register request failed', 'err'));
 }
 
 function startSetup() {
