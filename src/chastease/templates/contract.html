@@ -11,7 +11,7 @@
       </div>
     </div>
 
-    <div id="contractBox" class="mt-4 bg-gray-900 border border-gray-700 rounded-lg p-4 min-h-[200px]">Der Keuschheitsvertrag wird generiert. Geduld ....</div>
+    <div id="contractBox" class="mt-4 bg-gray-900 border border-gray-700 rounded-lg p-4 min-h-[200px] whitespace-pre-wrap">Der Keuschheitsvertrag wird generiert. Geduld ....</div>
     <div id="status" class="text-sm text-gray-400 mt-2"></div>
 
     <div id="consentBox" class="mt-4 bg-gray-900 border border-gray-700 rounded-lg p-4 hidden">
@@ -27,5 +27,6 @@
 
 {% block scripts %}
   <script src="/static/js/common.js"></script>
+  <script src="/static/js/session.js"></script>
   <script src="/static/js/contract.js"></script>
 {% endblock %}

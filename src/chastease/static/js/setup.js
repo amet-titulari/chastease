@@ -627,10 +627,10 @@ async function completeSetup() {
       },
     };
 
-    setStatus('Setup abgeschlossen. Vertrag erstellt. Weiterleitung zum Dashboard...');
+    setStatus('Setup abgeschlossen. Vertrag erstellt. Weiterleitung zur Vertragsseite...');
     setOutput({ complete: completeBody, contract: contractBody });
     setTimeout(() => {
-      window.location.href = '/dashboard';
+      window.location.href = '/contract';
     }, 700);
   } catch (error) {
     setStatus(String(error?.message || error), true);
