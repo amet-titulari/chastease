@@ -66,9 +66,15 @@ def get_active_chastity_session(user_id: str, auth_token: str, request: Request)
             }
 
         setup_session_id = find_setup_session_id_for_active_session(user_id, session.id)
+        setup_status = "configured"
+        if setup_session_id:
+            store = load_sessions()
+            linked_setup = store.get(setup_session_id) or {}
+            setup_status = linked_setup.get("status", setup_status)
         return {
             "has_active_session": True,
             "setup_session_id": setup_session_id,
+            "setup_status": setup_status,
             "chastity_session": serialize_chastity_session(session),
         }
     finally:

@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}Setup — Chastease{% endblock %}
+
+{% block content %}
+  <section class="mt-4 bg-gray-900 border border-gray-700 rounded-xl p-6 space-y-6">
+    <div>
+      <h1 class="text-2xl font-semibold">Setup</h1>
+      <p id="setupInstructions" class="text-sm text-gray-400 mt-2">Setup-Session wird geladen…</p>
+      <p id="setupSessionInfo" class="text-sm text-gray-400 mt-1">-</p>
+    </div>
+
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <button id="accBaseBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+        <span>Basis-Konfiguration</span>
+        <span id="accBaseChevron" class="text-gray-400">−</span>
+      </button>
+      <div id="accBaseBody" class="mt-4 space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label class="text-sm text-gray-400">Language</label>
+          <select id="setupLanguage" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+            <option value="de">Deutsch</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">Autonomy mode</label>
+          <select id="setupAutonomy" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+            <option value="suggest">suggest</option>
+            <option value="execute">execute</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">Hard stop</label>
+          <select id="setupHardStop" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+            <option value="true">enabled</option>
+            <option value="false">disabled</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label class="text-sm text-gray-400">Openings period</label>
+          <select id="openingLimitPeriod" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+            <option value="day">day</option>
+            <option value="week" selected>week</option>
+            <option value="month">month</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">Max openings / period</label>
+          <input id="maxOpeningsInPeriod" type="number" min="0" max="200" value="2" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">Opening window (min)</label>
+          <input id="openingWindowMinutes" type="number" min="1" max="240" value="15" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+        </div>
+      </div>
+
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="text-sm text-gray-400">TTLock integration</label>
+          <select id="setupIntTtlock" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+            <option value="true" selected>enabled</option>
+            <option value="false">disabled</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">Chaster integration</label>
+          <select id="setupIntChaster" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+            <option value="false">disabled</option>
+            <option value="true">enabled</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button id="setupStartBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">Speichern</button>
+      </div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <button id="accQuestionBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+        <span>Psychogramm</span>
+        <span id="accQuestionChevron" class="text-gray-400">+</span>
+      </button>
+      <div id="accQuestionBody" class="mt-4 space-y-4 hidden">
+      <div id="questionnaireWrap" class="space-y-3"></div>
+        <div class="flex flex-wrap gap-2">
+          <button id="submitAnswersBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">Speichern</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <button id="accLlmBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+        <span>LLM Konfiguration</span>
+        <span id="accLlmChevron" class="text-gray-400">+</span>
+      </button>
+      <div id="accLlmBody" class="mt-4 space-y-4 hidden">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm text-gray-400">Provider</label>
+            <input id="llmProviderName" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="custom" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-400">LLM API URL</label>
+            <input id="llmApiUrl" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" placeholder="https://..." value="https://api.x.ai/v1/chat/completions" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-400">LLM API Key</label>
+            <input id="llmApiKey" type="password" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" placeholder="leave empty to keep existing key" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-400">Chat model</label>
+            <input id="llmChatModel" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="grok-4-1-fast-non-reasoning" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-400">Vision model</label>
+            <input id="llmVisionModel" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="grok-4-latest" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-400">Profile active</label>
+            <select id="llmIsActive" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+              <option value="true">enabled</option>
+              <option value="false">disabled</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">Behavior prompt</label>
+          <textarea id="llmBehaviorPrompt" class="mt-1 w-full min-h-28 rounded-md bg-gray-900 p-2 border border-gray-700"></textarea>
+        </div>
+        <p id="llmInfo" class="text-sm text-gray-400"></p>
+        <div class="space-y-2">
+          <button id="liveTestLlmBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Test live</button>
+          <button id="saveLlmProfileBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 hidden" disabled>Speichern</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="ttlockSection" class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <button id="accTtlockBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+        <span>TTLock Konfiguration</span>
+        <span id="accTtlockChevron" class="text-gray-400">+</span>
+      </button>
+      <div id="accTtlockBody" class="mt-4 space-y-4 hidden">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm text-gray-400">TTLock user</label>
+            <input id="ttlockUser" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" placeholder="email or account" value="eritque.clausus@gmx.net" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-400">TTLock password</label>
+            <input id="ttlockPassword" type="password" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" autocomplete="current-password" />
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button id="ttlockDiscoverBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Geräte suchen</button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm text-gray-400">Gateway</label>
+            <select id="ttlockGatewayId" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+              <option value="">-</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-sm text-gray-400">Lock</label>
+            <select id="ttlockLockId" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+              <option value="">-</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button id="saveTtlockBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 hidden" disabled>Speichern</button>
+        </div>
+        <p id="ttlockDiscoverInfo" class="text-sm text-gray-400"></p>
+      </div>
+    </div>
+
+    <div id="chasterSection" class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <button id="accChasterBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+        <span>Chaster Konfiguration</span>
+        <span id="accChasterChevron" class="text-gray-400">+</span>
+      </button>
+      <div id="accChasterBody" class="mt-4 space-y-4 hidden">
+        <p class="text-sm text-gray-400">Chaster ist aktiviert. Die Detail-Konfiguration folgt in einem nächsten Schritt.</p>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <button id="accCompletionBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+        <span>Setup abschließen</span>
+        <span id="accCompletionChevron" class="text-gray-400">+</span>
+      </button>
+      <div id="accCompletionBody" class="mt-4 space-y-4 hidden">
+        <p class="text-sm text-gray-400">Wenn das Psychogramm gespeichert wurde, kannst du das Setup hier abschließen und zur Dashboard-Ansicht wechseln.</p>
+        <div class="flex flex-wrap gap-2">
+            <button id="completeSetupBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Setup abschließen</button>
+        </div>
+        <div id="completeSetupConfirmWrap" class="hidden space-y-3">
+          <p class="text-sm text-red-300">ACHTUNG: Nach dem akzeptieren können keine weiteren Anpassungen mehr vorgenommen werden.</p>
+          <button id="confirmCompleteSetupBtn" class="px-4 py-2 rounded bg-red-600 hover:bg-red-500">Akzeptieren und weiterfahren</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <button id="accArtifactsBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+        <span>Artifacts</span>
+        <span id="accArtifactsChevron" class="text-gray-400">+</span>
+      </button>
+      <div id="accArtifactsBody" class="mt-4 space-y-4 hidden">
+      <div class="flex flex-wrap gap-2">
+          <button id="generateArtifactsBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Analyse + Vertrag erstellen</button>
+          <button id="acceptConsentBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Einwilligung akzeptieren</button>
+      </div>
+      <textarea id="consentText" class="w-full min-h-20 rounded-md bg-gray-900 p-2 border border-gray-700" placeholder="Consent text (optional, will auto-fill required text if empty)"></textarea>
+      </div>
+    </div>
+
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/common.js"></script>
+  <script src="/static/js/session.js"></script>
+  <script src="/static/js/setup.js"></script>
+{% endblock %}

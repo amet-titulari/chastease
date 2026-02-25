@@ -14,3 +14,22 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[2] / 
 def app_shell(request: Request):
     session_kill_enabled = bool(getattr(request.app.state.config, "ENABLE_SESSION_KILL", False))
     return templates.TemplateResponse(request, "app.html", {"session_kill_enabled": session_kill_enabled})
+
+
+@router.get("/dashboard", response_class=HTMLResponse)
+def dashboard_view(request: Request):
+    session_kill_enabled = bool(getattr(request.app.state.config, "ENABLE_SESSION_KILL", False))
+    return templates.TemplateResponse(request, "dashboard.html", {"session_kill_enabled": session_kill_enabled})
+
+
+@router.get("/setup", response_class=HTMLResponse)
+def setup_view(request: Request, setup_session_id: str | None = None):
+    session_kill_enabled = bool(getattr(request.app.state.config, "ENABLE_SESSION_KILL", False))
+    return templates.TemplateResponse(
+        request,
+        "setup.html",
+        {
+            "session_kill_enabled": session_kill_enabled,
+            "setup_session_id": setup_session_id,
+        },
+    )

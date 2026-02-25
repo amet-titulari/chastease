@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.8 - 2026-02-25
+
+- Setup-Prozess erneuert:
+  - Accordion-Flow und Schrittreihenfolge konsolidiert (Basis -> Psychogramm -> LLM -> TTLock/Chaster -> Abschluss -> Artefakte).
+  - Integrationskarten (TTLock/Chaster) als eigene Schritte mit kontrollierter Sichtbarkeit nach Speichern in der Basis-Konfiguration.
+  - LLM-UX verfeinert: Ghost-Button fuer Live-Test mit Laufzeit-Glow; Speichern wird erst nach erfolgreichem Test sichtbar/aktiv.
+  - Warn-/Bestaetigungsstufe vor Setup-Abschluss hinzugefuegt.
+- Dashboard-/Session-Statusanzeige stabilisiert:
+  - `setup_status` wird auch bei aktiver Session konsistent mitgeliefert.
+  - Frontend-Fallback auf irrefuehrendes `draft` entfernt.
+- UI-Konsistenz verbessert:
+  - Speichern-Buttons auf einheitliches Blau vereinheitlicht.
+  - Sekundaere Aktionsbuttons stilistisch harmonisiert und Beschriftungen in Deutsch vereinheitlicht.
+
 ## 0.1.7 - 2026-02-25
 
 - Frontend: Auth-Formulare getrennt und UX verbessert:

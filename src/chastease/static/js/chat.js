@@ -43,12 +43,7 @@ function loadAuthFromStorage() {
   }
 }
 
-function resolveActiveSession() {
-  chastease_common.setStatus(document.getElementById('status'), 'Session lookup not implemented (stub)');
-}
-
 // expose globally
-window.chastease_chat = { sendMessage, loadAuthFromStorage, resolveActiveSession };
+window.chastease_chat = { sendMessage, loadAuthFromStorage };
 window.sendMessage = sendMessage;
 window.loadAuthFromStorage = loadAuthFromStorage;
-window.resolveActiveSession = resolveActiveSession;
