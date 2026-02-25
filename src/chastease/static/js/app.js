@@ -3,6 +3,11 @@ document.addEventListener('DOMContentLoaded', function () {
   const registerBtn = document.getElementById('registerBtn');
   const userInfo = document.getElementById('userInfo');
 
+  // set mode from URL param `mode=register` or `mode=login` (default: login)
+  const urlParams = new URLSearchParams(window.location.search);
+  const mode = (urlParams.get('mode') || 'login').toLowerCase();
+  setAuthMode(mode);
+
   if (loginBtn) loginBtn.addEventListener('click', () => {
     handleLoginClick();
   });
@@ -49,12 +54,17 @@ function handleLoginClick() {
 }
 
 function handleRegisterClick() {
-  const username = document.getElementById('username')?.value || '';
+  const username = document.getElementById('reg_username')?.value || '';
   const email = document.getElementById('email')?.value || `${username}@example.com`;
-  const password = document.getElementById('password')?.value || '';
+  const password = document.getElementById('reg_password')?.value || '';
+  const passwordRepeat = document.getElementById('passwordRepeat')?.value || '';
   const infoEl = document.getElementById('userInfo');
   if (!username || !password) {
     chastease_common.setStatus(infoEl, 'Username and password required for register', 'err');
+    return;
+  }
+  if (password !== passwordRepeat) {
+    chastease_common.setStatus(infoEl, 'Passwords do not match', 'err');
     return;
   }
   chastease_common.setStatus(infoEl, 'Registering...');
@@ -73,6 +83,20 @@ function handleRegisterClick() {
       }
     })
     .catch(err => chastease_common.setStatus(infoEl, 'Register request failed', 'err'));
+}
+
+function setAuthMode(mode) {
+  const loginSection = document.getElementById('loginSection');
+  const registerSection = document.getElementById('registerSection');
+  const switchToLogin = document.getElementById('switchToLogin');
+  const switchToRegister = document.getElementById('switchToRegister');
+  if (mode === 'register') {
+    if (loginSection) loginSection.classList.add('hidden');
+    if (registerSection) registerSection.classList.remove('hidden');
+  } else {
+    if (loginSection) loginSection.classList.remove('hidden');
+    if (registerSection) registerSection.classList.add('hidden');
+  }
 }
 
 function startSetup() {

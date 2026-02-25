@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.7 - 2026-02-25
+
+- Frontend: Auth-Formulare getrennt und UX verbessert:
+  - Login zeigt nur `Benutzername` und `Passwort`.
+  - Registrierung zeigt `Benutzername`, `E-Mail`, `Passwort` und `Passwort-Bestätigung`.
+  - Clientseitiges JS steuert den Auth-Mode über den URL-Parameter `mode` und validiert Passwort-Matching.
+- Tests: Frontend-Änderungen verifiziert; Test-Suite grün.
+- Kleinere Refactor- und Stabilitätsfixes im UI/Router-Bereich.
+
 ## 0.1.6 - 2026-02-25
 
 - Setup-/Session-Stabilisierung:
