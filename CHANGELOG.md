@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.9 - 2026-02-25
+
+- Vertrags-/Consent-Flow weiter stabilisiert:
+  - Contract-Seite bindet `session.js` korrekt ein (Fix fuer "Session helper nicht verfuegbar").
+  - Nach Setup-Abschluss mit Vertragsgenerierung erfolgt direkte Weiterleitung auf `/contract` fuer sofortigen Digital-Consent.
+  - Contract-Seite liest Vertragsdaten robust (aktive Session + Setup-Session-Fallback) und aktualisiert den signierten Zustand nach Consent sofort.
+- Markdown-Rendering fuer Artefakte eingefuehrt:
+  - Vertragstext auf `/contract` wird als Markdown dargestellt.
+  - Psychogramm-Analyse im Dashboard wird als Markdown dargestellt.
+  - Lokaler, sicherer Markdown-Renderer in `static/js/common.js` hinzugefuegt (ohne externe CDN-Abhaengigkeit).
+- Tests erweitert:
+  - Neuer Setup-Flow-Test validiert den Consent-Uebergang (`pending -> accepted`) inklusive Sichtbarkeit in `/sessions/active`.
+  - Web-Test fuer `/contract`-Seite inklusive Script-Einbindung (`session.js`, `contract.js`).
+
 ## 0.1.8 - 2026-02-25
 
 - Setup-Prozess erneuert:

@@ -470,3 +470,88 @@ def test_contract_consent_updates_signature_and_footer(client, monkeypatch):
     assert '"consent_accepted": "true"' in contract_text
     assert '"consent_accepted_at": "-"' not in contract_text
     assert "[signatur ausstehend]" not in contract_text
+
+
+def test_complete_contract_accept_reflected_in_active_session(client, monkeypatch):
+    from chastease.api.routers import setup as setup_router
+
+    monkeypatch.setattr(
+        setup_router,
+        "generate_psychogram_analysis_with_end_date_for_setup",
+        lambda *_args, **_kwargs: ("Analyse bereit.", "2026-04-15"),
+    )
+    monkeypatch.setattr(
+        setup_router,
+        "generate_contract_for_setup",
+        lambda *_args, **_kwargs: (
+            "# Keuschheits-Vertrag\n\n"
+            "## Signatur\n"
+            "- Datum: ***2026-03-01***\n"
+            "- Unterschrift Sub: ***[signatur ausstehend]***\n\n"
+            "Technischer Footer:\n"
+            "```json\n"
+            "{\n"
+            '  "consent_accepted": "false",\n'
+            '  "consent_text": "-",\n'
+            '  "consent_accepted_at": "-"\n'
+            "}\n"
+            "```"
+        ),
+    )
+
+    auth = _register(client, "consent-active-user", "Consent Active User")
+    user_id = auth["user_id"]
+    start_response = client.post(
+        "/api/v1/setup/sessions",
+        json={"user_id": user_id, "auth_token": auth["auth_token"]},
+    )
+    assert start_response.status_code == 200
+    setup_session_id = start_response.json()["setup_session_id"]
+
+    answers_response = client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/answers",
+        json={
+            "answers": [
+                {"question_id": "q1_rule_structure", "value": 8},
+                {"question_id": "q2_strictness_authority", "value": 7},
+                {"question_id": "q3_control_need", "value": 8},
+                {"question_id": "q4_praise_importance", "value": 4},
+                {"question_id": "q5_novelty_challenge", "value": 8},
+                {"question_id": "q6_intensity_1_5", "value": 4},
+            ]
+        },
+    )
+    assert answers_response.status_code == 200
+
+    complete_response = client.post(f"/api/v1/setup/sessions/{setup_session_id}/complete")
+    assert complete_response.status_code == 200
+
+    contract_response = client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/contract",
+        json={"user_id": user_id, "auth_token": auth["auth_token"], "force": False},
+    )
+    assert contract_response.status_code == 200
+    assert contract_response.json()["consent"]["accepted"] is False
+
+    accept_response = client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/contract/accept",
+        json={
+            "user_id": user_id,
+            "auth_token": auth["auth_token"],
+            "consent_text": "Ich akzeptiere diesen Vertrag",
+        },
+    )
+    assert accept_response.status_code == 200
+    accepted = accept_response.json()
+    assert accepted["consent"]["accepted"] is True
+    assert accepted["consent"]["accepted_at"]
+
+    active_response = client.get(
+        f"/api/v1/sessions/active?user_id={user_id}&auth_token={auth['auth_token']}"
+    )
+    assert active_response.status_code == 200
+    active_data = active_response.json()
+    generated = ((active_data.get("chastity_session") or {}).get("policy") or {}).get("generated_contract") or {}
+    assert generated.get("text")
+    assert (generated.get("consent") or {}).get("accepted") is True
+    assert (generated.get("consent") or {}).get("accepted_at")

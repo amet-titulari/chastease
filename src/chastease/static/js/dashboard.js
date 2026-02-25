@@ -136,7 +136,15 @@ function renderPsychogram(body) {
   const updatedAt = psychogram.updated_at || psychogram.created_at || '-';
   if (psychMetaEl) psychMetaEl.textContent = `Confidence: ${confidenceText} · Aktualisiert: ${updatedAt}`;
 
-  if (psychAnalysisEl) psychAnalysisEl.textContent = psychogram.analysis || '';
+  if (psychAnalysisEl) {
+    const analysis = String(psychogram.analysis || '');
+    const renderer = window.chastease_common?.markdownToHtml;
+    if (typeof renderer === 'function') {
+      psychAnalysisEl.innerHTML = renderer(analysis);
+    } else {
+      psychAnalysisEl.textContent = analysis;
+    }
+  }
 
   const traits = psychogram.traits || {};
   const entries = Object.entries(traits)

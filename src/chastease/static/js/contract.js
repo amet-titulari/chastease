@@ -7,6 +7,17 @@ document.addEventListener('DOMContentLoaded', function () {
   const consentRequired = document.getElementById('consentRequired');
   let setupSessionId = null;
 
+  function renderMarkdown(node, value) {
+    if (!node) return;
+    const text = String(value || '');
+    const renderer = window.chastease_common?.markdownToHtml;
+    if (typeof renderer === 'function') {
+      node.innerHTML = renderer(text);
+      return;
+    }
+    node.textContent = text;
+  }
+
   async function apiCall(method, path, payload) {
     const res = await fetch(path, {
       method,
@@ -51,7 +62,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
-    contractBox.textContent = String(generated.text);
+    renderMarkdown(contractBox, generated.text);
 
     const consent = generated.consent || {};
     const required = String(consent.required_text || 'Ich akzeptiere diesen Vertrag');
@@ -96,7 +107,7 @@ document.addEventListener('DOMContentLoaded', function () {
         consent_text: val,
       };
       const body = await apiCall('POST', `/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/contract/accept`, payload);
-      contractBox.textContent = String(body.contract_text || contractBox.textContent);
+      if (body.contract_text) renderMarkdown(contractBox, body.contract_text);
       chastease_common.setStatus(status, `Consent akzeptiert: ${body?.consent?.accepted_at || ''}`);
       if (consentBox) consentBox.classList.add('hidden');
     } catch (err) {
