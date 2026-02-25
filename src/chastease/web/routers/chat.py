@@ -11,4 +11,4 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[2] / 
 
 @router.get("/chat", response_class=HTMLResponse)
 def chat_shell(request: Request):
-    return templates.TemplateResponse("chat.html", {"request": request})
+    return templates.TemplateResponse(request, "chat.html")

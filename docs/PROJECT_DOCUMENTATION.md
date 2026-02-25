@@ -10,26 +10,26 @@ Das System soll modular, testbar und langfristig erweiterbar sein.
 ## Dokumentationsstruktur
 
 1. Produkt
-- `/Users/swisi/Repos/privat/chastease/docs/PRODUCT_VISION.md`
-- `/Users/swisi/Repos/privat/chastease/docs/REQUIREMENTS_SRS.md`
-- `/Users/swisi/Repos/privat/chastease/docs/UI_UX_REQUIREMENTS.md`
-- `/Users/swisi/Repos/privat/chastease/docs/BACKLOG.md`
-- `/Users/swisi/Repos/privat/chastease/docs/PROJECT_PLAN.md`
+- `docs/PRODUCT_VISION.md`
+- `docs/REQUIREMENTS_SRS.md`
+- `docs/UI_UX_REQUIREMENTS.md`
+- `docs/BACKLOG.md`
+- `docs/PROJECT_PLAN.md`
 
 2. Architektur
-- `/Users/swisi/Repos/privat/chastease/docs/ARCHITECTURE.md`
-- `/Users/swisi/Repos/privat/chastease/docs/architecture/C4_SYSTEM_CONTEXT.md`
-- `/Users/swisi/Repos/privat/chastease/docs/architecture/C4_CONTAINER.md`
-- `/Users/swisi/Repos/privat/chastease/docs/architecture/C4_COMPONENT_BACKEND.md`
-- `/Users/swisi/Repos/privat/chastease/docs/architecture/ACTION_MATRIX.md`
-- `/Users/swisi/Repos/privat/chastease/docs/architecture/PSYCHOGRAM_SCHEMA.md`
-- `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_DOMAIN_MODEL.md`
-- `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_SEQUENCE_STORY_TURN.md`
-- `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_SEQUENCE_SETUP_LIFECYCLE.md`
+- `docs/ARCHITECTURE.md`
+- `docs/architecture/C4_SYSTEM_CONTEXT.md`
+- `docs/architecture/C4_CONTAINER.md`
+- `docs/architecture/C4_COMPONENT_BACKEND.md`
+- `docs/architecture/ACTION_MATRIX.md`
+- `docs/architecture/PSYCHOGRAM_SCHEMA.md`
+- `docs/architecture/UML_DOMAIN_MODEL.md`
+- `docs/architecture/UML_SEQUENCE_STORY_TURN.md`
+- `docs/architecture/UML_SEQUENCE_SETUP_LIFECYCLE.md`
 
 3. Architekturentscheidungen (ADR)
-- `/Users/swisi/Repos/privat/chastease/docs/adr/ADR-001-modular-monolith.md`
-- `/Users/swisi/Repos/privat/chastease/docs/adr/ADR-002-api-framework.md`
+- `docs/adr/ADR-001-modular-monolith.md`
+- `docs/adr/ADR-002-api-framework.md`
 
 ## Lesereihenfolge (Empfehlung)
 

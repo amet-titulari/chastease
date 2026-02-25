@@ -18,7 +18,7 @@
 - [x] Tool-/Connector-Abstraktion als eigene Schicht etablieren
 - [ ] Docker-Compose Dev-Setup definieren (Option A zuerst)
 
-## Refactoring-Fortschritt (Stand 2026-02-23)
+## Refactoring-Fortschritt (Stand 2026-02-25)
 
 - [x] API-Schemas ausgelagert (`src/chastease/api/schemas.py`)
 - [x] Questionnaire/Translations ausgelagert (`src/chastease/api/questionnaire.py`)
@@ -36,7 +36,7 @@
 ## Naechster testbarer Stand (Milestone R1)
 
 - Kriterium 1: `src/chastease/api/routers/setup.py` ohne direkte `legacy.*`-Alias-Aufrufe (ausser klar definierten Infrastruktur-Ports).
-- Kriterium 2: `python -m pytest` in Projekt-venv laeuft gruen. (erreicht in `.venv312`: 27 passed)
+- Kriterium 2: `python -m pytest` in Projekt-venv laeuft gruen. (erreicht in `.venv312`: 53 passed)
 - Kriterium 3: Smoke-Flow erfolgreich: `/api/v1/health`, Auth-Login/Register, Setup Start->Answers->Complete, `/api/v1/chat/turn`.
 
 ## Prioritaet P1

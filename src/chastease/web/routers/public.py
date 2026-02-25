@@ -11,10 +11,10 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[2] / 
 
 @router.get("/", response_class=HTMLResponse)
 def landing_page(request: Request):
-    return templates.TemplateResponse("landing.html", {"request": request})
+    return templates.TemplateResponse(request, "landing.html")
 
 
 @router.get("/contract", response_class=HTMLResponse)
 def contract_shell(request: Request):
-    return templates.TemplateResponse("contract.html", {"request": request})
+    return templates.TemplateResponse(request, "contract.html")
 

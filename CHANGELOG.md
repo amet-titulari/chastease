@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.6 - 2026-02-25
+
+- Setup-/Session-Stabilisierung:
+  - Setup-Start mit `integrations=["ttlock"]` funktioniert auch ohne verpflichtende `integration_config`.
+  - `POST /api/v1/setup/sessions/{id}/complete` aktiviert nun sofort eine persistente aktive Session.
+  - Setup-/Session-/Story-Flow-Regressionen behoben (voller Testlauf wieder gruen).
+- Frontend-Migration weitergezogen:
+  - Jinja2-Templates + Static-Mount als Standardpfad fuer Web-Seiten gefestigt.
+  - `/app`-Route auf schlanken Template-Renderer bereinigt (kein Legacy-Inline-HTML mehr im Router).
+- Doku-/Release-Sync:
+  - Projektstatus und Teststand auf aktuellen Stand aktualisiert.
+  - Versionen harmonisiert (`VERSION`, App-Metadaten, Changelog).
+
 ## 0.1.4 - 2026-02-24
 
 - LLM-Defaults fuer Setup/Profil aktualisiert:

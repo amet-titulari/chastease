@@ -8,7 +8,7 @@ Ein spielbarer vertikaler Slice:
 - KI erzeugt Reaktion/Narration
 - Ergebnis wird als Sessionzustand gespeichert
 
-## Priorisierung (Stand 2026-02-23)
+## Priorisierung (Stand 2026-02-25)
 
 1. Architektur-Refactoring als naechste Prioritaet
 2. Containerisierung (Docker/Compose)
@@ -31,8 +31,8 @@ Meilenstein R1 (naechster testbarer Stand):
 - Zielkorridor: ca. 1-2 Arbeitstage ab aktuellem Stand (bei stabiler Umgebung und ohne Scope-Erweiterung).
 
 R1-Status:
-- Erreicht am 2026-02-23 (Testlauf in `.venv312`: `27 passed`).
-- Naechster Schritt: Release-Preparing fuer Version `0.1.0` (Version-Bump, Changelog, Tag/Release-Notizen).
+- Erreicht am 2026-02-23; validiert am 2026-02-25 (Testlauf in `.venv312`: `53 passed`).
+- Naechster Schritt: Docker-Compose Dev-Setup (Option A) und Alembic-Migrationspfad abschliessen.
 
 P0.5-Status (ohne Docker):
 - Architektur-Refactoring abgeschlossen (API/Web-Router entkoppelt, gemeinsame Runtime-Helfer extrahiert).

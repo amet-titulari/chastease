@@ -69,7 +69,7 @@ Anforderung an Datennutzung:
 - Fragebogenantworten und Psychogramm duerfen ausschliesslich fuer Sessionsteuerung, Sicherheit und KI-Profilschaerfung verwendet werden.
 - Das Psychogramm dient als Interaktionsprofil, nicht als klinische Diagnostik.
 - Schema und Ableitungsregeln:
-  - `/Users/swisi/Repos/privat/chastease/docs/architecture/PSYCHOGRAM_SCHEMA.md`
+  - `docs/architecture/PSYCHOGRAM_SCHEMA.md`
 - Trigger-/Filter-Anforderung:
   - `blocked_trigger_words` und `forbidden_topics` muessen in Policy-Sicherheitsfilter einfliessen.
 
@@ -230,7 +230,7 @@ Zusatzregel:
 - Kritische Aktionen muessen mit klarer, fehlersicherer Nutzerfuehrung dargestellt werden.
 - Cross-Device-Zustand (letzter Turn, Sessionstatus) muss konsistent synchronisiert sein.
 - Siehe Detailanforderungen:
-  - `/Users/swisi/Repos/privat/chastease/docs/UI_UX_REQUIREMENTS.md`
+  - `docs/UI_UX_REQUIREMENTS.md`
 
 ## 11. Begriffsdefinition: Turn
 

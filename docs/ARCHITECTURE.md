@@ -1,7 +1,7 @@
 # Architekturueberblick
 
 Dieses Dokument beschreibt die Leitplanken fuer die technische Umsetzung.  
-Detaildiagramme liegen unter `/Users/swisi/Repos/privat/chastease/docs/architecture/`.
+Detaildiagramme liegen unter `docs/architecture/`.
 
 ## Architekturziele
 
@@ -22,7 +22,7 @@ Detaildiagramme liegen unter `/Users/swisi/Repos/privat/chastease/docs/architect
 
 ## Modulgrenzen (Zielstruktur)
 
-`/Users/swisi/Repos/privat/chastease/src/chastease/`
+`src/chastease/`
 
 *   `api/`
 *   `domains/characters/`
@@ -67,20 +67,20 @@ Detaildiagramme liegen unter `/Users/swisi/Repos/privat/chastease/docs/architect
 ## Referenzen
 
 *   C4 System Context:
-    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/C4_SYSTEM_CONTEXT.md`
+    *   `docs/architecture/C4_SYSTEM_CONTEXT.md`
 *   C4 Container:
-    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/C4_CONTAINER.md`
+    *   `docs/architecture/C4_CONTAINER.md`
 *   C4 Komponenten (Backend):
-    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/C4_COMPONENT_BACKEND.md`
+    *   `docs/architecture/C4_COMPONENT_BACKEND.md`
 *   Action Matrix:
-    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/ACTION_MATRIX.md`
+    *   `docs/architecture/ACTION_MATRIX.md`
 *   Psychogramm Schema:
-    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/PSYCHOGRAM_SCHEMA.md`
+    *   `docs/architecture/PSYCHOGRAM_SCHEMA.md`
 *   UML Domain Model:
-    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_DOMAIN_MODEL.md`
+    *   `docs/architecture/UML_DOMAIN_MODEL.md`
 *   UML Story Turn Sequence:
-    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_SEQUENCE_STORY_TURN.md`
+    *   `docs/architecture/UML_SEQUENCE_STORY_TURN.md`
 *   UML Setup Lifecycle Sequence:
-    *   `/Users/swisi/Repos/privat/chastease/docs/architecture/UML_SEQUENCE_SETUP_LIFECYCLE.md`
+    *   `docs/architecture/UML_SEQUENCE_SETUP_LIFECYCLE.md`
 *   ADR API Framework:
-    *   `/Users/swisi/Repos/privat/chastease/docs/adr/ADR-002-api-framework.md`
+    *   `docs/adr/ADR-002-api-framework.md`
