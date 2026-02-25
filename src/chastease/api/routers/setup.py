@@ -76,7 +76,12 @@ def _validate_ttlock_config(integrations: list[str], integration_config: dict[st
     normalized_integrations = [str(item).strip().lower() for item in (integrations or []) if str(item).strip()]
     if "ttlock" not in normalized_integrations:
         return
-    ttlock_cfg = integration_config.get("ttlock") if isinstance(integration_config, dict) else None
+    # If no integration_config was provided for ttlock, allow starting setup
+    # with ttlock listed in integrations; only validate when a ttlock
+    # configuration object is actually supplied.
+    if not isinstance(integration_config, dict) or "ttlock" not in integration_config:
+        return
+    ttlock_cfg = integration_config.get("ttlock")
     if not isinstance(ttlock_cfg, dict):
         raise HTTPException(
             status_code=400,
@@ -420,7 +425,18 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
 
     setup_session["status"] = "configured"
     setup_session["updated_at"] = _now_iso()
-    setup_session["active_session_id"] = None
+    store[setup_session_id] = setup_session
+    save_sessions(store)
+
+    # Ensure an active ChastitySession is created from this setup immediately
+    db = get_db_session(request)
+    try:
+        active_session_id = _ensure_active_session_from_setup(db, setup_session)
+        db.commit()
+    finally:
+        db.close()
+
+    store = load_sessions()
     store[setup_session_id] = setup_session
     save_sessions(store)
 
@@ -430,10 +446,10 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
         "artifacts_status": "pending",
         "artifacts_error": None,
         "chastity_session": {
-            "session_id": None,
+            "session_id": active_session_id,
             "user_id": setup_session["user_id"],
             "character_id": setup_session.get("character_id"),
-            "status": "pending_activation",
+            "status": "active",
             "policy": setup_session["policy_preview"],
             "psychogram": setup_session["psychogram"],
             "psychogram_brief": _psychogram_brief(setup_session["psychogram"], setup_session["policy_preview"]),

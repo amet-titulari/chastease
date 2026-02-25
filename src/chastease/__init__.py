@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from dotenv import load_dotenv
 
 from .backend import build_backend_router
@@ -21,6 +23,11 @@ def create_app(config_object: type[Config] = Config) -> FastAPI:
     init_db(app.state.engine)
     app.state.ai_service = build_ai_service(app.state.config)
     app.state.tool_registry = build_default_tool_registry()
+    # Mount static files if present (used for custom JS/CSS/assets)
+    static_dir = Path(__file__).resolve().parent / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
     app.include_router(build_frontend_router())
     app.include_router(build_backend_router())
     return app

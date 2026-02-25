@@ -316,6 +316,14 @@ def _normalize_pending_actions(pending_actions: list[dict]) -> list[dict]:
         payload = (action or {}).get("payload")
         payload_dict = dict(payload) if isinstance(payload, dict) else {}
         normalized_action, normalized_payload = _unwrap_action_request(raw_action_type, payload_dict)
+        # Normalize duration payloads (e.g., amount+unit -> seconds) so pending actions
+        # carry a consistent payload representation expected by the frontend/tests.
+        try:
+            normalized_payload = _normalize_duration_payload(normalized_action or raw_action_type, normalized_payload)
+        except Exception:
+            # Keep original payload if normalization fails
+            normalized_payload = dict(normalized_payload or {})
+
         normalized.append(
             {
                 "action_type": normalized_action or raw_action_type,

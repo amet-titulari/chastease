@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Chastease — Landing{% endblock %}
+
+{% block content %}
+  <section class="bg-gray-800 border border-gray-700 rounded-xl p-8">
+    <h1 class="text-3xl font-extrabold mb-2">Chastease</h1>
+    <p class="text-gray-300 mb-4">Evolutionäres Prototyping für ein KI-gestütztes Session-Rollenspiel mit User-Setup und persistentem Turn-Flow.</p>
+    <div class="flex gap-2">
+      <a class="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500" href="/app?mode=login">Login</a>
+      <a class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600" href="/app?mode=register">Register</a>
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Chastease{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.2"></script>
+  <style>
+    /* minimal page-level adjustments for dark mode */
+    body { background-color: rgb(6 9 14); }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-900 text-gray-100 antialiased">
+  <header class="max-w-6xl mx-auto p-4">
+    <nav class="flex items-center justify-between">
+      <div class="text-lg font-bold">Chastease</div>
+      <div class="space-x-2">
+        <a class="px-3 py-1 rounded-md bg-gray-800 hover:bg-gray-700" href="/">Home</a>
+        <a class="px-3 py-1 rounded-md bg-gray-800 hover:bg-gray-700" href="/app">App</a>
+        <a class="px-3 py-1 rounded-md bg-gray-800 hover:bg-gray-700" href="/chat">Chat</a>
+        <a class="px-3 py-1 rounded-md bg-gray-800 hover:bg-gray-700" href="/contract">Vertrag</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-4">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="max-w-6xl mx-auto p-4 text-sm text-gray-400">
+    © Chastease
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

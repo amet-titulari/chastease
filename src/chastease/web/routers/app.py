@@ -1,7 +1,12 @@
 ﻿from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from pathlib import Path
 
 router = APIRouter(tags=["web-app"])
+
+# Templates directory: src/chastease/templates
+templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[2] / "templates"))
 
 
 @router.get("/app", response_class=HTMLResponse)
@@ -18,167 +23,11 @@ def app_shell(request: Request) -> str:
   <style>
     * { box-sizing: border-box; }
     body { font-family: "Avenir Next", "Segoe UI", Arial, sans-serif; margin: 0; background: #0b1220; color: #e8eefc; }
-    .wrap { max-width: 1024px; margin: 0 auto; padding: 24px; }
-    .card { background: #101a30; border: 1px solid #22314f; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-    h1, h2 { margin: 0 0 10px; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
-    .topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 10px;
-      border: 1px solid #2b3d63;
-      background: #111e3b;
-      color: #e8eefc;
-      padding: 9px 12px;
-      text-decoration: none;
-      font-weight: 700;
-      line-height: 1.2;
-    }
-    .btn:hover { background: #1a2b4e; }
-    .btn.ghost { background: transparent; }
-    .btn.primary { background: #2d8cff; border-color: transparent; }
-    .setup-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(220px, 1fr));
-      gap: 10px 12px;
-      max-width: 760px;
-      margin-bottom: 12px;
-      margin-right: auto;
-    }
-    .setup-item label {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 13px;
-      color: #a9b9da;
-      line-height: 1.2;
-    }
-    .setup-item input,
-    .setup-item select {
-      width: 100%;
-      min-width: 0;
-      max-width: 100%;
-    }
-    .setup-item-full { grid-column: 1 / -1; }
-    .ttlock-device-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(220px, 1fr));
-      gap: 10px 12px;
-      max-width: 100%;
-      margin: 0;
-    }
-    .setup-item input[type="date"] { max-width: 100%; }
-    .qgrid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 10px;
-      align-items: stretch;
-    }
-    .q-item {
-      display: flex;
-      flex-direction: column;
-      min-height: 168px;
-    }
-    .q-item label {
-      min-height: 74px;
-      margin-bottom: 8px;
-      line-height: 1.3;
-    }
-    .q-item textarea {
-      min-height: 88px !important;
-    }
-    .q-item select,
-    .q-item input[type="range"] {
-      margin-top: auto;
-    }
-    label { display: block; font-size: 13px; color: #a9b9da; margin-bottom: 4px; }
-    input, select, button, textarea { border-radius: 8px; border: 1px solid #2b3d63; background: #0f1930; color: #e8eefc; padding: 8px 10px; }
-    input[type=range] { width: 100%; padding: 0; }
-    .slider-ends { display: flex; justify-content: space-between; gap: 8px; }
-    button { background: #2d8cff; border: 0; cursor: pointer; }
-    button:hover { background: #4aa0ff; }
-    button.ghost { background: transparent; border: 1px solid #2b3d63; }
-    button.danger { background: #c62828; color: #fff; }
-    button.danger:hover { background: #e53935; }
-    button.success { background: #1f9d55; color: #fff; }
-    button.success:hover { background: #24b562; }
-    button:disabled { opacity: 0.45; cursor: not-allowed; }
-    textarea { width: 100%; min-height: 280px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border-bottom: 1px solid #22314f; padding: 8px 6px; text-align: left; font-size: 13px; }
-    th { color: #9ab0d8; font-weight: 600; width: 220px; }
-    .md-block { line-height: 1.35; white-space: normal; }
-    .md-block h1, .md-block h2, .md-block h3, .md-block h4, .md-block h5, .md-block h6 {
-      margin: 0 0 8px;
-      font-size: 15px;
-      line-height: 1.2;
-    }
-    .md-block p { margin: 0 0 8px; }
-    .md-block ul, .md-block ol { margin: 0 0 10px 18px; padding: 0; }
-    .md-block li { margin: 2px 0; }
-    .md-block pre {
-      margin: 0 0 10px;
-      padding: 8px;
-      border-radius: 8px;
-      border: 1px solid #2a3f67;
-      background: #0a1328;
-      overflow: auto;
-    }
-    .md-block code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      background: #0a1328;
-      border: 1px solid #2a3f67;
-      border-radius: 5px;
-      padding: 1px 4px;
-    }
-    .md-block pre code {
-      background: transparent;
-      border: 0;
-      border-radius: 0;
-      padding: 0;
-    }
-    .md-block a { color: #7fb5ff; }
-    .small { font-size: 12px; color: #9ab0d8; }
-    a { color: #7fb5ff; text-decoration: none; }
-    .hidden { display: none !important; }
+    @router.get("/app", response_class=HTMLResponse)
+    def app_shell(request: Request):
+        session_kill_enabled = bool(getattr(request.app.state.config, "ENABLE_SESSION_KILL", False))
+        return templates.TemplateResponse("app.html", {"request": request, "session_kill_enabled": session_kill_enabled})
 
-    .accordion { display: grid; gap: 10px; }
-    .acc-item { background: #101a30; border: 1px solid #22314f; border-radius: 12px; overflow: hidden; }
-    .acc-head {
-      width: 100%;
-      background: transparent;
-      border: 0;
-      color: #e8eefc;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 16px;
-      font-size: 30px;
-      font-weight: 700;
-      text-align: left;
-    }
-    .acc-item.active .acc-head { border-bottom: 1px solid #22314f; }
-    .acc-item.locked .acc-head { color: #8aa0c8; }
-    .acc-lock { font-size: 12px; color: #8aa0c8; }
-    .acc-body { display: none; padding: 16px; }
-    .acc-item.active .acc-body { display: block; }
-    .dashboard-timer {
-      margin: 8px 0 12px;
-      padding: 18px 18px 14px;
-      border: 1px solid #2a3f67;
-      border-radius: 20px;
-      background: linear-gradient(180deg, #162a50 0%, #0f1f3d 100%);
-      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
-    }
-    .dashboard-timer-head {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 10px;
-      margin-bottom: 14px;
-    }
     .dashboard-timer-summary {
       font-size: 14px;
       color: #b8caea;

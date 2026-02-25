@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -34,7 +35,7 @@ class ChastitySession(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
-    character_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("characters.id"), nullable=True)
+    character_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("characters.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False)
     language: Mapped[str] = mapped_column(String(5), nullable=False)
     policy_snapshot_json: Mapped[str] = mapped_column(Text, nullable=False)
@@ -65,7 +66,7 @@ class LLMProfile(Base):
     api_url: Mapped[str] = mapped_column(String(500), nullable=False)
     api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False, default="")
     chat_model: Mapped[str] = mapped_column(String(120), nullable=False)
-    vision_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    vision_model: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     behavior_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
