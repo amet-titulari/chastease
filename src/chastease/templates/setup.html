@@ -40,6 +40,26 @@
         </div>
       </div>
 
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="text-sm text-gray-400">Vertragsstart</label>
+          <input id="contractStartDate" type="date" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">Mindestdauer (Tage)</label>
+          <input id="contractMinDurationDays" type="number" min="0" max="3650" value="90" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">Max Enddatum</label>
+          <input id="contractMaxEndDate" type="date" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">Max Dauer (Tage)</label>
+          <input id="contractMaxDurationDays" type="number" min="0" max="3650" value="365" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+        </div>
+      </div>
+      <p id="durationHint" class="text-xs text-gray-500">0 Tage bei "Max Dauer" bedeutet: Enddatum wird durch die KI bestimmt.</p>
+
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <label class="text-sm text-gray-400">Openings period</label>

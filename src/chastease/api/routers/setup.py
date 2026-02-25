@@ -363,6 +363,7 @@ def submit_setup_answers(setup_session_id: str, payload: SetupAnswersRequest, re
     setup_session["contract_generation_status"] = "idle"
     setup_session["contract_generated_at"] = None
     setup_session["ai_proposed_end_date"] = None
+
     setup_session["updated_at"] = _now_iso()
     store[setup_session_id] = setup_session
     save_sessions(store)
@@ -400,8 +401,33 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
         setup_session["psychogram"] = _build_psychogram(setup_session)
     if setup_session["policy_preview"] is None:
         setup_session["policy_preview"] = _build_policy(setup_session, setup_session["psychogram"])
+
+    setup_session["psychogram_analysis_status"] = "generating"
+    setup_session["updated_at"] = _now_iso()
+    store[setup_session_id] = setup_session
+    save_sessions(store)
+
+    db = get_db_session(request)
+    try:
+        analysis_text, proposed_end_date = generate_psychogram_analysis_with_end_date_for_setup(db, request, setup_session)
+        generated_at = _now_iso()
+        setup_session["psychogram_analysis"] = analysis_text
+        setup_session["psychogram_analysis_status"] = "ready"
+        setup_session["psychogram_analysis_generated_at"] = generated_at
+        setup_session["ai_proposed_end_date"] = proposed_end_date
+        setup_session["psychogram"]["analysis"] = analysis_text
+        setup_session["updated_at"] = generated_at
+    except Exception:
+        setup_session["psychogram_analysis_status"] = "error"
+        setup_session["updated_at"] = _now_iso()
+        store = load_sessions()
+        store[setup_session_id] = setup_session
+        save_sessions(store)
+        db.close()
+        raise
+
     setup_session["policy_preview"].setdefault("contract", {})
-    setup_session["policy_preview"]["contract"]["proposed_end_date"] = None
+    setup_session["policy_preview"]["contract"]["proposed_end_date"] = setup_session.get("ai_proposed_end_date")
     setup_session["policy_preview"]["generated_contract"] = {
         "status": "pending",
         "text": None,
@@ -414,14 +440,14 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
         },
         "technical_info": {"consent": None},
     }
-    setup_session["psychogram_analysis"] = None
-    setup_session["psychogram_analysis_status"] = "pending"
-    setup_session["psychogram_analysis_generated_at"] = None
+    setup_session["psychogram_analysis"] = analysis_text
+    setup_session["psychogram_analysis_status"] = "ready"
+    setup_session["psychogram_analysis_generated_at"] = generated_at
     setup_session["contract_generation_status"] = "pending"
     setup_session["contract_generated_at"] = None
-    setup_session["ai_proposed_end_date"] = None
+    setup_session["ai_proposed_end_date"] = proposed_end_date
     if isinstance(setup_session.get("psychogram"), dict):
-        setup_session["psychogram"].pop("analysis", None)
+        setup_session["psychogram"]["analysis"] = analysis_text
 
     setup_session["status"] = "configured"
     setup_session["updated_at"] = _now_iso()
@@ -429,7 +455,6 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
     save_sessions(store)
 
     # Ensure an active ChastitySession is created from this setup immediately
-    db = get_db_session(request)
     try:
         active_session_id = _ensure_active_session_from_setup(db, setup_session)
         db.commit()
@@ -445,6 +470,8 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
         "status": "configured",
         "artifacts_status": "pending",
         "artifacts_error": None,
+        "psychogram_analysis": setup_session.get("psychogram_analysis"),
+        "psychogram_analysis_status": setup_session.get("psychogram_analysis_status"),
         "chastity_session": {
             "session_id": active_session_id,
             "user_id": setup_session["user_id"],
@@ -453,7 +480,7 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
             "policy": setup_session["policy_preview"],
             "psychogram": setup_session["psychogram"],
             "psychogram_brief": _psychogram_brief(setup_session["psychogram"], setup_session["policy_preview"]),
-            "psychogram_analysis": None,
+            "psychogram_analysis": setup_session.get("psychogram_analysis"),
             "contract_generation_status": setup_session.get("contract_generation_status", "pending"),
         },
     }

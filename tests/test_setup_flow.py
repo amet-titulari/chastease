@@ -53,6 +53,10 @@ def test_setup_session_lifecycle(client):
     assert "psychogram_preview" in answers_data
     assert "policy_preview" in answers_data
     assert "psychogram_brief" in answers_data
+    assert "psychogram_analysis" not in answers_data
+    session_after_answers = client.get(f"/api/v1/setup/sessions/{setup_session_id}").json()
+    assert session_after_answers["psychogram_analysis"] is None
+    assert session_after_answers["psychogram_analysis_status"] == "idle"
     assert "autonomy_profile" in answers_data["psychogram_preview"]["interaction_preferences"]
     assert "praise_timing" in answers_data["psychogram_preview"]["interaction_preferences"]
 
@@ -66,8 +70,11 @@ def test_setup_session_lifecycle(client):
     assert complete_response.status_code == 200
     complete_data = complete_response.json()
     assert complete_data["status"] == "configured"
+    assert complete_data["psychogram_analysis_status"] == "ready"
+    assert complete_data["psychogram_analysis"]
     assert complete_data["chastity_session"]["status"] == "active"
     assert complete_data["chastity_session"]["user_id"] == user_id
+    assert complete_data["chastity_session"]["psychogram_analysis"]
 
 
 def test_setup_session_returns_english_questions(client):

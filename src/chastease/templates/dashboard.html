@@ -8,6 +8,48 @@
       <h1 class="text-2xl font-semibold">Dashboard</h1>
       <p id="dashboardStatus" class="text-sm text-gray-400 mt-2">Lade Sitzungsstatus...</p>
     </div>
+
+    <div class="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <h2 class="text-lg font-semibold">Countdown</h2>
+        <p id="dashboardTimerSummary" class="text-sm text-gray-400">-</p>
+      </div>
+      <div class="flex items-start justify-center gap-3 flex-wrap" aria-label="Countdown">
+        <div class="flex flex-col items-center gap-2">
+          <div class="flex items-center gap-1">
+            <span id="timerDayA" class="min-w-11 h-14 px-2 rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-3xl font-semibold">0</span>
+            <span id="timerDayB" class="min-w-11 h-14 px-2 rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-3xl font-semibold">0</span>
+            <span id="timerDayC" class="min-w-11 h-14 px-2 rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-3xl font-semibold">0</span>
+          </div>
+          <span class="text-xs text-gray-400 uppercase">Tage</span>
+        </div>
+        <span class="text-2xl text-gray-400 mt-3">:</span>
+        <div class="flex flex-col items-center gap-2">
+          <div class="flex items-center gap-1">
+            <span id="timerHourA" class="min-w-11 h-14 px-2 rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-3xl font-semibold">0</span>
+            <span id="timerHourB" class="min-w-11 h-14 px-2 rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-3xl font-semibold">0</span>
+          </div>
+          <span class="text-xs text-gray-400 uppercase">Stunden</span>
+        </div>
+        <span class="text-2xl text-gray-400 mt-3">:</span>
+        <div class="flex flex-col items-center gap-2">
+          <div class="flex items-center gap-1">
+            <span id="timerMinA" class="min-w-11 h-14 px-2 rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-3xl font-semibold">0</span>
+            <span id="timerMinB" class="min-w-11 h-14 px-2 rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-3xl font-semibold">0</span>
+          </div>
+          <span class="text-xs text-gray-400 uppercase">Minuten</span>
+        </div>
+        <span class="text-2xl text-gray-400 mt-3">:</span>
+        <div class="flex flex-col items-center gap-2">
+          <div class="flex items-center gap-1">
+            <span id="timerSecA" class="min-w-11 h-14 px-2 rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-3xl font-semibold">0</span>
+            <span id="timerSecB" class="min-w-11 h-14 px-2 rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-3xl font-semibold">0</span>
+          </div>
+          <span class="text-xs text-gray-400 uppercase">Sekunden</span>
+        </div>
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-2">
         <p class="text-xs text-gray-500 uppercase tracking-wide">Active session</p>
@@ -24,6 +66,17 @@
         <button id="dashboardKillBtn" class="px-4 py-2 rounded bg-red-600 hover:bg-red-500">Kill session</button>
       {% endif %}
       <button id="dashboardRefreshBtn" class="px-4 py-2 rounded bg-gray-700 hover:bg-gray-600">Refresh</button>
+    </div>
+
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
+      <h2 class="text-lg font-semibold">Psychogramm</h2>
+      <p id="dashboardPsychSummary" class="text-sm text-gray-300">Noch kein Psychogramm verfügbar.</p>
+      <p id="dashboardPsychMeta" class="text-xs text-gray-400"></p>
+      <p id="dashboardPsychAnalysis" class="text-sm text-gray-300 whitespace-pre-wrap"></p>
+      <div>
+        <h3 class="text-sm font-semibold text-gray-300 mb-2">Traits</h3>
+        <div id="dashboardPsychTraits" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+      </div>
     </div>
   </section>
 {% endblock %}

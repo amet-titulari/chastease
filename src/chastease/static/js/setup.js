@@ -26,6 +26,10 @@ const autonomyEl = document.getElementById('setupAutonomy');
 const hardStopEl = document.getElementById('setupHardStop');
 const intTtlockEl = document.getElementById('setupIntTtlock');
 const intChasterEl = document.getElementById('setupIntChaster');
+const contractStartDateEl = document.getElementById('contractStartDate');
+const contractMinDurationDaysEl = document.getElementById('contractMinDurationDays');
+const contractMaxEndDateEl = document.getElementById('contractMaxEndDate');
+const contractMaxDurationDaysEl = document.getElementById('contractMaxDurationDays');
 const openingLimitPeriodEl = document.getElementById('openingLimitPeriod');
 const maxOpeningsInPeriodEl = document.getElementById('maxOpeningsInPeriod');
 const openingWindowMinutesEl = document.getElementById('openingWindowMinutes');
@@ -162,6 +166,98 @@ function parseBool(value, defaultValue = false) {
   if (value === true || value === 'true') return true;
   if (value === false || value === 'false') return false;
   return defaultValue;
+}
+
+function parseDateInputValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const date = new Date(`${raw}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDateInputValue(dateObj) {
+  return dateObj.toISOString().slice(0, 10);
+}
+
+function daysBetween(startRaw, endRaw) {
+  const start = parseDateInputValue(startRaw);
+  const end = parseDateInputValue(endRaw);
+  if (!start || !end) return null;
+  const diffMs = end.getTime() - start.getTime();
+  return Math.max(0, Math.round(diffMs / (24 * 60 * 60 * 1000)));
+}
+
+function dateByDuration(startRaw, durationDays) {
+  const start = parseDateInputValue(startRaw);
+  const duration = Number(durationDays);
+  if (!start || Number.isNaN(duration) || duration <= 0) return null;
+  const target = new Date(start.getTime() + duration * 24 * 60 * 60 * 1000);
+  return formatDateInputValue(target);
+}
+
+function syncMinDurationGuard() {
+  if (!contractMinDurationDaysEl || !contractMaxDurationDaysEl) return;
+  const minDuration = Math.max(0, Number(contractMinDurationDaysEl.value || 0));
+  const maxDuration = Math.max(0, Number(contractMaxDurationDaysEl.value || 0));
+  if (maxDuration > 0 && minDuration > maxDuration) {
+    contractMinDurationDaysEl.value = String(maxDuration);
+    return;
+  }
+  contractMinDurationDaysEl.value = String(minDuration);
+}
+
+function syncDurationFromMaxEndDate() {
+  if (!contractStartDateEl || !contractMaxEndDateEl || !contractMaxDurationDaysEl) return;
+  const diffDays = daysBetween(contractStartDateEl.value, contractMaxEndDateEl.value);
+  contractMaxDurationDaysEl.value = diffDays === null ? '0' : String(diffDays);
+  syncMinDurationGuard();
+}
+
+function syncMaxEndDateFromDuration() {
+  if (!contractStartDateEl || !contractMaxEndDateEl || !contractMaxDurationDaysEl) return;
+  const duration = Math.max(0, Number(contractMaxDurationDaysEl.value || 0));
+  if (duration === 0) {
+    contractMaxEndDateEl.value = '';
+    syncMinDurationGuard();
+    return;
+  }
+  const targetDate = dateByDuration(contractStartDateEl.value, duration);
+  if (targetDate) contractMaxEndDateEl.value = targetDate;
+  syncMinDurationGuard();
+}
+
+function setContractDefaults() {
+  const now = new Date();
+  if (contractStartDateEl && !contractStartDateEl.value) {
+    contractStartDateEl.value = formatDateInputValue(now);
+  }
+  if (contractMinDurationDaysEl && !String(contractMinDurationDaysEl.value || '').trim()) {
+    contractMinDurationDaysEl.value = '90';
+  }
+  if (contractMaxDurationDaysEl && !String(contractMaxDurationDaysEl.value || '').trim()) {
+    contractMaxDurationDaysEl.value = '365';
+  }
+  if (contractMaxEndDateEl && !contractMaxEndDateEl.value && contractStartDateEl?.value) {
+    const maxEnd = dateByDuration(contractStartDateEl.value, Number(contractMaxDurationDaysEl?.value || 365));
+    if (maxEnd) contractMaxEndDateEl.value = maxEnd;
+  }
+  syncMinDurationGuard();
+}
+
+function getContractPayloadValues() {
+  const contract_start_date = contractStartDateEl?.value || null;
+  const minDuration = Math.max(0, Number(contractMinDurationDaysEl?.value || 0));
+  const maxDuration = Math.max(0, Number(contractMaxDurationDaysEl?.value || 0));
+  const contract_min_end_date = dateByDuration(contract_start_date, minDuration);
+  let contract_max_end_date = null;
+  if (maxDuration > 0) {
+    contract_max_end_date = contractMaxEndDateEl?.value || dateByDuration(contract_start_date, maxDuration);
+  }
+  return {
+    contract_start_date,
+    contract_min_end_date,
+    contract_max_end_date,
+  };
 }
 
 function openAccordion(targetKey) {
@@ -375,6 +471,20 @@ function applySetupToForm(data) {
   if (openingWindowMinutesEl && Number.isFinite(Number(data.opening_window_minutes))) {
     openingWindowMinutesEl.value = String(data.opening_window_minutes);
   }
+  if (contractStartDateEl) contractStartDateEl.value = data.contract_start_date || contractStartDateEl.value || '';
+  if (contractMaxEndDateEl) contractMaxEndDateEl.value = data.contract_max_end_date || '';
+  if (contractMinDurationDaysEl && data.contract_start_date && data.contract_min_end_date) {
+    const minDays = daysBetween(data.contract_start_date, data.contract_min_end_date);
+    if (minDays !== null) contractMinDurationDaysEl.value = String(minDays);
+  }
+  if (contractMaxDurationDaysEl && data.contract_start_date) {
+    if (!data.contract_max_end_date) {
+      contractMaxDurationDaysEl.value = '0';
+    } else {
+      const maxDays = daysBetween(data.contract_start_date, data.contract_max_end_date);
+      if (maxDays !== null) contractMaxDurationDaysEl.value = String(maxDays);
+    }
+  }
 
   const integrations = Array.isArray(data.integrations) ? data.integrations.map((x) => String(x).toLowerCase()) : [];
   const hasExplicitIntegrations = Array.isArray(data.integrations) && data.integrations.length > 0;
@@ -433,6 +543,8 @@ async function startSetup() {
     hard_stop_enabled: hardStopEl?.value === 'true',
     integrations,
     integration_config,
+    ...getContractPayloadValues(),
+    ai_controls_end_date: true,
     opening_limit_period: openingLimitPeriodEl?.value || 'week',
     max_openings_in_period: Number(maxOpeningsInPeriodEl?.value || 2),
     opening_window_minutes: Number(openingWindowMinutesEl?.value || 15),
@@ -681,6 +793,7 @@ async function bootstrap() {
 
   const helper = typeof chastease_session !== 'undefined' ? chastease_session : null;
   setupAccordionEvents();
+  setContractDefaults();
   if (llmBehaviorEl && !llmBehaviorEl.value) llmBehaviorEl.value = defaultBehaviorPrompt;
   auth = helper?.getStoredAuth ? helper.getStoredAuth() : null;
   if (!auth) {
@@ -719,6 +832,10 @@ artifactsBtn?.addEventListener('click', generateArtifacts);
 acceptConsentBtn?.addEventListener('click', acceptConsent);
 ttlockDiscoverBtn?.addEventListener('click', discoverTtlockDevices);
 ttlockLockEl?.addEventListener('change', updateTtlockSaveVisibility);
+contractStartDateEl?.addEventListener('change', syncMaxEndDateFromDuration);
+contractMaxEndDateEl?.addEventListener('change', syncDurationFromMaxEndDate);
+contractMaxDurationDaysEl?.addEventListener('input', syncMaxEndDateFromDuration);
+contractMinDurationDaysEl?.addEventListener('input', syncMinDurationGuard);
 saveTtlockBtn?.addEventListener('click', () => {
   setStatus('TTLock-Konfiguration gespeichert.');
   openNextAfterTtlockSave();
