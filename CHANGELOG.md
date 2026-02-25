@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.10 - 2026-02-25
+
+- Chat- und Aktionsfluss deutlich robuster gemacht:
+  - Striktes Request-Tag-Verhalten fuer LLM-Aktionen inklusive Repair-Round/Diagnostik erweitert.
+  - Timer- und Freeze/Pause-Handling stabilisiert (Alias-Mapping, Boundary-Clamping, verlässlichere Ausführung).
+  - Hygiene-Flow im Chat verbessert: kompaktere Action-Karten, aktive Countdown-Karte mit direktem Beenden.
+- Setup-/Session-Persistenz fuer Integrationen weiter vereinheitlicht:
+  - DB-first Integrations-Updates fuer aktive Session + Setup-Sync gefestigt.
+  - Setup uebernimmt nun auch TTLock-Konfiguration aus der letzten Session als Seed.
+- Dashboard-/UI-Polish:
+  - Pausenstatus-Visualisierung (inkl. Symbolik) und Runtime-Timer-Anzeige verfeinert.
+- Tests erweitert:
+  - Zusätzliche Regressionstests fuer Chat-Aktionen, Narration-Aliasing und Setup-TTLock-Seed.
+
 ## 0.1.9 - 2026-02-25
 
 - Vertrags-/Consent-Flow weiter stabilisiert:

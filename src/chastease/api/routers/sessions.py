@@ -1,3 +1,6 @@
+import json
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
@@ -9,6 +12,7 @@ from chastease.api.runtime import (
     resolve_user_id_from_token,
     serialize_chastity_session,
 )
+from chastease.api.schemas import SetupIntegrationsUpdateRequest
 from chastease.models import ChastitySession, Turn, User
 from chastease.repositories.setup_store import load_sessions, save_sessions
 
@@ -76,6 +80,70 @@ def get_active_chastity_session(user_id: str, auth_token: str, request: Request)
             "setup_session_id": setup_session_id,
             "setup_status": setup_status,
             "chastity_session": serialize_chastity_session(session),
+        }
+    finally:
+        db.close()
+
+
+@router.post("/{session_id}/integrations")
+def update_active_session_integrations(
+    session_id: str,
+    payload: SetupIntegrationsUpdateRequest,
+    request: Request,
+) -> dict:
+    token_user_id = resolve_user_id_from_token(payload.auth_token, request)
+    if token_user_id != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token for user.")
+
+    normalized_integrations = [str(item).strip().lower() for item in (payload.integrations or []) if str(item).strip()]
+    integration_config = payload.integration_config if isinstance(payload.integration_config, dict) else {}
+
+    db = get_db_session(request)
+    try:
+        user = db.get(User, payload.user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        session = db.get(ChastitySession, session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Chastity session not found.")
+        if session.user_id != payload.user_id:
+            raise HTTPException(status_code=403, detail="Session does not belong to user.")
+        if session.status != "active":
+            raise HTTPException(status_code=409, detail="Session is not active.")
+
+        policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
+        if not isinstance(policy, dict):
+            policy = {}
+        policy["integrations"] = normalized_integrations
+        policy["integration_config"] = integration_config
+
+        session.policy_snapshot_json = json.dumps(policy)
+        session.updated_at = datetime.now(UTC)
+        db.add(session)
+        db.commit()
+
+        applied_to_setup_session = False
+        setup_session_id = find_setup_session_id_for_active_session(payload.user_id, session_id)
+        if setup_session_id:
+            store = load_sessions()
+            setup_session = store.get(setup_session_id)
+            if isinstance(setup_session, dict) and setup_session.get("user_id") == payload.user_id:
+                setup_session["integrations"] = normalized_integrations
+                setup_session["integration_config"] = integration_config
+                if isinstance(setup_session.get("policy_preview"), dict):
+                    setup_session["policy_preview"]["integrations"] = normalized_integrations
+                    setup_session["policy_preview"]["integration_config"] = integration_config
+                setup_session["updated_at"] = datetime.now(UTC).isoformat()
+                store[setup_session_id] = setup_session
+                save_sessions(store)
+                applied_to_setup_session = True
+
+        return {
+            "session_id": session_id,
+            "integrations": normalized_integrations,
+            "integration_config": integration_config,
+            "applied_to_setup_session": applied_to_setup_session,
         }
     finally:
         db.close()

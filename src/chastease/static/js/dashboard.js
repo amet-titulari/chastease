@@ -24,6 +24,7 @@ const psychTraitsEl = document.getElementById('dashboardPsychTraits');
 
 let currentSession = null;
 let timerInterval = null;
+let sessionRefreshInterval = null;
 
 const traitLabels = {
   structure_need: 'Strukturbedarf',
@@ -70,6 +71,9 @@ function clearTimerInterval() {
 }
 
 function getTargetDate(body) {
+  const runtimeTimer = body?.chastity_session?.policy?.runtime_timer || {};
+  const runtimeTarget = toDateOrNull(runtimeTimer.effective_end_at);
+  if (runtimeTarget) return runtimeTarget;
   const contract = body?.chastity_session?.policy?.contract || {};
   return (
     toDateOrNull(contract.proposed_end_date) ||
@@ -78,10 +82,39 @@ function getTargetDate(body) {
   );
 }
 
+function splitSeconds(totalSecondsRaw) {
+  const totalSeconds = Math.max(0, Math.floor(Number(totalSecondsRaw) || 0));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return { days, hours, minutes, seconds };
+}
+
 function renderTimer(body) {
   clearTimerInterval();
   if (!body?.has_active_session) {
     resetTimerDisplay('Keine aktive Session.');
+    return;
+  }
+
+  const runtimeTimer = body?.chastity_session?.policy?.runtime_timer || {};
+  const timerState = String(runtimeTimer.state || '').toLowerCase();
+  if (timerState === 'paused') {
+    const remaining = Number(runtimeTimer.remaining_seconds);
+    const { days, hours, minutes, seconds } = splitSeconds(remaining);
+    updateTimerDigits(days, hours, minutes, seconds);
+
+    const pausedAt = toDateOrNull(runtimeTimer.paused_at);
+    if (timerSummaryEl) {
+      if (pausedAt) {
+        const datePart = pausedAt.toLocaleDateString('de-DE');
+        const timePart = pausedAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        timerSummaryEl.textContent = `❄️ Timer angehalten seit ${datePart} ${timePart}`;
+      } else {
+        timerSummaryEl.textContent = '❄️ Timer angehalten';
+      }
+    }
     return;
   }
 
@@ -111,7 +144,8 @@ function renderTimer(body) {
     if (timerSummaryEl) {
       const datePart = targetDate.toLocaleDateString('de-DE');
       const timePart = targetDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-      timerSummaryEl.textContent = `Bis ${datePart} ${timePart}`;
+      const prefix = runtimeTimer?.effective_end_at ? '⏱️ Runtime bis' : 'Bis';
+      timerSummaryEl.textContent = `${prefix} ${datePart} ${timePart}`;
     }
   };
 
@@ -216,6 +250,13 @@ function refreshSession() {
   });
 }
 
+function startSessionAutoRefresh() {
+  if (sessionRefreshInterval) return;
+  sessionRefreshInterval = window.setInterval(() => {
+    refreshSession();
+  }, 5000);
+}
+
 function goToSetup() {
   const setupId = currentSession?.setup_session_id;
   const target = setupId ? `/setup?setup_session_id=${encodeURIComponent(setupId)}` : '/setup';
@@ -254,4 +295,5 @@ document.addEventListener('DOMContentLoaded', () => {
     chastease_common.renderNavAuth();
   }
   refreshSession();
+  startSessionAutoRefresh();
 });

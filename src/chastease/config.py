@@ -1,4 +1,6 @@
 import os
+import secrets
+from pathlib import Path
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -28,10 +30,33 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _resolve_secret_key() -> str:
+    configured = os.getenv("SECRET_KEY")
+    if configured is not None and configured.strip():
+        return configured.strip()
+
+    key_file = os.getenv("SECRET_KEY_FILE", "data/secret_key.txt").strip() or "data/secret_key.txt"
+    key_path = Path(key_file)
+    if not key_path.is_absolute():
+        key_path = Path.cwd() / key_path
+
+    try:
+        if key_path.exists():
+            existing = key_path.read_text(encoding="utf-8").strip()
+            if existing:
+                return existing
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        generated = secrets.token_urlsafe(48)
+        key_path.write_text(generated, encoding="utf-8")
+        return generated
+    except Exception:
+        return "dev-secret-change-me"
+
+
 class Config:
     def __init__(self) -> None:
         self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").strip().upper()
-        self.SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
+        self.SECRET_KEY = _resolve_secret_key()
         self.OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
         self.DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/chastease.db")
@@ -51,3 +76,4 @@ class Config:
         self.LLM_CHAT_TIMEOUT_READ = max(3.0, _env_float("LLM_CHAT_TIMEOUT_READ", 10.0))
         self.LLM_CHAT_TIMEOUT_WRITE = max(1.0, _env_float("LLM_CHAT_TIMEOUT_WRITE", 10.0))
         self.LLM_CHAT_TIMEOUT_POOL = max(1.0, _env_float("LLM_CHAT_TIMEOUT_POOL", 3.0))
+        self.LLM_FAIL_CLOSED_REQUEST_TAG = _env_bool("LLM_FAIL_CLOSED_REQUEST_TAG", True)

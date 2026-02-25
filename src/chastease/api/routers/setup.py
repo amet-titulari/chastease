@@ -15,6 +15,7 @@ from chastease.api.schemas import (
     SetupArtifactsRequest,
     SetupChatPreviewRequest,
     SetupContractConsentRequest,
+    SetupIntegrationsUpdateRequest,
     SetupStartRequest,
 )
 from chastease.models import Character, ChastitySession, Turn, User
@@ -106,6 +107,57 @@ def _validate_ttlock_config(integrations: list[str], integration_config: dict[st
             status_code=400,
             detail="integration_config.ttlock.ttl_pass_md5 must be a lowercase 32-char md5 hex string.",
         )
+
+
+def _latest_ttlock_seed_from_user_session(db, user_id: str) -> dict | None:
+    latest_session = db.scalar(
+        select(ChastitySession)
+        .where(ChastitySession.user_id == user_id)
+        .order_by(ChastitySession.updated_at.desc())
+    )
+    if latest_session is None:
+        return None
+    if not latest_session.policy_snapshot_json:
+        return None
+    try:
+        policy = json.loads(latest_session.policy_snapshot_json)
+    except Exception:
+        return None
+    if not isinstance(policy, dict):
+        return None
+
+    integration_config = policy.get("integration_config") if isinstance(policy.get("integration_config"), dict) else {}
+    ttlock_cfg = integration_config.get("ttlock") if isinstance(integration_config.get("ttlock"), dict) else None
+    if ttlock_cfg is None:
+        return None
+
+    ttl_user = str(ttlock_cfg.get("ttl_user") or "").strip()
+    ttl_pass_md5 = str(ttlock_cfg.get("ttl_pass_md5") or "").strip().lower()
+    ttl_lock_id = str(ttlock_cfg.get("ttl_lock_id") or "").strip()
+    ttl_gateway_id = str(ttlock_cfg.get("ttl_gateway_id") or "").strip()
+    if not ttl_user or not ttl_pass_md5 or not ttl_lock_id:
+        return None
+    if re.fullmatch(r"[0-9a-f]{32}", ttl_pass_md5) is None:
+        return None
+
+    normalized_integrations = [
+        str(item).strip().lower() for item in (policy.get("integrations") or []) if str(item).strip()
+    ]
+    if "ttlock" not in normalized_integrations:
+        normalized_integrations.append("ttlock")
+
+    result_cfg = {
+        "ttl_user": ttl_user,
+        "ttl_pass_md5": ttl_pass_md5,
+        "ttl_lock_id": ttl_lock_id,
+    }
+    if ttl_gateway_id:
+        result_cfg["ttl_gateway_id"] = ttl_gateway_id
+
+    return {
+        "integrations": normalized_integrations,
+        "ttlock": result_cfg,
+    }
 
 
 def _system_note(lang: str, key: str, **kwargs) -> str:
@@ -223,7 +275,12 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
     if payload.max_openings_per_day is not None:
         opening_limit_period = "day"
         max_openings_in_period = payload.max_openings_per_day
-    _validate_ttlock_config(payload.integrations, payload.integration_config)
+    normalized_payload_integrations = [
+        str(item).strip().lower() for item in (payload.integrations or []) if str(item).strip()
+    ]
+    payload_integration_config = payload.integration_config if isinstance(payload.integration_config, dict) else {}
+    _validate_ttlock_config(normalized_payload_integrations, payload_integration_config)
+    latest_ttlock_seed = None
     db = get_db_session(request)
     try:
         token_user_id = resolve_user_id_from_token(payload.auth_token, request)
@@ -244,14 +301,35 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
         )
         if active_session is not None:
             raise HTTPException(status_code=409, detail="Active session already exists.")
+        latest_ttlock_seed = _latest_ttlock_seed_from_user_session(db, payload.user_id)
     finally:
         db.close()
 
     store = load_sessions()
     setup_session_id, setup_session = _find_user_setup_session(store, payload.user_id, {"draft", "setup_in_progress"})
+    created_new_setup_session = False
     if setup_session is None:
         setup_session = _create_draft_setup_session(payload.user_id, lang)
         setup_session_id = setup_session["setup_session_id"]
+        created_new_setup_session = True
+
+    effective_integrations = list(normalized_payload_integrations)
+    effective_integration_config = dict(payload_integration_config)
+    has_ttlock_in_payload = isinstance(effective_integration_config.get("ttlock"), dict)
+    existing_integration_config = setup_session.get("integration_config") if isinstance(setup_session.get("integration_config"), dict) else {}
+    existing_has_ttlock = isinstance(existing_integration_config.get("ttlock"), dict)
+    should_seed_ttlock = (
+        not has_ttlock_in_payload
+        and not existing_has_ttlock
+        and isinstance(latest_ttlock_seed, dict)
+        and setup_session.get("status") in {"draft", "setup_in_progress"}
+    )
+    if should_seed_ttlock:
+        ttlock_seed = latest_ttlock_seed.get("ttlock") if isinstance(latest_ttlock_seed.get("ttlock"), dict) else None
+        if ttlock_seed:
+            effective_integration_config["ttlock"] = ttlock_seed
+            if "ttlock" not in effective_integrations:
+                effective_integrations.append("ttlock")
 
     setup_session.update(
         {
@@ -262,8 +340,8 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
             "status": "setup_in_progress",
             "hard_stop_enabled": payload.hard_stop_enabled,
             "autonomy_mode": payload.autonomy_mode,
-            "integrations": payload.integrations,
-            "integration_config": payload.integration_config,
+            "integrations": effective_integrations,
+            "integration_config": effective_integration_config,
             "language": lang,
             "blocked_trigger_words": payload.blocked_trigger_words,
             "forbidden_topics": payload.forbidden_topics,
@@ -304,8 +382,8 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
         "status": "setup_in_progress",
         "questionnaire_version": QUESTIONNAIRE_VERSION,
         "language": lang,
-        "integrations": payload.integrations,
-        "integration_config": payload.integration_config,
+        "integrations": effective_integrations,
+        "integration_config": effective_integration_config,
         "contract": {
             "start_date": contract_start_date,
             "end_date": contract_end_date,
@@ -383,6 +461,45 @@ def submit_setup_answers(setup_session_id: str, payload: SetupAnswersRequest, re
 @router.get("/sessions/{setup_session_id}")
 def get_setup_session(setup_session_id: str) -> dict:
     return _get_session_or_404(setup_session_id)
+
+
+@router.post("/sessions/{setup_session_id}/integrations")
+def update_setup_integrations(
+    setup_session_id: str,
+    payload: SetupIntegrationsUpdateRequest,
+    request: Request,
+) -> dict:
+    store = load_sessions()
+    setup_session = store.get(setup_session_id)
+    if setup_session is None:
+        raise HTTPException(status_code=404, detail=_t("de", "not_found"))
+    if setup_session.get("user_id") != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid user for setup session.")
+    token_user_id = resolve_user_id_from_token(payload.auth_token, request)
+    if token_user_id != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token for user.")
+
+    normalized_integrations = [str(item).strip().lower() for item in (payload.integrations or []) if str(item).strip()]
+    integration_config = payload.integration_config if isinstance(payload.integration_config, dict) else {}
+    _validate_ttlock_config(normalized_integrations, integration_config)
+
+    setup_session["integrations"] = normalized_integrations
+    setup_session["integration_config"] = integration_config
+    if isinstance(setup_session.get("policy_preview"), dict):
+        setup_session["policy_preview"]["integrations"] = normalized_integrations
+        setup_session["policy_preview"]["integration_config"] = integration_config
+    setup_session["updated_at"] = _now_iso()
+    store[setup_session_id] = setup_session
+    save_sessions(store)
+
+    applied_to_active_session = sync_setup_snapshot_to_active_session(request, setup_session)
+    return {
+        "setup_session_id": setup_session_id,
+        "status": setup_session.get("status", "setup_in_progress"),
+        "integrations": normalized_integrations,
+        "integration_config": integration_config,
+        "applied_to_active_session": applied_to_active_session,
+    }
 
 @router.post("/sessions/{setup_session_id}/complete")
 def complete_setup_session(setup_session_id: str, request: Request) -> dict:

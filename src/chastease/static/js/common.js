@@ -126,12 +126,64 @@ function markdownToHtml(markdown) {
   return out.join('');
 }
 
+function getStoredAuth() {
+  try {
+    const raw = localStorage.getItem(authStorageKey());
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.user_id || !parsed.auth_token) return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function updatePrimaryNav() {
+  const link = document.getElementById('navPrimary');
+  if (!link) return;
+
+  const auth = getStoredAuth();
+  if (!auth) {
+    link.textContent = 'App';
+    link.setAttribute('href', '/app');
+    return;
+  }
+
+  try {
+    const url = `/api/v1/sessions/active?user_id=${encodeURIComponent(auth.user_id)}&auth_token=${encodeURIComponent(auth.auth_token)}`;
+    const response = await fetch(url);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      link.textContent = 'App';
+      link.setAttribute('href', '/app');
+      return;
+    }
+
+    if (body?.has_active_session || body?.setup_status === 'configured') {
+      link.textContent = 'Dashboard';
+      link.setAttribute('href', '/dashboard');
+      return;
+    }
+
+    const setupId = body?.setup_session_id;
+    link.textContent = 'Setup';
+    link.setAttribute('href', setupId ? `/setup?setup_session_id=${encodeURIComponent(setupId)}` : '/setup');
+  } catch (e) {
+    link.textContent = 'App';
+    link.setAttribute('href', '/app');
+  }
+}
+
 // expose globally
-window.chastease_common = { authStorageKey, logoutUser, setStatus, renderNavAuth, markdownToHtml };
+window.chastease_common = { authStorageKey, logoutUser, setStatus, renderNavAuth, markdownToHtml, updatePrimaryNav };
 
 document.addEventListener('DOMContentLoaded', () => {
   try {
     renderNavAuth();
   } catch (e) {}
+  try {
+    updatePrimaryNav();
+  } catch (e) {}
 });
 window.chastease_common.renderNavAuth = renderNavAuth;
+window.chastease_common.updatePrimaryNav = updatePrimaryNav;

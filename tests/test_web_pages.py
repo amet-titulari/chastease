@@ -3,6 +3,8 @@ def test_landing_page(client):
     assert response.status_code == 200
     assert "Chastease" in response.text
     assert "Register" in response.text
+    assert "href=\"/\">Home<" not in response.text
+    assert "id=\"navPrimary\"" in response.text
 
 
 def test_app_shell_page(client):
@@ -18,3 +20,11 @@ def test_contract_page(client):
     assert "Keuschheitsvertrag" in response.text
     assert "/static/js/session.js" in response.text
     assert "/static/js/contract.js" in response.text
+
+
+def test_chat_page(client):
+    response = client.get("/chat")
+    assert response.status_code == 200
+    assert "AI Chat" in response.text
+    assert "/static/js/session.js" in response.text
+    assert "/static/js/chat.js" in response.text

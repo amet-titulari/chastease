@@ -1,3 +1,10 @@
+import json
+from datetime import UTC, datetime
+from uuid import uuid4
+
+from chastease.models import ChastitySession
+
+
 def _register(client, username, name="Wearer", password="demo-pass-123", email=None):
     response = client.post(
         "/api/v1/auth/register",
@@ -303,6 +310,55 @@ def test_setup_start_rejects_incomplete_ttlock_integration_config(client):
     assert "ttl_user, ttl_pass_md5 and ttl_lock_id" in response.json()["detail"]
 
 
+def test_setup_start_seeds_ttlock_config_from_last_session(client):
+    auth = _register(client, "ttlock-seed-user", "TTLock Seed User")
+    user_id = auth["user_id"]
+
+    db = client.app.state.db_session_factory()
+    try:
+        seeded_policy = {
+            "integrations": ["ttlock"],
+            "integration_config": {
+                "ttlock": {
+                    "ttl_user": "seed-user@example.com",
+                    "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                    "ttl_gateway_id": "gw-seed",
+                    "ttl_lock_id": "lock-seed",
+                }
+            },
+        }
+        historical_session = ChastitySession(
+            id=str(uuid4()),
+            user_id=user_id,
+            character_id=None,
+            status="finished",
+            language="de",
+            policy_snapshot_json=json.dumps(seeded_policy),
+            psychogram_snapshot_json=json.dumps({}),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        db.add(historical_session)
+        db.commit()
+    finally:
+        db.close()
+
+    start_response = client.post(
+        "/api/v1/setup/sessions",
+        json={
+            "user_id": user_id,
+            "auth_token": auth["auth_token"],
+            "integrations": [],
+            "integration_config": {},
+        },
+    )
+    assert start_response.status_code == 200
+    data = start_response.json()
+    assert "ttlock" in data["integrations"]
+    assert data["integration_config"]["ttlock"]["ttl_user"] == "seed-user@example.com"
+    assert data["integration_config"]["ttlock"]["ttl_lock_id"] == "lock-seed"
+
+
 def test_setup_start_rejects_end_before_start(client):
     auth = _register(client, "contract-invalid-user", "Contract Invalid User")
     user_id = auth["user_id"]
@@ -316,6 +372,64 @@ def test_setup_start_rejects_end_before_start(client):
         },
     )
     assert response.status_code == 400
+
+
+def test_setup_integrations_update_syncs_to_active_session(client):
+    auth = _register(client, "ttlock-sync-user", "TTLock Sync User")
+    user_id = auth["user_id"]
+
+    start_response = client.post(
+        "/api/v1/setup/sessions",
+        json={"user_id": user_id, "auth_token": auth["auth_token"]},
+    )
+    assert start_response.status_code == 200
+    setup_session_id = start_response.json()["setup_session_id"]
+
+    answers_response = client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/answers",
+        json={
+            "answers": [
+                {"question_id": "q1_rule_structure", "value": 8},
+                {"question_id": "q2_strictness_authority", "value": 7},
+                {"question_id": "q3_control_need", "value": 8},
+                {"question_id": "q4_praise_importance", "value": 4},
+                {"question_id": "q5_novelty_challenge", "value": 8},
+                {"question_id": "q6_intensity_1_5", "value": 4},
+            ]
+        },
+    )
+    assert answers_response.status_code == 200
+
+    complete_response = client.post(f"/api/v1/setup/sessions/{setup_session_id}/complete")
+    assert complete_response.status_code == 200
+    session_id = complete_response.json()["chastity_session"]["session_id"]
+
+    update_response = client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/integrations",
+        json={
+            "user_id": user_id,
+            "auth_token": auth["auth_token"],
+            "integrations": ["ttlock"],
+            "integration_config": {
+                "ttlock": {
+                    "ttl_user": "wearer@example.com",
+                    "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                    "ttl_gateway_id": "gw-1",
+                    "ttl_lock_id": "lock-1",
+                }
+            },
+        },
+    )
+    assert update_response.status_code == 200
+    updated = update_response.json()
+    assert updated["applied_to_active_session"] is True
+    assert updated["integrations"] == ["ttlock"]
+
+    active_response = client.get(f"/api/v1/sessions/{session_id}")
+    assert active_response.status_code == 200
+    policy = active_response.json()["policy"]
+    assert policy["integrations"] == ["ttlock"]
+    assert policy["integration_config"]["ttlock"]["ttl_lock_id"] == "lock-1"
 
 
 def test_setup_start_accepts_disabled_penalty_caps(client):

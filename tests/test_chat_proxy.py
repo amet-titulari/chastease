@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from time import sleep
 from uuid import uuid4
@@ -62,6 +62,22 @@ def _create_active_session(client, auth, **start_overrides):
     finally:
         db.close()
     return session_id
+
+
+def _update_session_snapshots(client, session_id, *, policy=None, psychogram=None):
+    db = client.app.state.db_session_factory()
+    try:
+        session = db.get(ChastitySession, session_id)
+        assert session is not None
+        if policy is not None:
+            session.policy_snapshot_json = json.dumps(policy)
+        if psychogram is not None:
+            session.psychogram_snapshot_json = json.dumps(psychogram)
+        session.updated_at = datetime.now(UTC)
+        db.add(session)
+        db.commit()
+    finally:
+        db.close()
 
 
 def test_chat_proxy_turn_and_execute_action_endpoint(client):
@@ -145,8 +161,31 @@ def test_chat_add_time_respects_max_end_date_boundary(client):
     )
     assert execute_add_time.status_code == 200
     timer = execute_add_time.json()["timer"]
+    assert "clamped to max end date boundary" in execute_add_time.json()["message"]
     effective_end = datetime.fromisoformat(timer["effective_end_at"]).date().isoformat()
     assert effective_end == "2026-01-02"
+
+
+def test_chat_reduce_time_clamps_to_min_end_date_boundary(client):
+    auth = _register(client, username="chat-user-reduce-min")
+    session_id = _create_active_session(
+        client,
+        auth,
+        contract_start_date="2026-01-01",
+        contract_min_end_date="2026-01-01",
+        contract_max_end_date="2026-01-02",
+        ai_controls_end_date=False,
+    )
+
+    execute_reduce_time = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "reduce_time", "payload": {"seconds": 86401}},
+    )
+    assert execute_reduce_time.status_code == 200
+    timer = execute_reduce_time.json()["timer"]
+    assert "clamped to min end date boundary" in execute_reduce_time.json()["message"]
+    effective_end = datetime.fromisoformat(timer["effective_end_at"]).date().isoformat()
+    assert effective_end == "2026-01-01"
 
 
 def test_chat_unpause_respects_max_end_date_boundary(client):
@@ -317,6 +356,213 @@ def test_chat_turn_keeps_image_verification_as_pending_action(client):
     assert data["pending_actions"][0]["action_type"] == "image_verification"
 
 
+def test_chat_turn_keeps_hygiene_open_pending_even_in_execute_mode(client):
+    auth = _register(client, username="chat-user-hygiene-pending")
+    session_id = _create_active_session(
+        client,
+        auth,
+        autonomy_mode="execute",
+        integrations=["ttlock"],
+        integration_config={
+            "ttlock": {
+                "ttl_user": "wearer@example.com",
+                "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                "ttl_lock_id": "12345",
+            }
+        },
+    )
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        'Bitte bestaetigen.\n[[REQUEST:hygiene_open|{"reason":"hygiene"}]]'
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Bitte Hygieneoeffnung.", "language": "de"},
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["executed_actions"] == []
+    assert data["failed_actions"] == []
+    assert len(data["pending_actions"]) == 1
+    assert data["pending_actions"][0]["action_type"] == "hygiene_open"
+
+
+def test_chat_turn_maps_ttlock_open_request_to_hygiene_open_pending(client):
+    auth = _register(client, username="chat-user-ttlock-alias")
+    session_id = _create_active_session(
+        client,
+        auth,
+        autonomy_mode="execute",
+        integrations=["ttlock"],
+        integration_config={
+            "ttlock": {
+                "ttl_user": "wearer@example.com",
+                "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                "ttl_lock_id": "12345",
+            }
+        },
+    )
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        'Bitte bestaetigen.\n[[REQUEST:ttlock_open|{"reason":"hygiene"}]]'
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Bitte oeffnen.", "language": "de"},
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["executed_actions"] == []
+    assert data["failed_actions"] == []
+    assert len(data["pending_actions"]) == 1
+    assert data["pending_actions"][0]["action_type"] == "hygiene_open"
+
+
+def test_chat_turn_fail_closed_blocks_hygiene_fallback_when_plain_text(client):
+    auth = _register(client, username="chat-user-plain-fallback")
+    session_id = _create_active_session(
+        client,
+        auth,
+        autonomy_mode="execute",
+        integrations=["ttlock"],
+        integration_config={
+            "ttlock": {
+                "ttl_user": "wearer@example.com",
+                "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                "ttl_lock_id": "12345",
+            }
+        },
+    )
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        "Fuer diese Hygieneoeffnung ohne Verifikation gewaehre ich eine Ausnahme. Oeffne den Kaefig."
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={
+            "session_id": session_id,
+            "message": "Kannst du eine Hygieneoeffnung ohne Verifikation starten?",
+            "language": "de",
+        },
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["pending_actions"] == []
+    assert data["executed_actions"] == []
+    assert data["action_diagnostics"]["raw_machine_tag_present"] is False
+    assert data["action_diagnostics"]["reask_attempted"] is True
+    assert data["action_diagnostics"]["reask_applied"] is False
+    assert data["action_diagnostics"]["strict_request_tag_mode"] is True
+    assert data["action_diagnostics"]["fallback_applied"] is False
+    assert any("Strict request-tag mode" in str(item.get("detail", "")) for item in data["failed_actions"])
+
+
+def test_chat_turn_can_use_hygiene_fallback_when_strict_mode_disabled(client):
+    client.app.state.config.LLM_FAIL_CLOSED_REQUEST_TAG = False
+    auth = _register(client, username="chat-user-plain-fallback-legacy")
+    session_id = _create_active_session(
+        client,
+        auth,
+        autonomy_mode="execute",
+        integrations=["ttlock"],
+        integration_config={
+            "ttlock": {
+                "ttl_user": "wearer@example.com",
+                "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                "ttl_lock_id": "12345",
+            }
+        },
+    )
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        "Fuer diese Hygieneoeffnung ohne Verifikation gewaehre ich eine Ausnahme. Oeffne den Kaefig."
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={
+            "session_id": session_id,
+            "message": "Kannst du eine Hygieneoeffnung ohne Verifikation starten?",
+            "language": "de",
+        },
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert len(data["pending_actions"]) == 1
+    assert data["pending_actions"][0]["action_type"] == "hygiene_open"
+    assert data["action_diagnostics"]["strict_request_tag_mode"] is False
+    assert data["action_diagnostics"]["fallback_applied"] is True
+
+
+def test_chat_turn_reask_repairs_plain_text_into_structured_request(client):
+    auth = _register(client, username="chat-user-reask-repair")
+    session_id = _create_active_session(
+        client,
+        auth,
+        autonomy_mode="execute",
+        integrations=["ttlock"],
+        integration_config={
+            "ttlock": {
+                "ttl_user": "wearer@example.com",
+                "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                "ttl_lock_id": "12345",
+            }
+        },
+    )
+    calls = {"n": 0}
+
+    def _fake_generate(_context):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return "Ich erlaube eine Hygieneoeffnung ohne Verifikation."
+        return '[[REQUEST:hygiene_open|{"reason":"hygiene"}]]'
+
+    client.app.state.ai_service.generate_narration = _fake_generate
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={
+            "session_id": session_id,
+            "message": "Kannst du eine Hygieneoeffnung ohne Verifikation starten?",
+            "language": "de",
+        },
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert len(data["pending_actions"]) == 1
+    assert data["pending_actions"][0]["action_type"] == "hygiene_open"
+    assert data["action_diagnostics"]["raw_machine_tag_present"] is False
+    assert data["action_diagnostics"]["reask_attempted"] is True
+    assert data["action_diagnostics"]["reask_applied"] is True
+    assert data["action_diagnostics"]["fallback_applied"] is False
+    assert any("repair round generated" in str(item.get("detail", "")) for item in data["failed_actions"])
+
+
+def test_chat_turn_falls_back_to_pause_timer_on_plain_text_intent(client):
+    client.app.state.config.LLM_FAIL_CLOSED_REQUEST_TAG = False
+    auth = _register(client, username="chat-user-pause-fallback")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        "Verstanden. Freeze aktiviert. Der Timer laeuft nicht weiter."
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={
+            "session_id": session_id,
+            "message": "Kannst du bitte pausieren? Also einen freeze machen",
+            "language": "de",
+        },
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["pending_actions"] == []
+    assert len(data["executed_actions"]) == 1
+    assert data["executed_actions"][0]["action_type"] == "pause_timer"
+    assert data["action_diagnostics"]["raw_machine_tag_present"] is False
+    assert data["action_diagnostics"]["strict_request_tag_mode"] is False
+    assert data["action_diagnostics"]["fallback_applied"] is True
+
+
 def test_chat_action_execute_hygiene_open_success(client, monkeypatch):
     auth = _register(client, username="chat-user-ttlock-open")
     session_id = _create_active_session(
@@ -375,6 +621,54 @@ def test_chat_action_execute_ttlock_open_is_reserved(client):
     assert "not allowed for execution" in str(execute.json().get("detail", ""))
 
 
+def test_chat_action_execute_freeze_alias_pauses_timer(client):
+    auth = _register(client, username="chat-user-freeze-alias")
+    session_id = _create_active_session(client, auth)
+
+    execute = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "freeze_timer", "payload": {}},
+    )
+    assert execute.status_code == 200
+    data = execute.json()
+    assert data["executed"] is True
+    assert data["action_type"] == "pause_timer"
+    assert data["timer"]["state"] == "paused"
+
+
+
+def test_active_session_integrations_update_persists_to_db_policy(client):
+    auth = _register(client, username="chat-user-integrations-update")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+
+    update = client.post(
+        f"/api/v1/sessions/{session_id}/integrations",
+        json={
+            "user_id": auth["user_id"],
+            "auth_token": auth["auth_token"],
+            "integrations": ["ttlock"],
+            "integration_config": {
+                "ttlock": {
+                    "ttl_user": "wearer@example.com",
+                    "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                    "ttl_lock_id": "12345",
+                }
+            },
+        },
+    )
+    assert update.status_code == 200
+    body = update.json()
+    assert body["session_id"] == session_id
+    assert body["integrations"] == ["ttlock"]
+    assert body["integration_config"]["ttlock"]["ttl_lock_id"] == "12345"
+
+    session_fetch = client.get(f"/api/v1/sessions/{session_id}")
+    assert session_fetch.status_code == 200
+    policy = session_fetch.json()["policy"]
+    assert policy["integrations"] == ["ttlock"]
+    assert policy["integration_config"]["ttlock"]["ttl_lock_id"] == "12345"
+
+
 def test_chat_vision_review_saves_uploaded_image(client, monkeypatch, tmp_path):
     monkeypatch.setenv("IMAGE_VERIFICATION_DIR", str(tmp_path / "image_reviews"))
     auth = _register(client, username="chat-user-vision")
@@ -408,3 +702,98 @@ def test_chat_vision_review_saves_uploaded_image(client, monkeypatch, tmp_path):
     saved_path = data.get("saved_image_path")
     assert isinstance(saved_path, str) and saved_path
     assert Path(saved_path).exists()
+
+
+def test_chat_turn_history_endpoint_returns_persisted_turns(client):
+    auth = _register(client, username="chat-user-history")
+    session_id = _create_active_session(client, auth)
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={
+            "session_id": session_id,
+            "message": "Bitte gib mir ein kurzes Status-Update.",
+            "language": "de",
+            "attachments": [],
+        },
+    )
+    assert turn.status_code == 200
+
+    turns = client.get(f"/api/v1/sessions/{session_id}/turns")
+    assert turns.status_code == 200
+    data = turns.json()
+    assert data["session_id"] == session_id
+    assert isinstance(data["turns"], list)
+    assert len(data["turns"]) >= 1
+    last_turn = data["turns"][-1]
+    assert "player_action" in last_turn
+    assert "ai_narration" in last_turn
+
+
+def test_chat_turn_safeword_abort_requires_two_confirmations_and_reason(client):
+    auth = _register(client, username="chat-user-abort-flow")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+    psychogram = {
+        "safety_profile": {
+            "mode": "safeword",
+            "safeword": "stopp",
+            "safeword_abort_protocol": {
+                "confirmation_questions_required": 2,
+                "reason_required": True,
+            },
+        }
+    }
+    _update_session_snapshots(client, session_id, psychogram=psychogram)
+
+    trigger = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Stopp", "language": "de"},
+    )
+    assert trigger.status_code == 200
+    assert trigger.json()["pending_actions"] == []
+
+    first_confirmation = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Ich bestaetige den Abbruch", "language": "de"},
+    )
+    assert first_confirmation.status_code == 200
+    assert first_confirmation.json()["pending_actions"] == []
+
+    second_with_reason = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Grund: Schmerzen am Schloss", "language": "de"},
+    )
+    assert second_with_reason.status_code == 200
+    data = second_with_reason.json()
+    assert data["failed_actions"] == []
+    assert len(data["pending_actions"]) == 1
+    assert data["pending_actions"][0]["action_type"] == "hygiene_open"
+    assert data["pending_actions"][0]["payload"]["trigger"] == "safeword"
+
+
+def test_chat_turn_timer_expiry_creates_hygiene_open_pending(client):
+    auth = _register(client, username="chat-user-expired-timer")
+    session_id = _create_active_session(client, auth, autonomy_mode="suggest")
+    now = datetime.now(UTC)
+    policy = {
+        "runtime_timer": {
+            "state": "running",
+            "effective_end_at": (now - timedelta(minutes=1)).isoformat(),
+        },
+        "limits": {"opening_window_minutes": 12},
+    }
+    _update_session_snapshots(client, session_id, policy=policy)
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Status?", "language": "de"},
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["executed_actions"] == []
+    assert data["failed_actions"] == []
+    assert len(data["pending_actions"]) >= 1
+    hygiene_pending = [item for item in data["pending_actions"] if item.get("action_type") == "hygiene_open"]
+    assert len(hygiene_pending) == 1
+    assert hygiene_pending[0]["payload"]["trigger"] == "timer_expired"
+    assert hygiene_pending[0]["payload"]["opening_window_minutes"] == 12

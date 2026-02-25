@@ -17,17 +17,17 @@ logger = logging.getLogger(__name__)
 
 
 def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]]:
-    pattern = re.compile(r"\[\[ACTION:(?P<kind>[a-zA-Z0-9_\-]+)\|(?P<payload>\{.*?\})\]\]", re.DOTALL)
+    pattern = re.compile(r"\[\[ACTION:(?P<kind>[\w\-]+)\|(?P<payload>\{.*?\})\]\]", re.DOTALL)
     request_json_pattern = re.compile(
-        r"\[\[REQUEST:(?P<kind>[a-zA-Z0-9_\-]+)\|(?P<payload>\{.*?\})\]\]",
+        r"\[\[REQUEST:(?P<kind>[\w\-]+)\|(?P<payload>\{.*?\})\]\]",
         re.DOTALL,
     )
     request_call_pattern = re.compile(
-        r"\[REQUEST:\s*(?P<kind>[a-zA-Z0-9_\-]+)\((?P<args>.*?)\)\]",
+        r"\[REQUEST:\s*(?P<kind>[\w\-]+)\((?P<args>.*?)\)\]",
         re.IGNORECASE | re.DOTALL,
     )
     suggest_pattern = re.compile(
-        r"\[Suggest:\s*(?P<kind>[a-zA-Z0-9_\-]+)\((?P<args>.*?)\)\]",
+        r"\[Suggest:\s*(?P<kind>[\w\-]+)\((?P<args>.*?)\)\]",
         re.IGNORECASE | re.DOTALL,
     )
     file_pattern = re.compile(r"\[\[FILE\|(?P<payload>\{.*?\})\]\]", re.DOTALL)
@@ -84,8 +84,44 @@ def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]
         }.get(unit, 1)
         return amount * factor
 
+    def _normalize_action_type(raw: str) -> str:
+        action_type = str(raw or "").strip().lower()
+        alias_map = {
+            "addtime": "add_time",
+            "time_add": "add_time",
+            "extend_time": "add_time",
+            "reducetime": "reduce_time",
+            "time_reduce": "reduce_time",
+            "pause": "pause_timer",
+            "pausetimer": "pause_timer",
+            "freeze": "pause_timer",
+            "freeze_timer": "pause_timer",
+            "resume": "unpause_timer",
+            "unpause": "unpause_timer",
+            "unpausetimer": "unpause_timer",
+            "unfreeze": "unpause_timer",
+            "hygieneopen": "hygiene_open",
+            "hygiene_open": "hygiene_open",
+            "hygieneoeffnung": "hygiene_open",
+            "hygiene_oeffnung": "hygiene_open",
+            "hygieneöffnung": "hygiene_open",
+            "hygiene-close": "hygiene_close",
+            "hygieneclose": "hygiene_close",
+            "hygiene_close": "hygiene_close",
+            "hygieneschliessen": "hygiene_close",
+            "hygiene_schliessen": "hygiene_close",
+            "hygieneschließen": "hygiene_close",
+            "hygiene_schließen": "hygiene_close",
+            "ttlockopen": "hygiene_open",
+            "ttlock_open": "hygiene_open",
+            "ttlock-close": "hygiene_close",
+            "ttlockclose": "hygiene_close",
+            "ttlock_close": "hygiene_close",
+        }
+        return alias_map.get(action_type, action_type)
+
     for match in pattern.finditer(narration):
-        action_type = match.group("kind")
+        action_type = _normalize_action_type(match.group("kind"))
         payload_text = match.group("payload")
         try:
             payload = json.loads(payload_text)
@@ -94,7 +130,7 @@ def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]
         actions.append({"action_type": action_type, "payload": payload, "requires_execute_call": True})
         cleaned = cleaned.replace(match.group(0), "").strip()
     for match in request_json_pattern.finditer(narration):
-        action_type = str(match.group("kind") or "").strip().lower()
+        action_type = _normalize_action_type(match.group("kind"))
         payload_text = match.group("payload")
         try:
             payload = json.loads(payload_text)
@@ -103,17 +139,11 @@ def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]
         actions.append({"action_type": action_type, "payload": payload, "requires_execute_call": True})
         cleaned = cleaned.replace(match.group(0), "").strip()
     for match in request_call_pattern.finditer(narration):
-        action_type = str(match.group("kind") or "").strip().lower()
+        action_type = _normalize_action_type(match.group("kind"))
         args_text = str(match.group("args") or "")
         args = _parse_suggest_args(args_text)
         payload: dict[str, object] = dict(args)
-        normalized_type = {
-            "addtime": "add_time",
-            "time_add": "add_time",
-            "extend_time": "add_time",
-            "reducetime": "reduce_time",
-            "time_reduce": "reduce_time",
-        }.get(action_type, action_type)
+        normalized_type = _normalize_action_type(action_type)
         if normalized_type in {"add_time", "reduce_time"}:
             seconds = _parse_duration_seconds(str(args.get("duration") or args.get("seconds") or ""))
             if seconds is not None and seconds > 0:
@@ -121,17 +151,11 @@ def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]
         actions.append({"action_type": normalized_type, "payload": payload, "requires_execute_call": True})
         cleaned = cleaned.replace(match.group(0), "").strip()
     for match in suggest_pattern.finditer(narration):
-        action_type = str(match.group("kind") or "").strip().lower()
+        action_type = _normalize_action_type(match.group("kind"))
         args_text = str(match.group("args") or "")
         args = _parse_suggest_args(args_text)
         payload: dict[str, object] = dict(args)
-        normalized_type = {
-            "addtime": "add_time",
-            "time_add": "add_time",
-            "extend_time": "add_time",
-            "reducetime": "reduce_time",
-            "time_reduce": "reduce_time",
-        }.get(action_type, action_type)
+        normalized_type = _normalize_action_type(action_type)
         if normalized_type in {"add_time", "reduce_time"}:
             seconds = _parse_duration_seconds(str(args.get("duration") or args.get("seconds") or ""))
             if seconds is not None and seconds > 0:

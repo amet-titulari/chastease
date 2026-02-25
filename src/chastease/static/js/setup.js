@@ -729,6 +729,66 @@ async function discoverTtlockDevices() {
   }
 }
 
+async function saveTtlockConfig() {
+  if (!auth) {
+    setStatus('Login fehlt.', true);
+    return;
+  }
+
+  const ttCfg = ttlockConfigFromForm();
+  const integrations = getIntegrations(Boolean(ttCfg));
+  const integration_config = {};
+  if (ttCfg) integration_config.ttlock = ttCfg;
+
+  if (intTtlockEl?.value === 'true' && !ttCfg) {
+    setTtlockInfo('TTLock-Konfiguration unvollständig: user, lock und Passwort/Hash erforderlich.', true);
+    return;
+  }
+
+  try {
+    setTtlockInfo('Speichere TTLock-Konfiguration...');
+    let targetPath = null;
+    const helper = typeof chastease_session !== 'undefined' ? chastease_session : null;
+    let active = null;
+    if (helper && typeof helper.fetchActiveSession === 'function') {
+      active = await helper.fetchActiveSession(statusEl);
+    } else {
+      active = await apiCall(
+        'GET',
+        `/api/v1/sessions/active?user_id=${encodeURIComponent(auth.user_id)}&auth_token=${encodeURIComponent(auth.auth_token)}`,
+      );
+    }
+
+    if (active?.has_active_session && active?.chastity_session?.session_id) {
+      targetPath = `/api/v1/sessions/${encodeURIComponent(active.chastity_session.session_id)}/integrations`;
+    } else if (setupSessionId) {
+      targetPath = `/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/integrations`;
+    } else {
+      setTtlockInfo('Keine aktive Session oder Setup-Session gefunden.', true);
+      return;
+    }
+
+    const body = await apiCall('POST', targetPath, {
+      user_id: auth.user_id,
+      auth_token: auth.auth_token,
+      integrations,
+      integration_config,
+    });
+    currentSetup = {
+      ...(currentSetup || {}),
+      integrations: body.integrations || integrations,
+      integration_config: body.integration_config || integration_config,
+    };
+    setTtlockInfo('TTLock-Konfiguration gespeichert.');
+    setStatus('TTLock-Konfiguration gespeichert.');
+    setOutput(body);
+    openNextAfterTtlockSave();
+  } catch (error) {
+    setTtlockInfo(String(error?.message || error), true);
+    setOutput({ error: String(error?.message || error) });
+  }
+}
+
 function buildLlmPayloadBase() {
   if (!auth) return null;
   return {
@@ -864,10 +924,7 @@ contractStartDateEl?.addEventListener('change', syncMaxEndDateFromDuration);
 contractMaxEndDateEl?.addEventListener('change', syncDurationFromMaxEndDate);
 contractMaxDurationDaysEl?.addEventListener('input', syncMaxEndDateFromDuration);
 contractMinDurationDaysEl?.addEventListener('input', syncMinDurationGuard);
-saveTtlockBtn?.addEventListener('click', () => {
-  setStatus('TTLock-Konfiguration gespeichert.');
-  openNextAfterTtlockSave();
-});
+saveTtlockBtn?.addEventListener('click', saveTtlockConfig);
 
 const llmFields = [
   llmProviderEl,

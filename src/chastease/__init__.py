@@ -13,10 +13,11 @@ from .services.ai.factory import build_ai_service
 
 
 def create_app(config_object: type[Config] = Config) -> FastAPI:
-    load_dotenv()
+    root_dir = Path(__file__).resolve().parents[2]
+    load_dotenv(dotenv_path=root_dir / ".env")
     config = config_object()
     configure_logging(config.LOG_LEVEL)
-    app = FastAPI(title="chastease-api", version="0.1.7")
+    app = FastAPI(title="chastease-api", version="0.1.10")
     app.state.config = config
     app.state.engine = build_engine(app.state.config.DATABASE_URL)
     app.state.db_session_factory = build_session_factory(app.state.engine)

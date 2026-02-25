@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import time
+import unicodedata
 from pathlib import Path
 from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
@@ -35,10 +36,24 @@ _HYGIENE_ACTIONS = {"hygiene_open", "hygiene_close"}
 _ACTION_ALIASES = {
     "addtime": "add_time",
     "reducetime": "reduce_time",
+    "pause": "pause_timer",
     "pausetimer": "pause_timer",
+    "freeze": "pause_timer",
+    "freeze_timer": "pause_timer",
+    "timer_pause": "pause_timer",
+    "resume": "unpause_timer",
     "unpausetimer": "unpause_timer",
+    "unfreeze": "unpause_timer",
+    "resume_timer": "unpause_timer",
     "hygieneopen": "hygiene_open",
     "hygieneclose": "hygiene_close",
+    "hygieneoeffnung": "hygiene_open",
+    "hygiene_oeffnung": "hygiene_open",
+    "hygieneöffnung": "hygiene_open",
+    "hygieneschliessen": "hygiene_close",
+    "hygiene_schliessen": "hygiene_close",
+    "hygieneschließen": "hygiene_close",
+    "hygiene_schließen": "hygiene_close",
     "imageverification": "image_verification",
     "verifyimage": "image_verification",
     "visionreview": "image_verification",
@@ -157,6 +172,301 @@ def _remaining_seconds(timer: dict, now: datetime) -> int:
     return max(0, int((end_at - ref).total_seconds()))
 
 
+def _normalize_text(value: str) -> str:
+    text = str(value or "").strip().lower()
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
+def _contains_word(text: str, candidate: str) -> bool:
+    normalized_text = _normalize_text(text)
+    normalized_candidate = _normalize_text(candidate)
+    if not normalized_candidate:
+        return False
+    if " " in normalized_candidate:
+        return normalized_candidate in normalized_text
+    words = re.findall(r"\w+", normalized_text)
+    return normalized_candidate in words
+
+
+def _is_confirmation_message(message: str) -> bool:
+    normalized = _normalize_text(message)
+    tokens = {
+        "ja",
+        "yes",
+        "ok",
+        "okay",
+        "bestaetige",
+        "bestatige",
+        "bestatigung",
+        "confirm",
+        "confirmed",
+        "abbruch",
+        "abort",
+        "weiter",
+    }
+    words = set(re.findall(r"\w+", normalized))
+    return any(token in words for token in tokens)
+
+
+def _build_hygiene_open_pending_action(policy: dict, trigger: str, reason: str) -> dict:
+    limits = policy.get("limits") if isinstance(policy.get("limits"), dict) else {}
+    opening_window_minutes = int(limits.get("opening_window_minutes") or 15)
+    opening_window_minutes = max(1, min(opening_window_minutes, 240))
+    return {
+        "action_type": "hygiene_open",
+        "payload": {
+            "reason": reason,
+            "trigger": trigger,
+            "opening_window_minutes": opening_window_minutes,
+            "auto_relock_seconds": 5,
+        },
+        "requires_execute_call": True,
+    }
+
+
+def _extract_abort_trigger(message: str, psychogram: dict) -> str | None:
+    safety = psychogram.get("safety_profile") if isinstance(psychogram.get("safety_profile"), dict) else {}
+    mode = str(safety.get("mode") or "safeword").strip().lower()
+    if mode == "safeword":
+        safeword = str(safety.get("safeword") or "").strip()
+        if safeword and _contains_word(message, safeword):
+            return "safeword"
+        return None
+
+    if mode == "traffic_light":
+        tl = safety.get("traffic_light_words") if isinstance(safety.get("traffic_light_words"), dict) else {}
+        red_word = str(tl.get("red") or "red").strip()
+        if red_word and _contains_word(message, red_word):
+            return "traffic_red"
+    return None
+
+
+def _abort_protocol(safety: dict, trigger: str) -> tuple[int, bool]:
+    if trigger == "safeword":
+        protocol = safety.get("safeword_abort_protocol") if isinstance(safety.get("safeword_abort_protocol"), dict) else {}
+    else:
+        protocol = safety.get("red_abort_protocol") if isinstance(safety.get("red_abort_protocol"), dict) else {}
+    confirmations = int(protocol.get("confirmation_questions_required") or 2)
+    reason_required = bool(protocol.get("reason_required", True))
+    return max(1, confirmations), reason_required
+
+
+def _handle_emergency_abort_message(
+    *,
+    message: str,
+    request_lang: str,
+    policy: dict,
+    psychogram: dict,
+    now: datetime,
+) -> tuple[bool, str | None, list[dict], dict]:
+    runtime_abort = policy.get("runtime_abort") if isinstance(policy.get("runtime_abort"), dict) else None
+    safety = psychogram.get("safety_profile") if isinstance(psychogram.get("safety_profile"), dict) else {}
+
+    if runtime_abort is None:
+        trigger = _extract_abort_trigger(message, psychogram)
+        if not trigger:
+            return False, None, [], policy
+        required, reason_required = _abort_protocol(safety, trigger)
+        policy["runtime_abort"] = {
+            "trigger": trigger,
+            "required_confirmations": required,
+            "confirmations": 0,
+            "reason_required": reason_required,
+            "reason": None,
+            "created_at": _iso_utc(now),
+        }
+        text = (
+            "Sicherheitsabbruch erkannt. Bitte bestaetige den Abbruch zweimal; eine Bestaetigung muss eine Begruendung enthalten."
+            if request_lang == "de"
+            else "Emergency abort detected. Please confirm abort twice; one confirmation must include a reason."
+        )
+        return True, text, [], policy
+
+    confirmations = int(runtime_abort.get("confirmations") or 0)
+    required_confirmations = int(runtime_abort.get("required_confirmations") or 2)
+    reason_required = bool(runtime_abort.get("reason_required", True))
+    reason_text = str(runtime_abort.get("reason") or "").strip()
+    trigger = str(runtime_abort.get("trigger") or "manual_abort").strip().lower()
+    msg = str(message or "").strip()
+
+    if not reason_text and reason_required and len(msg) >= 8 and not _is_confirmation_message(msg):
+        reason_text = msg
+        confirmations += 1
+    elif _is_confirmation_message(msg):
+        confirmations += 1
+
+    if confirmations >= required_confirmations and (not reason_required or bool(reason_text)):
+        policy.pop("runtime_abort", None)
+        reason = reason_text or "abort_confirmed"
+        pending = [_build_hygiene_open_pending_action(policy, trigger=trigger, reason=reason)]
+        text = (
+            "Abbruch bestaetigt. Bitte oeffne die Hygiene-Actionkarte und bestaetige die Oeffnung."
+            if request_lang == "de"
+            else "Abort confirmed. Please confirm opening via the hygiene action card."
+        )
+        return True, text, pending, policy
+
+    runtime_abort["confirmations"] = confirmations
+    runtime_abort["reason"] = reason_text or None
+    policy["runtime_abort"] = runtime_abort
+    remaining = max(0, required_confirmations - confirmations)
+    if reason_required and not reason_text:
+        text = (
+            f"Abbruch-Bestaetigung erfasst. Es fehlen {remaining} Bestaetigung(en). Bitte gib auch eine Begruendung an."
+            if request_lang == "de"
+            else f"Abort confirmation recorded. {remaining} confirmation(s) remaining. Please also provide a reason."
+        )
+    else:
+        text = (
+            f"Abbruch-Bestaetigung erfasst. Es fehlen {remaining} Bestaetigung(en)."
+            if request_lang == "de"
+            else f"Abort confirmation recorded. {remaining} confirmation(s) remaining."
+        )
+    return True, text, [], policy
+
+
+def _timer_expiry_pending_action(request_lang: str, policy: dict, now: datetime) -> tuple[str | None, list[dict], dict]:
+    timer = _ensure_timer_state(policy, now)
+    timer["remaining_seconds"] = _remaining_seconds(timer, now)
+    policy["runtime_timer"] = timer
+    if timer["remaining_seconds"] > 0:
+        return None, [], policy
+    if bool(policy.get("runtime_timer_expiry_open_prompted")):
+        return None, [], policy
+    policy["runtime_timer_expiry_open_prompted"] = True
+    pending = [_build_hygiene_open_pending_action(policy, trigger="timer_expired", reason="timer_expired")]
+    text = (
+        "Timer ist abgelaufen. Bitte bestaetige die Hygieneoeffnung in der Actionkarte."
+        if request_lang == "de"
+        else "Timer has expired. Please confirm hygiene opening in the action card."
+    )
+    return text, pending, policy
+
+
+def _fallback_pending_action_from_user_intent(message: str, policy: dict) -> dict | None:
+    normalized = _normalize_text(message)
+    pause_hints = {
+        "pause",
+        "pausieren",
+        "pause timer",
+        "timer pause",
+        "freeze",
+        "freeze timer",
+        "timer freeze",
+        "anhalten",
+        "timer anhalten",
+        "timer stoppen",
+        "stop timer",
+    }
+    resume_hints = {
+        "resume",
+        "resume timer",
+        "unfreeze",
+        "weiter",
+        "fortsetzen",
+        "timer fortsetzen",
+        "timer weiter",
+        "unpause",
+        "unpause timer",
+    }
+    open_hints = {
+        "hygieneoffnung",
+        "hygieneoeffnung",
+        "hygiene oeffnung",
+        "hygieneoffnen",
+        "hygieneoeffnen",
+        "hygiene oeffnen",
+        "hygieneoffnung",
+        "kafig offnen",
+        "kafig oeffnen",
+        "oeffnen",
+        "open",
+        "unlock",
+    }
+    close_hints = {
+        "hygiene schliessen",
+        "hygiene schliessen",
+        "hygieneschliessen",
+        "hygiene schliessen",
+        "kafig schliessen",
+        "schliessen",
+        "close",
+        "lock",
+    }
+
+    if any(hint in normalized for hint in pause_hints):
+        return {
+            "action_type": "pause_timer",
+            "payload": {},
+            "requires_execute_call": True,
+        }
+
+    if any(hint in normalized for hint in resume_hints):
+        return {
+            "action_type": "unpause_timer",
+            "payload": {},
+            "requires_execute_call": True,
+        }
+
+    if any(hint in normalized for hint in open_hints):
+        return _build_hygiene_open_pending_action(
+            policy,
+            trigger="user_intent_fallback",
+            reason="user_requested_hygiene_open",
+        )
+
+    if any(hint in normalized for hint in close_hints):
+        return {
+            "action_type": "hygiene_close",
+            "payload": {
+                "trigger": "user_intent_fallback",
+                "reason": "user_requested_hygiene_close",
+            },
+            "requires_execute_call": True,
+        }
+
+    return None
+
+
+def _repair_missing_request_tag(
+    *,
+    db,
+    request: Request,
+    session: ChastitySession,
+    request_lang: str,
+    user_message: str,
+    narration_raw: str,
+) -> tuple[list[dict], bool]:
+    repair_prompt = (
+        (
+            "FORMAT CORRECTION ONLY. Convert the assistant reply into exactly one machine line. "
+            "Return either one valid line [[REQUEST:<action_type>|<json_payload>]] or NO_ACTION. "
+            "No prose.\n\n"
+            f"User message: {user_message}\n"
+            f"Assistant reply: {narration_raw}"
+        )
+        if request_lang == "en"
+        else (
+            "NUR FORMAT-KORREKTUR. Wandle die Assistenten-Antwort in genau eine Machine-Zeile um. "
+            "Antworte entweder mit genau einer gueltigen Zeile [[REQUEST:<action_type>|<json_payload>]] oder NO_ACTION. "
+            "Kein Fliesstext.\n\n"
+            f"User message: {user_message}\n"
+            f"Assistant reply: {narration_raw}"
+        )
+    )
+    repair_raw = generate_ai_narration_for_session(
+        db,
+        request,
+        session,
+        repair_prompt,
+        request_lang,
+        [],
+    )
+    _narration_unused, repaired_actions, _files_unused = extract_pending_actions(repair_raw)
+    return repaired_actions, bool(repaired_actions)
+
+
 def _apply_timer_action(action_type: str, payload: dict, policy: dict, now: datetime) -> tuple[dict, dict, str]:
     contract = policy.setdefault("contract", {})
     timer = _ensure_timer_state(policy, now)
@@ -192,25 +502,29 @@ def _apply_timer_action(action_type: str, payload: dict, policy: dict, now: date
         if seconds <= 0:
             raise HTTPException(status_code=400, detail="Action 'add_time' requires seconds > 0.")
         next_end_at = effective_end_at + timedelta(seconds=seconds)
+        clamped_to_max = False
         if max_end_at is not None and next_end_at > max_end_at:
             next_end_at = max_end_at
+            clamped_to_max = True
         effective_end_at = next_end_at
         timer["effective_end_at"] = _iso_utc(effective_end_at)
         timer["last_action"] = "add_time"
         timer["last_action_at"] = _iso_utc(now)
-        message = "Time added."
+        message = "Time added (clamped to max end date boundary)." if clamped_to_max else "Time added."
     elif action == "reduce_time":
         seconds = int(payload.get("seconds", 0))
         if seconds <= 0:
             raise HTTPException(status_code=400, detail="Action 'reduce_time' requires seconds > 0.")
         next_end_at = effective_end_at - timedelta(seconds=seconds)
+        clamped_to_min = False
         if min_end_at is not None and next_end_at < min_end_at:
-            raise HTTPException(status_code=400, detail="Action 'reduce_time' exceeds min_end_date boundary.")
+            next_end_at = min_end_at
+            clamped_to_min = True
         effective_end_at = next_end_at
         timer["effective_end_at"] = _iso_utc(effective_end_at)
         timer["last_action"] = "reduce_time"
         timer["last_action_at"] = _iso_utc(now)
-        message = "Time reduced."
+        message = "Time reduced (clamped to min end date boundary)." if clamped_to_min else "Time reduced."
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported action_type '{action_type}'.")
 
@@ -676,6 +990,13 @@ def _auto_execute_pending_actions(
         if not normalized_action:
             failed_actions.append({"action_type": "", "payload": payload_dict, "detail": "Missing action_type."})
             continue
+        if normalized_action in _HYGIENE_ACTIONS:
+            remaining_actions.append({
+                "action_type": normalized_action,
+                "payload": payload_dict,
+                "requires_execute_call": True,
+            })
+            continue
         if not should_execute:
             remaining_actions.append(action)
             continue
@@ -716,6 +1037,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         raise HTTPException(status_code=400, detail="Field 'message' is required.")
 
     action_text = message
+    strict_request_tag_mode = bool(getattr(request.app.state.config, "LLM_FAIL_CLOSED_REQUEST_TAG", True))
 
     db = get_db_session(request)
     try:
@@ -723,20 +1045,108 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         if session is None:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
 
-        narration_raw = generate_ai_narration_for_session(
-            db, request, session, action_text, request_lang, payload.attachments
-        )
-        narration, pending_actions, generated_files = extract_pending_actions(narration_raw)
         policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
         if not isinstance(policy, dict):
             policy = {}
-        pending_actions, executed_actions, failed_actions, updated_policy = _auto_execute_pending_actions(
-            request=request,
+        psychogram = json.loads(session.psychogram_snapshot_json) if session.psychogram_snapshot_json else {}
+        if not isinstance(psychogram, dict):
+            psychogram = {}
+
+        now = datetime.now(UTC)
+        policy_dirty = False
+        pending_actions: list[dict] = []
+        executed_actions: list[dict] = []
+        failed_actions: list[dict] = []
+        generated_files: list[dict] = []
+        raw_has_machine_tag = False
+        fallback_applied = False
+        reask_attempted = False
+        reask_applied = False
+
+        timer_narration, timer_pending, policy = _timer_expiry_pending_action(request_lang, policy, now)
+        if timer_pending:
+            policy_dirty = True
+            pending_actions.extend(timer_pending)
+
+        abort_handled, abort_narration, abort_pending, policy = _handle_emergency_abort_message(
+            message=action_text,
+            request_lang=request_lang,
             policy=policy,
-            pending_actions=pending_actions,
+            psychogram=psychogram,
+            now=now,
         )
-        if executed_actions:
-            session.policy_snapshot_json = json.dumps(updated_policy)
+        if abort_handled:
+            policy_dirty = True
+            pending_actions.extend(abort_pending)
+
+        if abort_handled:
+            narration = abort_narration or timer_narration or ""
+        elif timer_narration:
+            narration = timer_narration
+        else:
+            narration_raw = generate_ai_narration_for_session(
+                db, request, session, action_text, request_lang, payload.attachments
+            )
+            narration, ai_pending_actions, generated_files = extract_pending_actions(narration_raw)
+            precheck_failed_actions: list[dict] = []
+            raw_has_machine_tag = bool(re.search(r"\[\[(REQUEST|ACTION):", narration_raw, flags=re.IGNORECASE))
+            if not ai_pending_actions:
+                reask_attempted = True
+                repaired_actions, repaired = _repair_missing_request_tag(
+                    db=db,
+                    request=request,
+                    session=session,
+                    request_lang=request_lang,
+                    user_message=action_text,
+                    narration_raw=narration_raw,
+                )
+                if repaired:
+                    ai_pending_actions = repaired_actions
+                    reask_applied = True
+                    precheck_failed_actions.append(
+                        {
+                            "action_type": str(ai_pending_actions[0].get("action_type") or ""),
+                            "payload": ai_pending_actions[0].get("payload") or {},
+                            "detail": "LLM repair round generated structured action tag.",
+                        }
+                    )
+            if not ai_pending_actions:
+                fallback_action = _fallback_pending_action_from_user_intent(action_text, policy)
+                if fallback_action is not None:
+                    if strict_request_tag_mode:
+                        precheck_failed_actions.append(
+                            {
+                                "action_type": str(fallback_action.get("action_type") or ""),
+                                "payload": fallback_action.get("payload") or {},
+                                "detail": (
+                                    "Strict request-tag mode: no valid structured action tag after repair; "
+                                    "action not executed."
+                                ),
+                            }
+                        )
+                    else:
+                        ai_pending_actions = [fallback_action]
+                        fallback_applied = True
+                        precheck_failed_actions.append(
+                            {
+                                "action_type": str(fallback_action.get("action_type") or ""),
+                                "payload": fallback_action.get("payload") or {},
+                                "detail": "LLM returned no structured action tag; applied user-intent fallback.",
+                            }
+                        )
+            ai_pending_actions, executed_actions, auto_failed_actions, updated_policy = _auto_execute_pending_actions(
+                request=request,
+                policy=policy,
+                pending_actions=ai_pending_actions,
+            )
+            failed_actions = [*precheck_failed_actions, *auto_failed_actions]
+            policy = updated_policy
+            pending_actions.extend(ai_pending_actions)
+            if executed_actions:
+                policy_dirty = True
+
+        if policy_dirty:
+            session.policy_snapshot_json = json.dumps(policy)
 
         current_turn_no = db.scalar(select(func.max(Turn.turn_no)).where(Turn.session_id == session.id))
         next_turn_no = (current_turn_no or 0) + 1
@@ -765,6 +1175,15 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         "executed_actions": executed_actions,
         "failed_actions": failed_actions,
         "generated_files": generated_files,
+        "action_diagnostics": {
+            "strict_request_tag_mode": strict_request_tag_mode,
+            "raw_machine_tag_present": raw_has_machine_tag,
+            "reask_attempted": reask_attempted,
+            "reask_applied": reask_applied,
+            "fallback_applied": fallback_applied,
+            "pending_actions_count": len(pending_actions),
+            "failed_actions_count": len(failed_actions),
+        },
         "next_state": "awaiting_wearer_action",
     }
 

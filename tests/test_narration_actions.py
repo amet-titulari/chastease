@@ -74,3 +74,33 @@ def test_extract_pending_actions_parses_multiline_request_payload() -> None:
     assert actions[0]["payload"]["request"] == "geschlossener Lock mit Uhrzeit"
     assert actions[0]["payload"]["verification_instruction"] == "Pruefe Lock und Rasur."
     assert "[[REQUEST:" not in cleaned
+
+
+def test_extract_pending_actions_parses_hygiene_oeffnung_alias() -> None:
+    narration = "Bitte bestaetigen.\n[[REQUEST:hygieneoeffnung|{\"reason\":\"hygiene\"}]]"
+    cleaned, actions, _ = extract_pending_actions(narration)
+
+    assert len(actions) == 1
+    assert actions[0]["action_type"] == "hygiene_open"
+    assert actions[0]["payload"]["reason"] == "hygiene"
+    assert "[[REQUEST:" not in cleaned
+
+
+def test_extract_pending_actions_maps_ttlock_open_to_hygiene_open() -> None:
+    narration = 'Bitte bestaetigen.\n[[REQUEST:ttlock_open|{"reason":"hygiene"}]]'
+    cleaned, actions, _ = extract_pending_actions(narration)
+
+    assert len(actions) == 1
+    assert actions[0]["action_type"] == "hygiene_open"
+    assert actions[0]["payload"]["reason"] == "hygiene"
+    assert "[[REQUEST:" not in cleaned
+
+
+def test_extract_pending_actions_maps_freeze_alias_to_pause_timer() -> None:
+    narration = 'Bitte einfrieren.\n[[REQUEST:freeze_timer|{}]]'
+    cleaned, actions, _ = extract_pending_actions(narration)
+
+    assert len(actions) == 1
+    assert actions[0]["action_type"] == "pause_timer"
+    assert actions[0]["payload"] == {}
+    assert "[[REQUEST:" not in cleaned
