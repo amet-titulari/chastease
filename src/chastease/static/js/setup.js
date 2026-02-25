@@ -596,14 +596,42 @@ async function completeSetup() {
     setStatus('Bitte zuerst Setup starten.', true);
     return;
   }
+  if (!auth) {
+    setStatus('Login fehlt.', true);
+    return;
+  }
   try {
-    setStatus('Setup wird abgeschlossen...');
-    const body = await apiCall('POST', `/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/complete`);
-    setStatus('Setup abgeschlossen. Weiterleitung zum Dashboard...');
-    setOutput(body);
+    setStatus('Setup wird abgeschlossen und Psychogramm finalisiert...');
+    const completeBody = await apiCall('POST', `/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/complete`);
+
+    setStatus('Psychogramm liegt vor. Vertrag wird generiert...');
+    const contractBody = await apiCall('POST', `/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/contract`, {
+      user_id: auth.user_id,
+      auth_token: auth.auth_token,
+      force: false,
+    });
+
+    currentSetup = {
+      ...(currentSetup || {}),
+      status: completeBody?.status || 'configured',
+      psychogram_analysis: completeBody?.psychogram_analysis || currentSetup?.psychogram_analysis,
+      psychogram_analysis_status: completeBody?.psychogram_analysis_status || currentSetup?.psychogram_analysis_status,
+      policy_preview: {
+        ...((currentSetup && currentSetup.policy_preview) || {}),
+        generated_contract: {
+          ...((((currentSetup && currentSetup.policy_preview) || {}).generated_contract || {})),
+          text: contractBody?.contract_text,
+          generated_at: contractBody?.contract_generated_at,
+          consent: contractBody?.consent,
+        },
+      },
+    };
+
+    setStatus('Setup abgeschlossen. Vertrag erstellt. Weiterleitung zum Dashboard...');
+    setOutput({ complete: completeBody, contract: contractBody });
     setTimeout(() => {
       window.location.href = '/dashboard';
-    }, 400);
+    }, 700);
   } catch (error) {
     setStatus(String(error?.message || error), true);
     setOutput({ error: String(error?.message || error) });
