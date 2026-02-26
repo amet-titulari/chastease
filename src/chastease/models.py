@@ -57,6 +57,19 @@ class Turn(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
+class AuditEntry(Base):
+    __tablename__ = "audit_entries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("chastity_sessions.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    turn_id: Mapped[str] = mapped_column(String(36), ForeignKey("turns.id"), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    detail: Mapped[str] = mapped_column(Text, nullable=False)
+    metadata_json: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class LLMProfile(Base):
     __tablename__ = "llm_profiles"
 

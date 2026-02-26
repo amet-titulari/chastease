@@ -4,20 +4,18 @@ Prioritaetssystem: `0 = Hoch / in Umsetzung`, `1 = Vorbereitet / Folgeplanung`, 
 
 ## Prioritaet 0 (Hoch / in Umsetzung)
 
-- [ ] Regressionstests fuer Notfallabbruch + `ttlock_open`\-Sonderpfad erweitern
-- [ ] Regressionstests fuer Oeffnungslimit (`opening_limit_period`, `max_openings_in_period`) erweitern
-- [ ] Optionales Observability-Logging fuer gefilterte Machine-Tags und Abbruch-Transitions
-- [ ] GitHub Release-Tagging fuer `v0.2.0` nachziehen
+- [X] GitHub Release-Tagging fuer `v0.2.0` nachziehen
+- [ ] Die AI soll in der Lage sein die Session Informationen zu erhalten
+- [ ] Die AI soll aktiv Sessionparameter anpassen können
 
 ## Prioritaet 1 (Vorbereitet / Folgeplanung)
 
-- [ ] Authentifizierung (JWT oder Session-basiert)
 - [ ] Mehrsprachigkeit (Deutsch/Englisch) in API, UI und Setup-Flow
 - [ ] Inventar- und Itemsystem (einfach)
 - [ ] Prompt-Template Versionierung
-
 ## Prioritaet 2 (Idee / Umsetzung planen)
 
+- [ ] Authentifizierung (Passkey/2FA als Erweiterung)
 - [ ] Questgenerator und Questfortschritt
 - [ ] Monitoring (Sentry/OpenTelemetry)
 - [ ] Szenario-Bibliothek fuer Keyholder-Interaktionsmuster
@@ -64,3 +62,10 @@ Prioritaetssystem: `0 = Hoch / in Umsetzung`, `1 = Vorbereitet / Folgeplanung`, 
 - [x] Kriterium 1: `src/chastease/api/routers/setup.py` ohne direkte `legacy.*`-Alias-Aufrufe (ausser klar definierten Infrastruktur-Ports).
 - [x] Kriterium 2: `python -m pytest` in Projekt-venv laeuft gruen. (zuletzt: 74 passed, 1 failed; Testfall an neue Notfall-Semantik anpassen)
 - [x] Kriterium 3: Smoke-Flow erfolgreich: `/api/v1/health`, Auth-Login/Register, Setup Start->Answers->Complete, `/api/v1/chat/turn`.
+
+
+### Prioritaet 0 (abgeschlossen, 2026-02-26)
+
+- [x] Regressionstests fuer Notfallabbruch + `ttlock_open`-Sonderpfad erweitern
+- [x] Regressionstests fuer Oeffnungslimit (`opening_limit_period`, `max_openings_in_period`) erweitern
+- [x] Optionales Observability-Logging fuer gefilterte Machine-Tags und Abbruch-Transitions (Audit-Log + Admin-View)

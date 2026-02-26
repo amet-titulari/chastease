@@ -17,6 +17,7 @@ from chastease.api.schemas import ChatActionExecuteRequest, ChatTurnRequest, Cha
 from chastease.models import ChastitySession, Turn
 from chastease.repositories.setup_store import load_sessions, save_sessions
 from chastease.services.narration import extract_pending_actions, generate_ai_narration_for_session
+from chastease.shared.audit import record_audit_event
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -356,14 +357,15 @@ def _handle_emergency_abort_message(
     policy: dict,
     psychogram: dict,
     now: datetime,
-) -> tuple[bool, str | None, list[dict], dict]:
+) -> tuple[bool, str | None, list[dict], dict, list[dict]]:
     runtime_abort = policy.get("runtime_abort") if isinstance(policy.get("runtime_abort"), dict) else None
     safety = psychogram.get("safety_profile") if isinstance(psychogram.get("safety_profile"), dict) else {}
+    events: list[dict] = []
 
     if runtime_abort is None:
         trigger = _extract_abort_trigger(message, psychogram)
         if not trigger:
-            return False, None, [], policy
+            return False, None, [], policy, events
         required, reason_required = _abort_protocol(safety, trigger)
         policy["runtime_abort"] = {
             "trigger": trigger,
@@ -378,7 +380,19 @@ def _handle_emergency_abort_message(
             if request_lang == "de"
             else "Emergency abort detected. Please confirm abort twice; one confirmation must include a reason."
         )
-        return True, text, [], policy
+        events.append(
+            {
+                "event_type": "abort_trigger_detected",
+                "detail": "Abort trigger detected and confirmation flow initiated.",
+                "metadata": {
+                    "trigger": trigger,
+                    "required_confirmations": required,
+                    "reason_required": reason_required,
+                    "safety_mode": str(safety.get("mode") or "safeword").strip().lower(),
+                },
+            }
+        )
+        return True, text, [], policy, events
 
     confirmations = int(runtime_abort.get("confirmations") or 0)
     required_confirmations = int(runtime_abort.get("required_confirmations") or 2)
@@ -404,7 +418,19 @@ def _handle_emergency_abort_message(
             if request_lang == "de"
             else "Abort confirmed. Emergency opening (ttlock_open) is now triggered directly; session and contract will then be invalidated."
         )
-        return True, text, pending, policy
+        events.append(
+            {
+                "event_type": "abort_confirmed",
+                "detail": "Emergency abort confirmed and ttlock_open pending action scheduled.",
+                "metadata": {
+                    "trigger": trigger,
+                    "required_confirmations": required_confirmations,
+                    "confirmations": confirmations,
+                    "reason": reason,
+                },
+            }
+        )
+        return True, text, pending, policy, events
 
     runtime_abort["confirmations"] = confirmations
     runtime_abort["reason"] = reason_text or None
@@ -422,7 +448,7 @@ def _handle_emergency_abort_message(
             if request_lang == "de"
             else f"Abort confirmation recorded. {remaining} confirmation(s) remaining."
         )
-    return True, text, [], policy
+    return True, text, [], policy, events
 
 
 def _timer_expiry_pending_action(request_lang: str, policy: dict, now: datetime) -> tuple[str | None, list[dict], dict]:
@@ -1284,6 +1310,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         session = db.get(ChastitySession, payload.session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
+        audit_events_to_log: list[dict] = []
 
         policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
         if not isinstance(policy, dict):
@@ -1308,13 +1335,14 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
             policy_dirty = True
             pending_actions.extend(timer_pending)
 
-        abort_handled, abort_narration, abort_pending, policy = _handle_emergency_abort_message(
+        abort_handled, abort_narration, abort_pending, policy, abort_audit_events = _handle_emergency_abort_message(
             message=action_text,
             request_lang=request_lang,
             policy=policy,
             psychogram=psychogram,
             now=now,
         )
+        audit_events_to_log.extend(abort_audit_events)
         if abort_handled:
             policy_dirty = True
             if abort_pending:
@@ -1414,6 +1442,32 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
             pending_actions.extend(ai_pending_actions)
             if executed_actions:
                 policy_dirty = True
+            if raw_has_machine_tag:
+                executed_action_types = [
+                    str(item.get("action_type") or "").strip()
+                    for item in executed_actions
+                    if str(item.get("action_type") or "").strip()
+                ]
+                pending_action_types = [
+                    str(action.get("action_type") or "").strip()
+                    for action in pending_actions
+                    if str(action.get("action_type") or "").strip()
+                ]
+                machine_tag_event = {
+                    "event_type": "machine_tag_filtered",
+                    "detail": "AI narration contained machine tags that were removed before returning the response.",
+                    "metadata": {
+                        "raw_machine_tag_present": True,
+                        "raw_preview": narration_raw[:400],
+                        "fallback_applied": fallback_applied,
+                        "reask_applied": reask_applied,
+                        "executed_action_types": executed_action_types,
+                        "pending_action_types": pending_action_types,
+                        "pending_actions_count": len(pending_actions),
+                        "failed_actions_count": len(failed_actions),
+                    },
+                }
+                audit_events_to_log.append(machine_tag_event)
 
         if policy_dirty:
             session.policy_snapshot_json = json.dumps(policy)
@@ -1432,6 +1486,17 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         session.updated_at = datetime.now(UTC)
         db.add(turn)
         db.add(session)
+        if audit_events_to_log:
+            for event in audit_events_to_log:
+                record_audit_event(
+                    db=db,
+                    session_id=session.id,
+                    user_id=session.user_id,
+                    turn_id=turn.id,
+                    event_type=event.get("event_type") or "",
+                    detail=event.get("detail") or "",
+                    metadata=event.get("metadata"),
+                )
         db.commit()
     finally:
         db.close()

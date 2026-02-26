@@ -765,10 +765,13 @@ def test_chat_turn_safeword_abort_requires_two_confirmations_and_reason(client):
     )
     assert second_with_reason.status_code == 200
     data = second_with_reason.json()
-    assert data["failed_actions"] == []
-    assert len(data["pending_actions"]) == 1
-    assert data["pending_actions"][0]["action_type"] == "hygiene_open"
-    assert data["pending_actions"][0]["payload"]["trigger"] == "safeword"
+    assert len(data["failed_actions"]) == 1
+    failed_action = data["failed_actions"][0]
+    assert failed_action["action_type"] == "ttlock_open"
+    assert failed_action["detail"] == "TT-Lock integration is not enabled in this session policy."
+    assert failed_action["payload"].get("reason") == "Grund: Schmerzen am Schloss"
+    assert failed_action["payload"].get("emergency") is True
+    assert data["pending_actions"] == []
 
 
 def test_chat_turn_timer_expiry_creates_hygiene_open_pending(client):

@@ -19,3 +19,14 @@ def client(monkeypatch, tmp_path):
     app = create_app()
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture()
+def admin_client(monkeypatch, tmp_path):
+    monkeypatch.setenv("SETUP_STORE_PATH", str(tmp_path / "setup_sessions.json"))
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'chastease_test.db'}")
+    monkeypatch.setenv("ENABLE_SESSION_KILL", "true")
+    monkeypatch.setenv("ENABLE_AUDIT_LOG_VIEW", "true")
+    app = create_app()
+    with TestClient(app) as test_client:
+        yield test_client
