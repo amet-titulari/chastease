@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.11 - 2026-02-26
+
+- Notfall-/Abbruch-Flow korrigiert und gehaertet:
+  - Notfallabbruch fuehrt nun direkt `ttlock_open` aus (statt `hygiene_open`) fuer die Tresor-Notfalloeffnung.
+  - Session/Vertrag werden erst nach erfolgreicher Notfalloeffnung archiviert/invalidiert.
+  - Trigger-Erkennung fuer Notfallabbruch erweitert (`rot/red`, `abbruch`, `notfall`, `stop/stopp`, etc.).
+- Chat-Action- und Vision-Flow verbessert:
+  - Bildverifikation auf schlanken One-Button-Flow umgestellt (`Bild aufnehmen` -> Vorschau -> `Bild prüfen`).
+  - JSON-Payload in der Image-Action-Card ausgeblendet; Anforderung/Verifikation besser lesbar gemacht.
+  - Vision-Review auf kurze Bewertung ohne separate Bildbeschreibung umgestellt.
+- Robustheit/Traffic:
+  - Dashboard-/Session-Polling gedrosselt und zentral per Cache/In-Flight-Dedupe optimiert.
+  - Maschinen-Tags in Narration gehaertet, damit rohe `[[REQUEST...]]`-Fragmente nicht im UI erscheinen.
+
 ## 0.1.10 - 2026-02-25
 
 - Chat- und Aktionsfluss deutlich robuster gemacht:

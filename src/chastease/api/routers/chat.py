@@ -12,9 +12,10 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import func, select
 
-from chastease.api.runtime import get_db_session, lang
+from chastease.api.runtime import find_setup_session_id_for_active_session, get_db_session, lang
 from chastease.api.schemas import ChatActionExecuteRequest, ChatTurnRequest, ChatVisionReviewRequest
 from chastease.models import ChastitySession, Turn
+from chastease.repositories.setup_store import load_sessions, save_sessions
 from chastease.services.narration import extract_pending_actions, generate_ai_narration_for_session
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -225,9 +226,98 @@ def _build_hygiene_open_pending_action(policy: dict, trigger: str, reason: str) 
     }
 
 
+def _build_emergency_ttlock_open_pending_action(trigger: str, reason: str) -> dict:
+    return {
+        "action_type": "ttlock_open",
+        "payload": {
+            "reason": reason,
+            "trigger": trigger,
+            "emergency": True,
+        },
+        "requires_execute_call": True,
+    }
+
+
+def _invalidate_contract_and_archive_session(
+    *,
+    request: Request,
+    session: ChastitySession,
+    policy: dict,
+    reason: str,
+    now: datetime,
+) -> dict:
+    updated_policy = dict(policy) if isinstance(policy, dict) else {}
+
+    generated_contract = updated_policy.setdefault("generated_contract", {})
+    if not isinstance(generated_contract, dict):
+        generated_contract = {}
+        updated_policy["generated_contract"] = generated_contract
+    consent = generated_contract.setdefault("consent", {})
+    if not isinstance(consent, dict):
+        consent = {}
+        generated_contract["consent"] = consent
+
+    consent["accepted"] = False
+    consent["accepted_at"] = None
+    consent["consent_text"] = None
+    consent["invalidated"] = True
+    consent["invalidated_at"] = _iso_utc(now)
+    consent["invalidated_reason"] = reason
+    generated_contract["is_valid"] = False
+
+    session.status = "archived"
+    session.policy_snapshot_json = json.dumps(updated_policy)
+    session.updated_at = now
+
+    setup_session_id = find_setup_session_id_for_active_session(session.user_id, session.id)
+    if setup_session_id:
+        store = load_sessions()
+        setup_session = store.get(setup_session_id)
+        if isinstance(setup_session, dict):
+            setup_session["status"] = "archived"
+            setup_session["active_session_id"] = None
+            setup_session["updated_at"] = _iso_utc(now)
+            policy_preview = setup_session.get("policy_preview") if isinstance(setup_session.get("policy_preview"), dict) else {}
+            setup_generated_contract = policy_preview.get("generated_contract") if isinstance(policy_preview.get("generated_contract"), dict) else {}
+            setup_consent = setup_generated_contract.get("consent") if isinstance(setup_generated_contract.get("consent"), dict) else {}
+            setup_consent["accepted"] = False
+            setup_consent["accepted_at"] = None
+            setup_consent["consent_text"] = None
+            setup_consent["invalidated"] = True
+            setup_consent["invalidated_at"] = _iso_utc(now)
+            setup_consent["invalidated_reason"] = reason
+            setup_generated_contract["consent"] = setup_consent
+            setup_generated_contract["is_valid"] = False
+            policy_preview["generated_contract"] = setup_generated_contract
+            setup_session["policy_preview"] = policy_preview
+            store[setup_session_id] = setup_session
+            save_sessions(store)
+
+    return updated_policy
+
+
 def _extract_abort_trigger(message: str, psychogram: dict) -> str | None:
     safety = psychogram.get("safety_profile") if isinstance(psychogram.get("safety_profile"), dict) else {}
     mode = str(safety.get("mode") or "safeword").strip().lower()
+
+    manual_abort_hints = {
+        "rot",
+        "red",
+        "abbruch",
+        "abbrechen",
+        "notfall",
+        "notfall stop",
+        "session abbrechen",
+        "sofort beenden",
+        "sofort stoppen",
+        "stop",
+        "stopp",
+        "emergency stop",
+        "abort session",
+    }
+    if any(_contains_word(message, hint) for hint in manual_abort_hints):
+        return "manual_abort"
+
     if mode == "safeword":
         safeword = str(safety.get("safeword") or "").strip()
         if safeword and _contains_word(message, safeword):
@@ -297,13 +387,15 @@ def _handle_emergency_abort_message(
         confirmations += 1
 
     if confirmations >= required_confirmations and (not reason_required or bool(reason_text)):
-        policy.pop("runtime_abort", None)
         reason = reason_text or "abort_confirmed"
-        pending = [_build_hygiene_open_pending_action(policy, trigger=trigger, reason=reason)]
+        runtime_abort["confirmations"] = confirmations
+        runtime_abort["reason"] = reason
+        policy["runtime_abort"] = runtime_abort
+        pending = [_build_emergency_ttlock_open_pending_action(trigger=trigger, reason=reason)]
         text = (
-            "Abbruch bestaetigt. Bitte oeffne die Hygiene-Actionkarte und bestaetige die Oeffnung."
+            "Abbruch bestaetigt. Notfall-Oeffnung (ttlock_open) wird jetzt direkt ausgeloest; Session und Vertrag werden anschliessend invalidiert."
             if request_lang == "de"
-            else "Abort confirmed. Please confirm opening via the hygiene action card."
+            else "Abort confirmed. Emergency opening (ttlock_open) is now triggered directly; session and contract will then be invalidated."
         )
         return True, text, pending, policy
 
@@ -346,6 +438,8 @@ def _timer_expiry_pending_action(request_lang: str, policy: dict, now: datetime)
 
 def _fallback_pending_action_from_user_intent(message: str, policy: dict) -> dict | None:
     normalized = _normalize_text(message)
+    runtime_timer = (policy or {}).get("runtime_timer") if isinstance((policy or {}).get("runtime_timer"), dict) else {}
+    timer_state = str(runtime_timer.get("state") or "running").strip().lower()
     pause_hints = {
         "pause",
         "pausieren",
@@ -396,6 +490,8 @@ def _fallback_pending_action_from_user_intent(message: str, policy: dict) -> dic
     }
 
     if any(hint in normalized for hint in pause_hints):
+        if timer_state == "paused":
+            return None
         return {
             "action_type": "pause_timer",
             "payload": {},
@@ -403,6 +499,8 @@ def _fallback_pending_action_from_user_intent(message: str, policy: dict) -> dic
         }
 
     if any(hint in normalized for hint in resume_hints):
+        if timer_state != "paused":
+            return None
         return {
             "action_type": "unpause_timer",
             "payload": {},
@@ -936,6 +1034,15 @@ def _execute_action_with_policy(
             "message": action_message,
         }
     if normalized_action in _TTLOCK_ACTIONS:
+        trigger = str(normalized_payload.get("trigger") or "").strip().lower()
+        emergency_triggers = {"safeword", "traffic_red", "manual_abort"}
+        if normalized_action == "ttlock_open" and trigger in emergency_triggers:
+            return _execute_ttlock_action(
+                action_type=normalized_action,
+                payload=normalized_payload,
+                policy=policy,
+                request=request,
+            )
         raise HTTPException(
             status_code=403,
             detail=(
@@ -990,7 +1097,44 @@ def _auto_execute_pending_actions(
         if not normalized_action:
             failed_actions.append({"action_type": "", "payload": payload_dict, "detail": "Missing action_type."})
             continue
+        if normalized_action in _TTLOCK_ACTIONS:
+            trigger = str(payload_dict.get("trigger") or "").strip().lower()
+            emergency_triggers = {"safeword", "traffic_red", "manual_abort"}
+            should_force_execute_ttlock = normalized_action == "ttlock_open" and trigger in emergency_triggers
+            if should_force_execute_ttlock:
+                try:
+                    updated_policy, executed = _execute_action_with_policy(
+                        action_type=normalized_action,
+                        payload=payload_dict,
+                        policy=updated_policy,
+                        request=request,
+                        now=now,
+                    )
+                    executed_actions.append(executed)
+                except HTTPException as exc:
+                    failed_actions.append(
+                        {"action_type": normalized_action, "payload": payload_dict, "detail": str(exc.detail)}
+                    )
+                continue
         if normalized_action in _HYGIENE_ACTIONS:
+            trigger = str(payload_dict.get("trigger") or "").strip().lower()
+            emergency_triggers = {"safeword", "traffic_red", "manual_abort"}
+            should_force_execute = trigger in emergency_triggers
+            if should_force_execute:
+                try:
+                    updated_policy, executed = _execute_action_with_policy(
+                        action_type=normalized_action,
+                        payload=payload_dict,
+                        policy=updated_policy,
+                        request=request,
+                        now=now,
+                    )
+                    executed_actions.append(executed)
+                except HTTPException as exc:
+                    failed_actions.append(
+                        {"action_type": normalized_action, "payload": payload_dict, "detail": str(exc.detail)}
+                    )
+                continue
             remaining_actions.append({
                 "action_type": normalized_action,
                 "payload": payload_dict,
@@ -1077,7 +1221,37 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         )
         if abort_handled:
             policy_dirty = True
-            pending_actions.extend(abort_pending)
+            if abort_pending:
+                remaining_abort_actions, executed_abort_actions, failed_abort_actions, updated_policy = _auto_execute_pending_actions(
+                    request=request,
+                    policy=policy,
+                    pending_actions=abort_pending,
+                )
+                policy = updated_policy
+                pending_actions.extend(remaining_abort_actions)
+                executed_actions.extend(executed_abort_actions)
+                failed_actions.extend(failed_abort_actions)
+                emergency_open_executed = any(
+                    str(item.get("action_type") or "").strip().lower() == "ttlock_open"
+                    for item in executed_abort_actions
+                )
+                if emergency_open_executed:
+                    policy.pop("runtime_abort", None)
+                    runtime_abort_reason = "emergency_abort_confirmed"
+                    policy = _invalidate_contract_and_archive_session(
+                        request=request,
+                        session=session,
+                        policy=policy,
+                        reason=runtime_abort_reason,
+                        now=now,
+                    )
+                elif failed_abort_actions:
+                    fail_detail = str(failed_abort_actions[0].get("detail") or "unknown error")
+                    abort_narration = (
+                        f"{abort_narration} Notfall-Oeffnung fehlgeschlagen: {fail_detail}. Session bleibt aktiv bis Oeffnung erfolgreich ist."
+                        if request_lang == "de"
+                        else f"{abort_narration} Emergency opening failed: {fail_detail}. Session remains active until opening succeeds."
+                    )
 
         if abort_handled:
             narration = abort_narration or timer_narration or ""
