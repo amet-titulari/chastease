@@ -82,5 +82,15 @@ Detaildiagramme liegen unter `docs/architecture/`.
     *   `docs/architecture/UML_SEQUENCE_STORY_TURN.md`
 *   UML Setup Lifecycle Sequence:
     *   `docs/architecture/UML_SEQUENCE_SETUP_LIFECYCLE.md`
+*   UML Chat Action Execution Sequence:
+    *   `docs/architecture/UML_SEQUENCE_CHAT_ACTION_EXECUTION.md`
+*   UML Hygiene Opening Sequence:
+*   `docs/architecture/UML_SEQUENCE_HYGIENE_OPEN.md`
+*   UML Image Verification Sequence:
+    *   `docs/architecture/UML_SEQUENCE_IMAGE_VERIFICATION.md`
+*   UML Emergency Abort Sequence:
+    *   `docs/architecture/UML_SEQUENCE_EMERGENCY_ABORT.md`
+*   UML DevOps Image Build Sequence:
+    *   `docs/architecture/UML_SEQUENCE_DEVOPS_IMAGE_BUILD.md`
 *   ADR API Framework:
     *   `docs/adr/ADR-002-api-framework.md`

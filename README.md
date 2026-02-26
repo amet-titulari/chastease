@@ -86,6 +86,23 @@ Das Image wird nach GHCR gepusht unter:
 ghcr.io/amet-titulari/chastease:<tag>
 ```
 
+## Portainer Stack (GHCR)
+
+Fuer Portainer ist eine fertige Stack-Datei vorhanden:
+
+- `docker-compose.portainer.yml`
+
+Diese verwendet direkt das GHCR-Image:
+
+```text
+ghcr.io/amet-titulari/chastease:latest
+```
+
+Hinweise:
+
+- Falls das Package privat ist, in Portainer vorher eine Registry fuer `ghcr.io` hinterlegen (GitHub User + PAT mit `read:packages`).
+- Nach dem Deploy App unter `http://<host>:3000` erreichbar.
+
 Setup-Prototyp:
 
 ```bash

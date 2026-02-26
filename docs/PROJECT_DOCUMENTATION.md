@@ -26,6 +26,11 @@ Das System soll modular, testbar und langfristig erweiterbar sein.
 - `docs/architecture/UML_DOMAIN_MODEL.md`
 - `docs/architecture/UML_SEQUENCE_STORY_TURN.md`
 - `docs/architecture/UML_SEQUENCE_SETUP_LIFECYCLE.md`
+- `docs/architecture/UML_SEQUENCE_CHAT_ACTION_EXECUTION.md`
+- `docs/architecture/UML_SEQUENCE_HYGIENE_OPEN.md`
+- `docs/architecture/UML_SEQUENCE_IMAGE_VERIFICATION.md`
+- `docs/architecture/UML_SEQUENCE_EMERGENCY_ABORT.md`
+- `docs/architecture/UML_SEQUENCE_DEVOPS_IMAGE_BUILD.md`
 
 3. Architekturentscheidungen (ADR)
 - `docs/adr/ADR-001-modular-monolith.md`
@@ -42,7 +47,7 @@ Das System soll modular, testbar und langfristig erweiterbar sein.
 
 ## Aktueller Stand (2026-02-26)
 
-- Release-Stand: `0.1.11` (inkl. nachgelagerter Hotfixes auf `main`).
+- Release-Stand: `0.2.0` (inkl. nachgelagerter Hotfixes auf `main`).
 - Backend/Chat:
 	- Striktes Action-Tag-Handling mit Repair-Round und robustem Parsing aktiv.
 	- Notfall-Abbruch fuehrt direkte `ttlock_open`-Notfalloeffnung aus; Session/Vertrag werden erst nach erfolgreicher Oeffnung invalidiert/archiviert.
@@ -55,9 +60,12 @@ Das System soll modular, testbar und langfristig erweiterbar sein.
 - Setup/Session:
 	- Setup-/Session-Sync fuer Integrationen und Consent stabilisiert.
 	- Session-/Contract-Status nach Notfallabbruch konsistent auf Neustart-Pfad ausgelegt.
+- DevOps:
+	- Docker-Compose Dev-Setup (Option A) umgesetzt.
+	- Manueller GHCR-Image-Build via GitHub Action verfuegbar.
 
 ## Naechste sinnvolle Schritte
 
 - Regressionstests fuer Notfallabbruch + Oeffnungslimit-Pfade erweitern (inkl. `ttlock_open`-Fail/Retry-Szenarien).
 - Optionales observability-Logging fuer entfernte/unterdrueckte Machine-Tags und Notfallpfad-Transitions.
-- Release-Nachzug mit Tagging (z. B. `v0.1.11`) falls noch nicht gesetzt.
+- Release-Nachzug mit Tagging (z. B. `v0.2.0`) falls noch nicht gesetzt.

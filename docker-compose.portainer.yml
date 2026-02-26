@@ -1,0 +1,23 @@
+services:
+  chastease:
+    image: ghcr.io/amet-titulari/chastease:latest
+    container_name: chastease
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: sqlite:///data/chastease.db
+      IMAGE_VERIFICATION_DIR: data/image_verifications
+      LOG_LEVEL: INFO
+      ENABLE_SESSION_KILL: "false"
+      SECRET_KEY: x7k9p2m4q8r5t1v3n6j0b2f4h9l5y8z1
+      TTL_API_BASE: https://euapi.ttlock.com
+      TTL_CLIENT_ID: "8fa8f25f53ff4721a6b0bbc895e8e600"
+      TTL_CLIENT_SECRET: "054d7bb1836e6993352d7a12cf7bcd69"
+    volumes:
+      - chastease_data:/app/data
+
+volumes: 
+  chastease_data:
