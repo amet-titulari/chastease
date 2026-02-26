@@ -16,7 +16,7 @@
 - [x] Architektur-Refactoring: API/Web-Routen entflechten und in Module aufteilen
 - [x] Frontend/Backend-Trennung im Monorepo vorbereiten
 - [x] Tool-/Connector-Abstraktion als eigene Schicht etablieren
-- [ ] Docker-Compose Dev-Setup definieren (Option A zuerst)
+- [x] Docker-Compose Dev-Setup definieren (Option A zuerst)
 
 ## Refactoring-Fortschritt (Stand 2026-02-25)
 

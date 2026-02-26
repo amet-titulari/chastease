@@ -32,7 +32,7 @@ Meilenstein R1 (naechster testbarer Stand):
 
 R1-Status:
 - Erreicht am 2026-02-23; validiert am 2026-02-25 (Testlauf in `.venv312`: `53 passed`).
-- Naechster Schritt: Docker-Compose Dev-Setup (Option A) und Alembic-Migrationspfad abschliessen.
+- Docker-Compose Dev-Setup (Option A) ist umgesetzt; naechster Schritt ist der Alembic-Migrationspfad.
 
 P0.5-Status (ohne Docker):
 - Architektur-Refactoring abgeschlossen (API/Web-Router entkoppelt, gemeinsame Runtime-Helfer extrahiert).

@@ -47,6 +47,26 @@ Healthcheck:
 curl http://127.0.0.1:5000/api/v1/health
 ```
 
+## Docker Compose (Dev)
+
+Option A (lokale Entwicklung mit Hot-Reload, SQLite in Docker-Volume):
+
+```bash
+docker compose up --build
+```
+
+App ist danach erreichbar unter:
+
+```text
+http://127.0.0.1:5000/
+```
+
+Wichtige Hinweise:
+
+- Das Repo wird als Bind-Mount eingebunden (`./:/app`), daher wirken Codeaenderungen direkt mit Reload.
+- Persistente Laufzeitdaten liegen im Docker-Volume `chastease_data` (`/app/data`).
+- Fuer API-Keys/Secrets in Dev die gewuenschten Variablen beim `docker compose`-Start in der Shell setzen oder in `docker-compose.yml` ergaenzen.
+
 Setup-Prototyp:
 
 ```bash
