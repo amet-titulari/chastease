@@ -203,6 +203,13 @@ def _is_confirmation_message(message: str) -> bool:
         "confirm",
         "confirmed",
         "abbruch",
+        "abbrechen",
+        "beenden",
+        "stop",
+        "stopp",
+        "notfall",
+        "rot",
+        "red",
         "abort",
         "weiter",
     }
@@ -804,6 +811,90 @@ def _ttlock_from_policy(policy: dict) -> dict:
     return ttlock if isinstance(ttlock, dict) else {}
 
 
+def _opening_window_start(now: datetime, period: str) -> datetime:
+    normalized = str(period or "day").strip().lower()
+    if normalized == "month":
+        return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if normalized == "week":
+        weekday = now.weekday()
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        return start_of_day - timedelta(days=weekday)
+    return now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _is_emergency_open(payload: dict) -> bool:
+    if bool(payload.get("emergency", False)):
+        return True
+    trigger = str(payload.get("trigger") or "").strip().lower()
+    return trigger in {"manual_abort", "safeword", "traffic_red"}
+
+
+def _assert_opening_limit_allows_open(policy: dict, payload: dict, now: datetime) -> None:
+    if _is_emergency_open(payload):
+        return
+
+    limits = policy.get("limits") if isinstance(policy.get("limits"), dict) else {}
+    opening_period = str(limits.get("opening_limit_period") or "day").strip().lower()
+    if opening_period not in {"day", "week", "month"}:
+        opening_period = "day"
+
+    raw_limit = limits.get("max_openings_in_period", limits.get("max_openings_per_day", 1))
+    try:
+        max_openings = int(raw_limit)
+    except (TypeError, ValueError):
+        max_openings = 1
+    max_openings = max(0, max_openings)
+
+    runtime_limits = policy.get("runtime_opening_limits") if isinstance(policy.get("runtime_opening_limits"), dict) else {}
+    raw_events = runtime_limits.get("open_events") if isinstance(runtime_limits.get("open_events"), list) else []
+
+    parsed_events: list[datetime] = []
+    for item in raw_events:
+        if not isinstance(item, str):
+            continue
+        parsed = _parse_iso_dt(item)
+        if parsed is not None:
+            parsed_events.append(parsed)
+
+    window_start = _opening_window_start(now, opening_period)
+    events_in_window = [dt for dt in parsed_events if dt >= window_start]
+
+    if max_openings <= 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Opening limit reached for period '{opening_period}' (0 openings allowed).",
+        )
+    if len(events_in_window) >= max_openings:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Opening limit reached for period '{opening_period}' "
+                f"({len(events_in_window)}/{max_openings} used)."
+            ),
+        )
+
+
+def _record_open_event(policy: dict, now: datetime) -> None:
+    runtime_limits = policy.get("runtime_opening_limits") if isinstance(policy.get("runtime_opening_limits"), dict) else {}
+    raw_events = runtime_limits.get("open_events") if isinstance(runtime_limits.get("open_events"), list) else []
+
+    parsed_events: list[datetime] = []
+    for item in raw_events:
+        if not isinstance(item, str):
+            continue
+        parsed = _parse_iso_dt(item)
+        if parsed is not None:
+            parsed_events.append(parsed)
+
+    retention_start = now - timedelta(days=90)
+    retained = [dt for dt in parsed_events if dt >= retention_start]
+    retained.append(now)
+    retained.sort()
+
+    runtime_limits["open_events"] = [_iso_utc(dt) for dt in retained]
+    policy["runtime_opening_limits"] = runtime_limits
+
+
 def _retry_delay_seconds(attempt: int, retry_after_header: str | None = None) -> float:
     if retry_after_header:
         raw = str(retry_after_header).strip()
@@ -959,6 +1050,9 @@ def _execute_ttlock_action(
         raise HTTPException(status_code=400, detail="TT-Lock server config missing: TTL_CLIENT_ID / TTL_CLIENT_SECRET.")
 
     command = "open" if str(action_type).endswith("_open") else "close"
+    now = datetime.now(UTC)
+    if command == "open":
+        _assert_opening_limit_allows_open(policy, payload, now)
     access_token = _ttlock_access_token(
         base_url=base_url,
         client_id=client_id,
@@ -973,6 +1067,8 @@ def _execute_ttlock_action(
         lock_id=lock_id,
         command=command,
     )
+    if command == "open":
+        _record_open_event(policy, now)
     logger.info(
         "TT-Lock command executed: action=%s lock_id=%s gateway_id=%s",
         action_type,
