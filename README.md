@@ -18,6 +18,7 @@ Dieses Repository ist die gemeinsame Basis fuer Implementierung, Planung und Dok
 - Pytest
 
 Erweiterungen fuer die naechsten Schritte:
+
 - SQLAlchemy + Alembic
 - PostgreSQL
 - Redis Queue (Background Jobs)
@@ -187,6 +188,7 @@ curl "http://127.0.0.1:5000/api/v1/sessions/<session_id>/live?ai_access_token=<a
 ```
 
 **Detail Levels:**
+
 - `light` (default): Nur `session_status` und `time_context` - minimal Token-Verbrauch für häufige Status-Checks
 - `full`: Zusätzlich `setup_context`, `turns`, `session` (vollständiges Session-Objekt)
 
