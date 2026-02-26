@@ -1,11 +1,26 @@
 # Changelog
 
+## 0.2.0 - 2026-02-26
+
+- Notfall-/Abbruchlogik auf Session-Ebene neu ausgerichtet:
+  - Notfallabbruch nutzt nun den direkten `ttlock_open`-Pfad.
+  - Session/Vertrag werden erst nach erfolgreicher Notfalloeffnung invalidiert/archiviert.
+  - Trigger-/Bestaetigungs-Erkennung fuer Notfallabbruch gehaertet.
+- Oeffnungslimits serverseitig verbindlich gemacht:
+  - `opening_limit_period` + `max_openings_in_period` werden bei Oeffnungen durchgesetzt.
+  - Runtime-Tracking fuer Oeffnungsereignisse eingefuehrt.
+- Chat/UI- und Betriebsverbesserungen:
+  - Bildverifikation als schlanker One-Button-Flow mit Vorschau/Status.
+  - Dashboard-/Session-Polling reduziert (Cache + Dedupe).
+  - Robustere Filterung von Machine-Tags in Narrationen.
+
 ## 0.1.11 - 2026-02-26
 
 - Notfall-/Abbruch-Flow korrigiert und gehaertet:
   - Notfallabbruch fuehrt nun direkt `ttlock_open` aus (statt `hygiene_open`) fuer die Tresor-Notfalloeffnung.
   - Session/Vertrag werden erst nach erfolgreicher Notfalloeffnung archiviert/invalidiert.
   - Trigger-Erkennung fuer Notfallabbruch erweitert (`rot/red`, `abbruch`, `notfall`, `stop/stopp`, etc.).
+  - Bestaetigungs-Erkennung fuer Abbruch erweitert (`abbrechen`, `beenden`, `stop/stopp`, `rot/red`), damit der Confirm-Counter nicht haengen bleibt.
 - Chat-Action- und Vision-Flow verbessert:
   - Bildverifikation auf schlanken One-Button-Flow umgestellt (`Bild aufnehmen` -> Vorschau -> `Bild prüfen`).
   - JSON-Payload in der Image-Action-Card ausgeblendet; Anforderung/Verifikation besser lesbar gemacht.
@@ -13,6 +28,8 @@
 - Robustheit/Traffic:
   - Dashboard-/Session-Polling gedrosselt und zentral per Cache/In-Flight-Dedupe optimiert.
   - Maschinen-Tags in Narration gehaertet, damit rohe `[[REQUEST...]]`-Fragmente nicht im UI erscheinen.
+  - Server-seitige Oeffnungslimits fuer TTLock gehaertet (`opening_limit_period` + `max_openings_in_period`) inkl. Runtime-Tracking pro Periode.
+  - Hotfix fuer `NameError` im TTLock-Open-Pfad nach Limit-Pruefung (Helper-Funktionen auf Modulscope verschoben).
 
 ## 0.1.10 - 2026-02-25
 

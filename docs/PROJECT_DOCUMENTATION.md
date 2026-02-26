@@ -39,3 +39,25 @@ Das System soll modular, testbar und langfristig erweiterbar sein.
 4. UML Domain + Sequenz
 5. Projektplan + Backlog
 6. ADRs
+
+## Aktueller Stand (2026-02-26)
+
+- Release-Stand: `0.1.11` (inkl. nachgelagerter Hotfixes auf `main`).
+- Backend/Chat:
+	- Striktes Action-Tag-Handling mit Repair-Round und robustem Parsing aktiv.
+	- Notfall-Abbruch fuehrt direkte `ttlock_open`-Notfalloeffnung aus; Session/Vertrag werden erst nach erfolgreicher Oeffnung invalidiert/archiviert.
+	- Bestaetigungs- und Trigger-Erkennung fuer Notfallabbruch wurde gehaertet (`rot/red`, `abbrechen`, `stop/stopp`, etc.).
+	- Oeffnungslimits werden serverseitig erzwungen (`opening_limit_period` + `max_openings_in_period`) mit laufender Ereignis-Historie.
+- Frontend/UI:
+	- Dashboard-Polling deutlich reduziert (Cache + Dedupe + Sichtbarkeitslogik).
+	- Image-Verification-Action-Card auf One-Button-Flow umgestellt (`Bild aufnehmen` -> Vorschau -> `Bild prüfen`), ohne JSON-Rohpayload.
+	- Sichtbarer Status waehrend Bildpruefung integriert.
+- Setup/Session:
+	- Setup-/Session-Sync fuer Integrationen und Consent stabilisiert.
+	- Session-/Contract-Status nach Notfallabbruch konsistent auf Neustart-Pfad ausgelegt.
+
+## Naechste sinnvolle Schritte
+
+- Regressionstests fuer Notfallabbruch + Oeffnungslimit-Pfade erweitern (inkl. `ttlock_open`-Fail/Retry-Szenarien).
+- Optionales observability-Logging fuer entfernte/unterdrueckte Machine-Tags und Notfallpfad-Transitions.
+- Release-Nachzug mit Tagging (z. B. `v0.1.11`) falls noch nicht gesetzt.
