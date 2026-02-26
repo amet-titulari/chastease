@@ -5,6 +5,8 @@ const setupEl = document.getElementById('setupSessionInfo');
 const setupBtn = document.getElementById('dashboardSetupBtn');
 const refreshBtn = document.getElementById('dashboardRefreshBtn');
 const killBtn = document.getElementById('dashboardKillBtn');
+const auditBtn = document.getElementById('dashboardAuditBtn');
+const turnLogBtn = document.getElementById('dashboardTurnBtn');
 
 const timerSummaryEl = document.getElementById('dashboardTimerSummary');
 const timerDayAEl = document.getElementById('timerDayA');
@@ -297,9 +299,55 @@ function killSession() {
     .catch(() => statusEl && chastease_common.setStatus(statusEl, 'Delete request failed', 'err'));
 }
 
+function openAuditLog() {
+  if (!currentSession?.has_active_session) {
+    if (statusEl) chastease_common.setStatus(statusEl, 'Keine aktive Session.', 'err');
+    return;
+  }
+  const sessionEntity = currentSession.chastity_session || {};
+  const sessionId = sessionEntity.session_id || sessionEntity.id;
+  if (!sessionId) {
+    if (statusEl) chastease_common.setStatus(statusEl, 'Session-ID fehlt.', 'err');
+    return;
+  }
+  if (statusEl) chastease_common.setStatus(statusEl, 'Audit-Log wird geöffnet.');
+  const target = `/audit-log?session_id=${encodeURIComponent(sessionId)}`;
+  const win = window.open(target, '_blank');
+  if (!win) {
+    if (statusEl) chastease_common.setStatus(statusEl, 'Popup blockiert.', 'err');
+    return;
+  }
+  win.focus?.();
+  if (statusEl) chastease_common.setStatus(statusEl, 'Audit-Log geöffnet.', 'ok');
+}
+
+function openTurnLog() {
+  if (!currentSession?.has_active_session) {
+    if (statusEl) chastease_common.setStatus(statusEl, 'Keine aktive Session.', 'err');
+    return;
+  }
+  const sessionEntity = currentSession.chastity_session || {};
+  const sessionId = sessionEntity.session_id || sessionEntity.id;
+  if (!sessionId) {
+    if (statusEl) chastease_common.setStatus(statusEl, 'Session-ID fehlt.', 'err');
+    return;
+  }
+  if (statusEl) chastease_common.setStatus(statusEl, 'Turn-Log wird geöffnet.');
+  const target = `/turn-log?session_id=${encodeURIComponent(sessionId)}`;
+  const win = window.open(target, '_blank');
+  if (!win) {
+    if (statusEl) chastease_common.setStatus(statusEl, 'Popup blockiert.', 'err');
+    return;
+  }
+  win.focus?.();
+  if (statusEl) chastease_common.setStatus(statusEl, 'Turn-Log geöffnet.', 'ok');
+}
+
 if (refreshBtn) refreshBtn.addEventListener('click', () => refreshSession(true));
 if (setupBtn) setupBtn.addEventListener('click', goToSetup);
 if (killBtn) killBtn.addEventListener('click', killSession);
+if (auditBtn) auditBtn.addEventListener('click', openAuditLog);
+if (turnLogBtn) turnLogBtn.addEventListener('click', openTurnLog);
 
 document.addEventListener('visibilitychange', () => {
   if (!shouldRunSessionRefresh()) return;

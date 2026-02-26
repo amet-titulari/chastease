@@ -1,6 +1,6 @@
 import json
 from fastapi import APIRouter, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import desc, select
 
 from chastease.api.runtime import get_db_session, resolve_user_id_from_token
 from chastease.models import AuditEntry, ChastitySession
@@ -26,7 +26,9 @@ def list_audit_entries(session_id: str, auth_token: str, request: Request) -> di
             raise HTTPException(status_code=403, detail="Session does not belong to user.")
 
         entries = db.scalars(
-            select(AuditEntry).where(AuditEntry.session_id == session_id).order_by(AuditEntry.created_at)
+            select(AuditEntry)
+            .where(AuditEntry.session_id == session_id)
+            .order_by(desc(AuditEntry.created_at))
         ).all()
         payload = []
         for entry in entries:

@@ -2,7 +2,7 @@ import json
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import desc, select
 
 from chastease.api.runtime import (
     find_or_create_draft_setup_session,
@@ -233,7 +233,11 @@ def get_session_turns(session_id: str, request: Request) -> dict:
         session = db.get(ChastitySession, session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
-        turns = db.scalars(select(Turn).where(Turn.session_id == session_id).order_by(Turn.turn_no)).all()
+        turns = db.scalars(
+            select(Turn)
+            .where(Turn.session_id == session_id)
+            .order_by(desc(Turn.turn_no))
+        ).all()
         return {
             "session_id": session_id,
             "turns": [
