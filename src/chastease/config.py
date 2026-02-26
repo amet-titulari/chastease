@@ -78,3 +78,4 @@ class Config:
         self.LLM_CHAT_TIMEOUT_POOL = max(1.0, _env_float("LLM_CHAT_TIMEOUT_POOL", 3.0))
         self.LLM_FAIL_CLOSED_REQUEST_TAG = _env_bool("LLM_FAIL_CLOSED_REQUEST_TAG", True)
         self.ENABLE_AUDIT_LOG_VIEW = _env_bool("ENABLE_AUDIT_LOG_VIEW", False)
+        self.AI_SESSION_READ_TOKEN = os.getenv("AI_SESSION_READ_TOKEN", "").strip()

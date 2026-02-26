@@ -221,6 +221,27 @@ class OpenAIAdapter:
         action = (context.action or "").lower()
         return "psychogram" in action
 
+    @staticmethod
+    def _is_live_state_dump_request(context: StoryTurnContext) -> bool:
+        if context.session_id == "setup-preview":
+            return False
+        action = (context.action or "").lower()
+        tokens = (
+            "vollständ",
+            "vollstaend",
+            "alle setup",
+            "setupinformationen",
+            "sessioninformationen",
+            "session information",
+            "complete session",
+            "full session",
+            "aktuellen sitzungs",
+            "live-endpunkt",
+            "live endpoint",
+            "status und zeiten",
+        )
+        return any(token in action for token in tokens)
+
     def generate_narration(self, context: StoryTurnContext) -> str:
         if self._is_analysis_request(context.action, context.language):
             return self._analysis_fallback(context)
@@ -277,6 +298,7 @@ class OpenAIAdapter:
             "Never invent facts about files/images you cannot see. "
             "If an attachment is missing or unreadable, say so clearly and ask for a better upload. "
             "Keep answers concise and operational. "
+            "If asked for complete current session/setup/timer details, return all available fields in a structured response without truncating key values. "
             "Action protocol is mandatory and strict. "
             "If your response asks for, approves, schedules, or executes an operational step, "
             "you MUST append exactly one machine line at the very end in this format: "
@@ -291,6 +313,13 @@ class OpenAIAdapter:
             "For image_verification send a payload with at least "
             "{\"request\": \"...\", \"verification_instruction\": \"...\"}. "
             "Before requesting image_verification, explain briefly what image should be provided and how you will verify it. "
+            "If you need the latest persisted session state, use the backend live-read endpoint "
+            "GET /api/v1/sessions/{session_id}/live. "
+            "Use ai_access_token for service-side AI access (configured via AI_SESSION_READ_TOKEN). "
+            "Never invent session state when the endpoint cannot be reached. "
+            "When the prompt contains a block named LIVE_SESSION_SNAPSHOT_JSON, treat it as authoritative source of truth. "
+            "Do not replace present values with defaults like null/initialized. "
+            "If you output JSON about session state, copy timing/status fields from that snapshot exactly. "
             "Examples of valid final lines: "
             "[[REQUEST:hygiene_open|{\"reason\":\"hygiene\"}]] "
             "[[REQUEST:add_time|{\"seconds\":900}]] "
@@ -333,7 +362,10 @@ class OpenAIAdapter:
             }
         is_setup_contract = self._is_setup_preview_contract_request(context)
         is_setup_analysis = self._is_setup_preview_analysis_request(context)
+        is_live_state_dump = self._is_live_state_dump_request(context)
         max_tokens = 1800 if is_setup_contract else (650 if is_setup_analysis else self.chat_max_tokens)
+        if is_live_state_dump:
+            max_tokens = max(max_tokens, 1200)
 
         payload = {
             "model": chat_model,

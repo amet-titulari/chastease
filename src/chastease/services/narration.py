@@ -8,9 +8,11 @@ from pathlib import Path
 from fastapi import Request
 from sqlalchemy import select
 
+from chastease.api.runtime import find_setup_session_id_for_active_session
 from chastease.api.setup_domain import _fixed_soft_limits_text, _lang, _required_contract_consent_text
 from chastease.connectors import generate_narration_with_optional_profile
 from chastease.models import ChastitySession, Turn, User
+from chastease.repositories.setup_store import load_sessions
 from chastease.services.ai.base import StoryTurnContext
 
 logger = logging.getLogger(__name__)
@@ -264,9 +266,106 @@ def _available_tools_summary(request: Request) -> str:
     return (
         f"execute={','.join(execute_tools) or '-'}; "
         f"suggest={','.join(suggest_tools) or '-'}; "
+        "live_session_read=GET /api/v1/sessions/{session_id}/live (?auth_token=wearer_token OR ?ai_access_token=ai_token) "
+        "[optional: ?detail_level=light|full (default:light, light=only time/status ~270tok, full=+setup/psychogram ~350tok)]; "
         "payload_rules=add_time/reduce_time require {seconds:int>0}; "
         "pause_timer/unpause_timer require {}"
     )
+
+
+def _safe_days_between(start_value: str | None, end_value: str | None) -> int | None:
+    start_raw = str(start_value or "").strip()
+    end_raw = str(end_value or "").strip()
+    if not start_raw or not end_raw:
+        return None
+    try:
+        start_date = date.fromisoformat(start_raw)
+        end_date = date.fromisoformat(end_raw)
+    except ValueError:
+        return None
+    return (end_date - start_date).days
+
+
+def _sanitize_setup_for_ai(setup_session: dict | None) -> dict | None:
+    if not isinstance(setup_session, dict):
+        return None
+    payload = json.loads(json.dumps(setup_session))
+    policy_preview = payload.get("policy_preview")
+    if isinstance(policy_preview, dict):
+        generated_contract = policy_preview.get("generated_contract")
+        if isinstance(generated_contract, dict):
+            full_text = str(generated_contract.get("text") or "")
+            generated_contract["text"] = None
+            generated_contract["text_omitted"] = bool(full_text)
+            generated_contract["text_length"] = len(full_text)
+    return payload
+
+
+def _build_live_snapshot_for_ai(session: ChastitySession, mode: str = "light") -> dict:
+    """
+    Build live session snapshot for AI prompt injection.
+    
+    mode:
+      - 'light': Only session_status and time_context (minimal tokens, ~300-400 chars)
+      - 'full': Includes psychogram_summary and setup_session_id (~1200-1400 chars)
+    """
+    policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
+    if not isinstance(policy, dict):
+        policy = {}
+
+    runtime_timer = policy.get("runtime_timer") if isinstance(policy.get("runtime_timer"), dict) else {}
+    contract = policy.get("contract") if isinstance(policy.get("contract"), dict) else {}
+
+    contract_start = str(contract.get("start_date") or "").strip() or None
+    contract_min_end = str(contract.get("min_end_date") or "").strip() or None
+    contract_max_end = str(contract.get("max_end_date") or "").strip() or None
+    contract_proposed_end = str(contract.get("proposed_end_date") or "").strip() or None
+    contract_end = str(contract.get("end_date") or "").strip() or None
+
+    snapshot = {
+        "session_id": session.id,
+        "session_status": {
+            "status": session.status,
+            "language": session.language,
+            "updated_at": session.updated_at.isoformat(),
+        },
+        "time_context": {
+            "timer_state": str(runtime_timer.get("state") or "running").lower(),
+            "is_paused": str(runtime_timer.get("state") or "running").lower() == "paused",
+            "target_end_at": runtime_timer.get("effective_end_at") or contract_end or contract_proposed_end,
+            "contract_start_date": contract_start,
+            "contract_min_end_date": contract_min_end,
+            "contract_max_end_date": contract_max_end,
+            "contract_proposed_end_date": contract_proposed_end,
+            "contract_end_date": contract_end,
+            "contract_min_duration_days": _safe_days_between(contract_start, contract_min_end),
+            "contract_max_duration_days": _safe_days_between(contract_start, contract_max_end),
+            "contract_target_duration_days": _safe_days_between(contract_start, contract_end or contract_proposed_end),
+            "runtime_timer": runtime_timer,
+        },
+    }
+
+    # Add psychogram and setup details only in 'full' mode
+    if str(mode).strip().lower() == "full":
+        psychogram = json.loads(session.psychogram_snapshot_json) if session.psychogram_snapshot_json else {}
+        if not isinstance(psychogram, dict):
+            psychogram = {}
+        
+        traits = psychogram.get("traits", {})
+        likes = psychogram.get("likes", [])
+        interaction_prefs = psychogram.get("interaction_preferences", {})
+        compact_psychogram = {
+            "top_traits": {k: traits.get(k) for k in likes[:4]} if isinstance(traits, dict) else {},
+            "autonomy_profile": interaction_prefs.get("autonomy_profile"),
+            "instruction_style": interaction_prefs.get("instruction_style"),
+        }
+        
+        linked_setup_id = find_setup_session_id_for_active_session(session.user_id, session.id)
+        
+        snapshot["psychogram_summary"] = compact_psychogram
+        snapshot["setup_session_id"] = linked_setup_id
+
+    return snapshot
 
 
 def _resolve_setup_user_display_name(db, setup_session: dict) -> str:
@@ -327,6 +426,13 @@ def generate_ai_narration_for_session(
         if history_block
         else f"Current wearer input: {action}{attachment_hint}"
     )
+
+    live_snapshot = _build_live_snapshot_for_ai(session)
+    action_with_context = (
+        f"{action_with_context}\n\n"
+        f"LIVE_SESSION_SNAPSHOT_JSON:\n{json.dumps(live_snapshot, ensure_ascii=False)}"
+    )
+
     if include_tools_summary:
         action_with_context = f"{action_with_context}\n\nAvailable tools: {_available_tools_summary(request)}"
 

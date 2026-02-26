@@ -109,10 +109,11 @@ async function loadTurnLog(event) {
     }
 
     const turns = Array.isArray(body.turns) ? body.turns : [];
-    renderTurnRows(turns);
-    const summaryText = turns.length ? `${turns.length} Turns geladen.` : 'Keine Turns gefunden.';
+    const sortedTurns = [...turns].sort((a, b) => Number(b?.turn_no || 0) - Number(a?.turn_no || 0));
+    renderTurnRows(sortedTurns);
+    const summaryText = sortedTurns.length ? `${sortedTurns.length} Turns geladen.` : 'Keine Turns gefunden.';
     updateSummary(summaryText);
-    updateStatus(turns.length ? 'Turns geladen.' : 'Keine Turns vorhanden.', 'ok');
+    updateStatus(sortedTurns.length ? 'Turns geladen.' : 'Keine Turns vorhanden.', 'ok');
   } catch (error) {
     const message = error?.message || 'Turns konnten nicht geladen werden.';
     clearEntries(message);

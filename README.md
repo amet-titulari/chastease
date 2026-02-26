@@ -170,7 +170,25 @@ Setup-Persistenz (aktuell):
 - Optional per Env steuerbar: `SETUP_STORE_PATH=/pfad/zur/datei.json`
 - Relationale Persistenz: `DATABASE_URL` (default: `sqlite:///data/chastease.db`)
 - Session-Kill-Feature (nur Test/Build): `ENABLE_SESSION_KILL=true|false` (default: `false`)
+- Optionaler AI-Read-Token fuer Live-Session-Infos: `AI_SESSION_READ_TOKEN=<secret>`
 - Auth-Tokens werden serverseitig in-memory gehalten (nach Server-Neustart ist Login erneut erforderlich)
+
+Live-Session-Infos abrufen:
+
+```bash
+# Wearer-Zugriff mit LIGHT mode (nur Zeit/Status, minimal ~270 tokens, default)
+curl "http://127.0.0.1:5000/api/v1/sessions/<session_id>/live?auth_token=<auth_token>&detail_level=light"
+
+# Wearer-Zugriff mit FULL mode (inkl. Setup/Turns/Psychogram, ~350+ tokens)
+curl "http://127.0.0.1:5000/api/v1/sessions/<session_id>/live?auth_token=<auth_token>&detail_level=full&recent_turns_limit=5"
+
+# AI-/Service-Zugriff (ai_access_token, serverseitig gegen AI_SESSION_READ_TOKEN geprueft)
+curl "http://127.0.0.1:5000/api/v1/sessions/<session_id>/live?ai_access_token=<ai_session_read_token>&detail_level=light"
+```
+
+**Detail Levels:**
+- `light` (default): Nur `session_status` und `time_context` - minimal Token-Verbrauch für häufige Status-Checks
+- `full`: Zusätzlich `setup_context`, `turns`, `session` (vollständiges Session-Objekt)
 
 ## Tests
 

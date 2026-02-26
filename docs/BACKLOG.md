@@ -6,6 +6,8 @@ Prioritaetssystem: `0 = Hoch / in Umsetzung`, `1 = Vorbereitet / Folgeplanung`, 
 
 - [X] GitHub Release-Tagging fuer `v0.2.0` nachziehen
 - [ ] Die AI soll in der Lage sein die Session Informationen zu erhalten
+- [ ] Bildbeweise sollen pgp vererschlüsselt abelegt werden
+- [ ] Die Anwendung soll eine Backupfunktion erhalten in der DB und Bildbeweise exportiert werden können
 - [ ] Die AI soll aktiv Sessionparameter anpassen können
 
 ## Prioritaet 1 (Vorbereitet / Folgeplanung)
@@ -13,6 +15,7 @@ Prioritaetssystem: `0 = Hoch / in Umsetzung`, `1 = Vorbereitet / Folgeplanung`, 
 - [ ] Mehrsprachigkeit (Deutsch/Englisch) in API, UI und Setup-Flow
 - [ ] Inventar- und Itemsystem (einfach)
 - [ ] Prompt-Template Versionierung
+
 ## Prioritaet 2 (Idee / Umsetzung planen)
 
 - [ ] Authentifizierung (Passkey/2FA als Erweiterung)

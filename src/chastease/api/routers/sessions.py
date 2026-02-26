@@ -1,8 +1,11 @@
 import json
-from datetime import UTC, datetime
+import math
+import secrets
+from datetime import UTC, date, datetime
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 
 from chastease.api.runtime import (
     find_or_create_draft_setup_session,
@@ -34,6 +37,147 @@ def _latest_setup_session_for_user(user_id: str) -> tuple[str, dict] | tuple[Non
         return (None, None)
     candidates.sort(key=lambda item: item[1].get("updated_at", item[1].get("created_at", "")), reverse=True)
     return candidates[0]
+
+
+def _can_access_session_live(session_user_id: str, auth_token: str | None, ai_access_token: str | None, request: Request) -> str | None:
+    if auth_token:
+        token_user_id = resolve_user_id_from_token(auth_token, request)
+        if token_user_id == session_user_id:
+            return "wearer"
+
+    configured_ai_token = str(getattr(request.app.state.config, "AI_SESSION_READ_TOKEN", "") or "").strip()
+    if configured_ai_token and ai_access_token and secrets.compare_digest(ai_access_token, configured_ai_token):
+        return "ai"
+
+    return None
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _resolve_live_target_end_at(policy: dict) -> tuple[str | None, str]:
+    runtime_timer = policy.get("runtime_timer") if isinstance(policy, dict) else {}
+    runtime_timer = runtime_timer if isinstance(runtime_timer, dict) else {}
+    effective_end_at = str(runtime_timer.get("effective_end_at") or "").strip()
+    if effective_end_at:
+        return effective_end_at, "runtime_timer.effective_end_at"
+
+    contract = policy.get("contract") if isinstance(policy, dict) else {}
+    contract = contract if isinstance(contract, dict) else {}
+    for key in ("end_date", "proposed_end_date", "max_end_date", "min_end_date"):
+        candidate = str(contract.get(key) or "").strip()
+        if candidate:
+            return candidate, f"contract.{key}"
+    return None, "none"
+
+
+def _safe_days_between(start_value: str | None, end_value: str | None) -> int | None:
+    start_raw = str(start_value or "").strip()
+    end_raw = str(end_value or "").strip()
+    if not start_raw or not end_raw:
+        return None
+    try:
+        start_date = date.fromisoformat(start_raw)
+        end_date = date.fromisoformat(end_raw)
+    except ValueError:
+        return None
+    return (end_date - start_date).days
+
+
+def _build_live_time_context(policy: dict, server_now: datetime) -> dict:
+    runtime_timer = policy.get("runtime_timer") if isinstance(policy, dict) else {}
+    runtime_timer = runtime_timer if isinstance(runtime_timer, dict) else {}
+    timer_state = str(runtime_timer.get("state") or "running").strip().lower() or "running"
+    is_paused = timer_state == "paused"
+
+    contract = policy.get("contract") if isinstance(policy, dict) else {}
+    contract = contract if isinstance(contract, dict) else {}
+    contract_start_date = str(contract.get("start_date") or "").strip() or None
+    contract_min_end_date = str(contract.get("min_end_date") or "").strip() or None
+    contract_max_end_date = str(contract.get("max_end_date") or "").strip() or None
+    contract_proposed_end_date = str(contract.get("proposed_end_date") or "").strip() or None
+    contract_end_date = str(contract.get("end_date") or "").strip() or None
+
+    target_end_at_raw, target_source = _resolve_live_target_end_at(policy)
+    target_end_at = _parse_iso_datetime(target_end_at_raw)
+
+    remaining_seconds: int | None = None
+    if timer_state == "paused":
+        paused_remaining = runtime_timer.get("remaining_seconds")
+        if isinstance(paused_remaining, (int, float)):
+            remaining_seconds = max(0, int(paused_remaining))
+    elif target_end_at is not None:
+        remaining_seconds = max(0, int(math.floor((target_end_at - server_now).total_seconds())))
+
+    is_overdue = False
+    if target_end_at is not None and timer_state != "paused":
+        is_overdue = target_end_at <= server_now
+
+    return {
+        "timer_state": timer_state,
+        "is_paused": is_paused,
+        "target_end_at": (target_end_at.isoformat() if target_end_at is not None else target_end_at_raw),
+        "target_source": target_source,
+        "remaining_seconds": remaining_seconds,
+        "is_overdue": is_overdue,
+        "paused_at": runtime_timer.get("paused_at"),
+        "contract_start_date": contract_start_date,
+        "contract_min_end_date": contract_min_end_date,
+        "contract_max_end_date": contract_max_end_date,
+        "contract_proposed_end_date": contract_proposed_end_date,
+        "contract_end_date": contract_end_date,
+        "contract_min_duration_days": _safe_days_between(contract_start_date, contract_min_end_date),
+        "contract_max_duration_days": _safe_days_between(contract_start_date, contract_max_end_date),
+        "contract_target_duration_days": _safe_days_between(
+            contract_start_date,
+            contract_end_date or contract_proposed_end_date,
+        ),
+        "runtime_timer": runtime_timer,
+    }
+
+
+def _resolve_setup_context(user_id: str, session_id: str) -> dict:
+    store = load_sessions()
+    linked_setup_session_id = find_setup_session_id_for_active_session(user_id, session_id)
+    linked_setup_session = store.get(linked_setup_session_id) if linked_setup_session_id else None
+
+    latest_setup_session_id = None
+    latest_setup_session = None
+    if isinstance(store, dict):
+        latest_setup_session_id, latest_setup_session = _latest_setup_session_for_user(user_id)
+
+    return {
+        "linked_setup_session_id": linked_setup_session_id,
+        "linked_setup_session": _sanitize_setup_session_for_live(linked_setup_session),
+        "latest_setup_session_id": latest_setup_session_id,
+        "latest_setup_session": _sanitize_setup_session_for_live(latest_setup_session),
+    }
+
+
+def _sanitize_setup_session_for_live(setup_session: dict | None) -> dict | None:
+    if not isinstance(setup_session, dict):
+        return None
+
+    sanitized = json.loads(json.dumps(setup_session))
+    policy_preview = sanitized.get("policy_preview")
+    if isinstance(policy_preview, dict):
+        generated_contract = policy_preview.get("generated_contract")
+        if isinstance(generated_contract, dict):
+            full_text = str(generated_contract.get("text") or "")
+            generated_contract["text"] = None
+            generated_contract["text_omitted"] = bool(full_text)
+            generated_contract["text_length"] = len(full_text)
+    return sanitized
 
 
 @router.get("/active")
@@ -236,7 +380,7 @@ def get_session_turns(session_id: str, request: Request) -> dict:
         turns = db.scalars(
             select(Turn)
             .where(Turn.session_id == session_id)
-            .order_by(desc(Turn.turn_no))
+            .order_by(Turn.turn_no)
         ).all()
         return {
             "session_id": session_id,
@@ -251,5 +395,89 @@ def get_session_turns(session_id: str, request: Request) -> dict:
                 for turn in turns
             ],
         }
+    finally:
+        db.close()
+
+
+@router.get("/{session_id}/live")
+def get_live_session_info(
+    session_id: str,
+    request: Request,
+    auth_token: str | None = None,
+    ai_access_token: str | None = None,
+    recent_turns_limit: int = 5,
+    detail_level: str = "light",
+) -> dict:
+    """
+    Retrieve live session information.
+    
+    detail_level:
+      - 'light': Only session_status and time_context (minimal token usage)
+      - 'full': Includes setup_context, turns, and full session object
+    """
+    detail_mode = str(detail_level).strip().lower()
+    if detail_mode not in ("light", "full"):
+        detail_mode = "light"
+    
+    turn_limit = max(1, min(25, int(recent_turns_limit)))
+    db = get_db_session(request)
+    try:
+        session = db.get(ChastitySession, session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Chastity session not found.")
+
+        access_mode = _can_access_session_live(session.user_id, auth_token, ai_access_token, request)
+        if access_mode is None:
+            raise HTTPException(status_code=401, detail="Invalid token for live session read.")
+
+        server_now = datetime.now(UTC)
+        session_payload = serialize_chastity_session(session)
+        policy = session_payload.get("policy") if isinstance(session_payload, dict) else {}
+        policy = policy if isinstance(policy, dict) else {}
+        time_context = _build_live_time_context(policy, server_now)
+
+        response = {
+            "request_id": str(uuid4()),
+            "server_time": server_now.isoformat(),
+            "access_mode": access_mode,
+            "detail_level": detail_mode,
+            "session_status": {
+                "status": session.status,
+                "language": session.language,
+                "updated_at": iso_utc(session.updated_at),
+            },
+            "time_context": time_context,
+        }
+
+        if detail_mode == "full":
+            total_turns = int(
+                db.scalar(select(func.count()).select_from(Turn).where(Turn.session_id == session_id)) or 0
+            )
+            turns = db.scalars(
+                select(Turn)
+                .where(Turn.session_id == session_id)
+                .order_by(desc(Turn.turn_no))
+                .limit(turn_limit)
+            ).all()
+            setup_context = _resolve_setup_context(session.user_id, session.id)
+            
+            response["session"] = session_payload
+            response["setup_context"] = setup_context
+            response["turns"] = {
+                "total": total_turns,
+                "returned": len(turns),
+                "items": [
+                    {
+                        "turn_no": turn.turn_no,
+                        "player_action": turn.player_action,
+                        "ai_narration": turn.ai_narration,
+                        "language": turn.language,
+                        "created_at": iso_utc(turn.created_at),
+                    }
+                    for turn in turns
+                ],
+            }
+
+        return response
     finally:
         db.close()
