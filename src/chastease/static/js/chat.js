@@ -419,6 +419,8 @@ function renderPendingActions(pendingActions) {
     card.appendChild(header);
     if (isHygieneAction) {
       card.appendChild(hygieneHint);
+    } else if (actionType === 'image_verification') {
+      // Image verification card renders a custom UI; do not show raw JSON payload.
     } else {
       card.appendChild(payloadNode);
     }
@@ -427,61 +429,137 @@ function renderPendingActions(pendingActions) {
       const requestText = String(payload?.request || 'Bitte ein Verifikationsbild aufnehmen/hochladen.');
       const instructionText = String(payload?.verification_instruction || 'Prüfe, ob die angeforderte Bedingung im Bild sichtbar erfüllt ist.');
 
-      const hint = document.createElement('p');
-      hint.className = 'mt-2 text-xs text-gray-300';
+      card.className = 'rounded border border-gray-700 bg-gray-800 p-3';
+      title.className = 'text-sm font-semibold text-gray-200';
+
+      const hint = document.createElement('div');
+      hint.className = 'mt-2 rounded border border-gray-700 bg-gray-900 p-2 text-sm text-gray-200';
       hint.textContent = `Anforderung: ${requestText}`;
 
-      const instruction = document.createElement('p');
-      instruction.className = 'mt-1 text-xs text-gray-400';
+      const instruction = document.createElement('div');
+      instruction.className = 'mt-2 rounded border border-gray-700 bg-gray-900 p-2 text-sm text-gray-300';
       instruction.textContent = `Verifikation: ${instructionText}`;
 
       const controls = document.createElement('div');
       controls.className = 'mt-2 flex flex-wrap items-center gap-2';
 
+      const captureBtn = document.createElement('button');
+      captureBtn.className = 'px-3 py-1.5 text-sm rounded bg-blue-600 hover:bg-blue-500';
+      captureBtn.textContent = 'Bild aufnehmen';
+
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
       fileInput.accept = 'image/*';
       fileInput.capture = 'environment';
-      fileInput.className = 'text-xs text-gray-300';
+      fileInput.className = 'hidden';
+
+      const previewWrap = document.createElement('div');
+      previewWrap.className = 'mt-2 hidden rounded border border-gray-700 bg-gray-900 p-2';
+
+      const previewImage = document.createElement('img');
+      previewImage.className = 'max-h-44 rounded border border-gray-700';
+      previewImage.alt = 'Vorschau Bildverifikation';
+
+      const reviewControls = document.createElement('div');
+      reviewControls.className = 'mt-2 hidden flex flex-wrap items-center gap-2';
+
+      const selectedInfo = document.createElement('div');
+      selectedInfo.className = 'mt-1 text-xs text-gray-400';
+      selectedInfo.textContent = 'Noch kein Bild gewählt.';
+
+      const reviewState = document.createElement('div');
+      reviewState.className = 'mt-2 text-xs text-blue-300 hidden';
+      reviewState.textContent = 'Bildprüfung gestartet...';
 
       const reviewBtn = document.createElement('button');
       reviewBtn.className = 'px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500';
       reviewBtn.textContent = 'Bild prüfen';
+      reviewBtn.disabled = true;
 
+      let selectedImage = null;
+
+      const setSelectedImage = (dataUrl, pictureName, pictureType, sourceText) => {
+        selectedImage = {
+          dataUrl,
+          pictureName: pictureName || 'image.jpg',
+          pictureType: pictureType || 'image/jpeg',
+        };
+        previewImage.src = dataUrl;
+        previewWrap.classList.remove('hidden');
+        reviewControls.classList.remove('hidden');
+        reviewBtn.disabled = false;
+        selectedInfo.textContent = sourceText;
+        reviewState.classList.add('hidden');
+        reviewState.textContent = 'Bildprüfung gestartet...';
+      };
+
+      captureBtn.addEventListener('click', () => {
+        fileInput.click();
+      });
+
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+        if (!file) return;
+        try {
+          const dataUrl = await fileToDataUrl(file);
+          setSelectedImage(dataUrl, file.name || 'image.jpg', file.type || 'image/jpeg', `Bild gewählt: ${file.name || 'image.jpg'}`);
+        } catch (error) {
+          setStatus(String(error?.message || error), true);
+        }
+      });
+
+      controls.appendChild(captureBtn);
       controls.appendChild(fileInput);
-      controls.appendChild(reviewBtn);
+
+      reviewControls.appendChild(reviewBtn);
+      previewWrap.appendChild(previewImage);
+
       card.appendChild(hint);
       card.appendChild(instruction);
       card.appendChild(controls);
+      card.appendChild(previewWrap);
+      card.appendChild(reviewControls);
+      card.appendChild(selectedInfo);
+      card.appendChild(reviewState);
 
       reviewBtn.addEventListener('click', async () => {
         if (!activeSessionId) return setStatus('Session fehlt.', true);
-        const file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
-        if (!file) return setStatus('Bitte ein Bild auswählen.', true);
+        if (!selectedImage?.dataUrl) return setStatus('Bitte ein Bild aufnehmen oder auswählen.', true);
 
         try {
-          setStatus('Bild wird geprüft...');
+          setStatus('Bildprüfung gestartet...');
           reviewBtn.disabled = true;
-          const dataUrl = await fileToDataUrl(file);
+          reviewBtn.textContent = 'Prüfung läuft...';
+          controls.classList.add('hidden');
+          previewWrap.classList.add('hidden');
+          reviewControls.classList.add('hidden');
+          selectedInfo.classList.add('hidden');
+          reviewState.classList.remove('hidden');
           const body = await apiCall('POST', '/api/v1/chat/vision-review', {
             session_id: activeSessionId,
             message: requestText,
             language: currentLanguage,
-            picture_name: file.name || 'image.jpg',
-            picture_content_type: file.type || 'image/jpeg',
-            picture_data_url: dataUrl,
+            picture_name: selectedImage.pictureName,
+            picture_content_type: selectedImage.pictureType,
+            picture_data_url: selectedImage.dataUrl,
             verification_instruction: instructionText,
             verification_action_payload: payload,
-            source: 'upload',
+            source: selectedImage.pictureName === 'camera.jpg' ? 'camera_capture' : 'upload',
           });
           appendMessage('assistant', body?.narration || 'Bildprüfung abgeschlossen.');
           const pendingAfterAutoExec = await autoExecuteTimerPendingActions(body?.pending_actions || []);
           renderPendingActions(pendingAfterAutoExec);
           setStatus('Bildprüfung abgeschlossen.');
         } catch (error) {
+          reviewState.textContent = 'Bildprüfung fehlgeschlagen. Bitte erneut versuchen.';
+          controls.classList.remove('hidden');
+          previewWrap.classList.remove('hidden');
+          reviewControls.classList.remove('hidden');
+          selectedInfo.classList.remove('hidden');
           setStatus(String(error?.message || error), true);
         } finally {
           reviewBtn.disabled = false;
+          reviewBtn.textContent = 'Bild prüfen';
         }
       });
     }

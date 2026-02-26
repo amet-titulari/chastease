@@ -353,6 +353,10 @@ class OpenAIAdapter:
         }
 
         has_image_payload = bool(attachment_content)
+        if has_image_payload and max_tokens < 320:
+            max_tokens = 320
+            payload["max_tokens"] = max_tokens
+            responses_payload["max_output_tokens"] = max_tokens
         if has_image_payload:
             attempt_timeouts = [
                 httpx.Timeout(connect=5.0, read=35.0, write=20.0, pool=5.0),

@@ -176,6 +176,25 @@ def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]
             }
         )
         cleaned = cleaned.replace(match.group(0), "").strip()
+
+    def _strip_orphan_machine_tags(text: str) -> str:
+        if not text:
+            return text
+        markers = ("[[REQUEST:", "[[ACTION:")
+        cleaned_text = text
+        while True:
+            positions = [idx for idx in (cleaned_text.find(m) for m in markers) if idx >= 0]
+            if not positions:
+                break
+            start = min(positions)
+            end = cleaned_text.find("]]", start)
+            if end < 0:
+                cleaned_text = cleaned_text[:start].rstrip()
+                break
+            cleaned_text = f"{cleaned_text[:start]}{cleaned_text[end + 2:]}".strip()
+        return cleaned_text
+
+    cleaned = _strip_orphan_machine_tags(cleaned)
     return cleaned, actions, generated_files
 
 

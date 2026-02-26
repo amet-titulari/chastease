@@ -1228,11 +1228,23 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
     if verification_instruction:
         enriched_prompt = (
             f"{enriched_prompt}\n\nVerification instruction:\n{verification_instruction}\n"
-            "Please briefly describe what is visible in the image first, then evaluate if the verification instruction is fulfilled."
+            "Return only the verification evaluation. "
+            "Do not include a separate image description section. "
+            "No greeting and no roleplay framing. "
+            "Keep it concise (max 4 short sentences) and include explicit pass/fail with reason."
         )
     if action_payload:
         enriched_prompt = f"{enriched_prompt}\n\nVerification payload: {action_payload_json}"
     enriched_prompt = f"{enriched_prompt}\n\nImage source: {payload.source}"
+    enriched_prompt = (
+        f"{enriched_prompt}\n\n"
+        "Output format requirement: Provide only a concise verification result (no standalone image description), "
+        "max 4 short sentences, ending with a clear verdict: PASSED or FAILED."
+    )
+    enriched_prompt = (
+        f"{enriched_prompt}\n"
+        "Do not output any machine tags such as [[REQUEST:...]], [[ACTION:...]], [REQUEST:...], or [Suggest:...]."
+    )
 
     db = get_db_session(request)
     try:

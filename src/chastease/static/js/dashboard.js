@@ -25,6 +25,7 @@ const psychTraitsEl = document.getElementById('dashboardPsychTraits');
 let currentSession = null;
 let timerInterval = null;
 let sessionRefreshInterval = null;
+const SESSION_AUTO_REFRESH_MS = 15000;
 
 const traitLabels = {
   structure_need: 'Strukturbedarf',
@@ -239,22 +240,29 @@ function updateView(body) {
   }
 }
 
-function refreshSession() {
+function refreshSession(forceRefresh = false) {
   if (!sessionHelper || typeof sessionHelper.fetchActiveSession !== 'function') {
     if (statusEl) chastease_common.setStatus(statusEl, 'Session helper missing.', 'err');
     return;
   }
-  sessionHelper.fetchActiveSession(statusEl).then((body) => {
+  sessionHelper.fetchActiveSession(statusEl, { forceRefresh }).then((body) => {
     if (!body) return;
     updateView(body);
   });
 }
 
+function shouldRunSessionRefresh() {
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return false;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+  return true;
+}
+
 function startSessionAutoRefresh() {
   if (sessionRefreshInterval) return;
   sessionRefreshInterval = window.setInterval(() => {
-    refreshSession();
-  }, 5000);
+    if (!shouldRunSessionRefresh()) return;
+    refreshSession(false);
+  }, SESSION_AUTO_REFRESH_MS);
 }
 
 function goToSetup() {
@@ -277,8 +285,11 @@ function killSession() {
     .then((res) => res.json().then((body) => ({ status: res.status, body })))
     .then(({ status, body }) => {
       if (status === 200) {
+        if (sessionHelper && typeof sessionHelper.invalidateActiveSessionCache === 'function') {
+          sessionHelper.invalidateActiveSessionCache();
+        }
         if (statusEl) chastease_common.setStatus(statusEl, 'Session deleted.');
-        refreshSession();
+        refreshSession(true);
       } else if (statusEl) {
         chastease_common.setStatus(statusEl, body.detail || 'Failed to delete', 'err');
       }
@@ -286,14 +297,19 @@ function killSession() {
     .catch(() => statusEl && chastease_common.setStatus(statusEl, 'Delete request failed', 'err'));
 }
 
-if (refreshBtn) refreshBtn.addEventListener('click', refreshSession);
+if (refreshBtn) refreshBtn.addEventListener('click', () => refreshSession(true));
 if (setupBtn) setupBtn.addEventListener('click', goToSetup);
 if (killBtn) killBtn.addEventListener('click', killSession);
+
+document.addEventListener('visibilitychange', () => {
+  if (!shouldRunSessionRefresh()) return;
+  refreshSession(true);
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof chastease_common !== 'undefined' && typeof chastease_common.renderNavAuth === 'function') {
     chastease_common.renderNavAuth();
   }
-  refreshSession();
+  refreshSession(true);
   startSessionAutoRefresh();
 });
