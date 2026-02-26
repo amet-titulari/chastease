@@ -5,10 +5,10 @@ services:
       dockerfile: Dockerfile
     container_name: chastease-dev
     ports:
-      - "5000:5000"
+      - "3000:3000"
     environment:
       HOST: 0.0.0.0
-      PORT: 5000
+      PORT: 3000
       UVICORN_RELOAD: "1"
       DATABASE_URL: sqlite:///data/chastease.db
       IMAGE_VERIFICATION_DIR: data/image_verifications

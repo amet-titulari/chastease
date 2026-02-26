@@ -58,7 +58,7 @@ docker compose up --build
 App ist danach erreichbar unter:
 
 ```text
-http://127.0.0.1:5000/
+http://127.0.0.1:3000/
 ```
 
 Wichtige Hinweise:
@@ -66,6 +66,25 @@ Wichtige Hinweise:
 - Das Repo wird als Bind-Mount eingebunden (`./:/app`), daher wirken Codeaenderungen direkt mit Reload.
 - Persistente Laufzeitdaten liegen im Docker-Volume `chastease_data` (`/app/data`).
 - Fuer API-Keys/Secrets in Dev die gewuenschten Variablen beim `docker compose`-Start in der Shell setzen oder in `docker-compose.yml` ergaenzen.
+
+## GitHub Action: manuelles Docker Image (GHCR)
+
+Es gibt einen manuellen Workflow unter:
+
+```text
+Actions -> Manual Docker Image Build -> Run workflow
+```
+
+Optionen beim Start:
+
+- `image_tag`: optionaler Tag (wenn leer: `manual-<run_number>`)
+- `push_latest`: optional `true`, um zusaetzlich `:latest` zu pushen
+
+Das Image wird nach GHCR gepusht unter:
+
+```text
+ghcr.io/amet-titulari/chastease:<tag>
+```
 
 Setup-Prototyp:
 
