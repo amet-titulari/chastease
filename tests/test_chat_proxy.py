@@ -419,6 +419,7 @@ def test_chat_turn_maps_ttlock_open_request_to_hygiene_open_pending(client):
 
 
 def test_chat_turn_fail_closed_blocks_hygiene_fallback_when_plain_text(client):
+    client.app.state.config.LLM_FAIL_CLOSED_REQUEST_TAG = True
     auth = _register(client, username="chat-user-plain-fallback")
     session_id = _create_active_session(
         client,
@@ -599,6 +600,59 @@ def test_chat_action_execute_hygiene_open_success(client, monkeypatch):
     assert data["ttlock"]["lock_id"] == "12345"
 
 
+def test_chat_action_execute_hygiene_close_requires_seal_text_when_enabled(client, monkeypatch):
+    auth = _register(client, username="chat-user-seal-mode")
+    session_id = _create_active_session(
+        client,
+        auth,
+        integrations=["ttlock"],
+        seal_mode="plomben",
+        integration_config={
+            "ttlock": {
+                "ttl_user": "wearer@example.com",
+                "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                "ttl_lock_id": "12345",
+            }
+        },
+    )
+    client.app.state.config.TTL_CLIENT_ID = "demo-client"
+    client.app.state.config.TTL_CLIENT_SECRET = "demo-secret"
+
+    monkeypatch.setattr(chat_router, "_ttlock_access_token", lambda **_kwargs: "access-token")
+    monkeypatch.setattr(
+        chat_router,
+        "_ttlock_command",
+        lambda **_kwargs: {"errcode": 0, "errmsg": "ok", "lockId": "12345"},
+    )
+
+    open_result = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "hygiene_open", "payload": {}},
+    )
+    assert open_result.status_code == 200
+    assert open_result.json()["payload"]["seal_status"] == "broken"
+
+    close_without_seal = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "hygiene_close", "payload": {}},
+    )
+    assert close_without_seal.status_code == 400
+    assert "Seal text is required" in str(close_without_seal.json().get("detail", ""))
+
+    close_with_seal = client.post(
+        "/api/v1/chat/actions/execute",
+        json={
+            "session_id": session_id,
+            "action_type": "hygiene_close",
+            "payload": {"seal_text": "PLOMBE-ALPHA-01"},
+        },
+    )
+    assert close_with_seal.status_code == 200
+    close_data = close_with_seal.json()
+    assert close_data["payload"]["seal_status"] == "sealed"
+    assert close_data["payload"]["seal_text"] == "PLOMBE-ALPHA-01"
+
+
 def test_chat_action_execute_hygiene_fails_without_integration_config(client):
     auth = _register(client, username="chat-user-ttlock-missing")
     session_id = _create_active_session(client, auth)
@@ -750,14 +804,16 @@ def test_chat_turn_safeword_abort_requires_two_confirmations_and_reason(client):
         json={"session_id": session_id, "message": "Stopp", "language": "de"},
     )
     assert trigger.status_code == 200
-    assert trigger.json()["pending_actions"] == []
+    assert len(trigger.json()["pending_actions"]) == 1
+    assert trigger.json()["pending_actions"][0]["action_type"] == "abort_decision"
 
     first_confirmation = client.post(
         "/api/v1/chat/turn",
         json={"session_id": session_id, "message": "Ich bestaetige den Abbruch", "language": "de"},
     )
     assert first_confirmation.status_code == 200
-    assert first_confirmation.json()["pending_actions"] == []
+    assert len(first_confirmation.json()["pending_actions"]) == 1
+    assert first_confirmation.json()["pending_actions"][0]["action_type"] == "abort_decision"
 
     second_with_reason = client.post(
         "/api/v1/chat/turn",
@@ -772,6 +828,43 @@ def test_chat_turn_safeword_abort_requires_two_confirmations_and_reason(client):
     assert failed_action["payload"].get("reason") == "Grund: Schmerzen am Schloss"
     assert failed_action["payload"].get("emergency") is True
     assert data["pending_actions"] == []
+
+
+def test_chat_turn_abort_can_be_cancelled_with_reason(client):
+    auth = _register(client, username="chat-user-abort-cancel")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+    psychogram = {
+        "safety_profile": {
+            "mode": "traffic_light",
+            "traffic_light_words": {"green": "gruen", "yellow": "gelb", "red": "rot"},
+            "red_abort_protocol": {
+                "confirmation_questions_required": 2,
+                "reason_required": True,
+            },
+        }
+    }
+    _update_session_snapshots(client, session_id, psychogram=psychogram)
+
+    trigger = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "ROT", "language": "de"},
+    )
+    assert trigger.status_code == 200
+    assert len(trigger.json()["pending_actions"]) == 1
+    assert trigger.json()["pending_actions"][0]["action_type"] == "abort_decision"
+
+    cancel = client.post(
+        "/api/v1/chat/turn",
+        json={
+            "session_id": session_id,
+            "message": "Nicht abbrechen. Es geht nicht um mich. Keine akute Gefahr. Grund: Kontext war extern.",
+            "language": "de",
+        },
+    )
+    assert cancel.status_code == 200
+    data = cancel.json()
+    assert data["pending_actions"] == []
+    assert data["failed_actions"] == []
 
 
 def test_chat_turn_timer_expiry_creates_hygiene_open_pending(client):

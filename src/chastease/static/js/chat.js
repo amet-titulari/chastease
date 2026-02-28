@@ -13,6 +13,7 @@ const MAX_RENDERED_HISTORY_TURNS = 12;
 const AUTO_TIMER_ACTIONS = new Set(['add_time', 'reduce_time', 'pause_timer', 'unpause_timer']);
 const HYGIENE_COUNTDOWN_STORAGE_PREFIX = 'chastease_hygiene_countdown:';
 let hygieneCountdownInterval = null;
+let hygieneSealRequiredOnClose = false;
 
 function hygieneCountdownStorageKey() {
   if (!activeSessionId) return null;
@@ -75,6 +76,7 @@ function showHygieneCountdownCard(resultBody) {
   if (!messagesEl) return;
   const payload = resultBody?.payload && typeof resultBody.payload === 'object' ? resultBody.payload : {};
   const ttlock = resultBody?.ttlock && typeof resultBody.ttlock === 'object' ? resultBody.ttlock : {};
+  hygieneSealRequiredOnClose = Boolean(payload?.seal_required_on_close);
   const endAtText = String(payload.window_end_at || '').trim();
   const openingWindowSeconds = Number(payload.opening_window_seconds || 0);
   const endAtMs = endAtText ? new Date(endAtText).getTime() : (Date.now() + (openingWindowSeconds * 1000));
@@ -128,6 +130,14 @@ function showHygieneCountdownCard(resultBody) {
 
   closeBtn.addEventListener('click', async () => {
     if (!activeSessionId) return setStatus('Session fehlt.', true);
+    let sealText = '';
+    if (hygieneSealRequiredOnClose) {
+      sealText = String(window.prompt('Bitte neuen Plomben-/Siegeltext eingeben:', '') || '').trim();
+      if (sealText.length < 3) {
+        setStatus('Neuer Siegeltext erforderlich (mindestens 3 Zeichen).', true);
+        return;
+      }
+    }
     try {
       closeBtn.disabled = true;
       closeBtn.classList.add('opacity-70');
@@ -135,7 +145,7 @@ function showHygieneCountdownCard(resultBody) {
       const body = await apiCall('POST', '/api/v1/chat/actions/execute', {
         session_id: activeSessionId,
         action_type: 'hygiene_close',
-        payload: { reason: 'hygiene_window_completed' },
+        payload: { reason: 'hygiene_window_completed', seal_text: sealText || undefined },
       });
       const successMessage = body?.message || 'Hygieneöffnung beendet.';
       appendMessage('assistant', `✅ ${successMessage}`);
@@ -340,6 +350,7 @@ function renderPendingActions(pendingActions) {
     const actionType = String(action?.action_type || '').trim();
     const payload = action?.payload && typeof action.payload === 'object' ? action.payload : {};
     const isHygieneAction = actionType === 'hygiene_open' || actionType === 'hygiene_close';
+    const isAbortDecision = actionType === 'abort_decision';
 
     const card = document.createElement('div');
     card.className = 'rounded border border-gray-700 bg-gray-800 p-3';
@@ -373,7 +384,142 @@ function renderPendingActions(pendingActions) {
       hygieneHint.textContent = 'Hygieneöffnung wieder schließen.';
     }
 
+    const sealInputWrap = document.createElement('div');
+    sealInputWrap.className = 'mt-2 hidden';
+    const sealInputLabel = document.createElement('label');
+    sealInputLabel.className = 'text-xs text-gray-300 block';
+    sealInputLabel.textContent = 'Neuer Plomben-/Siegeltext (Pflicht bei Plomben/Versiegelung)';
+    const sealInput = document.createElement('input');
+    sealInput.type = 'text';
+    sealInput.className = 'mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 text-sm';
+    sealInput.placeholder = 'z.B. PLOMBE-2026-02-27-A';
+    sealInputWrap.appendChild(sealInputLabel);
+    sealInputWrap.appendChild(sealInput);
+    if (actionType === 'hygiene_close') sealInputWrap.classList.remove('hidden');
+
     header.appendChild(title);
+    if (isAbortDecision) {
+      const helper = document.createElement('div');
+      helper.className = 'mt-2 text-xs text-gray-300';
+      helper.textContent = 'Ich habe ein mögliches Notfallsignal erkannt. Bitte kurz einordnen: ABBRECHEN oder NICHT ABBRECHEN (mit Begründung).';
+
+      const reasonLabel = document.createElement('label');
+      reasonLabel.className = 'mt-2 text-xs text-gray-300 block';
+      reasonLabel.textContent = 'Kurze Einordnung (Pflichtfeld)';
+      const reasonInput = document.createElement('textarea');
+      reasonInput.className = 'mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 text-sm min-h-20';
+      reasonInput.placeholder = 'Was ist der Kontext in 1–2 Sätzen?';
+
+      const continueChecksWrap = document.createElement('div');
+      continueChecksWrap.className = 'mt-2 space-y-1 text-xs text-gray-300';
+      const checksTitle = document.createElement('div');
+      checksTitle.className = 'text-xs text-gray-400';
+      checksTitle.textContent = 'Für "Kein Abbruch" bitte bestätigen:';
+      const check1 = document.createElement('label');
+      const check1Input = document.createElement('input');
+      check1Input.type = 'checkbox';
+      check1Input.className = 'mr-2';
+      check1.appendChild(check1Input);
+      check1.append('Es geht nicht um mich persönlich');
+      const check2 = document.createElement('label');
+      const check2Input = document.createElement('input');
+      check2Input.type = 'checkbox';
+      check2Input.className = 'mr-2';
+      check2.appendChild(check2Input);
+      check2.append('Es besteht aktuell keine akute Gefahr');
+      const check3 = document.createElement('label');
+      const check3Input = document.createElement('input');
+      check3Input.type = 'checkbox';
+      check3Input.className = 'mr-2';
+      check3.appendChild(check3Input);
+      check3.append('Ich möchte nur sachliche Unterstützung');
+      continueChecksWrap.appendChild(checksTitle);
+      continueChecksWrap.appendChild(check1);
+      continueChecksWrap.appendChild(check2);
+      continueChecksWrap.appendChild(check3);
+
+      const actionRow = document.createElement('div');
+      actionRow.className = 'mt-3 flex flex-wrap gap-2';
+      const abortBtn = document.createElement('button');
+      abortBtn.className = 'px-3 py-1.5 text-xs rounded bg-red-600 hover:bg-red-500';
+      abortBtn.textContent = 'Notfallabbruch';
+      const continueBtn = document.createElement('button');
+      continueBtn.className = 'px-3 py-1.5 text-xs rounded bg-green-600 hover:bg-green-500';
+      continueBtn.textContent = 'Kein Abbruch';
+      actionRow.appendChild(abortBtn);
+      actionRow.appendChild(continueBtn);
+
+      const executeDecision = async (decision) => {
+        const reason = String(reasonInput.value || '').trim();
+        if (reason.length < 3) {
+          setStatus('Bitte kurz den Kontext eintragen.', true);
+          return;
+        }
+        if (decision === 'continue') {
+          if (!(check1Input.checked && check2Input.checked && check3Input.checked)) {
+            setStatus('Für "NICHT ABBRECHEN" bitte alle drei Sicherheitsangaben bestätigen.', true);
+            return;
+          }
+        }
+
+        abortBtn.disabled = true;
+        continueBtn.disabled = true;
+        try {
+          if (decision === 'abort') {
+            appendMessage('user', `Begründung: ${reason}`);
+            const reasonTurn = await apiCall('POST', '/api/v1/chat/turn', {
+              session_id: activeSessionId,
+              message: `Begründung: ${reason}`,
+              language: currentLanguage,
+              attachments: [],
+            });
+            appendMessage('assistant', reasonTurn?.narration || '(keine Antwort)');
+            renderPendingActions(reasonTurn?.pending_actions || []);
+
+            appendMessage('user', 'Ich bestaetige den Abbruch.');
+            const confirmTurn = await apiCall('POST', '/api/v1/chat/turn', {
+              session_id: activeSessionId,
+              message: 'Ich bestaetige den Abbruch.',
+              language: currentLanguage,
+              attachments: [],
+            });
+            appendMessage('assistant', confirmTurn?.narration || '(keine Antwort)');
+            const pendingAfterAutoExec = await autoExecuteTimerPendingActions(confirmTurn?.pending_actions || []);
+            renderPendingActions(pendingAfterAutoExec);
+            setStatus('Danke für die Einordnung. Notfallablauf wird jetzt ausgeführt.');
+          } else {
+            const message = `Nicht abbrechen. Es betrifft nicht mich. Keine akute Gefahr. Nur sachliche Beratung/Begleitung. Grund: ${reason}`;
+            appendMessage('user', message);
+            const turn = await apiCall('POST', '/api/v1/chat/turn', {
+              session_id: activeSessionId,
+              message,
+              language: currentLanguage,
+              attachments: [],
+            });
+            appendMessage('assistant', turn?.narration || '(keine Antwort)');
+            const pendingAfterAutoExec = await autoExecuteTimerPendingActions(turn?.pending_actions || []);
+            renderPendingActions(pendingAfterAutoExec);
+            setStatus('Danke für die Einordnung. Kein Abbruch – die Session bleibt aktiv.');
+          }
+        } catch (error) {
+          setStatus(String(error?.message || error), true);
+          abortBtn.disabled = false;
+          continueBtn.disabled = false;
+        }
+      };
+
+      abortBtn.addEventListener('click', () => executeDecision('abort'));
+      continueBtn.addEventListener('click', () => executeDecision('continue'));
+
+      card.appendChild(helper);
+      card.appendChild(reasonLabel);
+      card.appendChild(reasonInput);
+      card.appendChild(actionRow);
+      card.appendChild(continueChecksWrap);
+      appendInlineActionCard(card);
+      return;
+    }
+
     if (actionType !== 'image_verification') {
       btn.addEventListener('click', async () => {
         if (!activeSessionId) return setStatus('Session fehlt.', true);
@@ -384,10 +530,15 @@ function renderPendingActions(pendingActions) {
           const originalLabel = btn.textContent;
           btn.textContent = 'Wird ausgeführt...';
           setStatus(`Führe Action aus: ${actionType}...`);
+          const effectivePayload = { ...payload };
+          if (actionType === 'hygiene_close') {
+            const maybeSealText = String(sealInput.value || '').trim();
+            if (maybeSealText) effectivePayload.seal_text = maybeSealText;
+          }
           const body = await apiCall('POST', '/api/v1/chat/actions/execute', {
             session_id: activeSessionId,
             action_type: actionType,
-            payload,
+            payload: effectivePayload,
           });
           const successMessage = body?.message || `Action ausgeführt: ${actionType}`;
           setStatus(successMessage);
@@ -419,6 +570,7 @@ function renderPendingActions(pendingActions) {
     card.appendChild(header);
     if (isHygieneAction) {
       card.appendChild(hygieneHint);
+      if (actionType === 'hygiene_close') card.appendChild(sealInputWrap);
     } else if (actionType === 'image_verification') {
       // Image verification card renders a custom UI; do not show raw JSON payload.
     } else {

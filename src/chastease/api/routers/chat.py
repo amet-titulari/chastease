@@ -218,10 +218,32 @@ def _is_confirmation_message(message: str) -> bool:
     return any(token in words for token in tokens)
 
 
+def _is_abort_cancellation_message(message: str) -> bool:
+    normalized = _normalize_text(message)
+    cancellation_hints = (
+        "nicht abbrechen",
+        "kein abbruch",
+        "abbruch nein",
+        "false alarm",
+        "fehlalarm",
+        "entwarnung",
+        "nicht mich",
+        "not me",
+        "betrifft nicht mich",
+        "keine akute gefahr",
+        "no acute danger",
+    )
+    return any(hint in normalized for hint in cancellation_hints)
+
+
 def _build_hygiene_open_pending_action(policy: dict, trigger: str, reason: str) -> dict:
     limits = policy.get("limits") if isinstance(policy.get("limits"), dict) else {}
     opening_window_minutes = int(limits.get("opening_window_minutes") or 15)
     opening_window_minutes = max(1, min(opening_window_minutes, 240))
+    seal_cfg = policy.get("seal") if isinstance(policy.get("seal"), dict) else {}
+    seal_mode = str(seal_cfg.get("mode") or "none").strip().lower()
+    if seal_mode not in {"none", "plomben", "versiegelung"}:
+        seal_mode = "none"
     return {
         "action_type": "hygiene_open",
         "payload": {
@@ -229,6 +251,8 @@ def _build_hygiene_open_pending_action(policy: dict, trigger: str, reason: str) 
             "trigger": trigger,
             "opening_window_minutes": opening_window_minutes,
             "auto_relock_seconds": 5,
+            "seal_mode": seal_mode,
+            "seal_required_on_close": seal_mode in {"plomben", "versiegelung"},
         },
         "requires_execute_call": True,
     }
@@ -243,6 +267,27 @@ def _build_emergency_ttlock_open_pending_action(trigger: str, reason: str) -> di
             "emergency": True,
         },
         "requires_execute_call": True,
+    }
+
+
+def _build_abort_decision_pending_action(runtime_abort: dict, safety_mode: str) -> dict:
+    trigger = str(runtime_abort.get("trigger") or "manual_abort").strip().lower()
+    required_confirmations = max(1, int(runtime_abort.get("required_confirmations") or 2))
+    confirmations = max(0, int(runtime_abort.get("confirmations") or 0))
+    reason_required = bool(runtime_abort.get("reason_required", True))
+    reason = str(runtime_abort.get("reason") or "").strip() or None
+    return {
+        "action_type": "abort_decision",
+        "payload": {
+            "trigger": trigger,
+            "safety_mode": safety_mode,
+            "required_confirmations": required_confirmations,
+            "confirmations": confirmations,
+            "remaining_confirmations": max(0, required_confirmations - confirmations),
+            "reason_required": reason_required,
+            "reason": reason,
+        },
+        "requires_execute_call": False,
     }
 
 
@@ -360,6 +405,7 @@ def _handle_emergency_abort_message(
 ) -> tuple[bool, str | None, list[dict], dict, list[dict]]:
     runtime_abort = policy.get("runtime_abort") if isinstance(policy.get("runtime_abort"), dict) else None
     safety = psychogram.get("safety_profile") if isinstance(psychogram.get("safety_profile"), dict) else {}
+    safety_mode = str(safety.get("mode") or "safeword").strip().lower()
     events: list[dict] = []
 
     if runtime_abort is None:
@@ -376,10 +422,11 @@ def _handle_emergency_abort_message(
             "created_at": _iso_utc(now),
         }
         text = (
-            "Sicherheitsabbruch erkannt. Bitte bestaetige den Abbruch zweimal; eine Bestaetigung muss eine Begruendung enthalten."
+            "Ich habe ein moegliches Notfallsignal erkannt. Bitte kurz einordnen: ABBRECHEN oder NICHT ABBRECHEN (mit Begruendung)."
             if request_lang == "de"
-            else "Emergency abort detected. Please confirm abort twice; one confirmation must include a reason."
+            else "Emergency abort detected. Please decide in the action card: ABORT or DO NOT ABORT (reason required)."
         )
+        pending = [_build_abort_decision_pending_action(policy["runtime_abort"], safety_mode)]
         events.append(
             {
                 "event_type": "abort_trigger_detected",
@@ -388,11 +435,11 @@ def _handle_emergency_abort_message(
                     "trigger": trigger,
                     "required_confirmations": required,
                     "reason_required": reason_required,
-                    "safety_mode": str(safety.get("mode") or "safeword").strip().lower(),
+                    "safety_mode": safety_mode,
                 },
             }
         )
-        return True, text, [], policy, events
+        return True, text, pending, policy, events
 
     confirmations = int(runtime_abort.get("confirmations") or 0)
     required_confirmations = int(runtime_abort.get("required_confirmations") or 2)
@@ -400,6 +447,25 @@ def _handle_emergency_abort_message(
     reason_text = str(runtime_abort.get("reason") or "").strip()
     trigger = str(runtime_abort.get("trigger") or "manual_abort").strip().lower()
     msg = str(message or "").strip()
+
+    if _is_abort_cancellation_message(msg):
+        policy.pop("runtime_abort", None)
+        text = (
+            "Danke fuer die Einordnung. Kein Abbruch - die Session bleibt aktiv."
+            if request_lang == "de"
+            else "Abort dismissed. Session remains active. Thanks for the clarification."
+        )
+        events.append(
+            {
+                "event_type": "abort_cancelled",
+                "detail": "Emergency abort flow cancelled by wearer confirmation.",
+                "metadata": {
+                    "trigger": trigger,
+                    "confirmations": confirmations,
+                },
+            }
+        )
+        return True, text, [], policy, events
 
     if not reason_text and reason_required and len(msg) >= 8 and not _is_confirmation_message(msg):
         reason_text = msg
@@ -414,7 +480,7 @@ def _handle_emergency_abort_message(
         policy["runtime_abort"] = runtime_abort
         pending = [_build_emergency_ttlock_open_pending_action(trigger=trigger, reason=reason)]
         text = (
-            "Abbruch bestaetigt. Notfall-Oeffnung (ttlock_open) wird jetzt direkt ausgeloest; Session und Vertrag werden anschliessend invalidiert."
+            "Danke fuer die Einordnung. Notfallablauf wird jetzt ausgefuehrt: Notfall-Oeffnung (ttlock_open), danach Invalidierung von Session und Vertrag."
             if request_lang == "de"
             else "Abort confirmed. Emergency opening (ttlock_open) is now triggered directly; session and contract will then be invalidated."
         )
@@ -438,17 +504,18 @@ def _handle_emergency_abort_message(
     remaining = max(0, required_confirmations - confirmations)
     if reason_required and not reason_text:
         text = (
-            f"Abbruch-Bestaetigung erfasst. Es fehlen {remaining} Bestaetigung(en). Bitte gib auch eine Begruendung an."
+            f"Bestaetigung erfasst. Es fehlen noch {remaining} Bestaetigung(en). Bitte gib zusaetzlich eine Begruendung an."
             if request_lang == "de"
             else f"Abort confirmation recorded. {remaining} confirmation(s) remaining. Please also provide a reason."
         )
     else:
         text = (
-            f"Abbruch-Bestaetigung erfasst. Es fehlen {remaining} Bestaetigung(en)."
+            f"Bestaetigung erfasst. Es fehlen noch {remaining} Bestaetigung(en)."
             if request_lang == "de"
             else f"Abort confirmation recorded. {remaining} confirmation(s) remaining."
         )
-    return True, text, [], policy, events
+    pending = [_build_abort_decision_pending_action(runtime_abort, safety_mode)]
+    return True, text, pending, policy, events
 
 
 def _timer_expiry_pending_action(request_lang: str, policy: dict, now: datetime) -> tuple[str | None, list[dict], dict]:
@@ -855,6 +922,14 @@ def _is_emergency_open(payload: dict) -> bool:
     return trigger in {"manual_abort", "safeword", "traffic_red"}
 
 
+def _seal_mode_from_policy(policy: dict) -> str:
+    seal_cfg = policy.get("seal") if isinstance(policy.get("seal"), dict) else {}
+    mode = str(seal_cfg.get("mode") or "none").strip().lower()
+    if mode not in {"none", "plomben", "versiegelung"}:
+        return "none"
+    return mode
+
+
 def _assert_opening_limit_allows_open(policy: dict, payload: dict, now: datetime) -> None:
     if _is_emergency_open(payload):
         return
@@ -1077,6 +1152,15 @@ def _execute_ttlock_action(
 
     command = "open" if str(action_type).endswith("_open") else "close"
     now = datetime.now(UTC)
+    seal_mode = _seal_mode_from_policy(policy)
+    seal_required_on_close = seal_mode in {"plomben", "versiegelung"}
+    runtime_seal = policy.get("runtime_seal") if isinstance(policy.get("runtime_seal"), dict) else {}
+    seal_text = str(payload.get("seal_text") or "").strip()
+    if action_type == "hygiene_close" and seal_required_on_close and len(seal_text) < 3:
+        raise HTTPException(
+            status_code=400,
+            detail="Seal text is required for hygiene_close when seal mode is enabled.",
+        )
     if command == "open":
         _assert_opening_limit_allows_open(policy, payload, now)
     access_token = _ttlock_access_token(
@@ -1095,6 +1179,19 @@ def _execute_ttlock_action(
     )
     if command == "open":
         _record_open_event(policy, now)
+        if action_type == "hygiene_open" and seal_required_on_close:
+            runtime_seal["status"] = "broken"
+            runtime_seal["broken_at"] = _iso_utc(now)
+            runtime_seal["current_text"] = None
+            runtime_seal["needs_new_seal"] = True
+    elif action_type == "hygiene_close" and seal_required_on_close:
+        runtime_seal["status"] = "sealed"
+        runtime_seal["sealed_at"] = _iso_utc(now)
+        runtime_seal["current_text"] = seal_text
+        runtime_seal["needs_new_seal"] = False
+
+    if seal_required_on_close:
+        policy["runtime_seal"] = runtime_seal
     logger.info(
         "TT-Lock command executed: action=%s lock_id=%s gateway_id=%s",
         action_type,
@@ -1117,6 +1214,10 @@ def _execute_ttlock_action(
             "opening_window_minutes": opening_window_minutes,
             "opening_window_seconds": opening_window_seconds,
             "window_end_at": window_end_at,
+            "seal_mode": seal_mode,
+            "seal_required_on_close": seal_required_on_close,
+            "seal_status": runtime_seal.get("status") if seal_required_on_close else "none",
+            "seal_text": runtime_seal.get("current_text") if (seal_required_on_close and action_type == "hygiene_close") else None,
         },
         "ttlock": {
             "command": command,
@@ -1346,12 +1447,33 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         if abort_handled:
             policy_dirty = True
             if abort_pending:
-                remaining_abort_actions, executed_abort_actions, failed_abort_actions, updated_policy = _auto_execute_pending_actions(
-                    request=request,
-                    policy=policy,
-                    pending_actions=abort_pending,
-                )
+                interactive_abort_actions = [
+                    action
+                    for action in abort_pending
+                    if str((action or {}).get("action_type") or "").strip().lower() == "abort_decision"
+                ]
+                auto_abort_actions = [
+                    action
+                    for action in abort_pending
+                    if str((action or {}).get("action_type") or "").strip().lower() != "abort_decision"
+                ]
+                remaining_abort_actions: list[dict] = []
+                executed_abort_actions: list[dict] = []
+                failed_abort_actions: list[dict] = []
+                updated_policy = policy
+                if auto_abort_actions:
+                    (
+                        remaining_abort_actions,
+                        executed_abort_actions,
+                        failed_abort_actions,
+                        updated_policy,
+                    ) = _auto_execute_pending_actions(
+                        request=request,
+                        policy=policy,
+                        pending_actions=auto_abort_actions,
+                    )
                 policy = updated_policy
+                pending_actions.extend(interactive_abort_actions)
                 pending_actions.extend(remaining_abort_actions)
                 executed_actions.extend(executed_abort_actions)
                 failed_actions.extend(failed_abort_actions)

@@ -5,7 +5,8 @@ Prioritaetssystem: `0 = Hoch / in Umsetzung`, `1 = Vorbereitet / Folgeplanung`, 
 ## Prioritaet 0 (Hoch / in Umsetzung)
 
 - [X] GitHub Release-Tagging fuer `v0.2.0` nachziehen
-- [ ] Die AI soll in der Lage sein die Session Informationen zu erhalten
+- [X] Die AI soll in der Lage sein die Session Informationen zu erhalten
+- [ ] Die AI soll Aktionen die pending sind auch canceln können. Beispiel: Verzicht auf Hygieneöffnung
 - [ ] Bildbeweise sollen pgp vererschlüsselt abelegt werden
 - [ ] Die Anwendung soll eine Backupfunktion erhalten in der DB und Bildbeweise exportiert werden können
 - [ ] Die AI soll aktiv Sessionparameter anpassen können

@@ -64,6 +64,7 @@ class SetupStartRequest(BaseModel):
     max_openings_in_period: int = Field(default=1, ge=0, le=200)
     max_openings_per_day: int | None = Field(default=None, ge=0, le=10)  # legacy alias
     opening_window_minutes: int = Field(default=30, ge=1, le=240)
+    seal_mode: Literal["none", "plomben", "versiegelung"] = "none"
 
 
 class SetupAnswer(BaseModel):

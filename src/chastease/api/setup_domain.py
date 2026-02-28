@@ -385,6 +385,9 @@ def _build_policy(setup_session: dict, psychogram: dict) -> dict:
     max_penalty_week = setup_session.get("max_penalty_per_week_minutes", 240)
     opening_period = setup_session.get("opening_limit_period", "day")
     max_openings = setup_session.get("max_openings_in_period", setup_session.get("max_openings_per_day", 1))
+    seal_mode = str(setup_session.get("seal_mode") or "none").strip().lower()
+    if seal_mode not in {"none", "plomben", "versiegelung"}:
+        seal_mode = "none"
     return {
         "policy_version": "1.1.0",
         "hard_stop_enabled": setup_session["hard_stop_enabled"],
@@ -413,6 +416,10 @@ def _build_policy(setup_session: dict, psychogram: dict) -> dict:
             "min_end_date": setup_session.get("contract_min_end_date"),
             "max_end_date": setup_session.get("contract_max_end_date", setup_session.get("contract_end_date")),
             "ai_controls_end_date": setup_session.get("ai_controls_end_date", False),
+        },
+        "seal": {
+            "mode": seal_mode,
+            "required_on_close": seal_mode in {"plomben", "versiegelung"},
         },
         "interaction_profile": {
             "preferred_tone": "balanced"
@@ -489,6 +496,7 @@ def _create_draft_setup_session(user_id: str, language: str = "de") -> dict:
         "max_openings_in_period": 1,
         "max_openings_per_day": 1,
         "opening_window_minutes": 30,
+        "seal_mode": "none",
         "questionnaire_version": QUESTIONNAIRE_VERSION,
         "answers": [],
         "psychogram": None,
