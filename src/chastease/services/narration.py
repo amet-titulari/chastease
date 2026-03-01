@@ -223,6 +223,17 @@ def _build_ai_context_summary(psychogram: dict, policy: dict) -> str:
     )
     limits = (policy or {}).get("limits", {})
     interaction_policy = (policy or {}).get("interaction_profile", {})
+    seal_cfg = (policy or {}).get("seal", {})
+    seal_mode = str(seal_cfg.get("mode") or "none").strip().lower()
+    runtime_seal = (policy or {}).get("runtime_seal", {})
+    seal_status = str(runtime_seal.get("status") or "none").strip().lower()
+    seal_text = str(runtime_seal.get("current_text") or "").strip()
+    seal_broken = bool(runtime_seal.get("needs_new_seal", False))
+    seal_info = (
+        f"mode={seal_mode}"
+        + (f", status={seal_status}, current_number={seal_text}" if seal_mode != "none" and seal_status and seal_text else "")
+        + (", needs_renewal=true" if seal_broken else "")
+    )
 
     safety_mode = safety.get("mode", "safeword")
     safety_text = f"mode={safety_mode}"
@@ -251,6 +262,7 @@ def _build_ai_context_summary(psychogram: dict, policy: dict) -> str:
         f"soft_limits={soft_limits or '-'}; "
         f"contract_consent={consent_state}; "
         f"safety={safety_text}; "
+        f"seal={seal_info}; "
         f"tone={interaction_policy.get('preferred_tone', 'balanced')}; "
         f"intensity={limits.get('max_intensity_level', 2)}; "
         f"hard_stop={policy.get('hard_stop_enabled', True)}"
@@ -268,6 +280,7 @@ def _available_tools_summary(request: Request) -> str:
         f"suggest={','.join(suggest_tools) or '-'}; "
         "live_session_read=GET /api/v1/sessions/{session_id}/live (?auth_token=wearer_token OR ?ai_access_token=ai_token) "
         "[optional: ?detail_level=light|full (default:light, light=only time/status ~270tok, full=+setup/psychogram ~350tok)]; "
+        "seal_status=GET /api/v1/chat/seal/{session_id} (?ai_access_token=ai_token) [returns seal_mode + current_text/status]; "
         "payload_rules=add_time/reduce_time require {seconds:int>0}; "
         "pause_timer/unpause_timer require {}"
     )

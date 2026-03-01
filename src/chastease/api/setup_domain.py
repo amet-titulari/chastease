@@ -420,6 +420,7 @@ def _build_policy(setup_session: dict, psychogram: dict) -> dict:
         "seal": {
             "mode": seal_mode,
             "required_on_close": seal_mode in {"plomben", "versiegelung"},
+            "initial_number": setup_session.get("initial_seal_number"),
         },
         "interaction_profile": {
             "preferred_tone": "balanced"
@@ -497,6 +498,7 @@ def _create_draft_setup_session(user_id: str, language: str = "de") -> dict:
         "max_openings_per_day": 1,
         "opening_window_minutes": 30,
         "seal_mode": "none",
+        "initial_seal_number": None,
         "questionnaire_version": QUESTIONNAIRE_VERSION,
         "answers": [],
         "psychogram": None,

@@ -199,8 +199,28 @@ def sync_setup_snapshot_to_active_session_db(db, setup_session: dict) -> bool:
     db_session = db.get(ChastitySession, session_id)
     if db_session is None:
         return False
+    
+    # Prepare policy with initial seal number if configured
+    policy = setup_session.get("policy_preview") or {}
+    if isinstance(policy, dict):
+        policy = dict(policy)  # Make a copy
+        
+        # Initialize runtime_seal with initial seal number if not already present
+        if "runtime_seal" not in policy:
+            seal_config = policy.get("seal", {})
+            seal_mode = seal_config.get("mode", "none")
+            initial_seal_number = setup_session.get("initial_seal_number")
+            
+            if seal_mode in {"plomben", "versiegelung"} and initial_seal_number:
+                policy["runtime_seal"] = {
+                    "status": "sealed",
+                    "current_text": initial_seal_number,
+                    "sealed_at": datetime.now(UTC).isoformat(),
+                    "needs_new_seal": False
+                }
+    
     db_session.psychogram_snapshot_json = json.dumps(setup_session["psychogram"])
-    db_session.policy_snapshot_json = json.dumps(setup_session["policy_preview"])
+    db_session.policy_snapshot_json = json.dumps(policy)
     db_session.updated_at = datetime.now(UTC)
     db.add(db_session)
     return True

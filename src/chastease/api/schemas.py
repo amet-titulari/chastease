@@ -65,6 +65,7 @@ class SetupStartRequest(BaseModel):
     max_openings_per_day: int | None = Field(default=None, ge=0, le=10)  # legacy alias
     opening_window_minutes: int = Field(default=30, ge=1, le=240)
     seal_mode: Literal["none", "plomben", "versiegelung"] = "none"
+    initial_seal_number: str | None = Field(default=None, min_length=3)
 
 
 class SetupAnswer(BaseModel):
@@ -148,3 +149,9 @@ class SetupIntegrationsUpdateRequest(BaseModel):
     auth_token: str = Field(min_length=8)
     integrations: list[Literal["ttlock", "chaster", "emlalock"]] = Field(default_factory=list)
     integration_config: dict[str, dict[str, str]] = Field(default_factory=dict)
+
+
+class SetupSealUpdateRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    auth_token: str = Field(min_length=8)
+    seal_mode: Literal["none", "plomben", "versiegelung"] = "none"

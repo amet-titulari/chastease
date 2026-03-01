@@ -79,6 +79,21 @@
         </div>
       </div>
 
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="text-sm text-gray-400">Plomben / Siegelung</label>
+          <select id="setupSealMode" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+            <option value="none" selected>Keine (freie Öffnungen)</option>
+            <option value="versiegelung">Versiegelung (Nummern erforderlich)</option>
+          </select>
+          <small class="text-xs text-gray-500 block mt-1">Bei aktivierter Versiegelung: Eine neue Nummer muss bei jeder Hygieneöffnung eingetragen werden</small>
+        </div>
+        <div id="initialSealNumberWrap" class="hidden">
+          <label class="text-sm text-gray-400">Erste Plombennummer</label>
+          <input id="setupInitialSealNumber" type="text" placeholder="z.B. PLOMBE-2026-03-01-A" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+          <small class="text-xs text-gray-500 block mt-1">Mindestens 3 Zeichen erforderlich</small>
+        </div>
+      </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>

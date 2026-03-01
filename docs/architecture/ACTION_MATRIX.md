@@ -13,7 +13,8 @@ Dieses Dokument definiert, welche Keyholder-Aktionen in welchen Modi erlaubt sin
 | Action | Execute | Suggest | 2-Phase | Preconditions | Limits/Policy | Folgeaktion erlaubt | Integration |
 |---|---|---|---|---|---|---|---|
 | `chat_reply` | ja | ja | nein | aktive Session | KI-Charakterprofil + Session-Policy | n/a | keine |
-| `hygiene_open` | ja | ja | nein | aktive Session, Oeffnung in Policy erlaubt | max. Oeffnungsdauer laut Policy | ja | optional (TTLock/chaster/emlalock je nach Setup) |
+| `hygiene_open` | ja | ja | nein | aktive Session, Oeffnung in Policy erlaubt | max. Oeffnungsdauer laut Policy; mit Plomben (mode=plomben/versiegelung): Plombe wird auf "broken" gesetzt | ja | optional (TTLock/chaster/emlalock je nach Setup) |
+| `hygiene_close` | ja | ja | nein | aktive Session, Oeffnung aktiv | ohne Plomben: keine weiteren Bedingungen; mit Plomben: `seal_text` (min. 3 Zeichen) erforderlich; mit Plomben: neue Nummer wird gespeichert | ja | optional (TTLock/chaster/emlalock je nach Setup) |
 | `pause_timer` | ja | ja | nein | aktive Session | nur wenn nicht bereits pausiert; Endzeit-Korrektur erfolgt bei Resume | ja | keine |
 | `unpause_timer` | ja | ja | nein | pausierte Session | Pausendauer wird auf Endzeit addiert; neue Endzeit wird fixiert | ja | keine |
 | `add_time` | ja | ja | nein | aktive oder pausierte Session | Normalisierung auf `seconds`; Input: `seconds` oder `amount+unit`; erhoeht Endzeit innerhalb Policy-Grenzen | ja | keine |

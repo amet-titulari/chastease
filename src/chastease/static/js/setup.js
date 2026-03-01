@@ -24,6 +24,9 @@ const accordionDefs = [
 const languageEl = document.getElementById('setupLanguage');
 const autonomyEl = document.getElementById('setupAutonomy');
 const hardStopEl = document.getElementById('setupHardStop');
+const sealModeEl = document.getElementById('setupSealMode');
+const initialSealNumberEl = document.getElementById('setupInitialSealNumber');
+const initialSealNumberWrapEl = document.getElementById('initialSealNumberWrap');
 const intTtlockEl = document.getElementById('setupIntTtlock');
 const intChasterEl = document.getElementById('setupIntChaster');
 const contractStartDateEl = document.getElementById('contractStartDate');
@@ -464,6 +467,12 @@ function applySetupToForm(data) {
   if (data.language && languageEl) languageEl.value = data.language;
   if (autonomyEl && data.autonomy_mode) autonomyEl.value = data.autonomy_mode;
   if (hardStopEl) hardStopEl.value = parseBool(data.hard_stop_enabled, true) ? 'true' : 'false';
+  if (sealModeEl && data.seal_mode) sealModeEl.value = data.seal_mode;
+  if (initialSealNumberEl && data.initial_seal_number) initialSealNumberEl.value = data.initial_seal_number;
+  if (initialSealNumberWrapEl) {
+    const showInitialSealNumber = data.seal_mode && data.seal_mode !== 'none';
+    initialSealNumberWrapEl.classList.toggle('hidden', !showInitialSealNumber);
+  }
   if (openingLimitPeriodEl && data.opening_limit_period) openingLimitPeriodEl.value = data.opening_limit_period;
   if (maxOpeningsInPeriodEl && Number.isFinite(Number(data.max_openings_in_period))) {
     maxOpeningsInPeriodEl.value = String(data.max_openings_in_period);
@@ -541,6 +550,8 @@ async function startSetup() {
     language: languageEl?.value || 'de',
     autonomy_mode: autonomyEl?.value || 'suggest',
     hard_stop_enabled: hardStopEl?.value === 'true',
+    seal_mode: sealModeEl?.value || 'none',
+    initial_seal_number: (initialSealNumberEl?.value || '').trim() || null,
     integrations,
     integration_config,
     ...getContractPayloadValues(),
@@ -925,6 +936,14 @@ contractMaxEndDateEl?.addEventListener('change', syncDurationFromMaxEndDate);
 contractMaxDurationDaysEl?.addEventListener('input', syncMaxEndDateFromDuration);
 contractMinDurationDaysEl?.addEventListener('input', syncMinDurationGuard);
 saveTtlockBtn?.addEventListener('click', saveTtlockConfig);
+
+sealModeEl?.addEventListener('change', () => {
+  const sealMode = sealModeEl?.value;
+  const showInitialSealNumber = sealMode !== 'none';
+  if (initialSealNumberWrapEl) {
+    initialSealNumberWrapEl.classList.toggle('hidden', !showInitialSealNumber);
+  }
+});
 
 const llmFields = [
   llmProviderEl,

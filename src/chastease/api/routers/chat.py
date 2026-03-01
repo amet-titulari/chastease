@@ -1,6 +1,7 @@
 ﻿import base64
 import json
 import logging
+import os
 import re
 import time
 import unicodedata
@@ -1796,3 +1797,49 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
         "ttlock": result.get("ttlock"),
         "message": result["message"],
     }
+
+@router.get("/seal/{session_id}")
+def get_seal_status(session_id: str, request: Request, ai_access_token: str | None = None) -> dict:
+    """
+    Retrieve current seal/plomb status for a session.
+    
+    Response includes:
+    - seal_mode: "none", "plomben", or "versiegelung"
+    - runtime_seal: current status, text (number), and renewal status
+    
+    Requires AI access token for authentication.
+    """
+    if not ai_access_token or not str(ai_access_token).strip():
+        raise HTTPException(status_code=401, detail="AI access token required.")
+    
+    ai_token = str(os.getenv("AI_SESSION_READ_TOKEN") or "").strip()
+    if not ai_token or ai_token != str(ai_access_token).strip():
+        raise HTTPException(status_code=401, detail="Invalid AI access token.")
+    
+    db = get_db_session(request)
+    try:
+        session = db.get(ChastitySession, session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Chastity session not found.")
+        
+        policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
+        if not isinstance(policy, dict):
+            policy = {}
+        
+        seal_cfg = policy.get("seal", {}) if isinstance(policy.get("seal"), dict) else {}
+        seal_mode = str(seal_cfg.get("mode") or "none").strip().lower()
+        runtime_seal = policy.get("runtime_seal", {}) if isinstance(policy.get("runtime_seal"), dict) else {}
+        
+        return {
+            "session_id": session_id,
+            "seal_mode": seal_mode,
+            "runtime_seal": {
+                "status": runtime_seal.get("status"),
+                "current_text": runtime_seal.get("current_text"),
+                "sealed_at": runtime_seal.get("sealed_at"),
+                "broken_at": runtime_seal.get("broken_at"),
+                "needs_new_seal": bool(runtime_seal.get("needs_new_seal", False)),
+            } if seal_mode != "none" else None,
+        }
+    finally:
+        db.close()

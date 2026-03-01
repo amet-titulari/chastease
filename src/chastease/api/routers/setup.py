@@ -16,6 +16,7 @@ from chastease.api.schemas import (
     SetupChatPreviewRequest,
     SetupContractConsentRequest,
     SetupIntegrationsUpdateRequest,
+    SetupSealUpdateRequest,
     SetupStartRequest,
 )
 from chastease.models import Character, ChastitySession, Turn, User
@@ -198,13 +199,31 @@ def _ensure_active_session_from_setup(db, setup_session: dict) -> str:
         if existing is not None:
             return existing_id
     session_id = str(uuid4())
+    
+    # Prepare policy with initial seal number if configured
+    policy = setup_session.get("policy_preview") or {}
+    if isinstance(policy, dict):
+        policy = dict(policy)  # Make a copy
+        seal_config = policy.get("seal", {})
+        seal_mode = seal_config.get("mode", "none")
+        initial_seal_number = setup_session.get("initial_seal_number")
+        
+        # Initialize runtime_seal with initial seal number if seal mode is active
+        if seal_mode in {"plomben", "versiegelung"} and initial_seal_number:
+            policy["runtime_seal"] = {
+                "status": "sealed",
+                "current_text": initial_seal_number,
+                "sealed_at": datetime.now(UTC).isoformat(),
+                "needs_new_seal": False
+            }
+    
     db_session = ChastitySession(
         id=session_id,
         user_id=setup_session["user_id"],
         character_id=setup_session.get("character_id"),
         status="active",
         language=setup_session["language"],
-        policy_snapshot_json=json.dumps(setup_session.get("policy_preview") or {}),
+        policy_snapshot_json=json.dumps(policy),
         psychogram_snapshot_json=json.dumps(setup_session.get("psychogram") or {}),
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
@@ -340,6 +359,8 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
             "status": "setup_in_progress",
             "hard_stop_enabled": payload.hard_stop_enabled,
             "autonomy_mode": payload.autonomy_mode,
+            "seal_mode": payload.seal_mode,
+            "initial_seal_number": payload.initial_seal_number,
             "integrations": effective_integrations,
             "integration_config": effective_integration_config,
             "language": lang,
@@ -380,6 +401,8 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
         "user_id": payload.user_id,
         "character_id": payload.character_id,
         "status": "setup_in_progress",
+        "seal_mode": payload.seal_mode,
+        "initial_seal_number": payload.initial_seal_number,
         "questionnaire_version": QUESTIONNAIRE_VERSION,
         "language": lang,
         "integrations": effective_integrations,
@@ -498,6 +521,52 @@ def update_setup_integrations(
         "status": setup_session.get("status", "setup_in_progress"),
         "integrations": normalized_integrations,
         "integration_config": integration_config,
+        "applied_to_active_session": applied_to_active_session,
+    }
+
+@router.post("/sessions/{setup_session_id}/seal")
+def update_setup_seal(
+    setup_session_id: str,
+    payload: SetupSealUpdateRequest,
+    request: Request,
+) -> dict:
+    """
+    Update seal/plomb mode for a setup session.
+    
+    Allowed modes:
+    - "none": No seal (seal text not required on hygiene_close)
+    - "plomben": Tagebuch-style numbered seal (seal text required on hygiene_close)
+    - "versiegelung": Full seal mode (seal text required on hygiene_close)
+    """
+    store = load_sessions()
+    setup_session = store.get(setup_session_id)
+    if setup_session is None:
+        raise HTTPException(status_code=404, detail=_t("de", "not_found"))
+    if setup_session.get("user_id") != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid user for setup session.")
+    token_user_id = resolve_user_id_from_token(payload.auth_token, request)
+    if token_user_id != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token for user.")
+
+    seal_mode = str(payload.seal_mode).strip().lower()
+    if seal_mode not in {"none", "plomben", "versiegelung"}:
+        seal_mode = "none"
+
+    setup_session["seal_mode"] = seal_mode
+    if isinstance(setup_session.get("policy_preview"), dict):
+        setup_session["policy_preview"]["seal"] = {
+            "mode": seal_mode,
+            "required_on_close": seal_mode in {"plomben", "versiegelung"},
+        }
+    setup_session["updated_at"] = _now_iso()
+    store[setup_session_id] = setup_session
+    save_sessions(store)
+
+    applied_to_active_session = sync_setup_snapshot_to_active_session(request, setup_session)
+    return {
+        "setup_session_id": setup_session_id,
+        "status": setup_session.get("status", "setup_in_progress"),
+        "seal_mode": seal_mode,
         "applied_to_active_session": applied_to_active_session,
     }
 
