@@ -155,3 +155,10 @@ class SetupSealUpdateRequest(BaseModel):
     user_id: str = Field(min_length=1)
     auth_token: str = Field(min_length=8)
     seal_mode: Literal["none", "plomben", "versiegelung"] = "none"
+
+class SetupAIControlledFieldsUpdateRequest(BaseModel):
+    """Nur KI darf diese geschützten Felder aktualisieren."""
+    user_id: str = Field(min_length=1)
+    auth_token: str = Field(min_length=8)
+    updates: dict = Field(default_factory=dict)  # z.B. {"contract_min_end_date": "2026-03-15", "opening_limit_period": "day"}
+    reason: str = Field(default="", max_length=500)  # Grund für die KI-Anpassung

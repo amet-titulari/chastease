@@ -14,6 +14,50 @@ from chastease.api.questionnaire import (
     TRANSLATIONS,
 )
 from chastease.repositories.setup_store import load_sessions
+
+# Diese Felder können während der aktiven Sitzung NUR von der KI angepasst werden.
+# - Beim Setup: Der Benutzer initialisiert diese Werte
+# - Während Session: Der Benutzer sieht sie (read-only), die KI kann sie dynamisch anpassen
+
+# Policy-Felder (Öffnungen, Versiegelung, Intensität, etc.)
+AI_CONTROLLED_POLICY_FIELDS = {
+    "contract_min_end_date",
+    "opening_limit_period", 
+    "max_openings_in_period",
+    "opening_window_minutes",
+    "seal_mode",
+    "initial_seal_number",
+    "max_intensity_level",  # Intensität (1-5), kann unabhängig von strictness_affinity angepasst werden
+}
+
+# Psychogramm-Trait-Felder (Persönlichkeits-/Präferenze-Scores)
+# Diese können von der KI basierend auf Beobachtungen der Session angepasst werden
+AI_CONTROLLED_PSYCHOGRAM_TRAITS = {
+    "structure_need",
+    "strictness_affinity",
+    "challenge_affinity",
+    "praise_affinity",
+    "accountability_need",
+    "novelty_affinity",
+    "service_orientation",
+    "protocol_affinity",
+}
+
+# Alle KI-steuerbaren Felder zusammen
+AI_CONTROLLED_SESSION_FIELDS = AI_CONTROLLED_POLICY_FIELDS | AI_CONTROLLED_PSYCHOGRAM_TRAITS
+
+def get_ai_controlled_session_fields() -> set[str]:
+    """Gibt alle Felder zurück, die während der Session nur von der KI angepasst werden können."""
+    return AI_CONTROLLED_SESSION_FIELDS.copy()
+
+def get_ai_controlled_policy_fields() -> set[str]:
+    """Gibt Policy-Felder zurück (Öffnungen, Versiegelung, etc.)."""
+    return AI_CONTROLLED_POLICY_FIELDS.copy()
+
+def get_ai_controlled_psychogram_traits() -> set[str]:
+    """Gibt Psychogramm-Traits zurück, die von der KI angepasst werden können."""
+    return AI_CONTROLLED_PSYCHOGRAM_TRAITS.copy()
+
 def _lang(value: str) -> str:
     return value if value in SUPPORTED_LANGUAGES else "de"
 

@@ -1,5 +1,5 @@
 ﻿import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 import re
 from typing import Literal
 from uuid import uuid4
@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from chastease.api.questionnaire import QUESTION_BANK, QUESTION_IDS, QUESTIONNAIRE_VERSION, TRAIT_KEYS
 from chastease.api.schemas import (
     PsychogramRecalibrationRequest,
+    SetupAIControlledFieldsUpdateRequest,
     SetupAnswersRequest,
     SetupArtifactsRequest,
     SetupChatPreviewRequest,
@@ -38,6 +39,9 @@ from chastease.api.setup_domain import (
     _t,
     _validate_answer,
     _validate_safety_answers,
+    get_ai_controlled_session_fields,
+    get_ai_controlled_policy_fields,
+    get_ai_controlled_psychogram_traits,
 )
 from chastease.repositories.setup_store import load_sessions, save_sessions
 from chastease.api.setup_ai import (
@@ -1143,6 +1147,162 @@ def recalibrate_psychogram(setup_session_id: str, payload: PsychogramRecalibrati
         "policy_preview": setup_session["policy_preview"],
         "psychogram_brief": _psychogram_brief(setup_session["psychogram"], setup_session["policy_preview"]),
         "applied_to_active_session": applied_to_active_session,
+    }
+
+@router.post("/sessions/{setup_session_id}/ai-update-fields")
+def ai_update_controlled_fields(setup_session_id: str, payload: SetupAIControlledFieldsUpdateRequest, request: Request) -> dict:
+    """KI-Endpoint: Aktualisiere während einer aktiven Sitzung die KI-gesteuerten Felder.
+    
+    Diese Felder werden beim Setup vom Benutzer initialisiert, können aber während
+    der aktiven Sitzung NUR von der KI dynamisch angepasst werden:
+    
+    POLICY-FELDER (Sessionverhalten):
+    - contract_min_end_date
+    - opening_limit_period, max_openings_in_period, opening_window_minutes
+    - seal_mode, initial_seal_number
+    
+    PSYCHOGRAMM-TRAITS (Präferenzen/Persönlichkeit):
+    - structure_need, strictness_affinity, challenge_affinity, praise_affinity
+    - accountability_need, novelty_affinity, service_orientation, protocol_affinity
+    
+    Für den Benutzer sind diese Felder in der aktiven Session read-only.
+    """
+    store = load_sessions()
+    setup_session = store.get(setup_session_id)
+    if setup_session is None:
+        raise HTTPException(status_code=404, detail=_t("de", "not_found"))
+    
+    lang = _lang(setup_session["language"])
+    allowed_fields = get_ai_controlled_session_fields()
+    policy_fields = get_ai_controlled_policy_fields()
+    psychogram_traits = get_ai_controlled_psychogram_traits()
+    
+    # Validiere, dass nur erlaubte Felder aktualisiert werden
+    for field_name in payload.updates.keys():
+        if field_name not in allowed_fields:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Field '{field_name}' is not AI-controllable. Allowed: policy fields or psychogram traits."
+            )
+    
+    # Initialisiere Psychogramm falls nicht vorhanden
+    if setup_session.get("psychogram") is None:
+        setup_session["psychogram"] = _build_psychogram(setup_session)
+    
+    psychogram = setup_session["psychogram"]
+    if "traits" not in psychogram:
+        psychogram["traits"] = {}
+    
+    # Verarbeite Aktualisierungen nach Typ
+    policy_updates = {}
+    psychogram_updates = {}
+    
+    for field_name, value in payload.updates.items():
+        if field_name in policy_fields:
+            # Validiere Policy-Felder
+            if field_name == "contract_min_end_date":
+                try:
+                    date.fromisoformat(str(value))
+                except (ValueError, TypeError):
+                    raise HTTPException(status_code=400, detail=f"Invalid date format for {field_name}")
+                policy_updates[field_name] = str(value)
+            
+            elif field_name == "opening_limit_period":
+                if str(value) not in {"day", "week", "month"}:
+                    raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}")
+                policy_updates[field_name] = str(value)
+            
+            elif field_name == "max_openings_in_period":
+                try:
+                    val = int(value)
+                    if val < 0 or val > 200:
+                        raise ValueError()
+                except (ValueError, TypeError):
+                    raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}")
+                policy_updates[field_name] = val
+            
+            elif field_name == "opening_window_minutes":
+                try:
+                    val = int(value)
+                    if val < 1 or val > 240:
+                        raise ValueError()
+                except (ValueError, TypeError):
+                    raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}")
+                policy_updates[field_name] = val
+            
+            elif field_name == "seal_mode":
+                if str(value) not in {"none", "plomben", "versiegelung"}:
+                    raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}")
+                policy_updates[field_name] = str(value)
+            
+            elif field_name == "initial_seal_number":
+                if value is not None:
+                    val_str = str(value).strip()
+                    if len(val_str) < 3 and val_str != "":
+                        raise HTTPException(status_code=400, detail=f"{field_name} must be at least 3 characters")
+                    policy_updates[field_name] = val_str if val_str else None
+                else:
+                    policy_updates[field_name] = None
+            
+            elif field_name == "max_intensity_level":
+                try:
+                    val = int(value)
+                    if val < 1 or val > 5:
+                        raise ValueError()
+                except (ValueError, TypeError):
+                    raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}. Must be integer 1-5")
+                policy_updates[field_name] = val
+        
+        elif field_name in psychogram_traits:
+            # Validiere Psychogramm-Traits (0-100 Integer)
+            try:
+                val = int(value)
+                if val < 0 or val > 100:
+                    raise ValueError()
+            except (ValueError, TypeError):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Psychogram trait '{field_name}' must be an integer between 0 and 100"
+                )
+            psychogram_updates[field_name] = val
+    
+    # Aktualisiere Policy-Felder in der Session
+    for field_name, value in policy_updates.items():
+        setup_session[field_name] = value
+    
+    # Aktualisiere Psychogramm-Traits
+    for trait_name, value in psychogram_updates.items():
+        psychogram["traits"][trait_name] = value
+    
+    # Markiere die Updatets mit Zeitstempel und Grund
+    setup_session["psychogram"]["updated_at"] = _now_iso()
+    if payload.reason:
+        setup_session["psychogram"]["ai_update_reason"] = payload.reason
+        setup_session["ai_update_reason"] = payload.reason
+        setup_session["ai_update_timestamp"] = _now_iso()
+    
+    # Neuberechnung der Policy basierend auf aktualisierten Psychogramm
+    if psychogram_updates:
+        setup_session["policy_preview"] = _build_policy(setup_session, psychogram)
+    
+    setup_session["updated_at"] = _now_iso()
+    store[setup_session_id] = setup_session
+    save_sessions(store)
+    
+    # Synchronisiere mit aktiver Session, wenn vorhanden
+    applied_to_active_session = sync_setup_snapshot_to_active_session(request, setup_session)
+    
+    return {
+        "setup_session_id": setup_session_id,
+        "message": "AI-controlled fields updated successfully",
+        "updated_fields": list(payload.updates.keys()),
+        "policy_updates": policy_updates,
+        "psychogram_updates": psychogram_updates,
+        "applied_to_active_session": applied_to_active_session,
+        "setup_session": {
+            "psychogram": setup_session.get("psychogram"),
+            "policy_preview": setup_session.get("policy_preview"),
+        },
     }
 
 @router.get("/questionnaire")
