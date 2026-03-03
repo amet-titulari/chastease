@@ -1,7 +1,9 @@
+import asyncio
 import json
+import logging
 import math
 import secrets
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
@@ -16,10 +18,13 @@ from chastease.api.runtime import (
     serialize_chastity_session,
 )
 from chastease.api.schemas import SetupIntegrationsUpdateRequest
+from chastease.api.routers.chaster import fetch_chaster_lock_runtime
 from chastease.models import ChastitySession, Turn, User
 from chastease.repositories.setup_store import load_sessions, save_sessions
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+logger = logging.getLogger(__name__)
+CHASTER_TIMER_SYNC_INTERVAL_SECONDS = 60
 
 
 def _latest_setup_session_for_user(user_id: str) -> tuple[str, dict] | tuple[None, None]:
@@ -92,6 +97,109 @@ def _safe_days_between(start_value: str | None, end_value: str | None) -> int | 
     except ValueError:
         return None
     return (end_date - start_date).days
+
+
+def _maybe_sync_timer_with_chaster(db, session: ChastitySession, request: Request, *, force: bool = False) -> bool:
+    if session is None or session.status != "active":
+        return False
+    if not session.policy_snapshot_json:
+        return False
+
+    try:
+        policy = json.loads(session.policy_snapshot_json)
+    except Exception:
+        return False
+    if not isinstance(policy, dict):
+        return False
+
+    integrations = [str(item).strip().lower() for item in (policy.get("integrations") or []) if str(item).strip()]
+    if "chaster" not in integrations:
+        return False
+
+    integration_config = policy.get("integration_config") if isinstance(policy.get("integration_config"), dict) else {}
+    chaster_cfg = integration_config.get("chaster") if isinstance(integration_config.get("chaster"), dict) else {}
+    api_token = str(chaster_cfg.get("api_token") or "").strip()
+    lock_id = str(chaster_cfg.get("lock_id") or "").strip()
+    if not api_token or not lock_id:
+        return False
+
+    runtime_timer = policy.get("runtime_timer") if isinstance(policy.get("runtime_timer"), dict) else {}
+    now = datetime.now(UTC)
+    if not force:
+        last_sync_raw = str(runtime_timer.get("last_chaster_sync_at") or "").strip()
+        last_sync_at = _parse_iso_datetime(last_sync_raw)
+        if last_sync_at is not None:
+            age_seconds = (now - last_sync_at).total_seconds()
+            if age_seconds < CHASTER_TIMER_SYNC_INTERVAL_SECONDS:
+                return False
+
+    base_url = str(chaster_cfg.get("api_base") or getattr(request.app.state.config, "CHASTER_API_BASE", "https://api.chaster.app") or "").strip()
+    try:
+        runtime = asyncio.run(
+            fetch_chaster_lock_runtime(
+                api_base=base_url,
+                api_token=api_token,
+                lock_id=lock_id,
+            )
+        )
+    except Exception as exc:
+        logger.debug("Chaster timer sync failed for session %s: %s", session.id, exc)
+        return False
+
+    if not isinstance(runtime, dict):
+        return False
+
+    runtime_timer = dict(runtime_timer) if isinstance(runtime_timer, dict) else {}
+    runtime_timer["last_chaster_sync_at"] = now.isoformat()
+
+    changed = False
+    target_end_at_raw = str(runtime.get("target_end_at") or "").strip() or None
+    remaining_seconds = runtime.get("remaining_seconds")
+    if remaining_seconds is not None:
+        try:
+            remaining_seconds = max(0, int(remaining_seconds))
+        except Exception:
+            remaining_seconds = None
+
+    if target_end_at_raw:
+        parsed_target = _parse_iso_datetime(target_end_at_raw)
+        if parsed_target is not None:
+            target_end_at_raw = parsed_target.isoformat()
+    elif remaining_seconds is not None:
+        target_end_at_raw = (now + timedelta(seconds=remaining_seconds)).isoformat()
+
+    if runtime.get("has_active_session") and target_end_at_raw:
+        if str(runtime_timer.get("effective_end_at") or "").strip() != target_end_at_raw:
+            runtime_timer["effective_end_at"] = target_end_at_raw
+            changed = True
+        runtime_timer["state"] = "running"
+        runtime_timer["paused_at"] = None
+        runtime_timer["source"] = "chaster"
+        runtime_timer["chaster_lock_id"] = str(runtime.get("lock_id") or lock_id)
+        raw_status = str(runtime.get("raw_status") or "").strip()
+        if raw_status:
+            runtime_timer["chaster_status"] = raw_status
+        if remaining_seconds is not None:
+            runtime_timer["remaining_seconds"] = remaining_seconds
+            changed = True
+    elif runtime.get("has_active_session"):
+        # We know there is an active lock, but no timing info could be extracted.
+        runtime_timer["source"] = "chaster"
+        runtime_timer["chaster_lock_id"] = str(runtime.get("lock_id") or lock_id)
+        raw_status = str(runtime.get("raw_status") or "").strip()
+        if raw_status:
+            runtime_timer["chaster_status"] = raw_status
+
+    policy["runtime_timer"] = runtime_timer
+    updated_json = json.dumps(policy)
+    if updated_json != (session.policy_snapshot_json or ""):
+        session.policy_snapshot_json = updated_json
+        session.updated_at = now
+        db.add(session)
+        db.commit()
+        changed = True
+
+    return changed
 
 
 def _build_live_time_context(policy: dict, server_now: datetime) -> dict:
@@ -212,6 +320,8 @@ def get_active_chastity_session(user_id: str, auth_token: str, request: Request)
                 "setup_session_id": draft_id,
                 "setup_status": draft_session["status"],
             }
+
+        _maybe_sync_timer_with_chaster(db, session, request, force=False)
 
         setup_session_id = find_setup_session_id_for_active_session(user_id, session.id)
         setup_status = "configured"
@@ -438,6 +548,8 @@ def get_live_session_info(
         access_mode = _can_access_session_live(session.user_id, auth_token, ai_access_token, request)
         if access_mode is None:
             raise HTTPException(status_code=401, detail="Invalid token for live session read.")
+
+        _maybe_sync_timer_with_chaster(db, session, request, force=False)
 
         server_now = datetime.now(UTC)
         session_payload = serialize_chastity_session(session)

@@ -143,6 +143,26 @@ def _extract_first_value(obj: Any, keys: set[str]) -> str | None:
     return None
 
 
+def _extract_first_number(obj: Any, keys: set[str]) -> int | None:
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if key in keys:
+                try:
+                    return int(value)
+                except Exception:
+                    pass
+        for value in obj.values():
+            nested = _extract_first_number(value, keys)
+            if nested is not None:
+                return nested
+    elif isinstance(obj, list):
+        for item in obj:
+            nested = _extract_first_number(item, keys)
+            if nested is not None:
+                return nested
+    return None
+
+
 def _sanitize_extensions(raw: Any) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for item in list(raw or []):
@@ -220,6 +240,171 @@ def _lock_looks_active(lock_data: dict[str, Any]) -> bool:
     return False
 
 
+def _parse_datetime_candidate(raw: Any) -> datetime | None:
+    if raw is None:
+        return None
+    # Epoch seconds / milliseconds
+    if isinstance(raw, (int, float)):
+        value = float(raw)
+        if value > 10_000_000_000:
+            value = value / 1000.0
+        try:
+            return datetime.fromtimestamp(value, tz=UTC)
+        except Exception:
+            return None
+
+    text = str(raw).strip()
+    if not text:
+        return None
+    # Numeric timestamp in string form
+    if text.isdigit():
+        try:
+            value = float(text)
+            if value > 10_000_000_000:
+                value = value / 1000.0
+            return datetime.fromtimestamp(value, tz=UTC)
+        except Exception:
+            return None
+
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _extract_lock_runtime(lock_data: dict[str, Any]) -> tuple[int | None, str | None]:
+    remaining_keys = {
+        "remainingSeconds",
+        "remaining_seconds",
+        "remainingTime",
+        "remaining_time",
+        "timeLeft",
+        "time_left",
+        "durationRemaining",
+        "duration_remaining",
+    }
+    remaining_seconds = _extract_first_number(lock_data, remaining_keys)
+    if isinstance(remaining_seconds, int):
+        remaining_seconds = max(0, remaining_seconds)
+
+    target_keys = {
+        "endAt",
+        "end_at",
+        "endsAt",
+        "ends_at",
+        "endDate",
+        "end_date",
+        "unlockAt",
+        "unlock_at",
+        "unlockDate",
+        "unlock_date",
+    }
+    target_end_at: str | None = None
+    for key in target_keys:
+        value = lock_data.get(key)
+        parsed = _parse_datetime_candidate(value)
+        if parsed is not None:
+            target_end_at = parsed.isoformat()
+            break
+    if target_end_at is None:
+        # fallback: search nested structures
+        for candidate in _extract_lock_candidates(lock_data):
+            for key in target_keys:
+                value = candidate.get(key)
+                parsed = _parse_datetime_candidate(value)
+                if parsed is not None:
+                    target_end_at = parsed.isoformat()
+                    break
+            if target_end_at is not None:
+                break
+
+    return remaining_seconds, target_end_at
+
+
+async def fetch_chaster_lock_runtime(
+    *,
+    api_base: str,
+    api_token: str,
+    lock_id: str,
+) -> dict[str, Any]:
+    base_url = str(api_base or "https://api.chaster.app").strip().rstrip("/")
+    token = str(api_token or "").strip()
+    target_lock_id = str(lock_id or "").strip()
+    if not token:
+        return {"success": False, "has_active_session": False, "lock_id": target_lock_id or None, "check_error": "Missing Chaster API token."}
+    if not target_lock_id:
+        return {"success": False, "has_active_session": False, "lock_id": None, "check_error": "Missing Chaster lock_id."}
+
+    probe_errors: list[str] = []
+    candidates: list[dict[str, Any]] = []
+
+    try:
+        lock_payload = await _get_json(f"{base_url}/locks/{target_lock_id}", token)
+        if isinstance(lock_payload, dict):
+            candidates.append(lock_payload)
+    except HTTPException as exc:
+        probe_errors.append(str(exc.detail))
+
+    try:
+        list_payload = await _get_json(f"{base_url}/locks", token)
+        list_candidates = _extract_lock_candidates(list_payload)
+        matched = []
+        for item in list_candidates:
+            found_lock_id = _extract_first_value(item, {"id", "_id", "lockId", "lock_id", "publicLockId", "public_lock_id"})
+            if found_lock_id == target_lock_id:
+                matched.append(item)
+        candidates.extend(matched)
+    except HTTPException as exc:
+        probe_errors.append(str(exc.detail))
+
+    if not candidates:
+        return {
+            "success": False if probe_errors else True,
+            "has_active_session": False,
+            "lock_id": target_lock_id,
+            "remaining_seconds": None,
+            "target_end_at": None,
+            "raw_status": None,
+            "check_error": " | ".join(probe_errors) if probe_errors else None,
+        }
+
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        if _lock_looks_active(candidate):
+            found_lock_id = _extract_first_value(candidate, {"id", "_id", "lockId", "lock_id", "publicLockId", "public_lock_id"}) or target_lock_id
+            remaining_seconds, target_end_at = _extract_lock_runtime(candidate)
+            raw_status = str(
+                candidate.get("status")
+                or candidate.get("state")
+                or candidate.get("lockStatus")
+                or candidate.get("lock_status")
+                or ""
+            ).strip() or None
+            return {
+                "success": True,
+                "has_active_session": True,
+                "lock_id": found_lock_id,
+                "remaining_seconds": remaining_seconds,
+                "target_end_at": target_end_at,
+                "raw_status": raw_status,
+                "check_error": None,
+            }
+
+    return {
+        "success": True,
+        "has_active_session": False,
+        "lock_id": target_lock_id,
+        "remaining_seconds": None,
+        "target_end_at": None,
+        "raw_status": None,
+        "check_error": None,
+    }
+
+
 @router.post("/check-active-session")
 async def check_active_chaster_session(payload: ChasterCheckSessionRequest, request: Request) -> dict:
     token_user_id = resolve_user_id_from_token(payload.auth_token, request)
@@ -230,63 +415,13 @@ async def check_active_chaster_session(payload: ChasterCheckSessionRequest, requ
     if not base_url:
         raise HTTPException(status_code=400, detail="Chaster API base URL is empty.")
 
-    token = payload.chaster_api_token.strip()
-    target_lock_id = str(payload.lock_id or "").strip()
-    probe_errors: list[str] = []
-    candidates: list[dict[str, Any]] = []
-
-    if target_lock_id:
-        try:
-            lock_payload = await _get_json(f"{base_url}/locks/{target_lock_id}", token)
-            if isinstance(lock_payload, dict):
-                candidates.append(lock_payload)
-        except HTTPException as exc:
-            probe_errors.append(str(exc.detail))
-
-    try:
-        list_payload = await _get_json(f"{base_url}/locks", token)
-        list_candidates = _extract_lock_candidates(list_payload)
-        if target_lock_id:
-            matched = []
-            for item in list_candidates:
-                found_lock_id = _extract_first_value(item, {"id", "_id", "lockId", "lock_id", "publicLockId", "public_lock_id"})
-                if found_lock_id == target_lock_id:
-                    matched.append(item)
-            candidates.extend(matched)
-        else:
-            candidates.extend(list_candidates)
-    except HTTPException as exc:
-        probe_errors.append(str(exc.detail))
-
-    if not candidates:
-        return {
-            "success": False if probe_errors else True,
-            "has_active_session": False,
-            "lock_id": None,
-            "checked_lock_id": target_lock_id or None,
-            "check_error": " | ".join(probe_errors) if probe_errors else None,
-        }
-
-    for candidate in candidates:
-        if not isinstance(candidate, dict):
-            continue
-        if _lock_looks_active(candidate):
-            found_lock_id = _extract_first_value(candidate, {"id", "_id", "lockId", "lock_id", "publicLockId", "public_lock_id"})
-            return {
-                "success": True,
-                "has_active_session": True,
-                "lock_id": found_lock_id or (target_lock_id or None),
-                "checked_lock_id": target_lock_id or None,
-                "check_error": None,
-            }
-
-    return {
-        "success": True,
-        "has_active_session": False,
-        "lock_id": None,
-        "checked_lock_id": target_lock_id or None,
-        "check_error": None,
-    }
+    runtime = await fetch_chaster_lock_runtime(
+        api_base=base_url,
+        api_token=payload.chaster_api_token.strip(),
+        lock_id=str(payload.lock_id or "").strip(),
+    )
+    runtime["checked_lock_id"] = str(payload.lock_id or "").strip() or None
+    return runtime
 
 
 @router.post("/create-session")
