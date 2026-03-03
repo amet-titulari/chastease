@@ -66,6 +66,9 @@ class SetupStartRequest(BaseModel):
     opening_window_minutes: int = Field(default=30, ge=1, le=240)
     seal_mode: Literal["none", "plomben", "versiegelung"] = "none"
     initial_seal_number: str | None = Field(default=None, min_length=3)
+    instruction_style: Literal["direct_command", "polite_authoritative", "suggestive", "mixed"] = "polite_authoritative"
+    desired_intensity: Literal["low", "medium", "strong", "demanding"] = "medium"
+    grooming_preference: Literal["no_preference", "clean_shaven", "trimmed", "natural"] = "clean_shaven"
 
 
 class SetupAnswer(BaseModel):
@@ -75,6 +78,12 @@ class SetupAnswer(BaseModel):
 
 class SetupAnswersRequest(BaseModel):
     answers: list[SetupAnswer]
+
+
+class SetupAICalibrationTurnRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    auth_token: str = Field(min_length=8)
+    wearer_message: str | None = None
 
 
 class PsychogramRecalibrationRequest(BaseModel):

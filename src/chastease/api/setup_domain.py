@@ -19,7 +19,7 @@ from chastease.repositories.setup_store import load_sessions
 # - Beim Setup: Der Benutzer initialisiert diese Werte
 # - Während Session: Der Benutzer sieht sie (read-only), die KI kann sie dynamisch anpassen
 
-# Policy-Felder (Öffnungen, Versiegelung, Intensität, etc.)
+# Policy-/Präferenz-Felder (Öffnungen, Versiegelung, Intensität, Interaktionsstil, etc.)
 AI_CONTROLLED_POLICY_FIELDS = {
     "contract_min_end_date",
     "opening_limit_period", 
@@ -28,6 +28,10 @@ AI_CONTROLLED_POLICY_FIELDS = {
     "seal_mode",
     "initial_seal_number",
     "max_intensity_level",  # Intensität (1-5), kann unabhängig von strictness_affinity angepasst werden
+    "instruction_style",
+    "desired_intensity",
+    "grooming_preference",
+    "escalation_mode",
 }
 
 # Psychogramm-Trait-Felder (Persönlichkeits-/Präferenze-Scores)
@@ -173,7 +177,7 @@ def _psychogram_brief(psychogram: dict, policy: dict) -> str:
     return f"Top traits -> {top_text}. Tone={tone}, intensity={intensity}, confidence={psychogram['confidence']}."
 
 def _derive_experience_profile(level: int) -> str:
-    if level <= 4:
+    if level <= 3:
         return "beginner"
     if level <= 7:
         return "intermediate"
@@ -312,9 +316,12 @@ def _build_psychogram(setup_session: dict) -> dict:
     )
     autonomy_profile, autonomy_bias = _derive_autonomy_preferences(setup_session, traits)
     praise_timing = _derive_praise_timing(traits)
-    instruction_style = answers.get("q8_instruction_style", "mixed")
-    escalation_mode = answers.get("q11_escalation_mode", "moderate")
-    grooming_preference = answers.get("q12_grooming_preference", "no_preference")
+    instruction_style = str(setup_session.get("instruction_style") or answers.get("q8_instruction_style") or "mixed")
+    escalation_mode = str(answers.get("q11_escalation_mode") or setup_session.get("escalation_mode") or "moderate")
+    grooming_preference = str(
+        setup_session.get("grooming_preference") or answers.get("q12_grooming_preference") or "no_preference"
+    )
+    desired_intensity = str(setup_session.get("desired_intensity") or "medium")
     experience_level_raw = int(answers.get("q13_experience_level", 50))
     experience_level = max(1, min(10, round(experience_level_raw / 10)))
     hard_limits_text = str(answers.get("q14_hard_limits_text", "")).strip()
@@ -357,6 +364,7 @@ def _build_psychogram(setup_session: dict) -> dict:
             "autonomy_bias": autonomy_bias,
             "praise_timing": praise_timing,
             "instruction_style": instruction_style,
+            "desired_intensity": desired_intensity,
             "escalation_mode": escalation_mode,
             "experience_level": experience_level,
             "experience_profile": _derive_experience_profile(experience_level),
@@ -391,6 +399,16 @@ def _derive_praise_timing(traits: dict) -> str:
     if praise >= 35:
         return "delayed"
     return "rare_but_impactful"
+
+def _intensity_choice_to_max_level(choice: str | None) -> int | None:
+    normalized = str(choice or "").strip().lower()
+    mapping = {
+        "low": 1,
+        "medium": 2,
+        "strong": 4,
+        "demanding": 5,
+    }
+    return mapping.get(normalized)
 
 def _derive_allowed_categories(traits: dict) -> list[str]:
     categories = ["hygiene", "service", "posture"]
@@ -429,6 +447,7 @@ def _build_policy(setup_session: dict, psychogram: dict) -> dict:
     max_penalty_week = setup_session.get("max_penalty_per_week_minutes", 240)
     opening_period = setup_session.get("opening_limit_period", "day")
     max_openings = setup_session.get("max_openings_in_period", setup_session.get("max_openings_per_day", 1))
+    requested_intensity = _intensity_choice_to_max_level(setup_session.get("desired_intensity"))
     seal_mode = str(setup_session.get("seal_mode") or "none").strip().lower()
     if seal_mode not in {"none", "plomben", "versiegelung"}:
         seal_mode = "none"
@@ -440,7 +459,14 @@ def _build_policy(setup_session: dict, psychogram: dict) -> dict:
         "integration_config": setup_session.get("integration_config", {}),
         "limits": {
             "max_intensity_level": default_limits.get(
-                "max_intensity_level", max(1, min(5, round(traits["strictness_affinity"] / 20)))
+                "max_intensity_level",
+                setup_session.get("max_intensity_level")
+                if setup_session.get("max_intensity_level") is not None
+                else (
+                    requested_intensity
+                    if requested_intensity is not None
+                    else max(1, min(5, round(traits["strictness_affinity"] / 20)))
+                ),
             ),
             "max_penalty_per_day_minutes": default_limits.get(
                 "max_penalty_per_day_minutes", max_penalty_day
@@ -476,6 +502,7 @@ def _build_policy(setup_session: dict, psychogram: dict) -> dict:
             "autonomy_bias": default_limits.get("autonomy_bias", autonomy_bias),
             "praise_timing": psychogram["interaction_preferences"]["praise_timing"],
             "instruction_style": psychogram["interaction_preferences"]["instruction_style"],
+            "escalation_mode": psychogram["interaction_preferences"].get("escalation_mode", "moderate"),
         },
         "safety_filters": {
             "blocked_trigger_words": sorted(
@@ -543,6 +570,10 @@ def _create_draft_setup_session(user_id: str, language: str = "de") -> dict:
         "opening_window_minutes": 30,
         "seal_mode": "none",
         "initial_seal_number": None,
+        "instruction_style": "polite_authoritative",
+        "desired_intensity": "medium",
+        "grooming_preference": "clean_shaven",
+        "escalation_mode": "moderate",
         "questionnaire_version": QUESTIONNAIRE_VERSION,
         "answers": [],
         "psychogram": None,

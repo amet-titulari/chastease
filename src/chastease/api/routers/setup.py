@@ -1,7 +1,7 @@
 ﻿import json
 from datetime import UTC, date, datetime
 import re
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 
 from chastease.api.questionnaire import QUESTION_BANK, QUESTION_IDS, QUESTIONNAIRE_VERSION, TRAIT_KEYS
 from chastease.api.schemas import (
+    SetupAICalibrationTurnRequest,
     PsychogramRecalibrationRequest,
     SetupAIControlledFieldsUpdateRequest,
     SetupAnswersRequest,
@@ -56,8 +57,18 @@ from chastease.api.setup_infra import (
     sync_setup_snapshot_to_active_session,
     sync_setup_snapshot_to_active_session_db,
 )
+from chastease.shared.audit import record_audit_event
 
 router = APIRouter(prefix="/setup", tags=["setup"])
+
+CALIBRATION_INTENSITY_TO_SCALE = {
+    "low": 20,
+    "medium": 45,
+    "strong": 75,
+    "demanding": 95,
+}
+
+CALIBRATION_FIELDS = {"instruction_style", "desired_intensity", "grooming_preference", "escalation_mode"}
 
 
 def _is_llm_timeout_error(exc: Exception) -> bool:
@@ -196,6 +207,190 @@ def _system_note(lang: str, key: str, **kwargs) -> str:
     return "System note."
 
 
+def _desired_intensity_to_scale_100(choice: str) -> int:
+    normalized = str(choice or "").strip().lower()
+    mapping = {
+        "low": 20,
+        "medium": 45,
+        "strong": 75,
+        "demanding": 95,
+    }
+    return mapping.get(normalized, 45)
+
+
+def _extract_json_payload(raw: str) -> dict | None:
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    candidates = [text]
+    fenced = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.IGNORECASE | re.DOTALL)
+    candidates.extend(fenced)
+    first = text.find("{")
+    last = text.rfind("}")
+    if first != -1 and last != -1 and last > first:
+        candidates.append(text[first : last + 1])
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            continue
+    return None
+
+
+def _next_calibration_question(inferred: dict[str, str], lang: str) -> str:
+    missing = CALIBRATION_FIELDS - set(inferred.keys())
+    if "instruction_style" in missing:
+        return (
+            "Wie soll ich dich am liebsten anleiten: direkt, höflich-autoritär, suggestiv oder gemischt?"
+            if lang == "de"
+            else "How should I guide you: direct, polite-authoritative, suggestive, or mixed?"
+        )
+    if "desired_intensity" in missing:
+        return (
+            "Welche Intensität passt aktuell: niedrig, mittel, stark oder belastend?"
+            if lang == "de"
+            else "Which intensity fits right now: low, medium, strong, or demanding?"
+        )
+    if "escalation_mode" in missing:
+        return (
+            "Wie schnell soll die Eskalation sein: sehr langsam, langsam, moderat, stark oder aggressiv?"
+            if lang == "de"
+            else "How fast should escalation be: very slow, slow, moderate, strong, or aggressive?"
+        )
+    if "grooming_preference" in missing:
+        return (
+            "Welche Intimrasur-Präferenz soll gelten: keine Präferenz, glatt rasiert, getrimmt oder natürlich?"
+            if lang == "de"
+            else "Which grooming preference should apply: no preference, clean shaven, trimmed, or natural?"
+        )
+    return (
+        "Danke. Ich habe die Kalibrierung abgeschlossen. Möchtest du noch etwas präzisieren?"
+        if lang == "de"
+        else "Thanks, calibration is complete. Do you want to fine-tune anything else?"
+    )
+
+
+def _infer_calibration_from_text(message: str, previous: dict[str, str]) -> dict[str, str]:
+    text = str(message or "").strip().lower()
+    inferred = dict(previous)
+    if not text:
+        return inferred
+
+    if any(token in text for token in ["direkt", "befehl", "command"]):
+        inferred["instruction_style"] = "direct_command"
+    elif any(token in text for token in ["höflich", "hoeflich", "autorit", "polite"]):
+        inferred["instruction_style"] = "polite_authoritative"
+    elif any(token in text for token in ["suggestiv", "verführer", "verfuehrer", "seductive", "suggestive"]):
+        inferred["instruction_style"] = "suggestive"
+    elif "gemischt" in text or "mixed" in text:
+        inferred["instruction_style"] = "mixed"
+
+    if any(token in text for token in ["niedrig", "sanft", "low", "gentle"]):
+        inferred["desired_intensity"] = "low"
+    elif any(token in text for token in ["mittel", "medium", "moderat"]):
+        inferred["desired_intensity"] = "medium"
+    elif any(token in text for token in ["stark", "intens", "strong"]):
+        inferred["desired_intensity"] = "strong"
+    elif any(token in text for token in ["belastend", "fordernd", "demanding", "hardcore"]):
+        inferred["desired_intensity"] = "demanding"
+
+    if any(token in text for token in ["sehr langsam", "very slow"]):
+        inferred["escalation_mode"] = "very_slow"
+    elif any(token in text for token in ["langsam", "slow"]):
+        inferred["escalation_mode"] = "slow"
+    elif any(token in text for token in ["moderat", "mittel", "moderate"]):
+        inferred["escalation_mode"] = "moderate"
+    elif any(token in text for token in ["aggressiv", "aggressive"]):
+        inferred["escalation_mode"] = "aggressive"
+    elif any(token in text for token in ["stark", "strong"]):
+        inferred["escalation_mode"] = "strong"
+
+    if any(token in text for token in ["keine präferenz", "keine praeferenz", "no preference"]):
+        inferred["grooming_preference"] = "no_preference"
+    elif any(token in text for token in ["glatt", "clean shaven", "rasiert"]):
+        inferred["grooming_preference"] = "clean_shaven"
+    elif any(token in text for token in ["trim", "getrimmt"]):
+        inferred["grooming_preference"] = "trimmed"
+    elif any(token in text for token in ["natürlich", "natuerlich", "natural"]):
+        inferred["grooming_preference"] = "natural"
+
+    return inferred
+
+
+def _sanitize_inferred_calibration(payload: dict[str, Any], current: dict[str, str]) -> tuple[dict[str, str], float, bool]:
+    inferred = dict(current)
+    raw_inferred = payload.get("inferred")
+    if isinstance(raw_inferred, dict):
+        for key in CALIBRATION_FIELDS:
+            if key not in raw_inferred:
+                continue
+            val = str(raw_inferred.get(key) or "").strip()
+            if not val:
+                continue
+            inferred[key] = val
+
+    valid_sets = {
+        "instruction_style": {"direct_command", "polite_authoritative", "suggestive", "mixed"},
+        "desired_intensity": {"low", "medium", "strong", "demanding"},
+        "grooming_preference": {"no_preference", "clean_shaven", "trimmed", "natural"},
+        "escalation_mode": {"very_slow", "slow", "moderate", "strong", "aggressive"},
+    }
+    for key, allowed in valid_sets.items():
+        if key in inferred and inferred[key] not in allowed:
+            inferred.pop(key, None)
+
+    try:
+        confidence = float(payload.get("confidence", 0.0))
+    except (TypeError, ValueError):
+        confidence = 0.0
+    confidence = max(0.0, min(confidence, 1.0))
+    completed = bool(payload.get("completed")) or (
+        len(CALIBRATION_FIELDS - set(inferred.keys())) == 0 and confidence >= 0.75
+    )
+    return inferred, confidence, completed
+
+
+def _apply_calibration_to_setup(setup_session: dict, inferred: dict[str, str], now_iso: str) -> dict[str, str]:
+    changed: dict[str, str] = {}
+    if "instruction_style" in inferred and setup_session.get("instruction_style") != inferred["instruction_style"]:
+        setup_session["instruction_style"] = inferred["instruction_style"]
+        changed["instruction_style"] = inferred["instruction_style"]
+    if "desired_intensity" in inferred and setup_session.get("desired_intensity") != inferred["desired_intensity"]:
+        setup_session["desired_intensity"] = inferred["desired_intensity"]
+        changed["desired_intensity"] = inferred["desired_intensity"]
+    if "grooming_preference" in inferred and setup_session.get("grooming_preference") != inferred["grooming_preference"]:
+        setup_session["grooming_preference"] = inferred["grooming_preference"]
+        changed["grooming_preference"] = inferred["grooming_preference"]
+    if "escalation_mode" in inferred and setup_session.get("escalation_mode") != inferred["escalation_mode"]:
+        setup_session["escalation_mode"] = inferred["escalation_mode"]
+        changed["escalation_mode"] = inferred["escalation_mode"]
+
+    answers_by_question = {
+        str(entry.get("question_id")): entry.get("value")
+        for entry in (setup_session.get("answers") or [])
+        if isinstance(entry, dict) and str(entry.get("question_id") or "").strip()
+    }
+    if "instruction_style" in inferred:
+        answers_by_question["q8_instruction_style"] = inferred["instruction_style"]
+    if "grooming_preference" in inferred:
+        answers_by_question["q12_grooming_preference"] = inferred["grooming_preference"]
+    if "desired_intensity" in inferred:
+        answers_by_question["q6_intensity_1_5"] = _desired_intensity_to_scale_100(inferred["desired_intensity"])
+    if "escalation_mode" in inferred:
+        answers_by_question["q11_escalation_mode"] = inferred["escalation_mode"]
+    setup_session["answers"] = [
+        {"question_id": question_id, "value": value}
+        for question_id, value in answers_by_question.items()
+    ]
+
+    setup_session["psychogram"] = _build_psychogram(setup_session)
+    setup_session["policy_preview"] = _build_policy(setup_session, setup_session["psychogram"])
+    setup_session["updated_at"] = now_iso
+    return changed
+
+
 def _ensure_active_session_from_setup(db, setup_session: dict) -> str:
     existing_id = str(setup_session.get("active_session_id") or "").strip()
     if existing_id:
@@ -280,6 +475,136 @@ def setup_chat_preview(setup_session_id: str, payload: SetupChatPreviewRequest, 
         "generated_files": generated_files,
         "preview": True,
         "next_state": "awaiting_wearer_action",
+    }
+
+
+@router.post("/sessions/{setup_session_id}/ai-calibration-turn")
+def ai_calibration_turn(setup_session_id: str, payload: SetupAICalibrationTurnRequest, request: Request) -> dict:
+    store = load_sessions()
+    setup_session = store.get(setup_session_id)
+    if setup_session is None:
+        raise HTTPException(status_code=404, detail=_t("de", "not_found"))
+    if setup_session.get("user_id") != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid user for setup session.")
+    token_user_id = resolve_user_id_from_token(payload.auth_token, request)
+    if token_user_id != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token for user.")
+    if setup_session.get("status") not in {"setup_in_progress", "configured"}:
+        raise HTTPException(status_code=409, detail="Setup session is not editable.")
+
+    lang = _lang(setup_session.get("language", "de"))
+    wearer_message = str(payload.wearer_message or "").strip()
+    calibration = setup_session.setdefault("ai_calibration", {})
+    turns = calibration.setdefault("turns", [])
+
+    current_inferred = dict(calibration.get("inferred") or {})
+    for key in CALIBRATION_FIELDS:
+        val = str(setup_session.get(key) or "").strip()
+        if val:
+            current_inferred[key] = val
+
+    assistant_message = ""
+    next_question = _next_calibration_question(current_inferred, lang)
+    confidence = float(calibration.get("confidence") or 0.0)
+    completed = bool(calibration.get("completed"))
+
+    if wearer_message:
+        db = get_db_session(request)
+        try:
+            if setup_session.get("psychogram") is None:
+                setup_session["psychogram"] = _build_psychogram(setup_session)
+            if setup_session.get("policy_preview") is None:
+                setup_session["policy_preview"] = _build_policy(setup_session, setup_session["psychogram"])
+
+            instruction = (
+                "You are calibrating a roleplay session setup. Return JSON only (no markdown) with exactly this shape: "
+                "{\"assistant_message\":\"...\",\"next_question\":\"...\",\"inferred\":{\"instruction_style\":\"direct_command|polite_authoritative|suggestive|mixed\",\"desired_intensity\":\"low|medium|strong|demanding\",\"grooming_preference\":\"no_preference|clean_shaven|trimmed|natural\",\"escalation_mode\":\"very_slow|slow|moderate|strong|aggressive\"},\"confidence\":0.0,\"completed\":false}. "
+                "Only set inferred keys when confidence is sufficient."
+            ) if lang == "en" else (
+                "Du kalibrierst ein Rollenspiel-Setup. Antworte nur als JSON (kein Markdown) mit exakt dieser Struktur: "
+                "{\"assistant_message\":\"...\",\"next_question\":\"...\",\"inferred\":{\"instruction_style\":\"direct_command|polite_authoritative|suggestive|mixed\",\"desired_intensity\":\"low|medium|strong|demanding\",\"grooming_preference\":\"no_preference|clean_shaven|trimmed|natural\",\"escalation_mode\":\"very_slow|slow|moderate|strong|aggressive\"},\"confidence\":0.0,\"completed\":false}. "
+                "Setze inferred-Felder nur, wenn du ausreichend sicher bist."
+            )
+            context_block = (
+                f"{instruction}\n\n"
+                f"CURRENT_INFERRED: {json.dumps(current_inferred, ensure_ascii=False)}\n"
+                f"WEARER_MESSAGE: {wearer_message}\n"
+                f"NEXT_FOCUS_QUESTION: {_next_calibration_question(current_inferred, lang)}"
+            )
+            raw = generate_ai_narration_for_setup_preview(
+                db=db,
+                request=request,
+                user_id=payload.user_id,
+                action=context_block,
+                language=lang,
+                psychogram=setup_session.get("psychogram") or {},
+                policy=setup_session.get("policy_preview") or {},
+            )
+        finally:
+            db.close()
+
+        parsed = _extract_json_payload(raw) or {}
+        ai_inferred, ai_confidence, ai_completed = _sanitize_inferred_calibration(parsed, current_inferred)
+        fallback_inferred = _infer_calibration_from_text(wearer_message, ai_inferred)
+        inferred = fallback_inferred
+        confidence = max(ai_confidence, 0.25 if inferred != current_inferred else 0.0)
+        completed = bool(ai_completed) or (len(CALIBRATION_FIELDS - set(inferred.keys())) == 0 and confidence >= 0.65)
+        assistant_message = str(parsed.get("assistant_message") or "").strip() or (
+            "Verstanden. Ich kalibriere die Werte auf Basis deiner Antwort." if lang == "de"
+            else "Understood. I am calibrating values based on your answer."
+        )
+        next_question = str(parsed.get("next_question") or "").strip() or _next_calibration_question(inferred, lang)
+
+        now = _now_iso()
+        changed = _apply_calibration_to_setup(setup_session, inferred, now)
+        calibration["inferred"] = inferred
+        calibration["confidence"] = confidence
+        calibration["completed"] = completed
+        calibration["last_question"] = next_question
+        turns.append(
+            {
+                "at": now,
+                "wearer_message": wearer_message,
+                "assistant_message": assistant_message,
+                "next_question": next_question,
+                "changed_fields": changed,
+                "confidence": confidence,
+            }
+        )
+        store[setup_session_id] = setup_session
+        save_sessions(store)
+        applied_to_active_session = sync_setup_snapshot_to_active_session(request, setup_session)
+        return {
+            "setup_session_id": setup_session_id,
+            "assistant_message": assistant_message,
+            "next_question": next_question,
+            "inferred": inferred,
+            "confidence": confidence,
+            "completed": completed,
+            "changed_fields": changed,
+            "turns_count": len(turns),
+            "applied_to_active_session": applied_to_active_session,
+        }
+
+    calibration["last_question"] = next_question
+    calibration["inferred"] = current_inferred
+    calibration["confidence"] = confidence
+    calibration["completed"] = completed
+    setup_session["updated_at"] = _now_iso()
+    store[setup_session_id] = setup_session
+    save_sessions(store)
+    return {
+        "setup_session_id": setup_session_id,
+        "assistant_message": (
+            "Ich stelle dir jetzt ein paar gezielte Fragen für die Kalibrierung."
+            if lang == "de"
+            else "I will now ask a few targeted calibration questions."
+        ),
+        "next_question": next_question,
+        "inferred": current_inferred,
+        "confidence": confidence,
+        "completed": completed,
+        "turns_count": len(turns),
     }
 
 @router.post("/sessions")
@@ -381,6 +706,10 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
             "max_openings_in_period": max_openings_in_period,
             "max_openings_per_day": max_openings_in_period if opening_limit_period == "day" else 0,
             "opening_window_minutes": payload.opening_window_minutes,
+            "instruction_style": payload.instruction_style,
+            "desired_intensity": payload.desired_intensity,
+            "grooming_preference": payload.grooming_preference,
+            "escalation_mode": "moderate",
             "questionnaire_version": QUESTIONNAIRE_VERSION,
             "updated_at": now,
             "psychogram_analysis": None,
@@ -389,12 +718,25 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
             "contract_generation_status": "idle",
             "contract_generated_at": None,
             "ai_proposed_end_date": None,
+            "ai_calibration": setup_session.get("ai_calibration") if isinstance(setup_session.get("ai_calibration"), dict) else {},
         }
     )
     if "created_at" not in setup_session:
         setup_session["created_at"] = now
     # keep previous answers to allow iterative setup editing without data loss
     setup_session.setdefault("answers", [])
+    answers_by_question = {
+        str(entry.get("question_id")): entry.get("value")
+        for entry in (setup_session.get("answers") or [])
+        if isinstance(entry, dict) and str(entry.get("question_id") or "").strip()
+    }
+    answers_by_question["q8_instruction_style"] = payload.instruction_style
+    answers_by_question["q12_grooming_preference"] = payload.grooming_preference
+    answers_by_question["q6_intensity_1_5"] = _desired_intensity_to_scale_100(payload.desired_intensity)
+    setup_session["answers"] = [
+        {"question_id": question_id, "value": value}
+        for question_id, value in answers_by_question.items()
+    ]
     setup_session.setdefault("psychogram", None)
     setup_session.setdefault("policy_preview", None)
     store[setup_session_id] = setup_session
@@ -411,6 +753,10 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
         "language": lang,
         "integrations": effective_integrations,
         "integration_config": effective_integration_config,
+        "instruction_style": payload.instruction_style,
+        "desired_intensity": payload.desired_intensity,
+        "grooming_preference": payload.grooming_preference,
+        "escalation_mode": setup_session.get("escalation_mode", "moderate"),
         "contract": {
             "start_date": contract_start_date,
             "end_date": contract_end_date,
@@ -1171,47 +1517,53 @@ def ai_update_controlled_fields(setup_session_id: str, payload: SetupAIControlle
     setup_session = store.get(setup_session_id)
     if setup_session is None:
         raise HTTPException(status_code=404, detail=_t("de", "not_found"))
-    
-    lang = _lang(setup_session["language"])
+    if setup_session.get("user_id") != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid user for setup session.")
+    token_user_id = resolve_user_id_from_token(payload.auth_token, request)
+    if token_user_id != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token for user.")
+
+    autonomy_mode = str(setup_session.get("autonomy_mode") or "execute").strip().lower()
+    if autonomy_mode != "execute":
+        raise HTTPException(
+            status_code=409,
+            detail="AI field updates are blocked while autonomy_mode='suggest'. Switch to 'execute' to auto-apply.",
+        )
+
     allowed_fields = get_ai_controlled_session_fields()
     policy_fields = get_ai_controlled_policy_fields()
     psychogram_traits = get_ai_controlled_psychogram_traits()
-    
-    # Validiere, dass nur erlaubte Felder aktualisiert werden
+
     for field_name in payload.updates.keys():
         if field_name not in allowed_fields:
             raise HTTPException(
-                status_code=400, 
-                detail=f"Field '{field_name}' is not AI-controllable. Allowed: policy fields or psychogram traits."
+                status_code=400,
+                detail=f"Field '{field_name}' is not AI-controllable. Allowed: policy fields or psychogram traits.",
             )
-    
-    # Initialisiere Psychogramm falls nicht vorhanden
+
     if setup_session.get("psychogram") is None:
         setup_session["psychogram"] = _build_psychogram(setup_session)
-    
     psychogram = setup_session["psychogram"]
     if "traits" not in psychogram:
         psychogram["traits"] = {}
-    
-    # Verarbeite Aktualisierungen nach Typ
-    policy_updates = {}
-    psychogram_updates = {}
-    
+    interaction_preferences = psychogram.setdefault("interaction_preferences", {})
+    personal_preferences = psychogram.setdefault("personal_preferences", {})
+
+    policy_updates: dict[str, object] = {}
+    psychogram_updates: dict[str, int] = {}
+
     for field_name, value in payload.updates.items():
         if field_name in policy_fields:
-            # Validiere Policy-Felder
             if field_name == "contract_min_end_date":
                 try:
                     date.fromisoformat(str(value))
                 except (ValueError, TypeError):
                     raise HTTPException(status_code=400, detail=f"Invalid date format for {field_name}")
                 policy_updates[field_name] = str(value)
-            
             elif field_name == "opening_limit_period":
                 if str(value) not in {"day", "week", "month"}:
                     raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}")
                 policy_updates[field_name] = str(value)
-            
             elif field_name == "max_openings_in_period":
                 try:
                     val = int(value)
@@ -1220,7 +1572,6 @@ def ai_update_controlled_fields(setup_session_id: str, payload: SetupAIControlle
                 except (ValueError, TypeError):
                     raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}")
                 policy_updates[field_name] = val
-            
             elif field_name == "opening_window_minutes":
                 try:
                     val = int(value)
@@ -1229,12 +1580,10 @@ def ai_update_controlled_fields(setup_session_id: str, payload: SetupAIControlle
                 except (ValueError, TypeError):
                     raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}")
                 policy_updates[field_name] = val
-            
             elif field_name == "seal_mode":
                 if str(value) not in {"none", "plomben", "versiegelung"}:
                     raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}")
                 policy_updates[field_name] = str(value)
-            
             elif field_name == "initial_seal_number":
                 if value is not None:
                     val_str = str(value).strip()
@@ -1243,7 +1592,6 @@ def ai_update_controlled_fields(setup_session_id: str, payload: SetupAIControlle
                     policy_updates[field_name] = val_str if val_str else None
                 else:
                     policy_updates[field_name] = None
-            
             elif field_name == "max_intensity_level":
                 try:
                     val = int(value)
@@ -1252,52 +1600,185 @@ def ai_update_controlled_fields(setup_session_id: str, payload: SetupAIControlle
                 except (ValueError, TypeError):
                     raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}. Must be integer 1-5")
                 policy_updates[field_name] = val
-        
+            elif field_name == "instruction_style":
+                if str(value) not in {"direct_command", "polite_authoritative", "suggestive", "mixed"}:
+                    raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}")
+                policy_updates[field_name] = str(value)
+            elif field_name == "desired_intensity":
+                if str(value) not in {"low", "medium", "strong", "demanding"}:
+                    raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}")
+                policy_updates[field_name] = str(value)
+            elif field_name == "grooming_preference":
+                if str(value) not in {"no_preference", "clean_shaven", "trimmed", "natural"}:
+                    raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}")
+                policy_updates[field_name] = str(value)
+            elif field_name == "escalation_mode":
+                if str(value) not in {"very_slow", "slow", "moderate", "strong", "aggressive"}:
+                    raise HTTPException(status_code=400, detail=f"Invalid value for {field_name}")
+                policy_updates[field_name] = str(value)
         elif field_name in psychogram_traits:
-            # Validiere Psychogramm-Traits (0-100 Integer)
             try:
                 val = int(value)
                 if val < 0 or val > 100:
                     raise ValueError()
             except (ValueError, TypeError):
                 raise HTTPException(
-                    status_code=400, 
-                    detail=f"Psychogram trait '{field_name}' must be an integer between 0 and 100"
+                    status_code=400,
+                    detail=f"Psychogram trait '{field_name}' must be an integer between 0 and 100",
                 )
             psychogram_updates[field_name] = val
-    
-    # Aktualisiere Policy-Felder in der Session
-    for field_name, value in policy_updates.items():
-        setup_session[field_name] = value
-    
-    # Aktualisiere Psychogramm-Traits
-    for trait_name, value in psychogram_updates.items():
-        psychogram["traits"][trait_name] = value
-    
-    # Markiere die Updatets mit Zeitstempel und Grund
-    setup_session["psychogram"]["updated_at"] = _now_iso()
+
+    changed_fields: list[dict] = []
+    for field_name, new_value in policy_updates.items():
+        old_value = setup_session.get(field_name)
+        if old_value != new_value:
+            changed_fields.append({"field": field_name, "old_value": old_value, "new_value": new_value})
+        setup_session[field_name] = new_value
+
+    for trait_name, new_value in psychogram_updates.items():
+        old_value = psychogram["traits"].get(trait_name)
+        if old_value != new_value:
+            changed_fields.append({"field": trait_name, "old_value": old_value, "new_value": new_value})
+        psychogram["traits"][trait_name] = new_value
+
+    if "instruction_style" in policy_updates:
+        interaction_preferences["instruction_style"] = policy_updates["instruction_style"]
+    if "desired_intensity" in policy_updates:
+        interaction_preferences["desired_intensity"] = policy_updates["desired_intensity"]
+    if "escalation_mode" in policy_updates:
+        interaction_preferences["escalation_mode"] = policy_updates["escalation_mode"]
+    if "grooming_preference" in policy_updates:
+        personal_preferences["grooming_preference"] = policy_updates["grooming_preference"]
+
+    if setup_session.get("policy_preview") is None:
+        setup_session["policy_preview"] = _build_policy(setup_session, psychogram)
+
+    if psychogram_updates:
+        previous_policy = setup_session.get("policy_preview") if isinstance(setup_session.get("policy_preview"), dict) else {}
+        previous_generated_contract = previous_policy.get("generated_contract")
+        previous_runtime_seal = previous_policy.get("runtime_seal")
+        previous_proposed_end_date = ((previous_policy.get("contract") or {}).get("proposed_end_date"))
+        setup_session["policy_preview"] = _build_policy(setup_session, psychogram)
+        if previous_generated_contract is not None:
+            setup_session["policy_preview"]["generated_contract"] = previous_generated_contract
+        if previous_runtime_seal is not None:
+            setup_session["policy_preview"]["runtime_seal"] = previous_runtime_seal
+        if previous_proposed_end_date is not None:
+            setup_session["policy_preview"].setdefault("contract", {})
+            setup_session["policy_preview"]["contract"]["proposed_end_date"] = previous_proposed_end_date
+
+    policy_preview = setup_session.setdefault("policy_preview", {})
+    limits = policy_preview.setdefault("limits", {})
+    contract = policy_preview.setdefault("contract", {})
+    seal = policy_preview.setdefault("seal", {})
+    interaction_profile = policy_preview.setdefault("interaction_profile", {})
+
+    if "contract_min_end_date" in policy_updates:
+        contract["min_end_date"] = policy_updates["contract_min_end_date"]
+    if "opening_limit_period" in policy_updates:
+        limits["opening_limit_period"] = policy_updates["opening_limit_period"]
+        if policy_updates["opening_limit_period"] == "day":
+            limits["max_openings_per_day"] = int(policy_updates.get("max_openings_in_period", setup_session.get("max_openings_in_period", 0)))
+        else:
+            limits["max_openings_per_day"] = 0
+    if "max_openings_in_period" in policy_updates:
+        limits["max_openings_in_period"] = policy_updates["max_openings_in_period"]
+        if str(setup_session.get("opening_limit_period") or "day") == "day":
+            limits["max_openings_per_day"] = policy_updates["max_openings_in_period"]
+    if "opening_window_minutes" in policy_updates:
+        limits["opening_window_minutes"] = policy_updates["opening_window_minutes"]
+    if "max_intensity_level" in policy_updates:
+        limits["max_intensity_level"] = policy_updates["max_intensity_level"]
+    if "seal_mode" in policy_updates:
+        seal["mode"] = policy_updates["seal_mode"]
+        seal["required_on_close"] = policy_updates["seal_mode"] in {"plomben", "versiegelung"}
+    if "initial_seal_number" in policy_updates:
+        seal["initial_number"] = policy_updates["initial_seal_number"]
+    if "instruction_style" in policy_updates:
+        interaction_profile["instruction_style"] = policy_updates["instruction_style"]
+    if "escalation_mode" in policy_updates:
+        interaction_profile["escalation_mode"] = policy_updates["escalation_mode"]
+
+    if "desired_intensity" in policy_updates:
+        answers_by_question = {
+            str(entry.get("question_id")): entry.get("value")
+            for entry in (setup_session.get("answers") or [])
+            if isinstance(entry, dict) and str(entry.get("question_id") or "").strip()
+        }
+        answers_by_question["q6_intensity_1_5"] = _desired_intensity_to_scale_100(str(policy_updates["desired_intensity"]))
+        setup_session["answers"] = [
+            {"question_id": question_id, "value": value}
+            for question_id, value in answers_by_question.items()
+        ]
+    if "instruction_style" in policy_updates:
+        answers_by_question = {
+            str(entry.get("question_id")): entry.get("value")
+            for entry in (setup_session.get("answers") or [])
+            if isinstance(entry, dict) and str(entry.get("question_id") or "").strip()
+        }
+        answers_by_question["q8_instruction_style"] = policy_updates["instruction_style"]
+        setup_session["answers"] = [
+            {"question_id": question_id, "value": value}
+            for question_id, value in answers_by_question.items()
+        ]
+    if "grooming_preference" in policy_updates:
+        answers_by_question = {
+            str(entry.get("question_id")): entry.get("value")
+            for entry in (setup_session.get("answers") or [])
+            if isinstance(entry, dict) and str(entry.get("question_id") or "").strip()
+        }
+        answers_by_question["q12_grooming_preference"] = policy_updates["grooming_preference"]
+        setup_session["answers"] = [
+            {"question_id": question_id, "value": value}
+            for question_id, value in answers_by_question.items()
+        ]
+
+    update_ts = _now_iso()
+    setup_session["psychogram"]["updated_at"] = update_ts
     if payload.reason:
         setup_session["psychogram"]["ai_update_reason"] = payload.reason
         setup_session["ai_update_reason"] = payload.reason
-        setup_session["ai_update_timestamp"] = _now_iso()
-    
-    # Neuberechnung der Policy basierend auf aktualisierten Psychogramm
-    if psychogram_updates:
-        setup_session["policy_preview"] = _build_policy(setup_session, psychogram)
-    
-    setup_session["updated_at"] = _now_iso()
+        setup_session["ai_update_timestamp"] = update_ts
+    setup_session["updated_at"] = update_ts
+
     store[setup_session_id] = setup_session
     save_sessions(store)
-    
-    # Synchronisiere mit aktiver Session, wenn vorhanden
     applied_to_active_session = sync_setup_snapshot_to_active_session(request, setup_session)
-    
+
+    active_session_id = str(setup_session.get("active_session_id") or "").strip()
+    audit_logged_count = 0
+    if active_session_id and changed_fields:
+        db = get_db_session(request)
+        try:
+            for change in changed_fields:
+                record_audit_event(
+                    db=db,
+                    session_id=active_session_id,
+                    user_id=setup_session["user_id"],
+                    event_type="ai_controlled_field_updated",
+                    detail=f"AI adjusted '{change['field']}' during session.",
+                    metadata={
+                        "field": change["field"],
+                        "old_value": change["old_value"],
+                        "new_value": change["new_value"],
+                        "reason": payload.reason or None,
+                        "autonomy_mode": autonomy_mode,
+                        "source": "setup_ai_update_fields",
+                    },
+                )
+                audit_logged_count += 1
+            db.commit()
+        finally:
+            db.close()
+
     return {
         "setup_session_id": setup_session_id,
         "message": "AI-controlled fields updated successfully",
         "updated_fields": list(payload.updates.keys()),
+        "changed_fields": changed_fields,
         "policy_updates": policy_updates,
         "psychogram_updates": psychogram_updates,
+        "audit_logged_count": audit_logged_count,
         "applied_to_active_session": applied_to_active_session,
         "setup_session": {
             "psychogram": setup_session.get("psychogram"),

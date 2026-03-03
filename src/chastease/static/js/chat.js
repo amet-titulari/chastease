@@ -3,17 +3,22 @@ const sessionInfoEl = document.getElementById('chatSessionInfo');
 const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
+const attachImageBtn = document.getElementById('attachImageBtn');
+const chatAttachmentInput = document.getElementById('chatAttachmentInput');
+const attachmentPreviewEl = document.getElementById('attachmentPreview');
 const pendingActionsWrapEl = document.getElementById('pendingActionsWrap');
 const pendingActionsEl = document.getElementById('pendingActions');
 
 let activeSessionId = null;
 let currentLanguage = 'de';
 let currentAutonomyMode = 'execute';
+let pendingAttachments = [];
 const MAX_RENDERED_HISTORY_TURNS = 12;
 const AUTO_TIMER_ACTIONS = new Set(['add_time', 'reduce_time', 'pause_timer', 'unpause_timer']);
 const HYGIENE_COUNTDOWN_STORAGE_PREFIX = 'chastease_hygiene_countdown:';
 let hygieneCountdownInterval = null;
 let hygieneSealRequiredOnClose = false;
+let sessionSealRequiredOnClose = false;
 
 function hygieneCountdownStorageKey() {
   if (!activeSessionId) return null;
@@ -90,15 +95,22 @@ function showHygieneCountdownCard(resultBody) {
 
   clearHygieneCountdownCard();
 
-  const row = document.createElement('div');
-  row.className = 'flex justify-start';
-  row.setAttribute('data-hygiene-countdown-row', 'true');
+  const messageWrapper = document.createElement('div');
+  messageWrapper.className = 'flex items-start gap-3';
+  messageWrapper.setAttribute('data-hygiene-countdown-row', 'true');
+
+  const avatar = document.createElement('div');
+  avatar.className = 'flex-none w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold';
+  avatar.textContent = 'AI';
+
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'flex-1';
 
   const bubble = document.createElement('div');
-  bubble.className = 'max-w-[95%] w-full rounded-lg bg-gray-900 text-gray-100 px-3 py-2 border border-cyan-700';
+  bubble.className = 'max-w-[90%] rounded-2xl bg-gray-800/80 text-gray-100 px-5 py-3 border border-cyan-600/50 shadow-lg';
 
   const card = document.createElement('div');
-  card.className = 'rounded border border-cyan-700 bg-gray-800 p-3';
+  card.className = 'rounded-lg border border-cyan-600/50 bg-gray-900/50 p-4';
   card.setAttribute('data-hygiene-countdown-card', 'true');
 
   const title = document.createElement('div');
@@ -167,9 +179,11 @@ function showHygieneCountdownCard(resultBody) {
   card.appendChild(hint);
   card.appendChild(closeBtn);
   bubble.appendChild(card);
-  row.appendChild(bubble);
-  messagesEl.appendChild(row);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  contentDiv.appendChild(bubble);
+  messageWrapper.appendChild(avatar);
+  messageWrapper.appendChild(contentDiv);
+  messagesEl.appendChild(messageWrapper);
+  scrollToBottom();
 
   persistHygieneCountdownState(new Date(endAtMs).toISOString());
 
@@ -206,22 +220,126 @@ function toPrettyActionName(actionType) {
   return raw.replaceAll('_', ' ');
 }
 
-function appendMessage(role, text) {
+function appendMessage(role, text, opts = {}) {
   if (!messagesEl) return;
-  const row = document.createElement('div');
-  row.className = role === 'user' ? 'flex justify-end' : 'flex justify-start';
+  const shouldScroll = opts.scroll !== false;
+  
+  const messageWrapper = document.createElement('div');
+  messageWrapper.className = 'flex items-start gap-3';
+  
+  if (role === 'user') {
+    // User message: avatar on right
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'flex-1 flex justify-end';
+    
+    const bubble = document.createElement('div');
+    bubble.className = 'max-w-[80%] rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 text-white px-5 py-3 shadow-lg';
+    bubble.textContent = String(text || '');
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'flex-none w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-sm font-bold';
+    avatar.textContent = 'DU';
+    
+    contentDiv.appendChild(bubble);
+    messageWrapper.appendChild(contentDiv);
+    messageWrapper.appendChild(avatar);
+  } else {
+    // Assistant message: avatar on left
+    const avatar = document.createElement('div');
+    avatar.className = 'flex-none w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold';
+    avatar.textContent = 'AI';
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'flex-1';
+    
+    const bubble = document.createElement('div');
+    bubble.className = 'max-w-[90%] rounded-2xl bg-gray-800/80 text-gray-100 px-5 py-3 border border-gray-700/50 shadow-lg prose prose-invert prose-sm max-w-none';
+    bubble.innerHTML = renderMarkdown(text);
+    
+    contentDiv.appendChild(bubble);
+    messageWrapper.appendChild(avatar);
+    messageWrapper.appendChild(contentDiv);
+  }
+  
+  messagesEl.appendChild(messageWrapper);
+  if (shouldScroll) scrollToBottom();
+}
 
-  const bubble = document.createElement('div');
-  bubble.className = role === 'user'
-    ? 'max-w-[85%] rounded-lg bg-blue-700 text-white px-3 py-2'
-    : 'max-w-[85%] rounded-lg bg-gray-800 text-gray-100 px-3 py-2 border border-gray-700';
+function scrollToBottom(smooth = true) {
+  const container = document.getElementById('messagesContainer');
+  if (!container) return;
+  container.scrollTo({
+    top: container.scrollHeight,
+    behavior: smooth ? 'smooth' : 'auto'
+  });
+}
 
-  if (role === 'assistant') bubble.innerHTML = renderMarkdown(text);
-  else bubble.textContent = String(text || '');
+function ensureInputAndLatestVisible() {
+  scrollToBottom(false);
+  if (inputEl) {
+    try {
+      inputEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    } catch (_error) {}
+  }
+}
 
-  row.appendChild(bubble);
-  messagesEl.appendChild(row);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+function renderAttachmentPreview() {
+  if (!attachmentPreviewEl) return;
+  attachmentPreviewEl.innerHTML = '';
+  if (!pendingAttachments.length) {
+    attachmentPreviewEl.classList.add('hidden');
+    return;
+  }
+  attachmentPreviewEl.classList.remove('hidden');
+  pendingAttachments.forEach((item, index) => {
+    const chip = document.createElement('div');
+    chip.className = 'inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/90 px-2 py-1 text-xs text-slate-200';
+
+    const thumb = document.createElement('img');
+    thumb.src = item.data_url;
+    thumb.alt = item.name || 'Bild';
+    thumb.className = 'h-8 w-8 rounded object-cover border border-slate-600';
+
+    const label = document.createElement('span');
+    label.textContent = item.name || `Bild ${index + 1}`;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'rounded px-1 text-slate-300 hover:text-white';
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Entfernen';
+    removeBtn.addEventListener('click', () => {
+      pendingAttachments = pendingAttachments.filter((_, i) => i !== index);
+      renderAttachmentPreview();
+    });
+
+    chip.appendChild(thumb);
+    chip.appendChild(label);
+    chip.appendChild(removeBtn);
+    attachmentPreviewEl.appendChild(chip);
+  });
+}
+
+async function handleAttachmentFiles(fileList) {
+  const files = Array.from(fileList || []).filter((f) => String(f.type || '').startsWith('image/'));
+  if (!files.length) return;
+  const maxFiles = 4;
+  const remainingSlots = Math.max(0, maxFiles - pendingAttachments.length);
+  const accepted = files.slice(0, remainingSlots);
+  for (const file of accepted) {
+    if ((file.size || 0) > 8 * 1024 * 1024) {
+      setStatus(`Datei zu groß: ${file.name} (max 8MB).`, true);
+      continue;
+    }
+    const dataUrl = await fileToDataUrl(file);
+    pendingAttachments.push({
+      name: String(file.name || 'image.jpg'),
+      type: String(file.type || 'image/jpeg'),
+      mime_type: String(file.type || 'image/jpeg'),
+      data_url: dataUrl,
+    });
+  }
+  renderAttachmentPreview();
 }
 
 function clearInlineActionCards() {
@@ -231,17 +349,26 @@ function clearInlineActionCards() {
 
 function appendInlineActionCard(cardNode) {
   if (!messagesEl || !cardNode) return;
-  const row = document.createElement('div');
-  row.className = 'flex justify-start';
-  row.setAttribute('data-inline-action-card', 'true');
+  const messageWrapper = document.createElement('div');
+  messageWrapper.className = 'flex items-start gap-3';
+  messageWrapper.setAttribute('data-inline-action-card', 'true');
+
+  const avatar = document.createElement('div');
+  avatar.className = 'flex-none w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold';
+  avatar.textContent = 'AI';
+
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'flex-1';
 
   const bubble = document.createElement('div');
-  bubble.className = 'max-w-[95%] w-full rounded-lg bg-gray-900 text-gray-100 px-3 py-2 border border-gray-700';
+  bubble.className = 'max-w-[90%] rounded-2xl bg-gray-800/80 text-gray-100 px-5 py-3 border border-gray-700/50 shadow-lg';
   bubble.appendChild(cardNode);
 
-  row.appendChild(bubble);
-  messagesEl.appendChild(row);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  contentDiv.appendChild(bubble);
+  messageWrapper.appendChild(avatar);
+  messageWrapper.appendChild(contentDiv);
+  messagesEl.appendChild(messageWrapper);
+  scrollToBottom();
 }
 
 async function apiCall(method, path, payload) {
@@ -307,6 +434,9 @@ async function resolveActiveSession() {
   currentLanguage = String(active?.chastity_session?.language || 'de');
   const mode = String(active?.chastity_session?.policy?.autonomy_mode || 'execute').toLowerCase();
   currentAutonomyMode = mode === 'suggest' ? 'suggest' : 'execute';
+  const sealMode = String(active?.chastity_session?.policy?.seal?.mode || 'none').toLowerCase();
+  sessionSealRequiredOnClose = sealMode === 'plomben' || sealMode === 'versiegelung';
+  hygieneSealRequiredOnClose = sessionSealRequiredOnClose;
   if (sessionInfoEl) {
     sessionInfoEl.textContent = `Session: ${activeSessionId} · Modus: ${currentAutonomyMode}`;
   }
@@ -327,12 +457,13 @@ async function loadRecentTurns() {
     recentTurns.forEach((turn) => {
       const playerAction = String(turn?.player_action || '').trim();
       const narration = String(turn?.ai_narration || '').trim();
-      if (playerAction) appendMessage('user', playerAction);
-      if (narration) appendMessage('assistant', narration);
+      if (playerAction) appendMessage('user', playerAction, { scroll: false });
+      if (narration) appendMessage('assistant', narration, { scroll: false });
     });
     if (!recentTurns.length) {
-      appendMessage('assistant', 'Noch keine Nachrichten in dieser Session.');
+      appendMessage('assistant', 'Noch keine Nachrichten in dieser Session.', { scroll: false });
     }
+    ensureInputAndLatestVisible();
   } catch (_error) {
     // Keep chat usable even if history endpoint fails.
   }
@@ -395,7 +526,10 @@ function renderPendingActions(pendingActions) {
     sealInput.placeholder = 'z.B. PLOMBE-2026-02-27-A';
     sealInputWrap.appendChild(sealInputLabel);
     sealInputWrap.appendChild(sealInput);
-    if (actionType === 'hygiene_close') sealInputWrap.classList.remove('hidden');
+    const sealRequiredOnClose = Boolean(payload?.seal_required_on_close ?? hygieneSealRequiredOnClose ?? sessionSealRequiredOnClose);
+    if (actionType === 'hygiene_close' && sealRequiredOnClose) {
+      sealInputWrap.classList.remove('hidden');
+    }
 
     header.appendChild(title);
     if (isAbortDecision) {
@@ -533,7 +667,7 @@ function renderPendingActions(pendingActions) {
           const effectivePayload = { ...payload };
           if (actionType === 'hygiene_close') {
             const maybeSealText = String(sealInput.value || '').trim();
-            if (maybeSealText) effectivePayload.seal_text = maybeSealText;
+            if (sealRequiredOnClose && maybeSealText) effectivePayload.seal_text = maybeSealText;
           }
           const body = await apiCall('POST', '/api/v1/chat/actions/execute', {
             session_id: activeSessionId,
@@ -765,19 +899,26 @@ async function sendMessage() {
     return;
   }
   const message = String(inputEl.value || '').trim();
-  if (!message) return;
+  const attachments = Array.isArray(pendingAttachments) ? [...pendingAttachments] : [];
+  if (!message && !attachments.length) return;
+  const messageForApi = message || (currentLanguage === 'en' ? '[Image upload]' : '[Bildupload]');
 
-  appendMessage('user', message);
+  if (message) appendMessage('user', message);
+  if (attachments.length) appendMessage('user', `📷 ${attachments.length} Bild(er) angehängt.`);
   inputEl.value = '';
+  pendingAttachments = [];
+  renderAttachmentPreview();
+  autoResizeTextarea();
   if (sendBtn) sendBtn.disabled = true;
 
   try {
     setStatus('Sende an LLM...');
+      showTypingIndicator();
     const body = await apiCall('POST', '/api/v1/chat/turn', {
       session_id: activeSessionId,
-      message,
+      message: messageForApi,
       language: currentLanguage,
-      attachments: [],
+      attachments,
     });
     appendMessage('assistant', body?.narration || '(keine Antwort)');
 
@@ -795,12 +936,54 @@ async function sendMessage() {
     appendMessage('assistant', `Fehler: ${String(error?.message || error)}`);
     setStatus(String(error?.message || error), true);
   } finally {
+    hideTypingIndicator();
     if (sendBtn) sendBtn.disabled = false;
     if (inputEl) inputEl.focus();
+    ensureInputAndLatestVisible();
   }
 }
 
 function wireEvents() {
+    // Auto-resize textarea
+    if (inputEl) {
+      inputEl.addEventListener('input', autoResizeTextarea);
+      autoResizeTextarea();
+    }
+
+    // Scroll-to-bottom button
+    const scrollBtn = document.getElementById('scrollToBottomBtn');
+    const messagesContainer = document.getElementById('messagesContainer');
+    if (scrollBtn && messagesContainer) {
+      messagesContainer.addEventListener('scroll', () => {
+        const isNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 150;
+        scrollBtn.classList.toggle('hidden', isNearBottom);
+      });
+      scrollBtn.addEventListener('click', () => scrollToBottom());
+    }
+
+  if (attachImageBtn && chatAttachmentInput) {
+    attachImageBtn.addEventListener('click', () => {
+      try {
+        if (typeof chatAttachmentInput.showPicker === 'function') {
+          chatAttachmentInput.showPicker();
+        } else {
+          chatAttachmentInput.click();
+        }
+      } catch (_error) {
+        chatAttachmentInput.click();
+      }
+    });
+    chatAttachmentInput.addEventListener('change', async () => {
+      try {
+        await handleAttachmentFiles(chatAttachmentInput.files);
+      } catch (error) {
+        setStatus(String(error?.message || error), true);
+      } finally {
+        chatAttachmentInput.value = '';
+      }
+    });
+  }
+
   if (sendBtn) sendBtn.addEventListener('click', sendMessage);
   if (inputEl) {
     inputEl.addEventListener('keydown', (event) => {
@@ -809,6 +992,28 @@ function wireEvents() {
         sendMessage();
       }
     });
+    inputEl.addEventListener('focus', () => ensureInputAndLatestVisible());
+    inputEl.addEventListener('paste', async (event) => {
+      const items = Array.from(event.clipboardData?.items || []);
+      const imageFiles = items
+        .filter((item) => item.kind === 'file' && String(item.type || '').startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter(Boolean);
+      if (!imageFiles.length) return;
+      event.preventDefault();
+      try {
+        await handleAttachmentFiles(imageFiles);
+        setStatus(`${imageFiles.length} Bild(er) aus Zwischenablage angehängt.`);
+      } catch (error) {
+        setStatus(String(error?.message || error), true);
+      }
+    });
+  }
+
+  window.addEventListener('resize', () => ensureInputAndLatestVisible());
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', ensureInputAndLatestVisible);
+    window.visualViewport.addEventListener('scroll', ensureInputAndLatestVisible);
   }
 }
 
@@ -819,7 +1024,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   if (sendBtn) sendBtn.disabled = true;
   await resolveActiveSession();
+  ensureInputAndLatestVisible();
 });
+
+  function showTypingIndicator() {
+    const indicator = document.getElementById('typingIndicator');
+    if (indicator) {
+      indicator.classList.remove('hidden');
+      scrollToBottom();
+    }
+  }
+
+  function hideTypingIndicator() {
+    const indicator = document.getElementById('typingIndicator');
+    if (indicator) indicator.classList.add('hidden');
+  }
+
+  function autoResizeTextarea() {
+    if (!inputEl) return;
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + 'px';
+  }
+hideTypingIndicator();
 
 window.chastease_chat = { sendMessage, resolveActiveSession };
 window.sendMessage = sendMessage;

@@ -10,13 +10,19 @@ const confirmCompleteSetupBtn = document.getElementById('confirmCompleteSetupBtn
 const completeSetupConfirmWrap = document.getElementById('completeSetupConfirmWrap');
 const artifactsBtn = document.getElementById('generateArtifactsBtn');
 const acceptConsentBtn = document.getElementById('acceptConsentBtn');
+const questionAccordionBtn = document.getElementById('accQuestionBtn');
+const aiCalibStartBtn = document.getElementById('aiCalibStartBtn');
+const aiCalibSendBtn = document.getElementById('aiCalibSendBtn');
+const aiCalibInputEl = document.getElementById('aiCalibInput');
+const aiCalibAssistantEl = document.getElementById('aiCalibAssistant');
+const aiCalibQuestionEl = document.getElementById('aiCalibQuestion');
 
 const accordionDefs = [
   { key: 'base', btn: 'accBaseBtn', body: 'accBaseBody', chevron: 'accBaseChevron' },
-  { key: 'questionnaire', btn: 'accQuestionBtn', body: 'accQuestionBody', chevron: 'accQuestionChevron' },
   { key: 'llm', btn: 'accLlmBtn', body: 'accLlmBody', chevron: 'accLlmChevron' },
   { key: 'ttlock', btn: 'accTtlockBtn', body: 'accTtlockBody', chevron: 'accTtlockChevron' },
   { key: 'chaster', btn: 'accChasterBtn', body: 'accChasterBody', chevron: 'accChasterChevron' },
+  { key: 'questionnaire', btn: 'accQuestionBtn', body: 'accQuestionBody', chevron: 'accQuestionChevron' },
   { key: 'completion', btn: 'accCompletionBtn', body: 'accCompletionBody', chevron: 'accCompletionChevron' },
   { key: 'artifacts', btn: 'accArtifactsBtn', body: 'accArtifactsBody', chevron: 'accArtifactsChevron' },
 ];
@@ -33,9 +39,14 @@ const contractStartDateEl = document.getElementById('contractStartDate');
 const contractMinDurationDaysEl = document.getElementById('contractMinDurationDays');
 const contractMaxEndDateEl = document.getElementById('contractMaxEndDate');
 const contractMaxDurationDaysEl = document.getElementById('contractMaxDurationDays');
+const maxPenaltyPerDayMinutesEl = document.getElementById('maxPenaltyPerDayMinutes');
+const maxPenaltyPerWeekMinutesEl = document.getElementById('maxPenaltyPerWeekMinutes');
 const openingLimitPeriodEl = document.getElementById('openingLimitPeriod');
 const maxOpeningsInPeriodEl = document.getElementById('maxOpeningsInPeriod');
 const openingWindowMinutesEl = document.getElementById('openingWindowMinutes');
+const instructionStyleEl = document.getElementById('setupInstructionStyle');
+const desiredIntensityEl = document.getElementById('setupDesiredIntensity');
+const groomingPreferenceEl = document.getElementById('setupGroomingPreference');
 const consentEl = document.getElementById('consentText');
 
 const ttlockUserEl = document.getElementById('ttlockUser');
@@ -65,6 +76,9 @@ let currentSetup = null;
 let questionnaire = [];
 let ttlPassMd5Cached = '';
 let llmLiveTestPassed = false;
+let llmConnectivityVerified = false;
+let aiCalibrationCompleted = false;
+const BASE_MANAGED_QUESTION_IDS = new Set(['q6_intensity_1_5', 'q8_instruction_style', 'q12_grooming_preference']);
 
 const defaultBehaviorPrompt = `Du bist meine ruhige, intelligente und psychologisch dominante Herrin / Keyholderin.
 Deine Dominanz ist kontrolliert, leise und absolut praesent. Du brauchst keine Lautstaerke, keine Beleidigungen und keine platte Grausamkeit - deine Macht liegt in Praezision, Geduld und Timing.
@@ -147,7 +161,9 @@ function updateTtlockSaveVisibility() {
 
 function invalidateLlmLiveTest(silent = false) {
   llmLiveTestPassed = false;
+  llmConnectivityVerified = false;
   setSaveLlmEnabled(false);
+  updateLlmDependentUi();
   if (!silent) {
     setLlmInfo('Live-Test erforderlich, bevor gespeichert werden kann.', true);
   }
@@ -235,7 +251,7 @@ function setContractDefaults() {
     contractStartDateEl.value = formatDateInputValue(now);
   }
   if (contractMinDurationDaysEl && !String(contractMinDurationDaysEl.value || '').trim()) {
-    contractMinDurationDaysEl.value = '90';
+    contractMinDurationDaysEl.value = '30';
   }
   if (contractMaxDurationDaysEl && !String(contractMaxDurationDaysEl.value || '').trim()) {
     contractMaxDurationDaysEl.value = '365';
@@ -264,6 +280,10 @@ function getContractPayloadValues() {
 }
 
 function openAccordion(targetKey) {
+  if (targetKey === 'questionnaire' && !llmConnectivityVerified) {
+    setStatus('Psychogramm ist gesperrt: zuerst LLM Live-Test erfolgreich durchführen und speichern.', true);
+    targetKey = 'llm';
+  }
   accordionDefs.forEach((definition) => {
     const body = document.getElementById(definition.body);
     const chevron = document.getElementById(definition.chevron);
@@ -271,6 +291,70 @@ function openAccordion(targetKey) {
     if (body) body.classList.toggle('hidden', !isActive);
     if (chevron) chevron.textContent = isActive ? '−' : '+';
   });
+}
+
+function updateLlmDependentUi() {
+  if (questionAccordionBtn) {
+    questionAccordionBtn.disabled = !llmConnectivityVerified;
+    questionAccordionBtn.classList.toggle('opacity-60', !llmConnectivityVerified);
+    questionAccordionBtn.classList.toggle('cursor-not-allowed', !llmConnectivityVerified);
+  }
+  if (submitAnswersBtn) submitAnswersBtn.disabled = !llmConnectivityVerified;
+  if (completeSetupBtn) completeSetupBtn.disabled = !llmConnectivityVerified;
+  if (confirmCompleteSetupBtn) confirmCompleteSetupBtn.disabled = !llmConnectivityVerified;
+  if (artifactsBtn) artifactsBtn.disabled = !llmConnectivityVerified;
+}
+
+function requireLlmReady(actionLabel = 'Dieser Schritt') {
+  if (llmConnectivityVerified) return true;
+  setStatus(`${actionLabel} ist gesperrt: bitte zuerst LLM Live-Test erfolgreich durchführen und Profil speichern.`, true);
+  openAccordion('llm');
+  return false;
+}
+
+function applyCalibrationInferred(inferred) {
+  if (!inferred || typeof inferred !== 'object') return;
+  if (instructionStyleEl && inferred.instruction_style) instructionStyleEl.value = inferred.instruction_style;
+  if (desiredIntensityEl && inferred.desired_intensity) desiredIntensityEl.value = inferred.desired_intensity;
+  if (groomingPreferenceEl && inferred.grooming_preference) groomingPreferenceEl.value = inferred.grooming_preference;
+}
+
+function renderAiCalibrationState(body) {
+  if (!body || typeof body !== 'object') return;
+  if (aiCalibAssistantEl) aiCalibAssistantEl.textContent = body.assistant_message || 'Kalibrierung bereit.';
+  if (aiCalibQuestionEl) aiCalibQuestionEl.textContent = body.next_question || '';
+  aiCalibrationCompleted = Boolean(body.completed);
+  applyCalibrationInferred(body.inferred);
+  if (aiCalibSendBtn) aiCalibSendBtn.disabled = aiCalibrationCompleted;
+}
+
+async function aiCalibrationTurn(wearerMessage = '') {
+  if (!requireLlmReady('AI-Kalibrierung')) return;
+  if (!setupSessionId || !auth) {
+    setStatus('Setup oder Login fehlt.', true);
+    return;
+  }
+  try {
+    if (aiCalibSendBtn) aiCalibSendBtn.disabled = true;
+    const body = await apiCall('POST', `/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/ai-calibration-turn`, {
+      user_id: auth.user_id,
+      auth_token: auth.auth_token,
+      wearer_message: String(wearerMessage || '').trim() || null,
+    });
+    if (aiCalibInputEl) aiCalibInputEl.value = '';
+    renderAiCalibrationState(body);
+    setStatus(
+      body.completed
+        ? 'AI-Kalibrierung abgeschlossen. Du kannst das Psychogramm speichern.'
+        : 'AI-Kalibrierung aktualisiert.',
+    );
+    setOutput(body);
+  } catch (error) {
+    setStatus(String(error?.message || error), true);
+    setOutput({ error: String(error?.message || error) });
+  } finally {
+    if (aiCalibSendBtn && !aiCalibrationCompleted) aiCalibSendBtn.disabled = false;
+  }
 }
 
 function setSectionVisibility(sectionEl, visible) {
@@ -292,15 +376,16 @@ function setupAccordionEvents() {
     btn.addEventListener('click', () => openAccordion(definition.key));
   });
   updateIntegrationSections();
+  updateLlmDependentUi();
   openAccordion('base');
 }
 
 function openNextAfterBaseSave() {
-  openAccordion('questionnaire');
+  openAccordion('llm');
 }
 
 function openNextAfterPsychogramSave() {
-  openAccordion('llm');
+  openAccordion('completion');
 }
 
 function openNextAfterLlmSave() {
@@ -312,7 +397,7 @@ function openNextAfterLlmSave() {
     openAccordion('chaster');
     return;
   }
-  openAccordion('completion');
+  openAccordion('questionnaire');
 }
 
 function openNextAfterTtlockSave() {
@@ -320,7 +405,7 @@ function openNextAfterTtlockSave() {
     openAccordion('chaster');
     return;
   }
-  openAccordion('completion');
+  openAccordion('questionnaire');
 }
 
 function getIntegrations(ttlockCfgPresent) {
@@ -365,7 +450,10 @@ function populateTtlockSelect(selectNode, items, valueKey, labelKey, selectedVal
 }
 
 function renderQuestions(questions) {
-  questionnaire = Array.isArray(questions) ? questions : [];
+  questionnaire = (Array.isArray(questions) ? questions : []).filter((q) => {
+    const qid = q?.question_id || q?.id;
+    return !BASE_MANAGED_QUESTION_IDS.has(String(qid || ''));
+  });
   if (!questionsWrap) return;
   if (!questionnaire.length) {
     questionsWrap.innerHTML = '<p class="text-sm text-gray-400">Noch keine Fragen geladen. Bitte zuerst "Start setup" ausführen.</p>';
@@ -480,6 +568,9 @@ function applySetupToForm(data) {
   if (openingWindowMinutesEl && Number.isFinite(Number(data.opening_window_minutes))) {
     openingWindowMinutesEl.value = String(data.opening_window_minutes);
   }
+  if (instructionStyleEl && data.instruction_style) instructionStyleEl.value = data.instruction_style;
+  if (desiredIntensityEl && data.desired_intensity) desiredIntensityEl.value = data.desired_intensity;
+  if (groomingPreferenceEl && data.grooming_preference) groomingPreferenceEl.value = data.grooming_preference;
   if (contractStartDateEl) contractStartDateEl.value = data.contract_start_date || contractStartDateEl.value || '';
   if (contractMaxEndDateEl) contractMaxEndDateEl.value = data.contract_max_end_date || '';
   if (contractMinDurationDaysEl && data.contract_start_date && data.contract_min_end_date) {
@@ -493,6 +584,12 @@ function applySetupToForm(data) {
       const maxDays = daysBetween(data.contract_start_date, data.contract_max_end_date);
       if (maxDays !== null) contractMaxDurationDaysEl.value = String(maxDays);
     }
+  }
+  if (maxPenaltyPerDayMinutesEl && Number.isFinite(Number(data.max_penalty_per_day_minutes))) {
+    maxPenaltyPerDayMinutesEl.value = String(data.max_penalty_per_day_minutes);
+  }
+  if (maxPenaltyPerWeekMinutesEl && Number.isFinite(Number(data.max_penalty_per_week_minutes))) {
+    maxPenaltyPerWeekMinutesEl.value = String(data.max_penalty_per_week_minutes);
   }
 
   const integrations = Array.isArray(data.integrations) ? data.integrations.map((x) => String(x).toLowerCase()) : [];
@@ -510,6 +607,10 @@ function applySetupToForm(data) {
   if (ttlockCfg.ttl_lock_id && ttlockLockEl) {
     populateTtlockSelect(ttlockLockEl, [{ lockId: ttlockCfg.ttl_lock_id, lockAlias: ttlockCfg.ttl_lock_id }], 'lockId', 'lockAlias', String(ttlockCfg.ttl_lock_id));
   }
+  const calib = data.ai_calibration || {};
+  aiCalibrationCompleted = Boolean(calib.completed);
+  if (calib.inferred) applyCalibrationInferred(calib.inferred);
+  if (aiCalibQuestionEl && calib.last_question) aiCalibQuestionEl.textContent = String(calib.last_question);
   updateIntegrationSections();
   updateTtlockSaveVisibility();
 }
@@ -544,6 +645,14 @@ async function startSetup() {
   const integration_config = {};
   if (ttCfg) integration_config.ttlock = ttCfg;
 
+  const instructionStyle = String(instructionStyleEl?.value || '').trim();
+  const desiredIntensity = String(desiredIntensityEl?.value || '').trim();
+  const groomingPreference = String(groomingPreferenceEl?.value || '').trim();
+  if (!instructionStyle || !desiredIntensity || !groomingPreference) {
+    setStatus('Bitte alle Pflichtfelder in der Basis-Konfiguration ausfüllen.', true);
+    return;
+  }
+
   const payload = {
     user_id: auth.user_id,
     auth_token: auth.auth_token,
@@ -556,9 +665,14 @@ async function startSetup() {
     integration_config,
     ...getContractPayloadValues(),
     ai_controls_end_date: true,
+    max_penalty_per_day_minutes: Math.max(0, Number(maxPenaltyPerDayMinutesEl?.value || 0)),
+    max_penalty_per_week_minutes: Math.max(0, Number(maxPenaltyPerWeekMinutesEl?.value || 0)),
     opening_limit_period: openingLimitPeriodEl?.value || 'week',
     max_openings_in_period: Number(maxOpeningsInPeriodEl?.value || 2),
     opening_window_minutes: Number(openingWindowMinutesEl?.value || 15),
+    instruction_style: instructionStyle,
+    desired_intensity: desiredIntensity,
+    grooming_preference: groomingPreference,
   };
 
   try {
@@ -582,6 +696,11 @@ async function startSetup() {
 }
 
 async function submitAnswers() {
+  if (!requireLlmReady('Psychogramm-Speichern')) return;
+  if (!aiCalibrationCompleted) {
+    setStatus('Bitte zuerst die AI-Kalibrierung im Psychogramm-Schritt abschließen.', true);
+    return;
+  }
   if (!setupSessionId) {
     setStatus('Bitte zuerst Setup starten.', true);
     return;
@@ -603,6 +722,7 @@ async function submitAnswers() {
 }
 
 async function completeSetup() {
+  if (!requireLlmReady('Setup-Abschluss')) return;
   if (!setupSessionId) {
     setStatus('Bitte zuerst Setup starten.', true);
     return;
@@ -655,6 +775,7 @@ function showCompleteSetupConfirmation() {
 }
 
 async function generateArtifacts() {
+  if (!requireLlmReady('Artefakt-Generierung')) return;
   if (!setupSessionId || !auth) {
     setStatus('Setup oder Login fehlt.', true);
     return;
@@ -824,6 +945,7 @@ async function loadLlmProfile() {
     if (!body.configured) {
       if (llmBehaviorEl && !llmBehaviorEl.value) llmBehaviorEl.value = defaultBehaviorPrompt;
       setLlmInfo('Noch kein LLM-Profil konfiguriert. Default-Vorgaben gesetzt.');
+      updateLlmDependentUi();
       setOutput(body);
       return;
     }
@@ -836,9 +958,11 @@ async function loadLlmProfile() {
     if (llmBehaviorEl) llmBehaviorEl.value = p.behavior_prompt || defaultBehaviorPrompt;
     if (llmApiKeyEl) llmApiKeyEl.value = '';
     setLlmInfo(`LLM-Profil geladen (API-Key gespeichert: ${p.has_api_key ? 'ja' : 'nein'}).`);
+    updateLlmDependentUi();
     setOutput(body);
   } catch (error) {
     setLlmInfo(String(error?.message || error), true);
+    updateLlmDependentUi();
     setOutput({ error: String(error?.message || error) });
   }
 }
@@ -853,6 +977,8 @@ async function testLlmProfile() {
     setLlmInfo('Live test erfolgreich. Speichern aktiviert.');
     setOutput(body);
     llmLiveTestPassed = true;
+    llmConnectivityVerified = true;
+    updateLlmDependentUi();
     setSaveLlmEnabled(true);
   } catch (error) {
     invalidateLlmLiveTest();
@@ -874,6 +1000,8 @@ async function saveLlmProfile() {
     setLlmInfo('Speichere LLM-Profil...');
     const body = await apiCall('POST', '/api/v1/llm/profile', payload);
     setLlmInfo('LLM-Profil gespeichert.');
+    llmConnectivityVerified = true;
+    updateLlmDependentUi();
     if (llmApiKeyEl) llmApiKeyEl.value = '';
     setOutput(body);
     openNextAfterLlmSave();
@@ -936,6 +1064,13 @@ contractMaxEndDateEl?.addEventListener('change', syncDurationFromMaxEndDate);
 contractMaxDurationDaysEl?.addEventListener('input', syncMaxEndDateFromDuration);
 contractMinDurationDaysEl?.addEventListener('input', syncMinDurationGuard);
 saveTtlockBtn?.addEventListener('click', saveTtlockConfig);
+aiCalibStartBtn?.addEventListener('click', () => aiCalibrationTurn(''));
+aiCalibSendBtn?.addEventListener('click', () => aiCalibrationTurn(aiCalibInputEl?.value || ''));
+aiCalibInputEl?.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  aiCalibrationTurn(aiCalibInputEl?.value || '');
+});
 
 sealModeEl?.addEventListener('change', () => {
   const sealMode = sealModeEl?.value;

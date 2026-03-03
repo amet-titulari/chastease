@@ -540,6 +540,8 @@ def _timer_expiry_pending_action(request_lang: str, policy: dict, now: datetime)
 def _fallback_pending_action_from_user_intent(message: str, policy: dict) -> dict | None:
     normalized = _normalize_text(message)
     runtime_timer = (policy or {}).get("runtime_timer") if isinstance((policy or {}).get("runtime_timer"), dict) else {}
+    runtime_hygiene = (policy or {}).get("runtime_hygiene") if isinstance((policy or {}).get("runtime_hygiene"), dict) else {}
+    hygiene_is_open = bool(runtime_hygiene.get("is_open"))
     timer_state = str(runtime_timer.get("state") or "running").strip().lower()
     pause_hints = {
         "pause",
@@ -585,9 +587,6 @@ def _fallback_pending_action_from_user_intent(message: str, policy: dict) -> dic
         "hygieneschliessen",
         "hygiene schliessen",
         "kafig schliessen",
-        "schliessen",
-        "close",
-        "lock",
     }
 
     if any(hint in normalized for hint in pause_hints):
@@ -609,6 +608,8 @@ def _fallback_pending_action_from_user_intent(message: str, policy: dict) -> dic
         }
 
     if any(hint in normalized for hint in open_hints):
+        if hygiene_is_open:
+            return None
         return _build_hygiene_open_pending_action(
             policy,
             trigger="user_intent_fallback",
@@ -616,6 +617,8 @@ def _fallback_pending_action_from_user_intent(message: str, policy: dict) -> dic
         )
 
     if any(hint in normalized for hint in close_hints):
+        if not hygiene_is_open:
+            return None
         return {
             "action_type": "hygiene_close",
             "payload": {
@@ -1156,11 +1159,17 @@ def _execute_ttlock_action(
     seal_mode = _seal_mode_from_policy(policy)
     seal_required_on_close = seal_mode in {"plomben", "versiegelung"}
     runtime_seal = policy.get("runtime_seal") if isinstance(policy.get("runtime_seal"), dict) else {}
+    runtime_hygiene = policy.get("runtime_hygiene") if isinstance(policy.get("runtime_hygiene"), dict) else {}
     seal_text = str(payload.get("seal_text") or "").strip()
     if action_type == "hygiene_close" and seal_required_on_close and len(seal_text) < 3:
         raise HTTPException(
             status_code=400,
             detail="Seal text is required for hygiene_close when seal mode is enabled.",
+        )
+    if action_type == "hygiene_close" and not bool(runtime_hygiene.get("is_open")):
+        raise HTTPException(
+            status_code=409,
+            detail="No active hygiene opening to close.",
         )
     if command == "open":
         _assert_opening_limit_allows_open(policy, payload, now)
@@ -1180,17 +1189,24 @@ def _execute_ttlock_action(
     )
     if command == "open":
         _record_open_event(policy, now)
+        runtime_hygiene["is_open"] = True
+        runtime_hygiene["opened_at"] = _iso_utc(now)
+        runtime_hygiene["closed_at"] = None
         if action_type == "hygiene_open" and seal_required_on_close:
             runtime_seal["status"] = "broken"
             runtime_seal["broken_at"] = _iso_utc(now)
             runtime_seal["current_text"] = None
             runtime_seal["needs_new_seal"] = True
-    elif action_type == "hygiene_close" and seal_required_on_close:
-        runtime_seal["status"] = "sealed"
-        runtime_seal["sealed_at"] = _iso_utc(now)
-        runtime_seal["current_text"] = seal_text
-        runtime_seal["needs_new_seal"] = False
+    elif action_type == "hygiene_close":
+        runtime_hygiene["is_open"] = False
+        runtime_hygiene["closed_at"] = _iso_utc(now)
+        if seal_required_on_close:
+            runtime_seal["status"] = "sealed"
+            runtime_seal["sealed_at"] = _iso_utc(now)
+            runtime_seal["current_text"] = seal_text
+            runtime_seal["needs_new_seal"] = False
 
+    policy["runtime_hygiene"] = runtime_hygiene
     if seal_required_on_close:
         policy["runtime_seal"] = runtime_seal
     logger.info(
@@ -1208,6 +1224,11 @@ def _execute_ttlock_action(
         if command == "open"
         else None
     )
+    if command == "open":
+        runtime_hygiene["window_end_at"] = window_end_at
+    else:
+        runtime_hygiene["window_end_at"] = None
+    policy["runtime_hygiene"] = runtime_hygiene
     return policy, {
         "action_type": action_type,
         "payload": {

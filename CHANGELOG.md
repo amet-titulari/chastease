@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0 - 2026-03-03
+
+- Setup-/Psychogramm-Flow weiter ausgebaut:
+  - Basis-Konfiguration erweitert (Anweisungsstil, Intensität, Intimrasur-Präferenz) und AI-Kalibrierung im UI vor den Speichern-Block verschoben.
+  - LLM/Integrationen als Voraussetzung für psychogrammgestützte Fragenfluss-Elemente konsolidiert.
+  - Defaults für Vertrags-/Session-Parameter und Psychogramm-Werte überarbeitet.
+- KI-gesteuerte Session-Anpassungen erweitert:
+  - Zusätzliche Policy-/Psychogramm-Felder als AI-kontrollierbar markiert (inkl. Audit-Log-Transparenz).
+  - Hygiene-/Öffnungslogik im Chat-Fallback gehärtet (inkl. State-Checks und Siegel-Mode-abhängiger Eingaben).
+- Chat-UX verbessert:
+  - Hintergrund, Composer und Scroll-Verhalten verfeinert, sodass letzte Nachricht und Eingabefeld zuverlässig sichtbar bleiben.
+  - Bild-Upload/Paste-Flow ergänzt und „schwebende Punkte“ durch neutrales Lade-Feedback ersetzt.
+- Psychogramm-Mapping korrigiert:
+  - Eskalationsmodus priorisiert nun die explizite Psychogramm-Antwort vor Defaults.
+  - Erfahrungsprofil-Schwellen angepasst (`40/100` wird als `intermediate` eingeordnet).
+
 ## 0.2.0 - 2026-02-26
 
 - Notfall-/Abbruchlogik auf Session-Ebene neu ausgerichtet:

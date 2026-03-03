@@ -47,7 +47,7 @@
         </div>
         <div>
           <label class="text-sm text-gray-400">Mindestdauer (Tage)</label>
-          <input id="contractMinDurationDays" type="number" min="0" max="3650" value="90" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+          <input id="contractMinDurationDays" type="number" min="0" max="3650" value="30" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
         </div>
         <div>
           <label class="text-sm text-gray-400">Max Enddatum</label>
@@ -59,15 +59,17 @@
         </div>
       </div>
       <p id="durationHint" class="text-xs text-gray-500">0 Tage bei "Max Dauer" bedeutet: Enddatum wird durch die KI bestimmt.</p>
-      <div class="bg-red-900/20 border border-red-700/50 rounded p-3 mb-4">
-        <p class="text-xs text-red-300 font-semibold">ℹ️ KI-Anpassung während der Session</p>
-        <p class="text-xs text-red-300 mt-1">Die folgenden Felder können Sie hier konfigurieren. Während der aktiven Session werden diese Werte vom Benutzer nicht änderbar, können aber von der KI dynamisch angepasst werden, wenn sie merkt, dass sie nicht zum Rollenspiel passen:</p>
-        <ul class="text-xs text-red-300 mt-2 ml-4 list-disc">
-          <li>Mindestdauer (Tage)</li>
-          <li>Openings period, Max openings / period, Opening window</li>
-          <li>Plomben / Siegelung und Erste Plombennummer</li>
-        </ul>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="text-sm text-gray-400">Penalty-Cap pro Tag (Minuten)</label>
+          <input id="maxPenaltyPerDayMinutes" type="number" min="0" max="1440" value="0" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">Penalty-Cap pro Woche (Minuten)</label>
+          <input id="maxPenaltyPerWeekMinutes" type="number" min="0" max="10080" value="0" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+        </div>
       </div>
+      <p class="text-xs text-gray-500">Hinweis: 0 deaktiviert das jeweilige Penalty-Cap.</p>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <label class="text-sm text-gray-400">Openings period</label>
@@ -103,6 +105,36 @@
         </div>
       </div>
 
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label class="text-sm text-gray-400">Wie sollen Anweisungen gegeben werden</label>
+          <select id="setupInstructionStyle" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" required>
+            <option value="direct_command">direkt & befehlsartig</option>
+            <option value="polite_authoritative">höflich-autoritär</option>
+            <option value="suggestive">suggestiv / verführerisch</option>
+            <option value="mixed" selected>gemischt je nach Situation</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">Welche Intensität möchtest du spielen</label>
+          <select id="setupDesiredIntensity" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" required>
+            <option value="low">niedrig</option>
+            <option value="medium">mittel</option>
+            <option value="strong" selected>stark</option>
+            <option value="demanding">belastend</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sm text-gray-400">Welche Intimrasur-Präferenz soll beachtet werden</label>
+          <select id="setupGroomingPreference" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" required>
+            <option value="no_preference">keine Präferenz</option>
+            <option value="clean_shaven" selected>glatt rasiert</option>
+            <option value="trimmed">getrimmt</option>
+            <option value="natural">natürlich</option>
+          </select>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label class="text-sm text-gray-400">TTLock integration</label>
@@ -123,19 +155,6 @@
       <div class="flex flex-wrap gap-2">
         <button id="setupStartBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">Speichern</button>
       </div>
-      </div>
-    </div>
-
-    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
-      <button id="accQuestionBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
-        <span>Psychogramm</span>
-        <span id="accQuestionChevron" class="text-gray-400">+</span>
-      </button>
-      <div id="accQuestionBody" class="mt-4 space-y-4 hidden">
-      <div id="questionnaireWrap" class="space-y-3"></div>
-        <div class="flex flex-wrap gap-2">
-          <button id="submitAnswersBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">Speichern</button>
-        </div>
       </div>
     </div>
 
@@ -233,6 +252,32 @@
       </button>
       <div id="accChasterBody" class="mt-4 space-y-4 hidden">
         <p class="text-sm text-gray-400">Chaster ist aktiviert. Die Detail-Konfiguration folgt in einem nächsten Schritt.</p>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <button id="accQuestionBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+        <span>Psychogramm</span>
+        <span id="accQuestionChevron" class="text-gray-400">+</span>
+      </button>
+      <div id="accQuestionBody" class="mt-4 space-y-4 hidden">
+        <p class="text-sm text-gray-400">Voraussetzung: LLM Live-Test muss erfolgreich sein und gespeichert werden.</p>
+        <div id="questionnaireWrap" class="space-y-3"></div>
+        <div class="bg-gray-900 border border-gray-700 rounded p-3 space-y-3">
+          <p class="text-sm text-gray-300">AI-Kalibrierung (dynamische Fragen)</p>
+          <p id="aiCalibAssistant" class="text-sm text-gray-300">Noch nicht gestartet.</p>
+          <p id="aiCalibQuestion" class="text-sm text-sky-300"></p>
+          <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
+            <input id="aiCalibInput" type="text" class="w-full rounded-md bg-gray-800 p-2 border border-gray-700" placeholder="Deine Antwort an die AI..." />
+            <button id="aiCalibSendBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Antwort senden</button>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button id="aiCalibStartBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Kalibrierung starten</button>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button id="submitAnswersBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">Speichern</button>
+        </div>
       </div>
     </div>
 

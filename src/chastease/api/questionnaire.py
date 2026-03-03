@@ -39,7 +39,7 @@ QUESTION_BANK = [
             "de": "Wie wichtig sind dir klare, schriftliche Regeln und genau definierte Erwartungen?",
             "en": "How important are clear written rules and well-defined expectations to you?",
         },
-        "default_values": {"de": 66, "en": 66},
+        "default_values": {"de": 60, "en": 60},
         "weights": {"structure_need": 1.0, "protocol_affinity": 0.4},
     },
     {
@@ -49,7 +49,7 @@ QUESTION_BANK = [
             "de": "Wie stark moechtest du in dieser Session Strenge, Konsequenz und Autoritaet erleben?",
             "en": "How strongly do you want to experience strictness, consequences, and authority in this session?",
         },
-        "default_values": {"de": 76, "en": 76},
+        "default_values": {"de": 60, "en": 60},
         "weights": {"strictness_affinity": 1.0, "accountability_need": 0.3},
     },
     {
@@ -59,7 +59,7 @@ QUESTION_BANK = [
             "de": "Wie sehr brauchst du das Gefuehl, wirklich kontrolliert und ueberwacht zu werden?",
             "en": "How much do you need to feel genuinely controlled and monitored?",
         },
-        "default_values": {"de": 100, "en": 100},
+        "default_values": {"de": 65, "en": 65},
         "weights": {"accountability_need": 1.0, "structure_need": 0.3},
     },
     {
@@ -69,7 +69,7 @@ QUESTION_BANK = [
             "de": "Wie wichtig ist positives Feedback/Anerkennung fuer gutes Verhalten?",
             "en": "How important is positive feedback/recognition for good behavior?",
         },
-        "default_values": {"de": 64, "en": 64},
+        "default_values": {"de": 50, "en": 50},
         "weights": {"praise_affinity": 1.0},
     },
     {
@@ -79,7 +79,7 @@ QUESTION_BANK = [
             "de": "Wie sehr suchst du Abwechslung, neue Aufgaben und ungewohnte Herausforderungen?",
             "en": "How much are you looking for variety, new tasks, and unfamiliar challenges?",
         },
-        "default_values": {"de": 68, "en": 68},
+        "default_values": {"de": 80, "en": 80},
         "weights": {"novelty_affinity": 0.7, "challenge_affinity": 0.7},
     },
     {
@@ -122,7 +122,7 @@ QUESTION_BANK = [
             {"value": "strong", "de": "stark", "en": "strong"},
             {"value": "aggressive", "de": "aggressiv", "en": "aggressive"},
         ],
-        "default_values": {"de": "moderate", "en": "moderate"},
+        "default_values": {"de": "strong", "en": "strong"},
         "weights": {},
     },
     {
@@ -207,7 +207,7 @@ QUESTION_BANK = [
             "de": "Wie erfahren bist du in diesem Kontext?",
             "en": "How experienced are you in this context?",
         },
-        "default_values": {"de": 15, "en": 15},
+        "default_values": {"de": 40, "en": 40},
         "weights": {},
     },
     {
@@ -236,5 +236,3 @@ TRAIT_KEYS = [
     "service_orientation",
     "protocol_affinity",
 ]
-
-

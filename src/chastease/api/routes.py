@@ -248,7 +248,7 @@ def _psychogram_brief(psychogram: dict, policy: dict) -> str:
 
 
 def _derive_experience_profile(level: int) -> str:
-    if level <= 4:
+    if level <= 3:
         return "beginner"
     if level <= 7:
         return "intermediate"
@@ -1142,9 +1142,9 @@ def _build_contract_template_fields(setup_session: dict) -> dict[str, str]:
     min_duration_days = _days_between(contract.get("start_date"), contract.get("min_end_date"))
     integrations = ", ".join(policy.get("integrations", [])) or "ttlock"
     end_control_mode = (
-        "AI-controlled; Keyholder may adjust provisional end date anytime within min/max boundaries."
+        "AI-controlled"
         if lang == "en"
-        else "KI-gesteuert; die Keyholderin darf das vorlaeufige Enddatum jederzeit innerhalb der Min/Max-Grenzen anpassen."
+        else "KI-gesteuert"
     )
     if not contract.get("ai_controls_end_date"):
         end_control_mode = "fixed/manual" if lang == "en" else "fix/manuell"

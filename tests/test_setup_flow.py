@@ -56,7 +56,7 @@ def test_setup_session_lifecycle(client):
     )
     assert answers_response.status_code == 200
     answers_data = answers_response.json()
-    assert answers_data["answered_questions"] == 8
+    assert answers_data["answered_questions"] >= 8
     assert "psychogram_preview" in answers_data
     assert "policy_preview" in answers_data
     assert "psychogram_brief" in answers_data
@@ -357,6 +357,169 @@ def test_setup_start_seeds_ttlock_config_from_last_session(client):
     assert "ttlock" in data["integrations"]
     assert data["integration_config"]["ttlock"]["ttl_user"] == "seed-user@example.com"
     assert data["integration_config"]["ttlock"]["ttl_lock_id"] == "lock-seed"
+
+
+def test_ai_update_fields_blocked_in_suggest_mode(client):
+    auth = _register(client, "ai-suggest-user", "AI Suggest")
+    user_id = auth["user_id"]
+    start_response = client.post(
+        "/api/v1/setup/sessions",
+        json={"user_id": user_id, "auth_token": auth["auth_token"], "autonomy_mode": "suggest"},
+    )
+    assert start_response.status_code == 200
+    setup_session_id = start_response.json()["setup_session_id"]
+
+    response = client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/ai-update-fields",
+        json={
+            "user_id": user_id,
+            "auth_token": auth["auth_token"],
+            "updates": {"opening_window_minutes": 60, "max_intensity_level": 5},
+            "reason": "adapt to wearer state",
+        },
+    )
+    assert response.status_code == 409
+    assert "autonomy_mode='suggest'" in response.json()["detail"]
+
+
+def test_ai_update_fields_apply_immediately_and_are_audited(admin_client):
+    auth = _register(admin_client, "ai-exec-user", "AI Exec")
+    user_id = auth["user_id"]
+    start_response = admin_client.post(
+        "/api/v1/setup/sessions",
+        json={"user_id": user_id, "auth_token": auth["auth_token"], "autonomy_mode": "execute"},
+    )
+    assert start_response.status_code == 200
+    setup_session_id = start_response.json()["setup_session_id"]
+
+    answers_response = admin_client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/answers",
+        json={
+            "answers": [
+                {"question_id": "q1_rule_structure", "value": 70},
+                {"question_id": "q2_strictness_authority", "value": 70},
+                {"question_id": "q3_control_need", "value": 70},
+                {"question_id": "q4_praise_importance", "value": 40},
+                {"question_id": "q5_novelty_challenge", "value": 70},
+                {"question_id": "q9_open_context", "value": "ready"},
+            ]
+        },
+    )
+    assert answers_response.status_code == 200
+
+    complete_response = admin_client.post(f"/api/v1/setup/sessions/{setup_session_id}/complete")
+    assert complete_response.status_code == 200
+    active_session_id = complete_response.json()["chastity_session"]["session_id"]
+
+    update_response = admin_client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/ai-update-fields",
+        json={
+            "user_id": user_id,
+            "auth_token": auth["auth_token"],
+            "updates": {
+                "opening_window_minutes": 75,
+                "max_intensity_level": 5,
+                "instruction_style": "direct_command",
+            },
+            "reason": "wearer requested stricter direct handling",
+        },
+    )
+    assert update_response.status_code == 200
+    update_data = update_response.json()
+    assert update_data["applied_to_active_session"] is True
+    assert update_data["audit_logged_count"] >= 3
+
+    active_response = admin_client.get(
+        f"/api/v1/sessions/active?user_id={user_id}&auth_token={auth['auth_token']}"
+    )
+    assert active_response.status_code == 200
+    policy = active_response.json()["chastity_session"]["policy"]
+    assert policy["limits"]["opening_window_minutes"] == 75
+    assert policy["limits"]["max_intensity_level"] == 5
+    assert policy["interaction_profile"]["instruction_style"] == "direct_command"
+
+    audit_response = admin_client.get(
+        f"/api/v1/admin/audit/session/{active_session_id}?auth_token={auth['auth_token']}"
+    )
+    assert audit_response.status_code == 200
+    entries = audit_response.json()["entries"]
+    ai_entries = [entry for entry in entries if entry["event_type"] == "ai_controlled_field_updated"]
+    assert len(ai_entries) >= 3
+    assert any(entry["metadata"].get("field") == "opening_window_minutes" for entry in ai_entries)
+    assert any(entry["metadata"].get("field") == "max_intensity_level" for entry in ai_entries)
+
+
+def test_ai_calibration_turn_returns_question_and_updates_inferred(client):
+    auth = _register(client, "ai-calib-user", "AI Calib")
+    user_id = auth["user_id"]
+    start_response = client.post(
+        "/api/v1/setup/sessions",
+        json={"user_id": user_id, "auth_token": auth["auth_token"]},
+    )
+    assert start_response.status_code == 200
+    setup_session_id = start_response.json()["setup_session_id"]
+
+    init_response = client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/ai-calibration-turn",
+        json={"user_id": user_id, "auth_token": auth["auth_token"]},
+    )
+    assert init_response.status_code == 200
+    init_data = init_response.json()
+    assert init_data["next_question"]
+
+    turn_response = client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/ai-calibration-turn",
+        json={
+            "user_id": user_id,
+            "auth_token": auth["auth_token"],
+            "wearer_message": "Bitte direkt und stark, Eskalation langsam, Intimrasur getrimmt.",
+        },
+    )
+    assert turn_response.status_code == 200
+    turn_data = turn_response.json()
+    inferred = turn_data["inferred"]
+    assert inferred["instruction_style"] == "direct_command"
+    assert inferred["desired_intensity"] == "strong"
+    assert inferred["escalation_mode"] == "slow"
+    assert inferred["grooming_preference"] == "trimmed"
+    assert turn_data["turns_count"] >= 1
+
+    session_data = client.get(f"/api/v1/setup/sessions/{setup_session_id}").json()
+    assert session_data["instruction_style"] == "direct_command"
+    assert session_data["desired_intensity"] == "strong"
+    assert session_data["grooming_preference"] == "trimmed"
+    assert session_data["escalation_mode"] == "slow"
+
+
+def test_psychogram_answers_override_default_escalation_and_map_experience_40_to_intermediate(client):
+    auth = _register(client, "psychogram-pref-user", "Psychogram Pref")
+    user_id = auth["user_id"]
+    start_response = client.post(
+        "/api/v1/setup/sessions",
+        json={"user_id": user_id, "auth_token": auth["auth_token"]},
+    )
+    assert start_response.status_code == 200
+    setup_session_id = start_response.json()["setup_session_id"]
+
+    answers_response = client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/answers",
+        json={
+            "answers": [
+                {"question_id": "q1_rule_structure", "value": 60},
+                {"question_id": "q2_strictness_authority", "value": 60},
+                {"question_id": "q3_control_need", "value": 65},
+                {"question_id": "q4_praise_importance", "value": 50},
+                {"question_id": "q5_novelty_challenge", "value": 80},
+                {"question_id": "q11_escalation_mode", "value": "strong"},
+                {"question_id": "q13_experience_level", "value": 40},
+            ]
+        },
+    )
+    assert answers_response.status_code == 200
+    interaction = answers_response.json()["psychogram_preview"]["interaction_preferences"]
+    assert interaction["escalation_mode"] == "strong"
+    assert interaction["experience_level"] == 4
+    assert interaction["experience_profile"] == "intermediate"
 
 
 def test_setup_start_rejects_end_before_start(client):

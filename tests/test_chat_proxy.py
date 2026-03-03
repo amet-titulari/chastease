@@ -598,6 +598,12 @@ def test_chat_action_execute_hygiene_open_success(client, monkeypatch):
     assert data["action_type"] == "hygiene_open"
     assert data["ttlock"]["command"] == "open"
     assert data["ttlock"]["lock_id"] == "12345"
+    assert data["payload"]["window_end_at"] is not None
+
+    session_fetch = client.get(f"/api/v1/sessions/{session_id}")
+    assert session_fetch.status_code == 200
+    runtime_hygiene = (session_fetch.json().get("policy") or {}).get("runtime_hygiene") or {}
+    assert runtime_hygiene.get("is_open") is True
 
 
 def test_chat_action_execute_hygiene_close_requires_seal_text_when_enabled(client, monkeypatch):
@@ -651,6 +657,70 @@ def test_chat_action_execute_hygiene_close_requires_seal_text_when_enabled(clien
     close_data = close_with_seal.json()
     assert close_data["payload"]["seal_status"] == "sealed"
     assert close_data["payload"]["seal_text"] == "PLOMBE-ALPHA-01"
+
+
+def test_chat_action_execute_hygiene_close_requires_open_hygiene_state(client, monkeypatch):
+    auth = _register(client, username="chat-user-close-no-open")
+    session_id = _create_active_session(
+        client,
+        auth,
+        integrations=["ttlock"],
+        seal_mode="none",
+        integration_config={
+            "ttlock": {
+                "ttl_user": "wearer@example.com",
+                "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                "ttl_lock_id": "12345",
+            }
+        },
+    )
+    client.app.state.config.TTL_CLIENT_ID = "demo-client"
+    client.app.state.config.TTL_CLIENT_SECRET = "demo-secret"
+    monkeypatch.setattr(chat_router, "_ttlock_access_token", lambda **_kwargs: "access-token")
+    monkeypatch.setattr(
+        chat_router,
+        "_ttlock_command",
+        lambda **_kwargs: {"errcode": 0, "errmsg": "ok", "lockId": "12345"},
+    )
+
+    close_without_open = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "hygiene_close", "payload": {}},
+    )
+    assert close_without_open.status_code == 409
+    assert "No active hygiene opening" in str(close_without_open.json().get("detail", ""))
+
+
+def test_chat_turn_fallback_does_not_offer_hygiene_close_when_not_open(client):
+    client.app.state.config.LLM_FAIL_CLOSED_REQUEST_TAG = False
+    auth = _register(client, username="chat-user-fallback-close-no-open")
+    session_id = _create_active_session(
+        client,
+        auth,
+        autonomy_mode="execute",
+        integrations=["ttlock"],
+        integration_config={
+            "ttlock": {
+                "ttl_user": "wearer@example.com",
+                "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                "ttl_lock_id": "12345",
+            }
+        },
+    )
+    client.app.state.ai_service.generate_narration = lambda _context: "Dann bitte Hygiene schließen."
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={
+            "session_id": session_id,
+            "message": "Bitte jetzt hygiene schliessen.",
+            "language": "de",
+        },
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["pending_actions"] == []
+    assert data["executed_actions"] == []
 
 
 def test_chat_action_execute_hygiene_fails_without_integration_config(client):
