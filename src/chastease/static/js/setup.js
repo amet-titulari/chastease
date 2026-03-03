@@ -381,6 +381,10 @@ function setupAccordionEvents() {
 }
 
 function openNextAfterBaseSave() {
+  if (llmConnectivityVerified) {
+    openNextAfterLlmSave();
+    return;
+  }
   openAccordion('llm');
 }
 
@@ -957,7 +961,14 @@ async function loadLlmProfile() {
     if (llmActiveEl) llmActiveEl.value = p.is_active ? 'true' : 'false';
     if (llmBehaviorEl) llmBehaviorEl.value = p.behavior_prompt || defaultBehaviorPrompt;
     if (llmApiKeyEl) llmApiKeyEl.value = '';
-    setLlmInfo(`LLM-Profil geladen (API-Key gespeichert: ${p.has_api_key ? 'ja' : 'nein'}).`);
+    llmConnectivityVerified = Boolean(p.is_active && p.has_api_key && p.api_url && p.chat_model);
+    llmLiveTestPassed = llmConnectivityVerified;
+    setLlmInfo(
+      llmConnectivityVerified
+        ? `LLM-Profil geladen (bereit, API-Key gespeichert: ${p.has_api_key ? 'ja' : 'nein'}).`
+        : `LLM-Profil geladen (nicht bereit, API-Key gespeichert: ${p.has_api_key ? 'ja' : 'nein'}).`,
+      !llmConnectivityVerified,
+    );
     updateLlmDependentUi();
     setOutput(body);
   } catch (error) {
