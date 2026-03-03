@@ -11,7 +11,7 @@ on:
         description: "Zusätzlich :latest pushen"
         required: false
         type: boolean
-        default: false
+        default: true
 
 jobs:
   build-and-push:
