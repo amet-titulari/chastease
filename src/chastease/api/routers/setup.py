@@ -1,4 +1,5 @@
-﻿import json
+﻿import asyncio
+import json
 from datetime import UTC, date, datetime
 import re
 from typing import Any, Literal
@@ -57,6 +58,7 @@ from chastease.api.setup_infra import (
     sync_setup_snapshot_to_active_session,
     sync_setup_snapshot_to_active_session_db,
 )
+from chastease.api.routers.chaster import ChasterCreateSessionRequest, create_chaster_session
 from chastease.shared.audit import record_audit_event
 
 router = APIRouter(prefix="/setup", tags=["setup"])
@@ -450,6 +452,84 @@ def _ensure_active_session_from_setup(db, setup_session: dict) -> str:
     db.add(db_session)
     setup_session["active_session_id"] = session_id
     return session_id
+
+
+def _maybe_create_chaster_session_on_contract_accept(
+    setup_session: dict,
+    user_id: str,
+    auth_token: str,
+    request: Request,
+) -> dict | None:
+    integrations = [
+        str(item).strip().lower() for item in (setup_session.get("integrations") or []) if str(item).strip()
+    ]
+    if "chaster" not in integrations:
+        return None
+
+    integration_config = setup_session.get("integration_config") if isinstance(setup_session.get("integration_config"), dict) else {}
+    chaster_cfg = integration_config.get("chaster") if isinstance(integration_config.get("chaster"), dict) else {}
+    lock_id = str(chaster_cfg.get("lock_id") or "").strip()
+    if lock_id:
+        return None
+
+    api_token = str(chaster_cfg.get("api_token") or "").strip()
+    if not api_token:
+        raise HTTPException(
+            status_code=409,
+            detail="Chaster is enabled but integration_config.chaster.api_token is missing.",
+        )
+
+    min_duration = int(chaster_cfg.get("min_duration_minutes") or 60)
+    max_duration = int(chaster_cfg.get("max_duration_minutes") or max(60, min_duration))
+    if min_duration <= 0:
+        min_duration = 60
+    if max_duration < min_duration:
+        max_duration = min_duration
+
+    min_limit = int(chaster_cfg.get("min_limit_duration_minutes") or 0)
+    max_limit = int(chaster_cfg.get("max_limit_duration_minutes") or 0)
+    if min_limit < 0:
+        min_limit = 0
+    if max_limit < min_limit:
+        max_limit = min_limit
+
+    request_payload = ChasterCreateSessionRequest(
+        user_id=user_id,
+        auth_token=auth_token,
+        chaster_api_token=api_token,
+        code=str(chaster_cfg.get("code") or "").strip() or None,
+        min_duration_minutes=min_duration,
+        max_duration_minutes=max_duration,
+        min_limit_duration_minutes=min_limit,
+        max_limit_duration_minutes=max_limit,
+        display_remaining_time=bool(chaster_cfg.get("display_remaining_time", True)),
+        limit_lock_time=bool(chaster_cfg.get("limit_lock_time", True)),
+        allow_session_offer=bool(chaster_cfg.get("allow_session_offer", True)),
+        is_test_lock=bool(chaster_cfg.get("is_test_lock", False)),
+        hide_time_logs=bool(chaster_cfg.get("hide_time_logs", True)),
+        extensions=chaster_cfg.get("extensions") if isinstance(chaster_cfg.get("extensions"), list) else [],
+    )
+
+    try:
+        created = asyncio.run(create_chaster_session(request_payload, request))
+    except HTTPException as exc:
+        raise HTTPException(status_code=502, detail=f"Chaster session creation failed during contract acceptance: {exc.detail}") from exc
+
+    created_cfg = (
+        (created.get("integration_config") or {}).get("chaster")
+        if isinstance(created, dict)
+        else None
+    )
+    if not isinstance(created_cfg, dict):
+        raise HTTPException(status_code=502, detail="Chaster session creation returned invalid integration_config.")
+
+    merged_cfg = dict(chaster_cfg)
+    merged_cfg.update(created_cfg)
+    integration_config["chaster"] = merged_cfg
+    setup_session["integration_config"] = integration_config
+    if isinstance(setup_session.get("policy_preview"), dict):
+        setup_session["policy_preview"]["integration_config"] = integration_config
+    return created_cfg
 
 
 @router.post("/sessions/{setup_session_id}/chat-preview")
@@ -1293,6 +1373,13 @@ def accept_setup_contract(setup_session_id: str, payload: SetupContractConsentRe
     provided_text = str(payload.consent_text or "").strip()
     if _normalize_consent_for_compare(provided_text) != _normalize_consent_for_compare(required_text):
         raise HTTPException(status_code=400, detail=f"Consent text mismatch. Required: {required_text}")
+
+    _maybe_create_chaster_session_on_contract_accept(
+        setup_session=setup_session,
+        user_id=payload.user_id,
+        auth_token=payload.auth_token,
+        request=request,
+    )
 
     accepted_at = _now_iso()
     consent["required_text"] = required_text

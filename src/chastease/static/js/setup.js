@@ -185,9 +185,8 @@ function updateTtlockSaveVisibility() {
 }
 
 function updateChasterSaveVisibility() {
-  const hasToken = Boolean(String(chasterApiTokenEl?.value || '').trim());
-  if (saveChasterBtn) saveChasterBtn.disabled = !hasToken;
-  if (createChasterSessionBtn) createChasterSessionBtn.disabled = !hasToken;
+  if (saveChasterBtn) saveChasterBtn.disabled = false;
+  if (createChasterSessionBtn) createChasterSessionBtn.classList.add('hidden');
 }
 
 function invalidateLlmLiveTest(silent = false) {
@@ -432,7 +431,7 @@ function openAccordion(targetKey) {
       setStatus('Psychogramm ist gesperrt: zuerst TTLock-Konfiguration speichern.', true);
       targetKey = 'ttlock';
     } else if (!isChasterReady()) {
-      setStatus('Psychogramm ist gesperrt: zuerst Chaster-Session erstellen und speichern.', true);
+      setStatus('Psychogramm ist gesperrt: zuerst Chaster-Konfiguration speichern.', true);
       targetKey = 'chaster';
     }
   }
@@ -447,15 +446,13 @@ function openAccordion(targetKey) {
 
 function updateLlmDependentUi() {
   const questionnaireUnlocked = isQuestionnaireUnlocked();
-  const chasterUnlocked = isChasterStepUnlocked();
   if (questionAccordionBtn) {
     questionAccordionBtn.disabled = !questionnaireUnlocked;
     questionAccordionBtn.classList.toggle('opacity-60', !questionnaireUnlocked);
     questionAccordionBtn.classList.toggle('cursor-not-allowed', !questionnaireUnlocked);
   }
   updateChasterSaveVisibility();
-  if (saveChasterBtn && !chasterUnlocked) saveChasterBtn.disabled = true;
-  if (createChasterSessionBtn && !chasterUnlocked) createChasterSessionBtn.disabled = true;
+  if (createChasterSessionBtn) createChasterSessionBtn.classList.add('hidden');
   if (submitAnswersBtn) submitAnswersBtn.disabled = !questionnaireUnlocked;
   if (completeSetupBtn) completeSetupBtn.disabled = !llmConnectivityVerified;
   if (confirmCompleteSetupBtn) confirmCompleteSetupBtn.disabled = !llmConnectivityVerified;
@@ -767,6 +764,21 @@ async function apiCall(method, path, payload) {
   return body;
 }
 
+async function checkActiveChasterSession(apiToken, lockId = '') {
+  const token = String(apiToken || '').trim();
+  if (!auth || !token) return null;
+  try {
+    return await apiCall('POST', '/api/v1/setup/chaster/check-active-session', {
+      user_id: auth.user_id,
+      auth_token: auth.auth_token,
+      chaster_api_token: token,
+      lock_id: String(lockId || '').trim() || null,
+    });
+  } catch (_error) {
+    return null;
+  }
+}
+
 function applySetupToForm(data) {
   if (!data) return;
   currentSetup = data;
@@ -1073,6 +1085,16 @@ async function acceptConsent() {
     return;
   }
   try {
+    if (intChasterEl?.value === 'true') {
+      const currentLockId = String(
+        ((currentSetup?.integration_config || {}).chaster || {}).lock_id || '',
+      ).trim();
+      if (!currentLockId) {
+        setStatus('Consent: Erstelle zuerst Chaster Session...');
+        await createChasterSessionAfterConsent(true);
+      }
+    }
+
     setStatus('Consent wird gespeichert...');
     const body = await apiCall('POST', `/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/contract/accept`, {
       user_id: auth.user_id,
@@ -1255,6 +1277,7 @@ async function saveChasterConfig() {
 
   if (intChasterEl?.value === 'true' && !chCfg) {
     setChasterInfo('Chaster-Konfiguration unvollständig: API Token erforderlich.', true);
+    setStatus('Chaster speichern fehlgeschlagen: API Token erforderlich.', true);
     return;
   }
 
@@ -1293,16 +1316,24 @@ async function saveChasterConfig() {
       integration_config: body.integration_config || integration_config,
     };
     chasterConfigCached = (currentSetup.integration_config || {}).chaster || chCfg || null;
-    if (intChasterEl?.value === 'true' && !String(chasterConfigCached?.lock_id || '').trim()) {
-      setChasterInfo('Chaster-Konfiguration gespeichert. Erstelle Session...');
-      await createChasterSessionAfterConsent(true);
-      chasterConfigCached = (currentSetup.integration_config || {}).chaster || null;
-    }
+    const savedApiToken = String(chasterConfigCached?.api_token || chCfg?.api_token || '').trim();
+    const savedLockId = String(chasterConfigCached?.lock_id || '').trim();
     if (chasterConfigCached?.lock_id) {
       setChasterInfo(`Chaster-Konfiguration gespeichert (lock_id=${String(chasterConfigCached.lock_id)}).`);
     } else {
-      setChasterInfo('Chaster-Konfiguration gespeichert.');
+      setChasterInfo('Chaster-Konfiguration gespeichert. Session wird bei Vertragsakzeptanz erstellt.');
     }
+    void (async () => {
+      const chasterState = await checkActiveChasterSession(savedApiToken, savedLockId);
+      if (!chasterState?.has_active_session) return;
+      const activeLockId = String(chasterState.lock_id || savedLockId || '').trim();
+      setChasterInfo(
+        activeLockId
+          ? `Warnung: Chaster Session läuft aktuell (lock_id=${activeLockId}).`
+          : 'Warnung: Chaster Session läuft aktuell.',
+        true,
+      );
+    })();
     setStatus('Chaster-Konfiguration gespeichert.');
     updateLlmDependentUi();
     setOutput(body);
@@ -1544,7 +1575,7 @@ acceptConsentBtn?.addEventListener('click', acceptConsent);
 ttlockDiscoverBtn?.addEventListener('click', discoverTtlockDevices);
 ttlockLockEl?.addEventListener('change', updateTtlockSaveVisibility);
 saveChasterBtn?.addEventListener('click', saveChasterConfig);
-createChasterSessionBtn?.addEventListener('click', createChasterSessionNow);
+if (createChasterSessionBtn) createChasterSessionBtn.classList.add('hidden');
 chasterApiTokenEl?.addEventListener('input', updateChasterSaveVisibility);
 chasterCodeEl?.addEventListener('input', updateChasterSaveVisibility);
 chasterMinLimitDurationEl?.addEventListener('input', updateChasterSaveVisibility);

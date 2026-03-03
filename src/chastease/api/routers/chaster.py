@@ -33,6 +33,13 @@ class ChasterCreateSessionRequest(BaseModel):
     create_lock_payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class ChasterCheckSessionRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    auth_token: str = Field(min_length=8)
+    chaster_api_token: str = Field(min_length=8)
+    lock_id: str | None = None
+
+
 def _compact_json_text(value: Any) -> str:
     if isinstance(value, (dict, list)):
         try:
@@ -83,6 +90,38 @@ async def _post_json(url: str, token: str, payload: dict[str, Any]) -> dict[str,
     raise HTTPException(status_code=400, detail=last_detail or f"Chaster API POST {url} failed.")
 
 
+async def _get_json(url: str, token: str) -> Any:
+    timeout = httpx.Timeout(connect=6.0, read=25.0, write=20.0, pool=6.0)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
+    last_detail = ""
+    for attempt in range(1, 3):
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(url, headers=headers)
+        if response.status_code >= 400:
+            transaction_id = str(response.headers.get("x-chaster-transaction-id") or "").strip()
+            retry_after_raw = str(response.headers.get("retry-after") or "").strip()
+            retry_after = int(retry_after_raw) if retry_after_raw.isdigit() else 0
+            body_text = response.text[:700].strip()
+            last_detail = (
+                f"Chaster API GET {url} failed with HTTP {response.status_code}"
+                f"{(' (tx=' + transaction_id + ')') if transaction_id else ''}"
+                f"{(': ' + body_text) if body_text else ''}"
+            )
+            should_retry = response.status_code >= 500 and retry_after > 0 and attempt < 2
+            if should_retry:
+                await asyncio.sleep(max(1, min(retry_after, 15)))
+                continue
+            raise HTTPException(status_code=400, detail=last_detail)
+        try:
+            return response.json()
+        except Exception as exc:  # pragma: no cover - defensive branch
+            raise HTTPException(status_code=400, detail=f"Chaster API returned non-JSON response for {url}.") from exc
+    raise HTTPException(status_code=400, detail=last_detail or f"Chaster API GET {url} failed.")
+
+
 def _nine_digit_code() -> str:
     return str(random.randint(100_000_000, 999_999_999))
 
@@ -120,6 +159,134 @@ def _sanitize_extensions(raw: Any) -> list[dict[str, Any]]:
             }
         )
     return result
+
+
+def _extract_lock_candidates(payload: Any) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            keys = set(node.keys())
+            if keys & {
+                "id",
+                "_id",
+                "lockId",
+                "lock_id",
+                "publicLockId",
+                "public_lock_id",
+                "status",
+                "state",
+                "isLocked",
+                "locked",
+                "isActive",
+                "active",
+            }:
+                results.append(node)
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(payload)
+    return results
+
+
+def _lock_looks_active(lock_data: dict[str, Any]) -> bool:
+    true_flags = {"isLocked", "locked", "isActive", "active", "isRunning", "running", "inProgress", "ongoing"}
+    for key in true_flags:
+        value = lock_data.get(key)
+        if value is True:
+            return True
+
+    status_keys = {"status", "state", "lockStatus", "lock_status"}
+    active_states = {"active", "locked", "running", "in_progress", "ongoing", "started"}
+    for key in status_keys:
+        raw = lock_data.get(key)
+        if raw is None:
+            continue
+        normalized = str(raw).strip().lower()
+        if normalized in active_states:
+            return True
+
+    for key in ("remainingSeconds", "remaining_seconds"):
+        raw = lock_data.get(key)
+        try:
+            if int(raw) > 0:
+                return True
+        except Exception:
+            continue
+
+    return False
+
+
+@router.post("/check-active-session")
+async def check_active_chaster_session(payload: ChasterCheckSessionRequest, request: Request) -> dict:
+    token_user_id = resolve_user_id_from_token(payload.auth_token, request)
+    if token_user_id != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token for user.")
+
+    base_url = str(getattr(request.app.state.config, "CHASTER_API_BASE", "https://api.chaster.app") or "").strip().rstrip("/")
+    if not base_url:
+        raise HTTPException(status_code=400, detail="Chaster API base URL is empty.")
+
+    token = payload.chaster_api_token.strip()
+    target_lock_id = str(payload.lock_id or "").strip()
+    probe_errors: list[str] = []
+    candidates: list[dict[str, Any]] = []
+
+    if target_lock_id:
+        try:
+            lock_payload = await _get_json(f"{base_url}/locks/{target_lock_id}", token)
+            if isinstance(lock_payload, dict):
+                candidates.append(lock_payload)
+        except HTTPException as exc:
+            probe_errors.append(str(exc.detail))
+
+    try:
+        list_payload = await _get_json(f"{base_url}/locks", token)
+        list_candidates = _extract_lock_candidates(list_payload)
+        if target_lock_id:
+            matched = []
+            for item in list_candidates:
+                found_lock_id = _extract_first_value(item, {"id", "_id", "lockId", "lock_id", "publicLockId", "public_lock_id"})
+                if found_lock_id == target_lock_id:
+                    matched.append(item)
+            candidates.extend(matched)
+        else:
+            candidates.extend(list_candidates)
+    except HTTPException as exc:
+        probe_errors.append(str(exc.detail))
+
+    if not candidates:
+        return {
+            "success": False if probe_errors else True,
+            "has_active_session": False,
+            "lock_id": None,
+            "checked_lock_id": target_lock_id or None,
+            "check_error": " | ".join(probe_errors) if probe_errors else None,
+        }
+
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        if _lock_looks_active(candidate):
+            found_lock_id = _extract_first_value(candidate, {"id", "_id", "lockId", "lock_id", "publicLockId", "public_lock_id"})
+            return {
+                "success": True,
+                "has_active_session": True,
+                "lock_id": found_lock_id or (target_lock_id or None),
+                "checked_lock_id": target_lock_id or None,
+                "check_error": None,
+            }
+
+    return {
+        "success": True,
+        "has_active_session": False,
+        "lock_id": None,
+        "checked_lock_id": target_lock_id or None,
+        "check_error": None,
+    }
 
 
 @router.post("/create-session")
