@@ -279,10 +279,27 @@ function getContractPayloadValues() {
   };
 }
 
+function isQuestionnaireUnlocked() {
+  if (!llmConnectivityVerified) return false;
+  if (intTtlockEl?.value !== 'true') return true;
+  const savedTtlock = currentSetup?.integration_config?.ttlock;
+  return Boolean(
+    savedTtlock
+      && String(savedTtlock.ttl_user || '').trim()
+      && String(savedTtlock.ttl_lock_id || '').trim()
+      && String(savedTtlock.ttl_pass_md5 || '').trim(),
+  );
+}
+
 function openAccordion(targetKey) {
-  if (targetKey === 'questionnaire' && !llmConnectivityVerified) {
-    setStatus('Psychogramm ist gesperrt: zuerst LLM Live-Test erfolgreich durchführen und speichern.', true);
-    targetKey = 'llm';
+  if (targetKey === 'questionnaire' && !isQuestionnaireUnlocked()) {
+    if (!llmConnectivityVerified) {
+      setStatus('Psychogramm ist gesperrt: zuerst LLM Live-Test erfolgreich durchführen und speichern.', true);
+      targetKey = 'llm';
+    } else if (intTtlockEl?.value === 'true') {
+      setStatus('Psychogramm ist gesperrt: zuerst TTLock-Konfiguration speichern.', true);
+      targetKey = 'ttlock';
+    }
   }
   accordionDefs.forEach((definition) => {
     const body = document.getElementById(definition.body);
@@ -294,12 +311,13 @@ function openAccordion(targetKey) {
 }
 
 function updateLlmDependentUi() {
+  const questionnaireUnlocked = isQuestionnaireUnlocked();
   if (questionAccordionBtn) {
-    questionAccordionBtn.disabled = !llmConnectivityVerified;
-    questionAccordionBtn.classList.toggle('opacity-60', !llmConnectivityVerified);
-    questionAccordionBtn.classList.toggle('cursor-not-allowed', !llmConnectivityVerified);
+    questionAccordionBtn.disabled = !questionnaireUnlocked;
+    questionAccordionBtn.classList.toggle('opacity-60', !questionnaireUnlocked);
+    questionAccordionBtn.classList.toggle('cursor-not-allowed', !questionnaireUnlocked);
   }
-  if (submitAnswersBtn) submitAnswersBtn.disabled = !llmConnectivityVerified;
+  if (submitAnswersBtn) submitAnswersBtn.disabled = !questionnaireUnlocked;
   if (completeSetupBtn) completeSetupBtn.disabled = !llmConnectivityVerified;
   if (confirmCompleteSetupBtn) confirmCompleteSetupBtn.disabled = !llmConnectivityVerified;
   if (artifactsBtn) artifactsBtn.disabled = !llmConnectivityVerified;
@@ -617,6 +635,7 @@ function applySetupToForm(data) {
   if (aiCalibQuestionEl && calib.last_question) aiCalibQuestionEl.textContent = String(calib.last_question);
   updateIntegrationSections();
   updateTtlockSaveVisibility();
+  updateLlmDependentUi();
 }
 
 async function loadSetupSession() {
@@ -918,6 +937,7 @@ async function saveTtlockConfig() {
     setTtlockInfo('TTLock-Konfiguration gespeichert.');
     setStatus('TTLock-Konfiguration gespeichert.');
     setOutput(body);
+    updateLlmDependentUi();
     openNextAfterTtlockSave();
   } catch (error) {
     setTtlockInfo(String(error?.message || error), true);
@@ -1075,6 +1095,14 @@ contractMaxEndDateEl?.addEventListener('change', syncDurationFromMaxEndDate);
 contractMaxDurationDaysEl?.addEventListener('input', syncMaxEndDateFromDuration);
 contractMinDurationDaysEl?.addEventListener('input', syncMinDurationGuard);
 saveTtlockBtn?.addEventListener('click', saveTtlockConfig);
+intTtlockEl?.addEventListener('change', () => {
+  updateIntegrationSections();
+  updateLlmDependentUi();
+});
+intChasterEl?.addEventListener('change', () => {
+  updateIntegrationSections();
+  updateLlmDependentUi();
+});
 aiCalibStartBtn?.addEventListener('click', () => aiCalibrationTurn(''));
 aiCalibSendBtn?.addEventListener('click', () => aiCalibrationTurn(aiCalibInputEl?.value || ''));
 aiCalibInputEl?.addEventListener('keydown', (event) => {
