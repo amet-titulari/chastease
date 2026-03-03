@@ -1344,6 +1344,7 @@ def _generate_contract_for_setup(db, request: Request, setup_session: dict) -> s
 
 from chastease.api.routers import (
     auth_router,
+    chaster_router,
     chat_router,
     llm_router,
     sessions_router,
@@ -1362,6 +1363,7 @@ api_router.include_router(story_router)
 api_router.include_router(chat_router)
 api_router.include_router(setup_router)
 api_router.include_router(ttlock_router)
+api_router.include_router(chaster_router)
 api_router.include_router(sessions_router)
 api_router.include_router(system_router)
 api_router.include_router(audit_router)

@@ -89,7 +89,7 @@ def _consent_technical_info(setup_session: dict) -> dict:
     }
 
 
-def _validate_ttlock_config(integrations: list[str], integration_config: dict[str, dict[str, str]]) -> None:
+def _validate_ttlock_config(integrations: list[str], integration_config: dict[str, dict[str, Any]]) -> None:
     normalized_integrations = [str(item).strip().lower() for item in (integrations or []) if str(item).strip()]
     if "ttlock" not in normalized_integrations:
         return
@@ -122,6 +122,26 @@ def _validate_ttlock_config(integrations: list[str], integration_config: dict[st
         raise HTTPException(
             status_code=400,
             detail="integration_config.ttlock.ttl_pass_md5 must be a lowercase 32-char md5 hex string.",
+        )
+
+
+def _validate_chaster_config(integrations: list[str], integration_config: dict[str, dict[str, Any]]) -> None:
+    normalized_integrations = [str(item).strip().lower() for item in (integrations or []) if str(item).strip()]
+    if "chaster" not in normalized_integrations:
+        return
+    if not isinstance(integration_config, dict) or "chaster" not in integration_config:
+        return
+    chaster_cfg = integration_config.get("chaster")
+    if not isinstance(chaster_cfg, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="Chaster integration requires integration_config.chaster object.",
+        )
+    api_token = str(chaster_cfg.get("api_token") or "").strip()
+    if not api_token:
+        raise HTTPException(
+            status_code=400,
+            detail="integration_config.chaster requires api_token.",
         )
 
 
@@ -628,6 +648,7 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
     ]
     payload_integration_config = payload.integration_config if isinstance(payload.integration_config, dict) else {}
     _validate_ttlock_config(normalized_payload_integrations, payload_integration_config)
+    _validate_chaster_config(normalized_payload_integrations, payload_integration_config)
     latest_ttlock_seed = None
     db = get_db_session(request)
     try:
@@ -855,6 +876,7 @@ def update_setup_integrations(
     normalized_integrations = [str(item).strip().lower() for item in (payload.integrations or []) if str(item).strip()]
     integration_config = payload.integration_config if isinstance(payload.integration_config, dict) else {}
     _validate_ttlock_config(normalized_integrations, integration_config)
+    _validate_chaster_config(normalized_integrations, integration_config)
 
     setup_session["integrations"] = normalized_integrations
     setup_session["integration_config"] = integration_config

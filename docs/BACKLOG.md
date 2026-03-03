@@ -12,12 +12,17 @@ Prioritaetssystem: `0 = Hoch / in Umsetzung`, `1 = Vorbereitet / Folgeplanung`, 
 
 ## Prioritaet 1 (Vorbereitet / Folgeplanung)
 
+- [ ] Chaster OAuth 2.0 Integration statt Developer Token (Authorization Code Flow, Token-Refresh, sichere Token-Persistenz pro User)
 - [ ] Mehrsprachigkeit (Deutsch/Englisch) in API, UI und Setup-Flow
 - [ ] Inventar- und Itemsystem (einfach)
 - [ ] Prompt-Template Versionierung
 
 ## Prioritaet 2 (Idee / Umsetzung planen)
 
+- [ ] Chaster-Integration: Bestehender Session beitreten (geplant, nach MVP "Session erstellen")
+- [ ] Chaster Lock-Create Payload vervollstaendigen (min/max/minLimit/maxLimit, limitLockTime, allowSessionOffer, isTestLock, hideTimeLogs, extensions)
+- [ ] Setup-Erweiterung fuer Chaster-Optionen inkl. Mapping auf Public-API-Parameter
+- [ ] Verification Picture und Hygieneoeffnung als konfigurierbare Chaster-Session-Optionen im Setup aktivieren
 - [ ] Authentifizierung (Passkey/2FA als Erweiterung)
 - [ ] Questgenerator und Questfortschritt
 - [ ] Monitoring (Sentry/OpenTelemetry)

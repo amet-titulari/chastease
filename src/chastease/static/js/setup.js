@@ -55,6 +55,21 @@ const ttlockGatewayEl = document.getElementById('ttlockGatewayId');
 const ttlockLockEl = document.getElementById('ttlockLockId');
 const ttlockDiscoverBtn = document.getElementById('ttlockDiscoverBtn');
 const ttlockInfoEl = document.getElementById('ttlockDiscoverInfo');
+const chasterApiTokenEl = document.getElementById('chasterApiToken');
+const chasterCodeEl = document.getElementById('chasterCode');
+const chasterMinDurationEl = document.getElementById('chasterMinDurationMinutes');
+const chasterMaxDurationEl = document.getElementById('chasterMaxDurationMinutes');
+const chasterMinLimitDurationEl = document.getElementById('chasterMinLimitDurationMinutes');
+const chasterMaxLimitDurationEl = document.getElementById('chasterMaxLimitDurationMinutes');
+const chasterLimitLockTimeEl = document.getElementById('chasterLimitLockTime');
+const chasterAllowSessionOfferEl = document.getElementById('chasterAllowSessionOffer');
+const chasterIsTestLockEl = document.getElementById('chasterIsTestLock');
+const chasterHideTimeLogsEl = document.getElementById('chasterHideTimeLogs');
+const chasterEnableVerificationPictureEl = document.getElementById('chasterEnableVerificationPicture');
+const chasterEnableHygieneOpeningEl = document.getElementById('chasterEnableHygieneOpening');
+const saveChasterBtn = document.getElementById('saveChasterBtn');
+const createChasterSessionBtn = document.getElementById('createChasterSessionBtn');
+const chasterInfoEl = document.getElementById('chasterInfo');
 
 const llmProviderEl = document.getElementById('llmProviderName');
 const llmApiUrlEl = document.getElementById('llmApiUrl');
@@ -75,6 +90,7 @@ let setupSessionId = null;
 let currentSetup = null;
 let questionnaire = [];
 let ttlPassMd5Cached = '';
+let chasterConfigCached = null;
 let llmLiveTestPassed = false;
 let llmConnectivityVerified = false;
 let aiCalibrationCompleted = false;
@@ -135,6 +151,15 @@ function setTtlockInfo(text, isErr = false) {
   }
 }
 
+function setChasterInfo(text, isErr = false) {
+  if (!chasterInfoEl) return;
+  if (typeof chastease_common !== 'undefined') {
+    chastease_common.setStatus(chasterInfoEl, text, isErr ? 'err' : 'ok');
+  } else {
+    chasterInfoEl.textContent = text;
+  }
+}
+
 function setSaveLlmEnabled(enabled) {
   if (!saveLlmProfileBtn) return;
   saveLlmProfileBtn.classList.toggle('hidden', !enabled);
@@ -157,6 +182,12 @@ function updateTtlockSaveVisibility() {
   const lockSelected = Boolean(String(ttlockLockEl?.value || '').trim());
   saveTtlockBtn.classList.toggle('hidden', !lockSelected);
   saveTtlockBtn.disabled = !lockSelected;
+}
+
+function updateChasterSaveVisibility() {
+  const hasToken = Boolean(String(chasterApiTokenEl?.value || '').trim());
+  if (saveChasterBtn) saveChasterBtn.disabled = !hasToken;
+  if (createChasterSessionBtn) createChasterSessionBtn.disabled = !hasToken;
 }
 
 function invalidateLlmLiveTest(silent = false) {
@@ -214,15 +245,79 @@ function dateByDuration(startRaw, durationDays) {
   return formatDateInputValue(target);
 }
 
+function contractDurationsToChasterMinutes() {
+  const minDays = Math.max(0, Number(contractMinDurationDaysEl?.value || 0));
+  const maxDays = Math.max(0, Number(contractMaxDurationDaysEl?.value || 0));
+  const minMinutes = Math.max(1, Math.round(minDays * 24 * 60));
+  const maxMinutes = Math.max(minMinutes, Math.round(maxDays * 24 * 60));
+  return { minMinutes, maxMinutes };
+}
+
+function generateNineDigitCode() {
+  const n = Math.floor(100000000 + Math.random() * 900000000);
+  return String(n);
+}
+
+function ensureChasterCode() {
+  if (!chasterCodeEl) return '';
+  const current = String(chasterCodeEl.value || '').trim();
+  if (/^\d{9}$/.test(current)) return current;
+  const code = generateNineDigitCode();
+  chasterCodeEl.value = code;
+  return code;
+}
+
+function syncChasterDurationsFromBase() {
+  const { minMinutes, maxMinutes } = contractDurationsToChasterMinutes();
+  if (chasterMinDurationEl) chasterMinDurationEl.value = String(minMinutes);
+  if (chasterMaxDurationEl) chasterMaxDurationEl.value = String(maxMinutes);
+}
+
+function buildChasterExtensionsFromForm() {
+  const verificationConfig = {
+    visibility: 'keyholder',
+    peerVerification: {
+      enabled: false,
+      punishments: [],
+    },
+  };
+  const hygieneConfig = {
+    openingTime: 900,
+    penaltyTime: 86400,
+    allowOnlyKeyholderToOpen: false,
+    requireVerificationPictureBefore: false,
+    requireVerificationPictureAfter: true,
+  };
+  const extensions = [];
+  const verificationEnabled = Boolean(chasterEnableVerificationPictureEl?.checked);
+  const hygieneEnabled = Boolean(chasterEnableHygieneOpeningEl?.checked);
+
+  if (verificationEnabled) {
+    extensions.push({
+      slug: 'verification-picture',
+      config: verificationConfig,
+    });
+  }
+  if (hygieneEnabled) {
+    extensions.push({
+      slug: 'temporary-opening',
+      config: hygieneConfig,
+    });
+  }
+  return extensions;
+}
+
 function syncMinDurationGuard() {
   if (!contractMinDurationDaysEl || !contractMaxDurationDaysEl) return;
   const minDuration = Math.max(0, Number(contractMinDurationDaysEl.value || 0));
   const maxDuration = Math.max(0, Number(contractMaxDurationDaysEl.value || 0));
   if (maxDuration > 0 && minDuration > maxDuration) {
     contractMinDurationDaysEl.value = String(maxDuration);
+    syncChasterDurationsFromBase();
     return;
   }
   contractMinDurationDaysEl.value = String(minDuration);
+  syncChasterDurationsFromBase();
 }
 
 function syncDurationFromMaxEndDate() {
@@ -230,6 +325,7 @@ function syncDurationFromMaxEndDate() {
   const diffDays = daysBetween(contractStartDateEl.value, contractMaxEndDateEl.value);
   contractMaxDurationDaysEl.value = diffDays === null ? '0' : String(diffDays);
   syncMinDurationGuard();
+  syncChasterDurationsFromBase();
 }
 
 function syncMaxEndDateFromDuration() {
@@ -238,11 +334,13 @@ function syncMaxEndDateFromDuration() {
   if (duration === 0) {
     contractMaxEndDateEl.value = '';
     syncMinDurationGuard();
+    syncChasterDurationsFromBase();
     return;
   }
   const targetDate = dateByDuration(contractStartDateEl.value, duration);
   if (targetDate) contractMaxEndDateEl.value = targetDate;
   syncMinDurationGuard();
+  syncChasterDurationsFromBase();
 }
 
 function setContractDefaults() {
@@ -261,6 +359,7 @@ function setContractDefaults() {
     if (maxEnd) contractMaxEndDateEl.value = maxEnd;
   }
   syncMinDurationGuard();
+  syncChasterDurationsFromBase();
 }
 
 function getContractPayloadValues() {
@@ -279,8 +378,7 @@ function getContractPayloadValues() {
   };
 }
 
-function isQuestionnaireUnlocked() {
-  if (!llmConnectivityVerified) return false;
+function isTtlockReady() {
   if (intTtlockEl?.value !== 'true') return true;
   const savedTtlock = currentSetup?.integration_config?.ttlock;
   return Boolean(
@@ -291,14 +389,51 @@ function isQuestionnaireUnlocked() {
   );
 }
 
+function isChasterReady() {
+  if (intChasterEl?.value !== 'true') return true;
+  const savedChaster = currentSetup?.integration_config?.chaster;
+  return Boolean(
+    savedChaster
+      && String(savedChaster.api_token || '').trim()
+      && String(savedChaster.code || '').trim(),
+  );
+}
+
+function isChasterStepUnlocked() {
+  return llmConnectivityVerified && isTtlockReady();
+}
+
+function isQuestionnaireUnlocked() {
+  if (!llmConnectivityVerified) return false;
+  if (!isTtlockReady()) return false;
+  if (!isChasterReady()) return false;
+  return true;
+}
+
 function openAccordion(targetKey) {
+  if (targetKey === 'ttlock' && !llmConnectivityVerified) {
+    setStatus('TTLock ist gesperrt: zuerst LLM Live-Test erfolgreich durchführen und speichern.', true);
+    targetKey = 'llm';
+  }
+  if (targetKey === 'chaster' && !isChasterStepUnlocked()) {
+    if (!llmConnectivityVerified) {
+      setStatus('Chaster ist gesperrt: zuerst LLM Live-Test erfolgreich durchführen und speichern.', true);
+      targetKey = 'llm';
+    } else {
+      setStatus('Chaster ist gesperrt: zuerst TTLock-Konfiguration speichern.', true);
+      targetKey = 'ttlock';
+    }
+  }
   if (targetKey === 'questionnaire' && !isQuestionnaireUnlocked()) {
     if (!llmConnectivityVerified) {
       setStatus('Psychogramm ist gesperrt: zuerst LLM Live-Test erfolgreich durchführen und speichern.', true);
       targetKey = 'llm';
-    } else if (intTtlockEl?.value === 'true') {
+    } else if (!isTtlockReady()) {
       setStatus('Psychogramm ist gesperrt: zuerst TTLock-Konfiguration speichern.', true);
       targetKey = 'ttlock';
+    } else if (!isChasterReady()) {
+      setStatus('Psychogramm ist gesperrt: zuerst Chaster-Session erstellen und speichern.', true);
+      targetKey = 'chaster';
     }
   }
   accordionDefs.forEach((definition) => {
@@ -312,11 +447,15 @@ function openAccordion(targetKey) {
 
 function updateLlmDependentUi() {
   const questionnaireUnlocked = isQuestionnaireUnlocked();
+  const chasterUnlocked = isChasterStepUnlocked();
   if (questionAccordionBtn) {
     questionAccordionBtn.disabled = !questionnaireUnlocked;
     questionAccordionBtn.classList.toggle('opacity-60', !questionnaireUnlocked);
     questionAccordionBtn.classList.toggle('cursor-not-allowed', !questionnaireUnlocked);
   }
+  updateChasterSaveVisibility();
+  if (saveChasterBtn && !chasterUnlocked) saveChasterBtn.disabled = true;
+  if (createChasterSessionBtn && !chasterUnlocked) createChasterSessionBtn.disabled = true;
   if (submitAnswersBtn) submitAnswersBtn.disabled = !questionnaireUnlocked;
   if (completeSetupBtn) completeSetupBtn.disabled = !llmConnectivityVerified;
   if (confirmCompleteSetupBtn) confirmCompleteSetupBtn.disabled = !llmConnectivityVerified;
@@ -394,15 +533,13 @@ function setupAccordionEvents() {
     btn.addEventListener('click', () => openAccordion(definition.key));
   });
   updateIntegrationSections();
+  ensureChasterCode();
+  updateChasterSaveVisibility();
   updateLlmDependentUi();
   openAccordion('base');
 }
 
 function openNextAfterBaseSave() {
-  if (llmConnectivityVerified) {
-    openNextAfterLlmSave();
-    return;
-  }
   openAccordion('llm');
 }
 
@@ -430,10 +567,14 @@ function openNextAfterTtlockSave() {
   openAccordion('questionnaire');
 }
 
-function getIntegrations(ttlockCfgPresent) {
+function openNextAfterChasterSave() {
+  openAccordion('questionnaire');
+}
+
+function getIntegrations(ttlockCfgPresent, chasterCfgPresent) {
   const integrations = [];
   if (intTtlockEl?.value === 'true' && ttlockCfgPresent) integrations.push('ttlock');
-  if (intChasterEl?.value === 'true') integrations.push('chaster');
+  if (intChasterEl?.value === 'true' && chasterCfgPresent) integrations.push('chaster');
   return integrations;
 }
 
@@ -453,6 +594,46 @@ function ttlockConfigFromForm() {
   config.ttl_lock_id = ttl_lock_id;
   if (ttl_gateway_id) config.ttl_gateway_id = ttl_gateway_id;
   return config;
+}
+
+function chasterConfigFromForm() {
+  const enabled = intChasterEl?.value === 'true';
+  if (!enabled) return null;
+  const api_token = String(chasterApiTokenEl?.value || '').trim();
+  const code = ensureChasterCode();
+  const lock_id = String(chasterConfigCached?.lock_id || '').trim();
+  const combination_id = String(chasterConfigCached?.combination_id || '').trim();
+  if (!api_token) return null;
+  const { minMinutes, maxMinutes } = contractDurationsToChasterMinutes();
+  const limit_lock_time = Boolean(chasterLimitLockTimeEl?.checked);
+  const requestedMinLimit = Math.max(0, Number(chasterMinLimitDurationEl?.value || 0));
+  const requestedMaxLimit = Math.max(0, Number(chasterMaxLimitDurationEl?.value || 0));
+  const min_limit_duration_minutes = limit_lock_time ? Math.max(1, requestedMinLimit || minMinutes) : 0;
+  const max_limit_duration_minutes = limit_lock_time
+    ? Math.max(min_limit_duration_minutes, requestedMaxLimit || maxMinutes)
+    : 0;
+  const allow_session_offer = Boolean(chasterAllowSessionOfferEl?.checked);
+  const is_test_lock = Boolean(chasterIsTestLockEl?.checked);
+  const hide_time_logs = Boolean(chasterHideTimeLogsEl?.checked);
+  const extensions = buildChasterExtensionsFromForm();
+  return {
+    api_base: String(chasterConfigCached?.api_base || 'https://api.chaster.app').trim(),
+    api_token,
+    code,
+    lock_id,
+    combination_id,
+    min_duration_minutes: minMinutes,
+    max_duration_minutes: maxMinutes,
+    display_remaining_time: true,
+    min_limit_duration_minutes,
+    max_limit_duration_minutes,
+    limit_lock_time,
+    allow_session_offer,
+    is_test_lock,
+    hide_time_logs,
+    extensions,
+    created_at: String(chasterConfigCached?.created_at || ''),
+  };
 }
 
 function populateTtlockSelect(selectNode, items, valueKey, labelKey, selectedValue = '') {
@@ -565,7 +746,22 @@ async function apiCall(method, path, payload) {
   });
   const body = await safeJson(response);
   if (!response.ok) {
-    const message = body?.detail || `HTTP ${response.status}`;
+    let message = `HTTP ${response.status}`;
+    if (Array.isArray(body?.detail)) {
+      message = body.detail.map((entry) => {
+        if (typeof entry === 'string') return entry;
+        if (entry && typeof entry === 'object') {
+          const loc = Array.isArray(entry.loc) ? entry.loc.join('.') : '';
+          const msg = String(entry.msg || JSON.stringify(entry));
+          return loc ? `${loc}: ${msg}` : msg;
+        }
+        return String(entry);
+      }).join(' | ');
+    } else if (body?.detail && typeof body.detail === 'object') {
+      message = JSON.stringify(body.detail);
+    } else if (body?.detail) {
+      message = String(body.detail);
+    }
     throw new Error(message);
   }
   return body;
@@ -629,12 +825,47 @@ function applySetupToForm(data) {
   if (ttlockCfg.ttl_lock_id && ttlockLockEl) {
     populateTtlockSelect(ttlockLockEl, [{ lockId: ttlockCfg.ttl_lock_id, lockAlias: ttlockCfg.ttl_lock_id }], 'lockId', 'lockAlias', String(ttlockCfg.ttl_lock_id));
   }
+  const chasterCfg = data.integration_config?.chaster || {};
+  chasterConfigCached = Object.keys(chasterCfg).length ? { ...chasterCfg } : null;
+  if (chasterApiTokenEl && chasterCfg.api_token) chasterApiTokenEl.value = String(chasterCfg.api_token);
+  if (chasterCodeEl) {
+    if (chasterCfg.code) chasterCodeEl.value = String(chasterCfg.code);
+    else ensureChasterCode();
+  }
+  if (chasterMinLimitDurationEl && Number.isFinite(Number(chasterCfg.min_limit_duration_minutes))) {
+    chasterMinLimitDurationEl.value = String(chasterCfg.min_limit_duration_minutes);
+  }
+  if (chasterMaxLimitDurationEl && Number.isFinite(Number(chasterCfg.max_limit_duration_minutes))) {
+    chasterMaxLimitDurationEl.value = String(chasterCfg.max_limit_duration_minutes);
+  }
+  if (chasterLimitLockTimeEl) chasterLimitLockTimeEl.checked = parseBool(chasterCfg.limit_lock_time, true);
+  if (chasterAllowSessionOfferEl) chasterAllowSessionOfferEl.checked = parseBool(chasterCfg.allow_session_offer, true);
+  if (chasterIsTestLockEl) chasterIsTestLockEl.checked = parseBool(chasterCfg.is_test_lock, false);
+  if (chasterHideTimeLogsEl) chasterHideTimeLogsEl.checked = parseBool(chasterCfg.hide_time_logs, true);
+  const savedExtensions = Array.isArray(chasterCfg.extensions) ? chasterCfg.extensions : [];
+  const savedVerification = savedExtensions.find((entry) => String(entry?.slug || '').trim().length > 0
+    && String(entry.slug).toLowerCase().includes('verification'));
+  const savedHygiene = savedExtensions.find((entry) => {
+    const slug = String(entry?.slug || '').trim().toLowerCase();
+    return slug === 'temporary-opening' || slug === 'hygiene-opening' || slug.includes('hygiene');
+  });
+  if (chasterEnableVerificationPictureEl) chasterEnableVerificationPictureEl.checked = Boolean(savedVerification) || savedExtensions.length === 0;
+  if (chasterEnableHygieneOpeningEl) chasterEnableHygieneOpeningEl.checked = Boolean(savedHygiene) || savedExtensions.length === 0;
+  syncChasterDurationsFromBase();
+  if (chasterConfigCached?.lock_id) {
+    setChasterInfo(`Chaster Session vorhanden (lock_id=${String(chasterConfigCached.lock_id)}).`);
+  } else if (chasterConfigCached?.api_token) {
+    setChasterInfo('Chaster-Konfiguration gespeichert. Session wird bei Vertragsakzeptanz erstellt.');
+  } else {
+    setChasterInfo('');
+  }
   const calib = data.ai_calibration || {};
   aiCalibrationCompleted = Boolean(calib.completed);
   if (calib.inferred) applyCalibrationInferred(calib.inferred);
   if (aiCalibQuestionEl && calib.last_question) aiCalibQuestionEl.textContent = String(calib.last_question);
   updateIntegrationSections();
   updateTtlockSaveVisibility();
+  updateChasterSaveVisibility();
   updateLlmDependentUi();
 }
 
@@ -664,9 +895,18 @@ async function startSetup() {
   const selectedChasterEnabled = intChasterEl?.value === 'true';
 
   const ttCfg = ttlockConfigFromForm();
-  const integrations = getIntegrations(Boolean(ttCfg));
+  let chCfg = null;
+  try {
+    chCfg = chasterConfigFromForm();
+  } catch (error) {
+    setChasterInfo(String(error?.message || error), true);
+    setStatus(String(error?.message || error), true);
+    return;
+  }
+  const integrations = getIntegrations(Boolean(ttCfg), Boolean(chCfg));
   const integration_config = {};
   if (ttCfg) integration_config.ttlock = ttCfg;
+  if (chCfg) integration_config.chaster = chCfg;
 
   const instructionStyle = String(instructionStyleEl?.value || '').trim();
   const desiredIntensity = String(desiredIntensityEl?.value || '').trim();
@@ -884,6 +1124,210 @@ async function discoverTtlockDevices() {
   }
 }
 
+async function createChasterSessionAfterConsent(strict = false, forceCreate = false) {
+  if (!auth) {
+    if (strict) throw new Error('Login fehlt.');
+    return null;
+  }
+  if (intChasterEl?.value !== 'true') {
+    if (strict) throw new Error('Chaster-Integration ist nicht aktiviert.');
+    return null;
+  }
+  let savedCfg = (currentSetup?.integration_config || {}).chaster || null;
+  if ((!savedCfg || !String(savedCfg.api_token || '').trim()) && intChasterEl?.value === 'true') {
+    try {
+      savedCfg = chasterConfigFromForm();
+    } catch (_) {
+      savedCfg = null;
+    }
+  }
+  if (!savedCfg || !String(savedCfg.api_token || '').trim()) {
+    if (strict) throw new Error('Chaster API Token fehlt.');
+    return null;
+  }
+  if (String(savedCfg.lock_id || '').trim() && !forceCreate) return { already_exists: true, config: savedCfg };
+
+  const { minMinutes, maxMinutes } = contractDurationsToChasterMinutes();
+  const savedLimitLockTime = Boolean(savedCfg.limit_lock_time);
+  const savedMinLimit = Math.max(0, Number(savedCfg.min_limit_duration_minutes || 0));
+  const savedMaxLimit = Math.max(0, Number(savedCfg.max_limit_duration_minutes || 0));
+  const effectiveMinLimit = savedLimitLockTime ? Math.max(1, savedMinLimit || minMinutes) : 0;
+  const effectiveMaxLimit = savedLimitLockTime ? Math.max(effectiveMinLimit, savedMaxLimit || maxMinutes) : 0;
+  const configuredLimitLockTime = Boolean(savedCfg.limit_lock_time);
+  const configuredIsTestLock = Boolean(savedCfg.is_test_lock);
+  const createPayload = {
+    user_id: auth.user_id,
+    auth_token: auth.auth_token,
+    chaster_api_token: String(savedCfg.api_token || '').trim(),
+    code: String(savedCfg.code || ensureChasterCode()).trim(),
+    min_duration_minutes: minMinutes,
+    max_duration_minutes: maxMinutes,
+    display_remaining_time: true,
+    min_limit_duration_minutes: effectiveMinLimit,
+    max_limit_duration_minutes: effectiveMaxLimit,
+    limit_lock_time: configuredLimitLockTime,
+    allow_session_offer: Boolean(savedCfg.allow_session_offer),
+    is_test_lock: configuredIsTestLock,
+    hide_time_logs: Boolean(savedCfg.hide_time_logs),
+    extensions: Array.isArray(savedCfg.extensions) ? savedCfg.extensions : [],
+  };
+  const created = await apiCall('POST', '/api/v1/setup/chaster/create-session', createPayload);
+  const createdChaster = (created?.integration_config || {}).chaster || {};
+  const mergedConfig = {
+    ...((currentSetup?.integration_config) || {}),
+    chaster: {
+      ...savedCfg,
+      ...createdChaster,
+    },
+  };
+  const integrations = Array.from(
+    new Set([
+      ...((currentSetup?.integrations || []).map((x) => String(x).toLowerCase())),
+      'chaster',
+    ]),
+  );
+  let targetPath = null;
+  const helper = typeof chastease_session !== 'undefined' ? chastease_session : null;
+  let active = null;
+  if (helper && typeof helper.fetchActiveSession === 'function') {
+    active = await helper.fetchActiveSession(statusEl);
+  } else {
+    active = await apiCall(
+      'GET',
+      `/api/v1/sessions/active?user_id=${encodeURIComponent(auth.user_id)}&auth_token=${encodeURIComponent(auth.auth_token)}`,
+    );
+  }
+  if (active?.has_active_session && active?.chastity_session?.session_id) {
+    targetPath = `/api/v1/sessions/${encodeURIComponent(active.chastity_session.session_id)}/integrations`;
+  } else if (setupSessionId) {
+    targetPath = `/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/integrations`;
+  } else {
+    throw new Error('Keine aktive Session oder Setup-Session gefunden.');
+  }
+
+  const saved = await apiCall('POST', targetPath, {
+    user_id: auth.user_id,
+    auth_token: auth.auth_token,
+    integrations,
+    integration_config: mergedConfig,
+  });
+  currentSetup = {
+    ...(currentSetup || {}),
+    integrations: saved.integrations || integrations,
+    integration_config: saved.integration_config || mergedConfig,
+  };
+  chasterConfigCached = (currentSetup.integration_config || {}).chaster || null;
+  if (chasterConfigCached?.lock_id) {
+    setChasterInfo(`Chaster Session erstellt (lock_id=${String(chasterConfigCached.lock_id)}).`);
+  }
+  return saved;
+}
+
+async function saveChasterConfig() {
+  if (!auth) {
+    setStatus('Login fehlt.', true);
+    return;
+  }
+  if (!isChasterStepUnlocked()) {
+    if (!llmConnectivityVerified) {
+      setStatus('Chaster ist gesperrt: zuerst LLM Live-Test durchführen.', true);
+      openAccordion('llm');
+    } else {
+      setStatus('Chaster ist gesperrt: zuerst TTLock-Konfiguration speichern.', true);
+      openAccordion('ttlock');
+    }
+    return;
+  }
+
+  const ttCfg = ttlockConfigFromForm();
+  let chCfg = null;
+  try {
+    chCfg = chasterConfigFromForm();
+  } catch (error) {
+    setChasterInfo(String(error?.message || error), true);
+    setStatus(String(error?.message || error), true);
+    return;
+  }
+  const integrations = getIntegrations(Boolean(ttCfg), Boolean(chCfg));
+  const integration_config = {};
+  if (ttCfg) integration_config.ttlock = ttCfg;
+  if (chCfg) integration_config.chaster = chCfg;
+
+  if (intChasterEl?.value === 'true' && !chCfg) {
+    setChasterInfo('Chaster-Konfiguration unvollständig: API Token erforderlich.', true);
+    return;
+  }
+
+  try {
+    setChasterInfo('Speichere Chaster-Konfiguration...');
+    let targetPath = null;
+    const helper = typeof chastease_session !== 'undefined' ? chastease_session : null;
+    let active = null;
+    if (helper && typeof helper.fetchActiveSession === 'function') {
+      active = await helper.fetchActiveSession(statusEl);
+    } else {
+      active = await apiCall(
+        'GET',
+        `/api/v1/sessions/active?user_id=${encodeURIComponent(auth.user_id)}&auth_token=${encodeURIComponent(auth.auth_token)}`,
+      );
+    }
+
+    if (active?.has_active_session && active?.chastity_session?.session_id) {
+      targetPath = `/api/v1/sessions/${encodeURIComponent(active.chastity_session.session_id)}/integrations`;
+    } else if (setupSessionId) {
+      targetPath = `/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/integrations`;
+    } else {
+      setChasterInfo('Keine aktive Session oder Setup-Session gefunden.', true);
+      return;
+    }
+
+    const body = await apiCall('POST', targetPath, {
+      user_id: auth.user_id,
+      auth_token: auth.auth_token,
+      integrations,
+      integration_config,
+    });
+    currentSetup = {
+      ...(currentSetup || {}),
+      integrations: body.integrations || integrations,
+      integration_config: body.integration_config || integration_config,
+    };
+    chasterConfigCached = (currentSetup.integration_config || {}).chaster || chCfg || null;
+    if (intChasterEl?.value === 'true' && !String(chasterConfigCached?.lock_id || '').trim()) {
+      setChasterInfo('Chaster-Konfiguration gespeichert. Erstelle Session...');
+      await createChasterSessionAfterConsent(true);
+      chasterConfigCached = (currentSetup.integration_config || {}).chaster || null;
+    }
+    if (chasterConfigCached?.lock_id) {
+      setChasterInfo(`Chaster-Konfiguration gespeichert (lock_id=${String(chasterConfigCached.lock_id)}).`);
+    } else {
+      setChasterInfo('Chaster-Konfiguration gespeichert.');
+    }
+    setStatus('Chaster-Konfiguration gespeichert.');
+    updateLlmDependentUi();
+    setOutput(body);
+    openNextAfterChasterSave();
+  } catch (error) {
+    setChasterInfo(String(error?.message || error), true);
+    setOutput({ error: String(error?.message || error) });
+  }
+}
+
+async function createChasterSessionNow() {
+  try {
+    await saveChasterConfig();
+    const created = await createChasterSessionAfterConsent(true, true);
+    const lockId = String((created?.integration_config || {}).chaster?.lock_id || '').trim();
+    if (!lockId) throw new Error('Chaster Session konnte nicht erstellt werden (keine lock_id erhalten).');
+    setStatus('Chaster Session erstellt.');
+  } catch (error) {
+    const msg = String(error?.message || error);
+    setChasterInfo(msg, true);
+    setStatus(msg, true);
+    setOutput({ error: msg });
+  }
+}
+
 async function saveTtlockConfig() {
   if (!auth) {
     setStatus('Login fehlt.', true);
@@ -891,9 +1335,18 @@ async function saveTtlockConfig() {
   }
 
   const ttCfg = ttlockConfigFromForm();
-  const integrations = getIntegrations(Boolean(ttCfg));
+  let chCfg = null;
+  try {
+    chCfg = chasterConfigFromForm();
+  } catch (error) {
+    setChasterInfo(String(error?.message || error), true);
+    setStatus(String(error?.message || error), true);
+    return;
+  }
+  const integrations = getIntegrations(Boolean(ttCfg), Boolean(chCfg));
   const integration_config = {};
   if (ttCfg) integration_config.ttlock = ttCfg;
+  if (chCfg) integration_config.chaster = chCfg;
 
   if (intTtlockEl?.value === 'true' && !ttCfg) {
     setTtlockInfo('TTLock-Konfiguration unvollständig: user, lock und Passwort/Hash erforderlich.', true);
@@ -1090,6 +1543,18 @@ artifactsBtn?.addEventListener('click', generateArtifacts);
 acceptConsentBtn?.addEventListener('click', acceptConsent);
 ttlockDiscoverBtn?.addEventListener('click', discoverTtlockDevices);
 ttlockLockEl?.addEventListener('change', updateTtlockSaveVisibility);
+saveChasterBtn?.addEventListener('click', saveChasterConfig);
+createChasterSessionBtn?.addEventListener('click', createChasterSessionNow);
+chasterApiTokenEl?.addEventListener('input', updateChasterSaveVisibility);
+chasterCodeEl?.addEventListener('input', updateChasterSaveVisibility);
+chasterMinLimitDurationEl?.addEventListener('input', updateChasterSaveVisibility);
+chasterMaxLimitDurationEl?.addEventListener('input', updateChasterSaveVisibility);
+chasterLimitLockTimeEl?.addEventListener('change', updateChasterSaveVisibility);
+chasterAllowSessionOfferEl?.addEventListener('change', updateChasterSaveVisibility);
+chasterIsTestLockEl?.addEventListener('change', updateChasterSaveVisibility);
+chasterHideTimeLogsEl?.addEventListener('change', updateChasterSaveVisibility);
+chasterEnableVerificationPictureEl?.addEventListener('change', updateChasterSaveVisibility);
+chasterEnableHygieneOpeningEl?.addEventListener('change', updateChasterSaveVisibility);
 contractStartDateEl?.addEventListener('change', syncMaxEndDateFromDuration);
 contractMaxEndDateEl?.addEventListener('change', syncDurationFromMaxEndDate);
 contractMaxDurationDaysEl?.addEventListener('input', syncMaxEndDateFromDuration);
@@ -1101,6 +1566,7 @@ intTtlockEl?.addEventListener('change', () => {
 });
 intChasterEl?.addEventListener('change', () => {
   updateIntegrationSections();
+  updateChasterSaveVisibility();
   updateLlmDependentUi();
 });
 aiCalibStartBtn?.addEventListener('click', () => aiCalibrationTurn(''));

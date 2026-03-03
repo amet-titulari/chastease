@@ -241,6 +241,15 @@ def update_active_session_integrations(
 
     normalized_integrations = [str(item).strip().lower() for item in (payload.integrations or []) if str(item).strip()]
     integration_config = payload.integration_config if isinstance(payload.integration_config, dict) else {}
+    if "chaster" in normalized_integrations:
+        chaster_cfg = integration_config.get("chaster") if isinstance(integration_config, dict) else None
+        if isinstance(chaster_cfg, dict):
+            api_token = str(chaster_cfg.get("api_token") or "").strip()
+            if not api_token:
+                raise HTTPException(
+                    status_code=400,
+                    detail="integration_config.chaster requires api_token.",
+                )
 
     db = get_db_session(request)
     try:

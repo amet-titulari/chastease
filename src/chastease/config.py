@@ -66,6 +66,7 @@ class Config:
         self.TTL_API_BASE = os.getenv("TTL_API_BASE", "https://euapi.ttlock.com")
         self.TTL_CLIENT_ID = os.getenv("TTL_CLIENT_ID", "")
         self.TTL_CLIENT_SECRET = os.getenv("TTL_CLIENT_SECRET", "")
+        self.CHASTER_API_BASE = os.getenv("CHASTER_API_BASE", "https://api.chaster.app").strip()
         self.LLM_STRICT_EXPLICIT_ENDPOINT = _env_bool("LLM_STRICT_EXPLICIT_ENDPOINT", True)
         self.LLM_CHAT_HISTORY_TURNS = max(1, _env_int("LLM_CHAT_HISTORY_TURNS", 3))
         self.LLM_CHAT_HISTORY_CHARS_PER_TURN = max(80, _env_int("LLM_CHAT_HISTORY_CHARS_PER_TURN", 280))

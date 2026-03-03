@@ -1,6 +1,7 @@
 ﻿from .audit import router as audit_router
 from .auth import router as auth_router
 from .chat import router as chat_router
+from .chaster import router as chaster_router
 from .llm import router as llm_router
 from .setup import router as setup_router
 from .sessions import router as sessions_router
@@ -13,6 +14,7 @@ __all__ = [
     "audit_router",
     "auth_router",
     "chat_router",
+    "chaster_router",
     "llm_router",
     "setup_router",
     "sessions_router",

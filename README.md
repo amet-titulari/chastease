@@ -171,6 +171,7 @@ Setup-Persistenz (aktuell):
 - Optional per Env steuerbar: `SETUP_STORE_PATH=/pfad/zur/datei.json`
 - Relationale Persistenz: `DATABASE_URL` (default: `sqlite:///data/chastease.db`)
 - Session-Kill-Feature (nur Test/Build): `ENABLE_SESSION_KILL=true|false` (default: `false`)
+- Chaster API Basis-URL (optional): `CHASTER_API_BASE=https://api.chaster.app`
 - Optionaler AI-Read-Token fuer Live-Session-Infos: `AI_SESSION_READ_TOKEN=<secret>`
 - Auth-Tokens werden serverseitig in-memory gehalten (nach Server-Neustart ist Login erneut erforderlich)
 
