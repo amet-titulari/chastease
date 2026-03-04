@@ -1,9 +1,8 @@
 from fastapi import APIRouter, HTTPException, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from chastease.api.runtime import get_db_session, lang, t
 from chastease.api.schemas import StoryTurnRequest
+from chastease.compat.rate_limit import Limiter, get_remote_address
 from chastease.models import ChastitySession, Turn, TurnJob
 from chastease.services.jobs import submit_turn_job
 

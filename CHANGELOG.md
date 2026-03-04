@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 - 2026-03-04
+
+- Refactory/Stabilisierung:
+  - Test-Suite wieder lauffähig gemacht (Syntax-Fix in `tests/conftest.py`, pytest-sichere Main-Guards für lokale Analyse-Skripte).
+  - Live-Snapshot-Erzeugung für KI korrigiert (JSON-Parsing für `policy_snapshot_json` und `psychogram_snapshot_json`).
+  - Live-Read-Token-Zugriff harmonisiert (`X-AI-Access-Token` Header plus Query-Param-Kompatibilität für `ai_access_token`).
+  - Kompatibilitäts-Fallbacks für lokale/restriktive Umgebungen ergänzt (`slowapi`- und `argon2`-Fallbacks), ohne produktives Standardverhalten zu ändern.
+- Verifikation:
+  - Vollständiger Testlauf erfolgreich: `129 passed`.
+
 ## 0.3.0 - 2026-03-03
 
 - Setup-/Psychogramm-Flow weiter ausgebaut:

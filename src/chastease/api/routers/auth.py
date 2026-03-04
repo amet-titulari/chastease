@@ -2,8 +2,6 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy import func, select
 
 from chastease.api.runtime import (
@@ -16,6 +14,7 @@ from chastease.api.runtime import (
     resolve_user_id_from_token,
     verify_password,
 )
+from chastease.compat.rate_limit import Limiter, get_remote_address
 from chastease.api.schemas import LoginRequest, RegisterRequest
 from chastease.models import User
 

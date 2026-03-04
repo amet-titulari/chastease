@@ -322,7 +322,8 @@ def _build_live_snapshot_for_ai(session: ChastitySession, mode: str = "light") -
       - 'light': Only session_status and time_context (minimal tokens, ~300-400 chars)
       - 'full': Includes psychogram_summary and setup_session_id (~1200-1400 chars)
     """
-    policy = session.policy_snapshot_json if session.policy_snapshot_json else {}
+    policy_raw = session.policy_snapshot_json if session.policy_snapshot_json else "{}"
+    policy = json.loads(policy_raw) if isinstance(policy_raw, str) else (policy_raw or {})
     if not isinstance(policy, dict):
         policy = {}
 
@@ -360,7 +361,8 @@ def _build_live_snapshot_for_ai(session: ChastitySession, mode: str = "light") -
 
     # Add psychogram and setup details only in 'full' mode
     if str(mode).strip().lower() == "full":
-        psychogram = session.psychogram_snapshot_json if session.psychogram_snapshot_json else {}
+        psychogram_raw = session.psychogram_snapshot_json if session.psychogram_snapshot_json else "{}"
+        psychogram = json.loads(psychogram_raw) if isinstance(psychogram_raw, str) else (psychogram_raw or {})
         if not isinstance(psychogram, dict):
             psychogram = {}
         

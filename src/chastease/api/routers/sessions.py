@@ -535,7 +535,11 @@ def get_live_session_info(
 
     AI access token must be supplied via the X-AI-Access-Token header.
     """
-    ai_access_token = request.headers.get("X-AI-Access-Token") or request.headers.get("x-ai-access-token")
+    ai_access_token = (
+        request.headers.get("X-AI-Access-Token")
+        or request.headers.get("x-ai-access-token")
+        or request.query_params.get("ai_access_token")
+    )
     detail_mode = str(detail_level).strip().lower()
     if detail_mode not in ("light", "full"):
         detail_mode = "light"

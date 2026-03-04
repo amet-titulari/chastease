@@ -2,9 +2,12 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from dotenv import load_dotenv
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
+from .compat.rate_limit import (
+    Limiter,
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler,
+    get_remote_address,
+)
 
 from .backend import build_backend_router
 from .config import Config
@@ -20,7 +23,7 @@ def create_app(config_object: type[Config] = Config) -> FastAPI:
     load_dotenv(dotenv_path=root_dir / ".env")
     config = config_object()
     configure_logging(config.LOG_LEVEL)
-    app = FastAPI(title="chastease-api", version="0.2.0")
+    app = FastAPI(title="chastease-api", version="0.3.1")
     app.state.config = config
     app.state.engine = build_engine(app.state.config.DATABASE_URL)
     app.state.db_session_factory = build_session_factory(app.state.engine)
