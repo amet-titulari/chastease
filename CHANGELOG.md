@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.2 - 2026-03-04
+
+- Betrieb und Release-Härtung:
+  - Secrets aus Portainer-Compose entfernt und auf Umgebungsvariablen umgestellt (`SECRET_KEY`, `TTL_CLIENT_ID`, `TTL_CLIENT_SECRET`).
+- Performance-Optimierung in Persistenzpfaden:
+  - Häufig abgefragte Tabellenfelder indexiert (Sessions, Turns, Audit, LLM-Profile).
+  - SQLite-Startup-Migration ergänzt, um fehlende Indizes bei Bestandsdatenbanken automatisch anzulegen.
+- Resilience/Retry konsolidiert:
+  - Gemeinsame HTTP-Retry-Utility eingeführt und in OpenAI-Adapter sowie TTLock-HTTP-Pfaden vereinheitlicht.
+  - Retry-Verhalten über `Retry-After` + Backoff zentralisiert und testseitig abgesichert.
+- Bildverifizierung robuster gemacht:
+  - Timeouts für Bild-Payloads deutlich erhöht, um Provider-Latenzen besser abzufangen.
+
 ## 0.3.1 - 2026-03-04
 
 - Refactory/Stabilisierung:
