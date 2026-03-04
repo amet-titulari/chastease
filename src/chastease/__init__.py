@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from .backend import build_backend_router
 from .config import Config
@@ -24,6 +27,9 @@ def create_app(config_object: type[Config] = Config) -> FastAPI:
     init_db(app.state.engine)
     app.state.ai_service = build_ai_service(app.state.config)
     app.state.tool_registry = build_default_tool_registry()
+    limiter = Limiter(key_func=get_remote_address)
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     # Mount static files if present (used for custom JS/CSS/assets)
     static_dir = Path(__file__).resolve().parent / "static"
     if static_dir.exists():

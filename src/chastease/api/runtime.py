@@ -3,17 +3,19 @@ import hashlib
 import hmac
 import json
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from fastapi import HTTPException, Request
 from sqlalchemy import func, select
 
 from chastease.api.questionnaire import SUPPORTED_LANGUAGES, TRANSLATIONS
 from chastease.api.setup_domain import _create_draft_setup_session, _find_user_setup_session
-from chastease.models import ChastitySession, LLMProfile, User
+from chastease.models import AuthToken, ChastitySession, LLMProfile, User
 
 AUTH_TOKEN_VERSION = "v1"
-auth_tokens: dict[str, str] = {}
+_argon2 = PasswordHasher()
 
 
 def lang(value: str) -> str:
@@ -89,16 +91,38 @@ def _verify_auth_token(token: str, secret_key: str, ttl_days: int) -> str | None
     return user_id
 
 
+def persist_auth_token(token: str, user_id: str, db, ttl_days: int = 30) -> None:
+    expires_at = datetime.now(UTC) + timedelta(days=ttl_days)
+    db_token = AuthToken(
+        token=token,
+        user_id=user_id,
+        expires_at=expires_at,
+        revoked=False,
+        created_at=datetime.now(UTC),
+    )
+    db.merge(db_token)
+    db.commit()
+
+
 def resolve_user_id_from_token(auth_token: str, request: Request) -> str | None:
-    cached = auth_tokens.get(auth_token)
-    if cached:
-        return cached
+    db = get_db_session(request)
+    try:
+        db_token = db.get(AuthToken, auth_token)
+        if db_token is not None and not db_token.revoked:
+            now = datetime.now(UTC)
+            expires = db_token.expires_at
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=UTC)
+            if now < expires:
+                return db_token.user_id
+    except Exception:
+        pass
+    finally:
+        db.close()
+
     secret_key = request.app.state.config.SECRET_KEY
     ttl_days = int(getattr(request.app.state.config, "AUTH_TOKEN_TTL_DAYS", 30))
-    user_id = _verify_auth_token(auth_token, secret_key, ttl_days)
-    if user_id:
-        auth_tokens[auth_token] = user_id
-    return user_id
+    return _verify_auth_token(auth_token, secret_key, ttl_days)
 
 
 def normalize_email(raw: str) -> str:
@@ -112,17 +136,20 @@ def normalize_email(raw: str) -> str:
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000).hex()
-    return f"{salt}${digest}"
+    return _argon2.hash(password)
 
 
 def verify_password(password: str, encoded: str) -> bool:
-    if "$" not in encoded:
-        return False
-    salt, expected = encoded.split("$", 1)
-    actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000).hex()
-    return hmac.compare_digest(actual, expected)
+    if encoded.startswith("$argon2"):
+        try:
+            return _argon2.verify(encoded, password)
+        except (VerifyMismatchError, VerificationError, InvalidHashError):
+            return False
+    if "$" in encoded:
+        salt, expected = encoded.split("$", 1)
+        actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000).hex()
+        return hmac.compare_digest(actual, expected)
+    return False
 
 
 def require_user_token(user_id: str, auth_token: str, db, request: Request) -> User:

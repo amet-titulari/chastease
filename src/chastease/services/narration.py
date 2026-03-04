@@ -13,7 +13,7 @@ from chastease.api.setup_domain import _fixed_soft_limits_text, _lang, _required
 from chastease.connectors import generate_narration_with_optional_profile
 from chastease.models import ChastitySession, Turn, User
 from chastease.repositories.setup_store import load_sessions
-from chastease.services.ai.base import StoryTurnContext
+from chastease.services.ai.base import StoryTurnContext, TurnHistoryEntry
 
 logger = logging.getLogger(__name__)
 
@@ -322,7 +322,7 @@ def _build_live_snapshot_for_ai(session: ChastitySession, mode: str = "light") -
       - 'light': Only session_status and time_context (minimal tokens, ~300-400 chars)
       - 'full': Includes psychogram_summary and setup_session_id (~1200-1400 chars)
     """
-    policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
+    policy = session.policy_snapshot_json if session.policy_snapshot_json else {}
     if not isinstance(policy, dict):
         policy = {}
 
@@ -360,7 +360,7 @@ def _build_live_snapshot_for_ai(session: ChastitySession, mode: str = "light") -
 
     # Add psychogram and setup details only in 'full' mode
     if str(mode).strip().lower() == "full":
-        psychogram = json.loads(session.psychogram_snapshot_json) if session.psychogram_snapshot_json else {}
+        psychogram = session.psychogram_snapshot_json if session.psychogram_snapshot_json else {}
         if not isinstance(psychogram, dict):
             psychogram = {}
         
@@ -402,20 +402,15 @@ def _resolve_setup_user_display_name(db, setup_session: dict) -> str:
 def generate_ai_narration_for_session(
     db, request: Request, session: ChastitySession, action: str, language: str, attachments: list[dict] | None = None
 ) -> str:
-    psychogram = json.loads(session.psychogram_snapshot_json)
-    policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
+    psychogram_raw = session.psychogram_snapshot_json
+    policy_raw = session.policy_snapshot_json if session.policy_snapshot_json else "{}"
+    psychogram = json.loads(psychogram_raw) if isinstance(psychogram_raw, str) else (psychogram_raw or {})
+    policy = json.loads(policy_raw) if isinstance(policy_raw, str) else (policy_raw or {})
     psychogram_summary = _build_ai_context_summary(psychogram, policy)
 
     config = request.app.state.config
     history_turn_limit = max(1, int(getattr(config, "LLM_CHAT_HISTORY_TURNS", 3)))
-    history_chars = max(80, int(getattr(config, "LLM_CHAT_HISTORY_CHARS_PER_TURN", 280)))
     include_tools_summary = bool(getattr(config, "LLM_CHAT_INCLUDE_TOOLS_SUMMARY", False))
-
-    def _trim(text: str) -> str:
-        compact = " ".join(str(text or "").split())
-        if len(compact) <= history_chars:
-            return compact
-        return compact[: max(1, history_chars - 3)].rstrip() + "..."
 
     recent_turns = (
         db.scalars(
@@ -426,34 +421,27 @@ def generate_ai_narration_for_session(
         )
         .all()
     )
-    recent_turns = list(reversed(recent_turns))
-    history_lines: list[str] = []
-    for turn in recent_turns:
-        history_lines.append(f"Wearer: {_trim(turn.player_action)}")
-        history_lines.append(f"Keyholder: {_trim(turn.ai_narration)}")
-    history_block = "\n".join(history_lines).strip()
-    attachment_names = [str(item.get("name", "file")) for item in (attachments or [])]
-    attachment_hint = f"\nCurrent attachments: {', '.join(attachment_names)}" if attachment_names else ""
-    action_with_context = (
-        (f"Recent dialogue:\n{history_block}\n\nCurrent wearer input: {action}{attachment_hint}")
-        if history_block
-        else f"Current wearer input: {action}{attachment_hint}"
-    )
+    turns_history = [
+        TurnHistoryEntry(
+            turn_no=t.turn_no,
+            player_action=t.player_action,
+            ai_narration=t.ai_narration,
+        )
+        for t in reversed(recent_turns)
+    ]
 
     live_snapshot = _build_live_snapshot_for_ai(session)
-    action_with_context = (
-        f"{action_with_context}\n\n"
-        f"LIVE_SESSION_SNAPSHOT_JSON:\n{json.dumps(live_snapshot, ensure_ascii=False)}"
-    )
-
-    if include_tools_summary:
-        action_with_context = f"{action_with_context}\n\nAvailable tools: {_available_tools_summary(request)}"
+    tools_summary = _available_tools_summary(request) if include_tools_summary else None
 
     context = StoryTurnContext(
         session_id=session.id,
-        action=action_with_context,
+        action=action,
         language=language,
         psychogram_summary=psychogram_summary,
+        turns_history=turns_history,
+        live_snapshot=live_snapshot,
+        tools_summary=tools_summary,
+        policy=policy,
     )
     return generate_narration_with_optional_profile(
         db,

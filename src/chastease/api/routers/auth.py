@@ -1,16 +1,18 @@
-﻿from datetime import UTC, datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import func, select
 
 from chastease.api.runtime import (
-    auth_tokens,
     find_or_create_draft_setup_session,
     get_db_session,
     hash_password,
     mint_auth_token,
     normalize_email,
+    persist_auth_token,
     resolve_user_id_from_token,
     verify_password,
 )
@@ -18,9 +20,11 @@ from chastease.api.schemas import LoginRequest, RegisterRequest
 from chastease.models import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/register")
+@limiter.limit("10/minute")
 def register(payload: RegisterRequest, request: Request) -> dict:
     db = get_db_session(request)
     try:
@@ -46,8 +50,9 @@ def register(payload: RegisterRequest, request: Request) -> dict:
         db.add(user)
         db.commit()
 
+        ttl_days = int(getattr(request.app.state.config, "AUTH_TOKEN_TTL_DAYS", 30))
         token = mint_auth_token(user.id, request.app.state.config.SECRET_KEY)
-        auth_tokens[token] = user.id
+        persist_auth_token(token, user.id, db, ttl_days)
         draft_id, draft_session = find_or_create_draft_setup_session(user.id, "de")
         return {
             "user_id": user.id,
@@ -63,6 +68,7 @@ def register(payload: RegisterRequest, request: Request) -> dict:
 
 
 @router.post("/login")
+@limiter.limit("20/minute")
 def login(payload: LoginRequest, request: Request) -> dict:
     db = get_db_session(request)
     try:
@@ -73,8 +79,9 @@ def login(payload: LoginRequest, request: Request) -> dict:
         if user is None or not verify_password(payload.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials.")
 
+        ttl_days = int(getattr(request.app.state.config, "AUTH_TOKEN_TTL_DAYS", 30))
         token = mint_auth_token(user.id, request.app.state.config.SECRET_KEY)
-        auth_tokens[token] = user.id
+        persist_auth_token(token, user.id, db, ttl_days)
         draft_id, draft_session = find_or_create_draft_setup_session(user.id, "de")
         return {
             "user_id": user.id,

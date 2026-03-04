@@ -1,4 +1,5 @@
 import httpx
+import json
 import logging
 import random
 import time
@@ -339,10 +340,39 @@ class OpenAIAdapter:
                 attachment_content.append({"type": "image_url", "image_url": {"url": data_url}})
 
         attachment_summary = "\n".join(attachment_lines) if attachment_lines else "- none"
+
+        history_parts: list[str] = []
+        history_chars = 280
+        for entry in context.turns_history:
+            def _trim(text: str, limit: int = history_chars) -> str:
+                compact = " ".join(str(text or "").split())
+                if len(compact) <= limit:
+                    return compact
+                return compact[: max(1, limit - 3)].rstrip() + "..."
+            history_parts.append(f"Wearer: {_trim(entry.player_action)}")
+            history_parts.append(f"Keyholder: {_trim(entry.ai_narration)}")
+        history_block = "\n".join(history_parts).strip()
+
+        attachment_names = [str(item.get("name", "file")) for item in (attachments or [])]
+        attachment_hint = f"\nCurrent attachments: {', '.join(attachment_names)}" if attachment_names else ""
+        if history_block:
+            action_block = f"Recent dialogue:\n{history_block}\n\nCurrent wearer input: {context.action}{attachment_hint}"
+        else:
+            action_block = f"Current wearer input: {context.action}{attachment_hint}"
+
+        if context.live_snapshot:
+            action_block = (
+                f"{action_block}\n\n"
+                f"LIVE_SESSION_SNAPSHOT_JSON:\n{json.dumps(context.live_snapshot, ensure_ascii=False)}"
+            )
+
+        if context.tools_summary:
+            action_block = f"{action_block}\n\nAvailable tools: {context.tools_summary}"
+
         user_prompt = (
             f"Session: {context.session_id}\n"
             f"Psychogram summary: {context.psychogram_summary}\n"
-            f"Wearer action: {context.action}\n"
+            f"Wearer action: {action_block}\n"
             f"Attachments:\n{attachment_summary}\n"
             f"Language: {context.language}\n"
             "Respond as the keyholder with concise narrative and next guidance. "

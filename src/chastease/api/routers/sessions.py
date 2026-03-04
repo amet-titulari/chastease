@@ -523,17 +523,19 @@ def get_live_session_info(
     session_id: str,
     request: Request,
     auth_token: str | None = None,
-    ai_access_token: str | None = None,
     recent_turns_limit: int = 5,
     detail_level: str = "light",
 ) -> dict:
     """
     Retrieve live session information.
-    
+
     detail_level:
       - 'light': Only session_status and time_context (minimal token usage)
       - 'full': Includes setup_context, turns, and full session object
+
+    AI access token must be supplied via the X-AI-Access-Token header.
     """
+    ai_access_token = request.headers.get("X-AI-Access-Token") or request.headers.get("x-ai-access-token")
     detail_mode = str(detail_level).strip().lower()
     if detail_mode not in ("light", "full"):
         detail_mode = "light"
