@@ -5,7 +5,42 @@ document.addEventListener('DOMContentLoaded', function () {
   const contractBox = document.getElementById('contractBox');
   const consentBox = document.getElementById('consentBox');
   const consentRequired = document.getElementById('consentRequired');
+  const contractChangesBox = document.getElementById('contractChangesBox');
+  const contractChangesList = document.getElementById('contractChangesList');
+  const contractDiffPreview = document.getElementById('contractDiffPreview');
+  const contractDiffDetails = document.getElementById('contractDiffDetails');
   let setupSessionId = null;
+
+  function renderContractTechnicalInfo(generated) {
+    if (!contractChangesBox || !contractChangesList || !contractDiffPreview || !contractDiffDetails) return;
+    const technical = (generated && typeof generated === 'object' && generated.technical_info && typeof generated.technical_info === 'object')
+      ? generated.technical_info
+      : null;
+    const edits = Array.isArray(technical?.ai_edits) ? technical.ai_edits : [];
+    const diffText = String(technical?.diff_preview || '').trim();
+
+    if (!edits.length && !diffText) {
+      contractChangesBox.classList.add('hidden');
+      contractChangesList.innerHTML = '';
+      contractDiffPreview.textContent = '';
+      return;
+    }
+
+    contractChangesList.innerHTML = '';
+    edits.forEach((edit) => {
+      const li = document.createElement('li');
+      const target = String(edit?.target || '-');
+      const op = String(edit?.op || '-');
+      const before = String(edit?.before_preview || '').trim();
+      const after = String(edit?.after_preview || '').trim();
+      li.textContent = `${target} (${op})${before || after ? `: "${before || '...'}" -> "${after || '...'}"` : ''}`;
+      contractChangesList.appendChild(li);
+    });
+
+    contractDiffPreview.textContent = diffText || 'Kein Diff verfuegbar.';
+    contractDiffDetails.open = Boolean(diffText);
+    contractChangesBox.classList.remove('hidden');
+  }
 
   function renderMarkdown(node, value) {
     if (!node) return;
@@ -63,6 +98,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     renderMarkdown(contractBox, generated.text);
+    renderContractTechnicalInfo(generated);
 
     const consent = generated.consent || {};
     const required = String(consent.required_text || 'Ich akzeptiere diesen Vertrag');

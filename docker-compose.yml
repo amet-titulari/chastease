@@ -30,7 +30,7 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       UVICORN_RELOAD: "1"
-      DATABASE_URL: postgresql://chastease:chastease@postgres:5432/chastease
+      DATABASE_URL: postgresql+psycopg://chastease:chastease@postgres:5432/chastease
       IMAGE_VERIFICATION_DIR: data/image_verifications
     volumes:
       - ./:/app

@@ -325,18 +325,6 @@
       <div id="accQuestionBody" class="mt-4 space-y-4 hidden">
         <p class="text-sm text-gray-400">Voraussetzung: LLM Live-Test muss erfolgreich sein und gespeichert werden.</p>
         <div id="questionnaireWrap" class="space-y-3"></div>
-        <div class="bg-gray-900 border border-gray-700 rounded p-3 space-y-3">
-          <p class="text-sm text-gray-300">AI-Kalibrierung (dynamische Fragen)</p>
-          <p id="aiCalibAssistant" class="text-sm text-gray-300">Noch nicht gestartet.</p>
-          <p id="aiCalibQuestion" class="text-sm text-sky-300"></p>
-          <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
-            <input id="aiCalibInput" type="text" class="w-full rounded-md bg-gray-800 p-2 border border-gray-700" placeholder="Deine Antwort an die AI..." />
-            <button id="aiCalibSendBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Antwort senden</button>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button id="aiCalibStartBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Kalibrierung starten</button>
-          </div>
-        </div>
         <div class="flex flex-wrap gap-2">
           <button id="submitAnswersBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">Speichern</button>
         </div>
@@ -380,5 +368,5 @@
 {% block scripts %}
   <script src="/static/js/common.js"></script>
   <script src="/static/js/session.js"></script>
-  <script src="/static/js/setup.js"></script>
+  <script src="/static/js/setup.js?v=20260306"></script>
 {% endblock %}

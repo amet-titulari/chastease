@@ -5,7 +5,7 @@ from time import sleep
 from uuid import uuid4
 
 from chastease.api.routers import chat as chat_router
-from chastease.models import ChastitySession
+from chastease.models import AuditEntry, ChastitySession
 
 
 def _register(client, username="chat-user", password="demo-pass-123"):
@@ -99,6 +99,25 @@ def test_chat_proxy_turn_and_execute_action_endpoint(client):
     assert "narration" in data
     assert "pending_actions" in data
 
+    db = client.app.state.db_session_factory()
+    try:
+        activity_snapshot = (
+            db.query(AuditEntry)
+            .filter(
+                AuditEntry.session_id == session_id,
+                AuditEntry.event_type == "activity_snapshot",
+            )
+            .order_by(AuditEntry.created_at.desc())
+            .first()
+        )
+        assert activity_snapshot is not None
+        metadata = json.loads(activity_snapshot.metadata_json or "{}")
+        assert "pending_actions" in metadata
+        assert "executed_actions" in metadata
+        assert "failed_actions" in metadata
+    finally:
+        db.close()
+
     execute = client.post(
         "/api/v1/chat/actions/execute",
         json={"session_id": session_id, "action_type": "pause_timer", "payload": {"minutes": 10}},
@@ -109,6 +128,24 @@ def test_chat_proxy_turn_and_execute_action_endpoint(client):
     assert exec_data["action_type"] == "pause_timer"
     assert exec_data["timer"]["state"] == "paused"
     assert exec_data["timer"]["paused_at"] is not None
+
+    db = client.app.state.db_session_factory()
+    try:
+        manual_event = (
+            db.query(AuditEntry)
+            .filter(
+                AuditEntry.session_id == session_id,
+                AuditEntry.event_type == "activity_manual_execute",
+            )
+            .order_by(AuditEntry.created_at.desc())
+            .first()
+        )
+        assert manual_event is not None
+        metadata = json.loads(manual_event.metadata_json or "{}")
+        assert metadata.get("status") == "success"
+        assert metadata.get("action_type") == "pause_timer"
+    finally:
+        db.close()
 
     execute_add_time = client.post(
         "/api/v1/chat/actions/execute",
@@ -826,6 +863,55 @@ def test_chat_vision_review_saves_uploaded_image(client, monkeypatch, tmp_path):
     saved_path = data.get("saved_image_path")
     assert isinstance(saved_path, str) and saved_path
     assert Path(saved_path).exists()
+
+
+def test_chat_vision_review_logs_failed_image_verification_activity(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("IMAGE_VERIFICATION_DIR", str(tmp_path / "image_reviews_failed"))
+    auth = _register(client, username="chat-user-vision-failed")
+    session_id = _create_active_session(client, auth)
+    client.app.state.ai_service.generate_narration = lambda _context: "Object not compliant. Verdict: FAILED."
+
+    picture_data_url = (
+        "data:image/png;base64,"
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AApMBgS9x+h0AAAAASUVORK5CYII="
+    )
+    review = client.post(
+        "/api/v1/chat/vision-review",
+        json={
+            "session_id": session_id,
+            "message": "Pruefung fuer Action Card.",
+            "language": "de",
+            "picture_name": "proof.png",
+            "picture_content_type": "image/png",
+            "picture_data_url": picture_data_url,
+            "verification_action_payload": {
+                "request": "Foto eines Hasen",
+                "verification_instruction": "Pruefe auf echten Hasen",
+            },
+            "source": "upload",
+        },
+    )
+    assert review.status_code == 200
+    data = review.json()
+    assert any(action.get("action_type") == "image_verification" for action in data.get("failed_actions", []))
+
+    db = client.app.state.db_session_factory()
+    try:
+        activity_snapshot = (
+            db.query(AuditEntry)
+            .filter(
+                AuditEntry.session_id == session_id,
+                AuditEntry.event_type == "activity_snapshot",
+            )
+            .order_by(AuditEntry.created_at.desc())
+            .first()
+        )
+        assert activity_snapshot is not None
+        metadata = json.loads(activity_snapshot.metadata_json or "{}")
+        failed_actions = metadata.get("failed_actions") if isinstance(metadata.get("failed_actions"), list) else []
+        assert any(action.get("action_type") == "image_verification" for action in failed_actions)
+    finally:
+        db.close()
 
 
 def test_chat_turn_history_endpoint_returns_persisted_turns(client):

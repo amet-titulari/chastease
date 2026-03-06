@@ -7,6 +7,7 @@ const refreshBtn = document.getElementById('dashboardRefreshBtn');
 const killBtn = document.getElementById('dashboardKillBtn');
 const auditBtn = document.getElementById('dashboardAuditBtn');
 const turnLogBtn = document.getElementById('dashboardTurnBtn');
+const activityLogBtn = document.getElementById('dashboardActivityBtn');
 
 const timerSummaryEl = document.getElementById('dashboardTimerSummary');
 const timerDayAEl = document.getElementById('timerDayA');
@@ -213,6 +214,112 @@ function renderPsychogram(body) {
   });
 }
 
+const SESSION_INFO_LABELS = {
+  session_id: 'Session-ID',
+  status: 'Status',
+  language: 'Sprache',
+  created_at: 'Erstellt am',
+  updated_at: 'Aktualisiert am',
+  autonomy_mode: 'Autonomiemodus',
+  instruction_style: 'Instruktionsstil',
+  desired_intensity: 'Intensität',
+  grooming_preference: 'Pflegepräferenz',
+  integrations: 'Integrationen',
+  hard_stop_enabled: 'Hard-Stop',
+  seal_mode: 'Versiegelungsmodus',
+  seal_status: 'Versiegelungsstatus',
+  seal_current: 'Aktuelle Plombe',
+  contract_start: 'Vertragsbeginn',
+  contract_end: 'Vertragsende',
+  contract_min_end: 'Frühestmögl. Ende',
+  contract_max_end: 'Spätestmögl. Ende',
+  timer_state: 'Timer-Status',
+  timer_end: 'Timer-Ende',
+  opening_limit: 'Öffnungslimit',
+  opening_window: 'Öffnungsfenster',
+  penalty_per_day: 'Max. Strafe/Tag',
+  penalty_per_week: 'Max. Strafe/Woche',
+  blocked_words: 'Gesperrte Wörter',
+  forbidden_topics: 'Verbotene Themen',
+};
+
+function fmtDateIso(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function renderSessionInfo(body) {
+  const sectionEl = document.getElementById('sessionInfoSection');
+  const tbodyEl = document.getElementById('sessionInfoTableBody');
+  if (!sectionEl || !tbodyEl) return;
+
+  if (!body?.has_active_session) {
+    sectionEl.classList.add('hidden');
+    return;
+  }
+
+  const sess = body.chastity_session || {};
+  const policy = (sess.policy && typeof sess.policy === 'object') ? sess.policy : {};
+  const psychogram = (sess.psychogram && typeof sess.psychogram === 'object') ? sess.psychogram : {};
+  const contract = (policy.contract && typeof policy.contract === 'object') ? policy.contract : {};
+  const limits = (policy.limits && typeof policy.limits === 'object') ? policy.limits : {};
+  const interaction = (policy.interaction_profile && typeof policy.interaction_profile === 'object') ? policy.interaction_profile : {};
+  const safetyFilters = (policy.safety_filters && typeof policy.safety_filters === 'object') ? policy.safety_filters : {};
+  const psychInteraction = (psychogram.interaction_preferences && typeof psychogram.interaction_preferences === 'object')
+    ? psychogram.interaction_preferences
+    : {};
+  const psychPersonal = (psychogram.personal_preferences && typeof psychogram.personal_preferences === 'object')
+    ? psychogram.personal_preferences
+    : {};
+  const timer = (policy.runtime_timer && typeof policy.runtime_timer === 'object') ? policy.runtime_timer : {};
+  const seal = (policy.seal && typeof policy.seal === 'object') ? policy.seal : {};
+  const runtimeSeal = (policy.runtime_seal && typeof policy.runtime_seal === 'object') ? policy.runtime_seal : {};
+
+  const rows = [
+    ['session_id', sess.session_id || '—'],
+    ['status', sess.status || '—'],
+    ['language', sess.language || '—'],
+    ['created_at', fmtDateIso(sess.created_at)],
+    ['updated_at', fmtDateIso(sess.updated_at)],
+    ['autonomy_mode', policy.autonomy_mode || '—'],
+    ['instruction_style', interaction.instruction_style || psychInteraction.instruction_style || '—'],
+    ['desired_intensity', psychInteraction.desired_intensity || '—'],
+    ['grooming_preference', psychPersonal.grooming_preference || '—'],
+    ['integrations', Array.isArray(policy.integrations) && policy.integrations.length ? policy.integrations.join(', ') : '—'],
+    ['hard_stop_enabled', policy.hard_stop_enabled != null ? (policy.hard_stop_enabled ? 'Ja' : 'Nein') : '—'],
+    ['seal_mode', seal.mode || '—'],
+    ['seal_status', runtimeSeal.status || '—'],
+    ['seal_current', runtimeSeal.current_text || '—'],
+    ['contract_start', contract.start_date || contract.contract_start_date || '—'],
+    ['contract_end', contract.end_date || contract.proposed_end_date || '—'],
+    ['contract_min_end', contract.min_end_date || '—'],
+    ['contract_max_end', contract.max_end_date || '—'],
+    ['timer_state', timer.state || '—'],
+    ['timer_end', fmtDateIso(timer.effective_end_at)],
+    ['opening_limit', limits.max_openings_in_period != null ? `${limits.max_openings_in_period} / ${limits.opening_limit_period || 'Tag'}` : '—'],
+    ['opening_window', limits.opening_window_minutes != null ? `${limits.opening_window_minutes} Min.` : '—'],
+    ['penalty_per_day', limits.max_penalty_per_day_minutes != null ? `${limits.max_penalty_per_day_minutes} Min.` : '—'],
+    ['penalty_per_week', limits.max_penalty_per_week_minutes != null ? `${limits.max_penalty_per_week_minutes} Min.` : '—'],
+    ['blocked_words', Array.isArray(safetyFilters.blocked_trigger_words) && safetyFilters.blocked_trigger_words.length ? safetyFilters.blocked_trigger_words.join(', ') : '—'],
+    ['forbidden_topics', Array.isArray(safetyFilters.forbidden_topics) && safetyFilters.forbidden_topics.length ? safetyFilters.forbidden_topics.join(', ') : '—'],
+  ];
+
+  tbodyEl.innerHTML = '';
+  rows.forEach(([key, value]) => {
+    const tr = document.createElement('tr');
+    tr.className = 'align-top';
+    tr.innerHTML = `
+      <td class="py-2 pr-4 text-gray-400 font-medium whitespace-nowrap w-1/3">${SESSION_INFO_LABELS[key] || key}</td>
+      <td class="py-2 text-gray-100 break-all">${String(value)}</td>
+    `;
+    tbodyEl.appendChild(tr);
+  });
+
+  sectionEl.classList.remove('hidden');
+}
+
 function describeActiveSession(body) {
   if (!body) return '—';
   if (body.has_active_session) {
@@ -234,6 +341,7 @@ function updateView(body) {
   if (activeEl) activeEl.textContent = describeActiveSession(body);
   if (setupEl) setupEl.textContent = describeSetup(body);
   renderTimer(body);
+  renderSessionInfo(body);
   renderPsychogram(body);
 
   if (statusEl) {
@@ -343,11 +451,34 @@ function openTurnLog() {
   if (statusEl) chastease_common.setStatus(statusEl, 'Turn-Log geöffnet.', 'ok');
 }
 
+function openActivityLog() {
+  if (!currentSession?.has_active_session) {
+    if (statusEl) chastease_common.setStatus(statusEl, 'Keine aktive Session.', 'err');
+    return;
+  }
+  const sessionEntity = currentSession.chastity_session || {};
+  const sessionId = sessionEntity.session_id || sessionEntity.id;
+  if (!sessionId) {
+    if (statusEl) chastease_common.setStatus(statusEl, 'Session-ID fehlt.', 'err');
+    return;
+  }
+  if (statusEl) chastease_common.setStatus(statusEl, 'Activity-Log wird geöffnet.');
+  const target = `/activity-log?session_id=${encodeURIComponent(sessionId)}`;
+  const win = window.open(target, '_blank');
+  if (!win) {
+    if (statusEl) chastease_common.setStatus(statusEl, 'Popup blockiert.', 'err');
+    return;
+  }
+  win.focus?.();
+  if (statusEl) chastease_common.setStatus(statusEl, 'Activity-Log geöffnet.', 'ok');
+}
+
 if (refreshBtn) refreshBtn.addEventListener('click', () => refreshSession(true));
 if (setupBtn) setupBtn.addEventListener('click', goToSetup);
 if (killBtn) killBtn.addEventListener('click', killSession);
 if (auditBtn) auditBtn.addEventListener('click', openAuditLog);
 if (turnLogBtn) turnLogBtn.addEventListener('click', openTurnLog);
+if (activityLogBtn) activityLogBtn.addEventListener('click', openActivityLog);
 
 document.addEventListener('visibilitychange', () => {
   if (!shouldRunSessionRefresh()) return;

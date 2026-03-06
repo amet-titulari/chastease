@@ -10,10 +10,10 @@ from chastease import create_app
 import uvicorn
 from dotenv import load_dotenv
 
-app = create_app()
-
 # load .env from project root if present (allows RELOAD/UVICORN_RELOAD settings)
 load_dotenv(dotenv_path=ROOT / '.env')
+
+app = create_app()
 
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")

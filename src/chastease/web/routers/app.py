@@ -56,6 +56,18 @@ def turn_log_view(request: Request, session_id: str | None = None):
     )
 
 
+@router.get("/activity-log", response_class=HTMLResponse)
+def activity_log_view(request: Request, session_id: str | None = None):
+    audit_log_enabled = bool(getattr(request.app.state.config, "ENABLE_AUDIT_LOG_VIEW", False))
+    if not audit_log_enabled:
+        raise HTTPException(status_code=404, detail="Not found.")
+    return templates.TemplateResponse(
+        request,
+        "activity_log.html",
+        {"session_id": session_id},
+    )
+
+
 @router.get("/setup", response_class=HTMLResponse)
 def setup_view(request: Request, setup_session_id: str | None = None):
     session_kill_enabled = bool(getattr(request.app.state.config, "ENABLE_SESSION_KILL", False))

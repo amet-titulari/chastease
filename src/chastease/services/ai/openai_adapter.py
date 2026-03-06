@@ -369,15 +369,22 @@ class OpenAIAdapter:
         if context.tools_summary:
             action_block = f"{action_block}\n\nAvailable tools: {context.tools_summary}"
 
-        user_prompt = (
-            f"Session: {context.session_id}\n"
-            f"Psychogram summary: {context.psychogram_summary}\n"
-            f"Wearer action: {action_block}\n"
-            f"Attachments:\n{attachment_summary}\n"
-            f"Language: {context.language}\n"
-            "Respond as the keyholder with concise narrative and next guidance. "
-            "Do not echo raw machine-readable key/value profile fields."
-        )
+        is_setup_contract = self._is_setup_preview_contract_request(context)
+        is_setup_analysis = self._is_setup_preview_analysis_request(context)
+        is_live_state_dump = self._is_live_state_dump_request(context)
+
+        if is_setup_contract:
+            user_prompt = context.action
+        else:
+            user_prompt = (
+                f"Session: {context.session_id}\n"
+                f"Psychogram summary: {context.psychogram_summary}\n"
+                f"Wearer action: {action_block}\n"
+                f"Attachments:\n{attachment_summary}\n"
+                f"Language: {context.language}\n"
+                "Respond as the keyholder with concise narrative and next guidance. "
+                "Do not echo raw machine-readable key/value profile fields."
+            )
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -390,27 +397,42 @@ class OpenAIAdapter:
                 "role": "user",
                 "content": [{"type": "text", "text": user_prompt}, *attachment_content],
             }
-        is_setup_contract = self._is_setup_preview_contract_request(context)
-        is_setup_analysis = self._is_setup_preview_analysis_request(context)
-        is_live_state_dump = self._is_live_state_dump_request(context)
         max_tokens = 1800 if is_setup_contract else (650 if is_setup_analysis else self.chat_max_tokens)
         if is_live_state_dump:
             max_tokens = max(max_tokens, 1200)
 
-        payload = {
-            "model": chat_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                user_message,
-            ],
-            "temperature": 0.3,
-            "top_p": 0.9,
-            "max_tokens": max_tokens,
-        }
+        if is_setup_contract:
+            contract_system_prompt = (
+                "You are a JSON contract editor. "
+                "Output ONLY valid JSON matching the requested schema. "
+                "Do not output any prose, markdown, or explanation outside the JSON object. "
+                "Never output [[REQUEST:...]] lines."
+            )
+            payload = {
+                "model": chat_model,
+                "messages": [
+                    {"role": "system", "content": contract_system_prompt},
+                    user_message,
+                ],
+                "temperature": 0.2,
+                "top_p": 0.9,
+                "max_tokens": max_tokens,
+            }
+        else:
+            payload = {
+                "model": chat_model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    user_message,
+                ],
+                "temperature": 0.3,
+                "top_p": 0.9,
+                "max_tokens": max_tokens,
+            }
         responses_payload = {
             "model": chat_model,
             "input": user_prompt,
-            "temperature": 0.3,
+            "temperature": 0.2 if is_setup_contract else 0.3,
             "max_output_tokens": max_tokens,
         }
 

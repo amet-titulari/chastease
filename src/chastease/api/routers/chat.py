@@ -237,6 +237,16 @@ def _is_abort_cancellation_message(message: str) -> bool:
     return any(hint in normalized for hint in cancellation_hints)
 
 
+def _extract_verification_status(narration: str) -> str | None:
+    """Return normalized status from vision narration verdict (PASSED/FAILED)."""
+    upper = str(narration or "").upper()
+    if re.search(r"\bFAILED\b", upper) or re.search(r"\bNOT\s+PASSED\b", upper):
+        return "failed"
+    if re.search(r"\bPASSED\b", upper):
+        return "success"
+    return None
+
+
 def _build_hygiene_open_pending_action(policy: dict, trigger: str, reason: str) -> dict:
     limits = policy.get("limits") if isinstance(policy.get("limits"), dict) else {}
     opening_window_minutes = int(limits.get("opening_window_minutes") or 15)
@@ -1616,6 +1626,25 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         if policy_dirty:
             session.policy_snapshot_json = json.dumps(policy)
 
+        activity_snapshot_event = {
+            "event_type": "activity_snapshot",
+            "detail": "Action status snapshot captured for this turn.",
+            "metadata": {
+                "source": "chat_turn",
+                "pending_actions": pending_actions,
+                "executed_actions": executed_actions,
+                "failed_actions": failed_actions,
+                "action_diagnostics": {
+                    "strict_request_tag_mode": strict_request_tag_mode,
+                    "raw_machine_tag_present": raw_has_machine_tag,
+                    "reask_attempted": reask_attempted,
+                    "reask_applied": reask_applied,
+                    "fallback_applied": fallback_applied,
+                },
+            },
+        }
+        audit_events_to_log.append(activity_snapshot_event)
+
         current_turn_no = db.scalar(select(func.max(Turn.turn_no)).where(Turn.session_id == session.id))
         next_turn_no = (current_turn_no or 0) + 1
         turn = Turn(
@@ -1730,6 +1759,7 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
         session = db.get(ChastitySession, payload.session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Chastity session not found.")
+        audit_events_to_log: list[dict] = []
         narration_raw = generate_ai_narration_for_session(
             db, request, session, enriched_prompt, request_lang, attachments
         )
@@ -1742,6 +1772,28 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
             policy=policy,
             pending_actions=pending_actions,
         )
+        verification_status = _extract_verification_status(narration)
+        verification_payload = {
+            **action_payload,
+            "source": payload.source,
+            "stored_image_path": saved_image_path,
+        }
+        if verification_status == "failed":
+            failed_actions.append(
+                {
+                    "action_type": "image_verification",
+                    "payload": verification_payload,
+                    "detail": "Image verification verdict: FAILED.",
+                }
+            )
+        elif verification_status == "success":
+            executed_actions.append(
+                {
+                    "action_type": "image_verification",
+                    "payload": verification_payload,
+                    "message": "Image verification verdict: PASSED.",
+                }
+            )
         if executed_actions:
             session.policy_snapshot_json = json.dumps(updated_policy)
 
@@ -1760,8 +1812,30 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
             created_at=datetime.now(UTC),
         )
         session.updated_at = datetime.now(UTC)
+        audit_events_to_log.append(
+            {
+                "event_type": "activity_snapshot",
+                "detail": "Action status snapshot captured for this vision review turn.",
+                "metadata": {
+                    "source": "chat_vision_review",
+                    "pending_actions": pending_actions,
+                    "executed_actions": executed_actions,
+                    "failed_actions": failed_actions,
+                },
+            }
+        )
         db.add(turn)
         db.add(session)
+        for event in audit_events_to_log:
+            record_audit_event(
+                db=db,
+                session_id=session.id,
+                user_id=session.user_id,
+                turn_id=turn.id,
+                event_type=event.get("event_type") or "",
+                detail=event.get("detail") or "",
+                metadata=event.get("metadata"),
+            )
         db.commit()
     finally:
         db.close()
@@ -1805,6 +1879,21 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
         )
         session.policy_snapshot_json = json.dumps(updated_policy)
         session.updated_at = now
+        record_audit_event(
+            db=db,
+            session_id=session.id,
+            user_id=session.user_id,
+            turn_id=None,
+            event_type="activity_manual_execute",
+            detail="Manual action execution completed.",
+            metadata={
+                "source": "chat_action_execute",
+                "status": "success",
+                "action_type": result.get("action_type"),
+                "payload": result.get("payload") or {},
+                "message": result.get("message") or "",
+            },
+        )
         db.add(session)
         db.commit()
     finally:

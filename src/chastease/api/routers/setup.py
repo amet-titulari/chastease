@@ -1243,7 +1243,8 @@ def generate_setup_contract(setup_session_id: str, payload: SetupArtifactsReques
     active_session_id = setup_session.get("active_session_id")
 
     existing_contract = ((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("text")
-    if existing_contract and not payload.force:
+    has_unresolved_placeholders = "{{" in str(existing_contract or "") and "}}" in str(existing_contract or "")
+    if existing_contract and not payload.force and not has_unresolved_placeholders:
         consent = _ensure_generated_contract_consent(setup_session)
         generated_contract = ((setup_session.get("policy_preview") or {}).get("generated_contract") or {})
         generated_contract.setdefault("technical_info", {})
@@ -1289,7 +1290,12 @@ def generate_setup_contract(setup_session_id: str, payload: SetupArtifactsReques
             "text": contract_text,
             "generated_at": generated_at,
             "consent": consent_state,
-            "technical_info": {"consent": _consent_technical_info(setup_session)},
+            "technical_info": {
+                "consent": _consent_technical_info(setup_session),
+                "template_text": str(setup_session.pop("_contract_template_text", "") or ""),
+                "ai_edits": list(setup_session.pop("_contract_ai_edits", []) or []),
+                "diff_preview": str(setup_session.pop("_contract_diff_preview", "") or ""),
+            },
         }
         setup_session["contract_generation_status"] = "ready"
         setup_session["contract_generated_at"] = generated_at
@@ -1444,7 +1450,8 @@ def generate_setup_artifacts(setup_session_id: str, payload: SetupArtifactsReque
 
     existing_analysis = setup_session.get("psychogram_analysis") or (setup_session.get("psychogram") or {}).get("analysis")
     existing_contract = ((setup_session.get("policy_preview") or {}).get("generated_contract") or {}).get("text")
-    if existing_analysis and existing_contract and not payload.force:
+    has_unresolved_placeholders = "{{" in str(existing_contract or "") and "}}" in str(existing_contract or "")
+    if existing_analysis and existing_contract and not payload.force and not has_unresolved_placeholders:
         consent = _ensure_generated_contract_consent(setup_session)
         generated_contract = ((setup_session.get("policy_preview") or {}).get("generated_contract") or {})
         generated_contract.setdefault("technical_info", {})
@@ -1505,7 +1512,12 @@ def generate_setup_artifacts(setup_session_id: str, payload: SetupArtifactsReque
             "text": contract_text,
             "generated_at": generated_at,
             "consent": consent_state,
-            "technical_info": {"consent": _consent_technical_info(setup_session)},
+            "technical_info": {
+                "consent": _consent_technical_info(setup_session),
+                "template_text": str(setup_session.pop("_contract_template_text", "") or ""),
+                "ai_edits": list(setup_session.pop("_contract_ai_edits", []) or []),
+                "diff_preview": str(setup_session.pop("_contract_diff_preview", "") or ""),
+            },
         }
         setup_session["contract_generation_status"] = "ready"
         setup_session["contract_generated_at"] = generated_at

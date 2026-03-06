@@ -11,11 +11,6 @@ const completeSetupConfirmWrap = document.getElementById('completeSetupConfirmWr
 const artifactsBtn = document.getElementById('generateArtifactsBtn');
 const acceptConsentBtn = document.getElementById('acceptConsentBtn');
 const questionAccordionBtn = document.getElementById('accQuestionBtn');
-const aiCalibStartBtn = document.getElementById('aiCalibStartBtn');
-const aiCalibSendBtn = document.getElementById('aiCalibSendBtn');
-const aiCalibInputEl = document.getElementById('aiCalibInput');
-const aiCalibAssistantEl = document.getElementById('aiCalibAssistant');
-const aiCalibQuestionEl = document.getElementById('aiCalibQuestion');
 
 const accordionDefs = [
   { key: 'base', btn: 'accBaseBtn', body: 'accBaseBody', chevron: 'accBaseChevron' },
@@ -93,7 +88,6 @@ let ttlPassMd5Cached = '';
 let chasterConfigCached = null;
 let llmLiveTestPassed = false;
 let llmConnectivityVerified = false;
-let aiCalibrationCompleted = false;
 const BASE_MANAGED_QUESTION_IDS = new Set(['q6_intensity_1_5', 'q8_instruction_style', 'q12_grooming_preference']);
 
 const defaultBehaviorPrompt = `Du bist meine ruhige, intelligente und psychologisch dominante Herrin / Keyholderin.
@@ -403,10 +397,7 @@ function isChasterStepUnlocked() {
 }
 
 function isQuestionnaireUnlocked() {
-  if (!llmConnectivityVerified) return false;
-  if (!isTtlockReady()) return false;
-  if (!isChasterReady()) return false;
-  return true;
+  return llmConnectivityVerified;
 }
 
 function openAccordion(targetKey) {
@@ -424,16 +415,8 @@ function openAccordion(targetKey) {
     }
   }
   if (targetKey === 'questionnaire' && !isQuestionnaireUnlocked()) {
-    if (!llmConnectivityVerified) {
-      setStatus('Psychogramm ist gesperrt: zuerst LLM Live-Test erfolgreich durchführen und speichern.', true);
-      targetKey = 'llm';
-    } else if (!isTtlockReady()) {
-      setStatus('Psychogramm ist gesperrt: zuerst TTLock-Konfiguration speichern.', true);
-      targetKey = 'ttlock';
-    } else if (!isChasterReady()) {
-      setStatus('Psychogramm ist gesperrt: zuerst Chaster-Konfiguration speichern.', true);
-      targetKey = 'chaster';
-    }
+    setStatus('Psychogramm ist gesperrt: zuerst LLM Live-Test erfolgreich durchführen und speichern.', true);
+    targetKey = 'llm';
   }
   accordionDefs.forEach((definition) => {
     const body = document.getElementById(definition.body);
@@ -464,51 +447,6 @@ function requireLlmReady(actionLabel = 'Dieser Schritt') {
   setStatus(`${actionLabel} ist gesperrt: bitte zuerst LLM Live-Test erfolgreich durchführen und Profil speichern.`, true);
   openAccordion('llm');
   return false;
-}
-
-function applyCalibrationInferred(inferred) {
-  if (!inferred || typeof inferred !== 'object') return;
-  if (instructionStyleEl && inferred.instruction_style) instructionStyleEl.value = inferred.instruction_style;
-  if (desiredIntensityEl && inferred.desired_intensity) desiredIntensityEl.value = inferred.desired_intensity;
-  if (groomingPreferenceEl && inferred.grooming_preference) groomingPreferenceEl.value = inferred.grooming_preference;
-}
-
-function renderAiCalibrationState(body) {
-  if (!body || typeof body !== 'object') return;
-  if (aiCalibAssistantEl) aiCalibAssistantEl.textContent = body.assistant_message || 'Kalibrierung bereit.';
-  if (aiCalibQuestionEl) aiCalibQuestionEl.textContent = body.next_question || '';
-  aiCalibrationCompleted = Boolean(body.completed);
-  applyCalibrationInferred(body.inferred);
-  if (aiCalibSendBtn) aiCalibSendBtn.disabled = aiCalibrationCompleted;
-}
-
-async function aiCalibrationTurn(wearerMessage = '') {
-  if (!requireLlmReady('AI-Kalibrierung')) return;
-  if (!setupSessionId || !auth) {
-    setStatus('Setup oder Login fehlt.', true);
-    return;
-  }
-  try {
-    if (aiCalibSendBtn) aiCalibSendBtn.disabled = true;
-    const body = await apiCall('POST', `/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/ai-calibration-turn`, {
-      user_id: auth.user_id,
-      auth_token: auth.auth_token,
-      wearer_message: String(wearerMessage || '').trim() || null,
-    });
-    if (aiCalibInputEl) aiCalibInputEl.value = '';
-    renderAiCalibrationState(body);
-    setStatus(
-      body.completed
-        ? 'AI-Kalibrierung abgeschlossen. Du kannst das Psychogramm speichern.'
-        : 'AI-Kalibrierung aktualisiert.',
-    );
-    setOutput(body);
-  } catch (error) {
-    setStatus(String(error?.message || error), true);
-    setOutput({ error: String(error?.message || error) });
-  } finally {
-    if (aiCalibSendBtn && !aiCalibrationCompleted) aiCalibSendBtn.disabled = false;
-  }
 }
 
 function setSectionVisibility(sectionEl, visible) {
@@ -871,10 +809,6 @@ function applySetupToForm(data) {
   } else {
     setChasterInfo('');
   }
-  const calib = data.ai_calibration || {};
-  aiCalibrationCompleted = Boolean(calib.completed);
-  if (calib.inferred) applyCalibrationInferred(calib.inferred);
-  if (aiCalibQuestionEl && calib.last_question) aiCalibQuestionEl.textContent = String(calib.last_question);
   updateIntegrationSections();
   updateTtlockSaveVisibility();
   updateChasterSaveVisibility();
@@ -972,10 +906,6 @@ async function startSetup() {
 
 async function submitAnswers() {
   if (!requireLlmReady('Psychogramm-Speichern')) return;
-  if (!aiCalibrationCompleted) {
-    setStatus('Bitte zuerst die AI-Kalibrierung im Psychogramm-Schritt abschließen.', true);
-    return;
-  }
   if (!setupSessionId) {
     setStatus('Bitte zuerst Setup starten.', true);
     return;
@@ -1599,13 +1529,6 @@ intChasterEl?.addEventListener('change', () => {
   updateIntegrationSections();
   updateChasterSaveVisibility();
   updateLlmDependentUi();
-});
-aiCalibStartBtn?.addEventListener('click', () => aiCalibrationTurn(''));
-aiCalibSendBtn?.addEventListener('click', () => aiCalibrationTurn(aiCalibInputEl?.value || ''));
-aiCalibInputEl?.addEventListener('keydown', (event) => {
-  if (event.key !== 'Enter') return;
-  event.preventDefault();
-  aiCalibrationTurn(aiCalibInputEl?.value || '');
 });
 
 sealModeEl?.addEventListener('change', () => {
