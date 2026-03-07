@@ -138,6 +138,45 @@ def test_setup_persists_to_store(client):
     assert data["language"] == "en"
 
 
+def test_roleplay_selection_refreshes_policy_preview_when_missing(client):
+    auth = _register(client, "roleplay-refresh-user", "Roleplay Refresh")
+    user_id = auth["user_id"]
+    start_response = client.post(
+        "/api/v1/setup/sessions",
+        json={"user_id": user_id, "auth_token": auth["auth_token"], "language": "de"},
+    )
+    assert start_response.status_code == 200
+    setup_session_id = start_response.json()["setup_session_id"]
+
+    selection_response = client.post(
+        f"/api/v1/setup/sessions/{setup_session_id}/roleplay",
+        json={
+            "user_id": user_id,
+            "auth_token": auth["auth_token"],
+            "roleplay_character_id": "builtin-keyholder",
+            "roleplay_scenario_id": "guided-chastity-session",
+            "prompt_profile_name": "amet-session",
+            "prompt_profile_mode": "immersive",
+            "prompt_profile_version": "v1",
+        },
+    )
+    assert selection_response.status_code == 200
+    data = selection_response.json()
+    assert data["roleplay_character_id"] == "builtin-keyholder"
+    assert data["roleplay_scenario_id"] == "guided-chastity-session"
+    assert data["roleplay_profile"]["prompt_profile"] == {
+        "name": "amet-session",
+        "version": "v1",
+        "mode": "immersive",
+    }
+
+    setup_state = client.get(f"/api/v1/setup/sessions/{setup_session_id}")
+    assert setup_state.status_code == 200
+    setup_body = setup_state.json()
+    assert isinstance(setup_body["policy_preview"], dict)
+    assert setup_body["policy_preview"]["roleplay"]["prompt_profile"]["mode"] == "immersive"
+
+
 def test_low_confidence_applies_conservative_defaults(client):
     auth = _register(client, "low-conf-user", "Low Conf")
     user_id = auth["user_id"]

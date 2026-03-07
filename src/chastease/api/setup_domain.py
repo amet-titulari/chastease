@@ -345,7 +345,7 @@ def _refresh_setup_roleplay_profile(setup_session: dict) -> dict:
     psychogram = setup_session.get("psychogram") if isinstance(setup_session.get("psychogram"), dict) else _build_psychogram(setup_session)
     policy = setup_session.get("policy_preview") if isinstance(setup_session.get("policy_preview"), dict) else _build_policy(setup_session, psychogram)
     roleplay_profile = _build_roleplay_profile(setup_session, psychogram, policy)
-    setup_session.setdefault("policy_preview", policy)
+    setup_session["policy_preview"] = policy
     setup_session["policy_preview"]["roleplay"] = roleplay_profile
     setup_session["roleplay_profile"] = roleplay_profile
     return roleplay_profile
