@@ -1,23 +1,44 @@
 services:
   chastease:
     image: ghcr.io/amet-titulari/chastease:latest
-    container_name: chastease
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       HOST: 0.0.0.0
       PORT: 3000
-      DATABASE_URL: sqlite:///data/chastease.db
-      IMAGE_VERIFICATION_DIR: data/image_verifications
+      RELOAD: false
       LOG_LEVEL: INFO
-      ENABLE_SESSION_KILL: "false"
-      SECRET_KEY: x7k9p2m4q8r5t1v3n6j0b2f4h9l5y8z1
+      SECRET_KEY: DcMondhKJ99Oo3TucnjGqAAhtpup7fSTLHVWDqPAGr2Omsgp5u1uwSJ4voQw5Xt4
+      DATABASE_URL: sqlite:///data/chastease.db
+      SETUP_STORE_PATH: data/setup_sessions.json
+      IMAGE_VERIFICATION_DIR: data/image_verifications
+      ENABLE_SESSION_KILL: true
+      ENABLE_AUDIT_LOG_VIEW: true
+      LLM_CHAT_RETRY_ATTEMPTS: 3
+      LLM_CHAT_TIMEOUT_CONNECT: 5
+      LLM_CHAT_TIMEOUT_READ: 45
+      LLM_CHAT_TIMEOUT_WRITE: 20
+      LLM_CHAT_TIMEOUT_POOL: 5
+      LLM_FAIL_CLOSED_REQUEST_TAG: false
       TTL_API_BASE: https://euapi.ttlock.com
-      TTL_CLIENT_ID: "8fa8f25f53ff4721a6b0bbc895e8e600"
-      TTL_CLIENT_SECRET: "054d7bb1836e6993352d7a12cf7bcd69"
+      TTL_CLIENT_ID: 8fa8f25f53ff4721a6b0bbc895e8e600
+      TTL_CLIENT_SECRET: 054d7bb1836e6993352d7a12cf7bcd69
+      CHASTER_API_BASE: https://api.chaster.app
+      CHASTER_DEVELOPER_API_BASE: https://api.chaster.app/api
+      CHASTER_DEVELOPER_TOKEN: aoMSAw4Gp1yw9ylH79FdkboF7WFwIm9b
+      CHASTER_EXTENSION_SLUG: ttlock-1
+      CHASTER_OAUTH_CLIENT_ID: lockbox-658244
+      CHASTER_OAUTH_CLIENT_SECRET: e3cfa519-8c74-4ce8-a73b-22b4f97494c5
+      CHASTER_OAUTH_REDIRECT_URI: https://ca.3624.ch/api/v1/auth/chaster/callback
+      CHASTER_OAUTH_AUTHORIZE_URL: https://sso.chaster.app/auth/realms/app/protocol/openid-connect/auth
+      CHASTER_OAUTH_TOKEN_URL: https://sso.chaster.app/auth/realms/app/protocol/openid-connect/token
+      CHASTER_OAUTH_USERINFO_URL: https://sso.chaster.app/auth/realms/app/protocol/openid-connect/userinfo
+      CHASTER_OAUTH_SCOPES: openid profile locks
+      AUTH_ENABLE_CHASTER_LOGIN: true
+      AUTH_ALLOW_LOCAL_LOGIN: false
     volumes:
       - chastease_data:/app/data
 
-volumes: 
+volumes:
   chastease_data:

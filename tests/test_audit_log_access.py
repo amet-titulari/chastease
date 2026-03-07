@@ -98,7 +98,7 @@ def test_admin_activity_entries_available_when_enabled(admin_client):
 
 
 def test_admin_activity_hides_stale_pending_when_failed_exists(admin_client):
-    auth = register_user(admin_client, "activity-dedupe")
+    auth = register_user(admin_client, f"activity-dedupe-{uuid4().hex[:8]}")
     session_id = create_active_session(admin_client, auth)
     payload = {
         "request": "Foto eines Hasen",
@@ -173,4 +173,86 @@ def test_admin_activity_hides_stale_pending_when_failed_exists(admin_client):
         if item.get("action_type") == "image_verification" and item.get("status") == "pending"
     ]
     assert len(failed_rows) == 1
+    assert pending_rows == []
+
+
+def test_admin_activity_hides_stale_pending_when_success_payload_is_enriched(admin_client):
+    auth = register_user(admin_client, f"activity-dedupe-success-{uuid4().hex[:8]}")
+    session_id = create_active_session(admin_client, auth)
+    pending_payload = {
+        "request": "Foto eines Hasen",
+        "verification_instruction": "Pruefe auf echten Hasen",
+    }
+    executed_payload = {
+        **pending_payload,
+        "source": "upload",
+        "stored_image_path": "/tmp/proof.png",
+    }
+    now = datetime.now(UTC)
+
+    db = admin_client.app.state.db_session_factory()
+    try:
+        db.add(
+            AuditEntry(
+                id=str(uuid4()),
+                session_id=session_id,
+                user_id=auth["user_id"],
+                turn_id=None,
+                event_type="activity_snapshot",
+                detail="older pending snapshot",
+                metadata_json=json.dumps(
+                    {
+                        "pending_actions": [{"action_type": "image_verification", "payload": pending_payload}],
+                        "executed_actions": [],
+                        "failed_actions": [],
+                    }
+                ),
+                created_at=now - timedelta(seconds=10),
+            )
+        )
+        db.add(
+            AuditEntry(
+                id=str(uuid4()),
+                session_id=session_id,
+                user_id=auth["user_id"],
+                turn_id=None,
+                event_type="activity_snapshot",
+                detail="newer success snapshot",
+                metadata_json=json.dumps(
+                    {
+                        "pending_actions": [],
+                        "executed_actions": [
+                            {
+                                "action_type": "image_verification",
+                                "payload": executed_payload,
+                                "message": "Image verification verdict: PASSED.",
+                            }
+                        ],
+                        "failed_actions": [],
+                    }
+                ),
+                created_at=now,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = admin_client.get(
+        f"/api/v1/admin/activity/session/{session_id}",
+        params={"auth_token": auth["auth_token"]},
+    )
+    assert response.status_code == 200
+    activities = response.json().get("activities", [])
+    success_rows = [
+        item
+        for item in activities
+        if item.get("action_type") == "image_verification" and item.get("status") == "success"
+    ]
+    pending_rows = [
+        item
+        for item in activities
+        if item.get("action_type") == "image_verification" and item.get("status") == "pending"
+    ]
+    assert len(success_rows) == 1
     assert pending_rows == []

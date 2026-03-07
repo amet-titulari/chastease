@@ -21,6 +21,11 @@ def _load_entry_metadata(entry: AuditEntry) -> dict:
 def _activity_key(action_type: str, payload: dict) -> tuple[str, str]:
     normalized_action = str(action_type or "").strip().lower()
     normalized_payload = payload if isinstance(payload, dict) else {}
+    if normalized_action == "image_verification":
+        normalized_payload = {
+            "request": normalized_payload.get("request"),
+            "verification_instruction": normalized_payload.get("verification_instruction"),
+        }
     try:
         payload_key = json.dumps(normalized_payload, sort_keys=True, ensure_ascii=True)
     except Exception:

@@ -4,6 +4,8 @@ from pathlib import Path
 from time import sleep
 from uuid import uuid4
 
+import pytest
+
 from chastease.api.routers import chat as chat_router
 from chastease.models import AuditEntry, ChastitySession
 
@@ -912,6 +914,41 @@ def test_chat_vision_review_logs_failed_image_verification_activity(client, monk
         assert any(action.get("action_type") == "image_verification" for action in failed_actions)
     finally:
         db.close()
+
+
+def test_chat_vision_review_clears_resolved_image_verification_pending(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("IMAGE_VERIFICATION_DIR", str(tmp_path / "image_reviews_resolved"))
+    auth = _register(client, username=f"chat-user-vision-resolved-{uuid4().hex[:8]}")
+    session_id = _create_active_session(client, auth)
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        'Pruefung abgeschlossen. Verdict: PASSED.\n'
+        '[[REQUEST:image_verification|{"request":"Foto eines Hasen","verification_instruction":"Pruefe auf echten Hasen"}]]'
+    )
+
+    picture_data_url = (
+        "data:image/png;base64,"
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AApMBgS9x+h0AAAAASUVORK5CYII="
+    )
+    review = client.post(
+        "/api/v1/chat/vision-review",
+        json={
+            "session_id": session_id,
+            "message": "Pruefung fuer Action Card.",
+            "language": "de",
+            "picture_name": "proof.png",
+            "picture_content_type": "image/png",
+            "picture_data_url": picture_data_url,
+            "verification_action_payload": {
+                "request": "Foto eines Hasen",
+                "verification_instruction": "Pruefe auf echten Hasen",
+            },
+            "source": "upload",
+        },
+    )
+    assert review.status_code == 200
+    data = review.json()
+    assert data["pending_actions"] == []
+    assert any(action.get("action_type") == "image_verification" for action in data.get("executed_actions", []))
 
 
 def test_chat_turn_history_endpoint_returns_persisted_turns(client):

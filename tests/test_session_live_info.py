@@ -119,6 +119,7 @@ def test_live_session_endpoint_allows_ai_token(monkeypatch, tmp_path):
     monkeypatch.setenv("SETUP_STORE_PATH", str(tmp_path / "setup_sessions.json"))
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'chastease_test.db'}")
     monkeypatch.setenv("AI_SESSION_READ_TOKEN", "ai-live-token")
+    monkeypatch.setenv("AUTH_ALLOW_LOCAL_LOGIN", "true")
 
     app = create_app()
     with TestClient(app) as ai_client:

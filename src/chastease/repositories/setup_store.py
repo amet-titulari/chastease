@@ -77,14 +77,27 @@ def _bootstrap_from_legacy_file_if_needed(conn) -> None:
     )
 
 
+def _is_sqlite(database_url: str) -> bool:
+    return database_url.startswith("sqlite")
+
+
+def _select_for_update_sql(database_url: str) -> str:
+    """Use FOR UPDATE on PostgreSQL to get a row-level lock across processes."""
+    base = "SELECT payload_json FROM setup_sessions_store WHERE store_key = :key"
+    if _is_sqlite(database_url):
+        return base
+    return f"{base} FOR UPDATE"
+
+
 def load_sessions() -> dict[str, dict[str, Any]]:
     with _LOCK:
-        engine = _engine_for(_database_url())
+        db_url = _database_url()
+        engine = _engine_for(db_url)
         with engine.begin() as conn:
             _ensure_store_table(conn)
             _bootstrap_from_legacy_file_if_needed(conn)
             payload_json = conn.execute(
-                text("SELECT payload_json FROM setup_sessions_store WHERE store_key = :key"),
+                text(_select_for_update_sql(db_url)),
                 {"key": _STORE_KEY},
             ).scalar_one_or_none()
         if not payload_json:
@@ -98,12 +111,19 @@ def load_sessions() -> dict[str, dict[str, Any]]:
 
 def save_sessions(sessions: dict[str, dict[str, Any]]) -> None:
     with _LOCK:
-        engine = _engine_for(_database_url())
+        db_url = _database_url()
+        engine = _engine_for(db_url)
         payload_json = json.dumps(sessions)
         now = datetime.now(UTC)
         with engine.begin() as conn:
             _ensure_store_table(conn)
             _bootstrap_from_legacy_file_if_needed(conn)
+            # Acquire row lock on PostgreSQL before mutation
+            if not _is_sqlite(db_url):
+                conn.execute(
+                    text("SELECT 1 FROM setup_sessions_store WHERE store_key = :key FOR UPDATE"),
+                    {"key": _STORE_KEY},
+                )
             updated = conn.execute(
                 text(
                     "UPDATE setup_sessions_store "

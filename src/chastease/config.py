@@ -49,15 +49,18 @@ def _resolve_secret_key() -> str:
         generated = secrets.token_urlsafe(48)
         key_path.write_text(generated, encoding="utf-8")
         return generated
-    except Exception:
-        return "dev-secret-change-me"
+    except Exception as exc:
+        raise RuntimeError(
+            "Failed to read or generate SECRET_KEY. Set the SECRET_KEY "
+            "environment variable or ensure the key file path is writable."
+        ) from exc
 
 
 class Config:
     def __init__(self) -> None:
         self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").strip().upper()
         self.SECRET_KEY = _resolve_secret_key()
-        self.OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+        self.OPENAI_MODEL = os.getenv("OPENAI_MODEL", "grok-4-1-fast-non-reasoning")
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
         self.DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/chastease.db")
         self.ENABLE_SESSION_KILL = _env_bool("ENABLE_SESSION_KILL", False)
@@ -104,3 +107,8 @@ class Config:
         self.LLM_FAIL_CLOSED_REQUEST_TAG = _env_bool("LLM_FAIL_CLOSED_REQUEST_TAG", True)
         self.ENABLE_AUDIT_LOG_VIEW = _env_bool("ENABLE_AUDIT_LOG_VIEW", _env_bool("ENABLE_AUDIT_LOG", False))
         self.AI_SESSION_READ_TOKEN = os.getenv("AI_SESSION_READ_TOKEN", "").strip()
+        # CORS: comma-separated list of allowed origins (empty = same-origin only)
+        _cors_raw = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+        self.CORS_ALLOWED_ORIGINS: list[str] = [
+            o.strip() for o in _cors_raw.split(",") if o.strip()
+        ]

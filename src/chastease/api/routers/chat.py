@@ -1136,7 +1136,7 @@ def _sync_chaster_lock_time_change(
         )
     try:
         response_json = response.json()
-    except Exception:
+    except (ValueError, KeyError):
         response_json = {"raw_response": response.text[:500]}
     return {
         "endpoint": url,
@@ -1188,7 +1188,7 @@ def _sync_chaster_freeze_state(
         )
     try:
         response_json = response.json()
-    except Exception:
+    except (ValueError, KeyError):
         response_json = {"raw_response": response.text[:500] or ""}
     return {
         "endpoint": url,
@@ -1231,7 +1231,7 @@ def _sync_chaster_temporary_opening(*, policy: dict, request: Request) -> dict |
         )
     try:
         response_json = response.json()
-    except Exception:
+    except (ValueError, KeyError):
         response_json = {"raw_response": response.text[:500] or ""}
     return {
         "endpoint": url,
@@ -1776,6 +1776,28 @@ def _auto_execute_pending_actions(
     return remaining_actions, executed_actions, failed_actions, updated_policy
 
 
+def _clear_resolved_image_verification_pending(
+    pending_actions: list[dict],
+    verification_payload: dict,
+) -> list[dict]:
+    request_value = str((verification_payload or {}).get("request") or "").strip()
+    instruction_value = str((verification_payload or {}).get("verification_instruction") or "").strip()
+    remaining: list[dict] = []
+    for action in pending_actions:
+        action_type = _normalize_action_type(str((action or {}).get("action_type") or ""))
+        payload = (action or {}).get("payload")
+        payload_dict = dict(payload) if isinstance(payload, dict) else {}
+        if action_type != "image_verification":
+            remaining.append(action)
+            continue
+        action_request = str(payload_dict.get("request") or "").strip()
+        action_instruction = str(payload_dict.get("verification_instruction") or "").strip()
+        if action_request == request_value and action_instruction == instruction_value:
+            continue
+        remaining.append(action)
+    return remaining
+
+
 @router.post("/turn")
 def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
     request_lang = lang(payload.language)
@@ -1915,7 +1937,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                 fallback_action = explicit_intent_action or _fallback_pending_action_from_user_intent(action_text, policy)
                 if fallback_action is not None:
                     if strict_request_tag_mode:
-                        if explicit_intent_action is not None:
+                        if explicit_intent_action is not None and timer_pending:
                             ai_pending_actions = [fallback_action]
                             fallback_applied = True
                             precheck_failed_actions.append(
@@ -2074,6 +2096,21 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
         raise HTTPException(status_code=400, detail="Invalid base64 image payload.") from exc
     if len(image_bytes) > 8 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="picture too large (max 8MB)")
+    # Validate actual image content by checking magic bytes
+    _IMAGE_MAGIC = {
+        b"\xff\xd8\xff": "image/jpeg",
+        b"\x89PNG\r\n\x1a\n": "image/png",
+        b"RIFF": "image/webp",  # WebP starts with RIFF....WEBP
+        b"GIF87a": "image/gif",
+        b"GIF89a": "image/gif",
+    }
+    detected_type = None
+    for magic, mime in _IMAGE_MAGIC.items():
+        if image_bytes[:len(magic)] == magic:
+            detected_type = mime
+            break
+    if detected_type is None:
+        raise HTTPException(status_code=400, detail="Uploaded file is not a recognized image format.")
     attachments = [
         {
             "name": payload.picture_name or "image",
@@ -2139,6 +2176,7 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
             "stored_image_path": saved_image_path,
         }
         if verification_status == "failed":
+            pending_actions = _clear_resolved_image_verification_pending(pending_actions, verification_payload)
             failed_actions.append(
                 {
                     "action_type": "image_verification",
@@ -2147,6 +2185,7 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
                 }
             )
         elif verification_status == "success":
+            pending_actions = _clear_resolved_image_verification_pending(pending_actions, verification_payload)
             executed_actions.append(
                 {
                     "action_type": "image_verification",

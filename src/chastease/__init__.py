@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from dotenv import load_dotenv
@@ -33,6 +34,15 @@ def create_app(config_object: type[Config] = Config) -> FastAPI:
     limiter = Limiter(key_func=get_remote_address)
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    # CORS: restrict cross-origin requests to explicitly allowed origins
+    allowed_origins = config.CORS_ALLOWED_ORIGINS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
     # Mount static files if present (used for custom JS/CSS/assets)
     static_dir = Path(__file__).resolve().parent / "static"
     if static_dir.exists():

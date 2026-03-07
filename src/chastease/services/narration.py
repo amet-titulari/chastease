@@ -127,8 +127,14 @@ def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]
         payload_text = match.group("payload")
         try:
             payload = json.loads(payload_text)
-        except Exception:
-            payload = {"raw": payload_text}
+        except (json.JSONDecodeError, ValueError):
+            logger.warning("Ignoring ACTION with invalid JSON payload: %s", payload_text[:200])
+            cleaned = cleaned.replace(match.group(0), "").strip()
+            continue
+        if not isinstance(payload, dict):
+            logger.warning("Ignoring ACTION with non-dict payload type: %s", type(payload).__name__)
+            cleaned = cleaned.replace(match.group(0), "").strip()
+            continue
         actions.append({"action_type": action_type, "payload": payload, "requires_execute_call": True})
         cleaned = cleaned.replace(match.group(0), "").strip()
     for match in request_json_pattern.finditer(narration):
@@ -136,8 +142,14 @@ def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]
         payload_text = match.group("payload")
         try:
             payload = json.loads(payload_text)
-        except Exception:
-            payload = {"raw": payload_text}
+        except (json.JSONDecodeError, ValueError):
+            logger.warning("Ignoring REQUEST with invalid JSON payload: %s", payload_text[:200])
+            cleaned = cleaned.replace(match.group(0), "").strip()
+            continue
+        if not isinstance(payload, dict):
+            logger.warning("Ignoring REQUEST with non-dict payload type: %s", type(payload).__name__)
+            cleaned = cleaned.replace(match.group(0), "").strip()
+            continue
         actions.append({"action_type": action_type, "payload": payload, "requires_execute_call": True})
         cleaned = cleaned.replace(match.group(0), "").strip()
     for match in request_call_pattern.finditer(narration):

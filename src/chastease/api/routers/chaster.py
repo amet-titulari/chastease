@@ -460,7 +460,7 @@ def _compact_json_text(value: Any) -> str:
         try:
             import json
             return json.dumps(value, ensure_ascii=False)
-        except Exception:
+        except (TypeError, ValueError):
             return str(value)
     return str(value)
 
@@ -483,7 +483,7 @@ async def _post_json(url: str, token: str, payload: dict[str, Any]) -> dict[str,
             try:
                 response_json = response.json()
                 body_text = _compact_json_text(response_json)[:700].strip()
-            except Exception:
+            except (ValueError, KeyError):
                 body_text = response.text[:700].strip()
             last_detail = (
                 f"Chaster API POST {url} failed with HTTP {response.status_code}"
@@ -625,9 +625,8 @@ async def _resolve_extension_session_id(lock_id: str, request: Request) -> str |
         )
     try:
         response_json = response.json()
-    except Exception:
+    except (ValueError, KeyError):
         response_json = {}
-    session_id = _find_extension_session_id(response_json, normalized_lock_id)
     return session_id or None
 
 
@@ -711,7 +710,7 @@ def resolve_verified_extension_session_from_main_token_sync(main_token: str, req
             )
         try:
             payload = response.json()
-        except Exception:
+        except (ValueError, KeyError):
             raise HTTPException(status_code=502, detail="Chaster extension main-token lookup returned non-JSON response.")
         if not isinstance(payload, dict):
             raise HTTPException(status_code=502, detail="Chaster extension main-token lookup returned invalid payload.")
@@ -726,7 +725,7 @@ def resolve_verified_extension_session_from_main_token_sync(main_token: str, req
                 continue
             try:
                 verified_payload = verify_response.json()
-            except Exception:
+            except (ValueError, KeyError):
                 verified_payload = {}
             if not isinstance(verified_payload, dict):
                 verified_payload = {}
@@ -773,7 +772,7 @@ async def _request_ok(
         return None
     try:
         parsed = response.json()
-    except Exception:
+    except (ValueError, KeyError):
         return {"raw_response": response.text[:700]}
     return parsed if isinstance(parsed, dict) else {"data": parsed}
 

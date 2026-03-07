@@ -265,6 +265,67 @@ function appendMessage(role, text, opts = {}) {
   if (shouldScroll) scrollToBottom();
 }
 
+function appendAssistantInfoCard(titleText, bodyText, tone = 'neutral', opts = {}) {
+  if (!messagesEl) return;
+  const shouldScroll = opts.scroll !== false;
+
+  const messageWrapper = document.createElement('div');
+  messageWrapper.className = 'flex items-start gap-3';
+
+  const avatar = document.createElement('div');
+  avatar.className = 'flex-none w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold';
+  avatar.textContent = 'AI';
+
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'flex-1';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'max-w-[90%] rounded-2xl bg-gray-800/80 text-gray-100 px-5 py-3 border border-gray-700/50 shadow-lg';
+
+  const toneClasses = {
+    success: 'border-emerald-500/40 bg-emerald-950/30 text-emerald-200',
+    failed: 'border-rose-500/40 bg-rose-950/30 text-rose-200',
+    neutral: 'border-slate-600/60 bg-slate-900/50 text-slate-200',
+  };
+
+  const card = document.createElement('div');
+  card.className = `rounded-lg border p-4 ${toneClasses[tone] || toneClasses.neutral}`;
+
+  const title = document.createElement('div');
+  title.className = 'text-sm font-semibold tracking-wide uppercase';
+  title.textContent = String(titleText || 'Info');
+
+  const body = document.createElement('div');
+  body.className = 'mt-2 prose prose-invert prose-sm max-w-none text-sm';
+  body.innerHTML = renderMarkdown(bodyText || '');
+
+  card.appendChild(title);
+  if (String(bodyText || '').trim()) card.appendChild(body);
+  bubble.appendChild(card);
+  contentDiv.appendChild(bubble);
+  messageWrapper.appendChild(avatar);
+  messageWrapper.appendChild(contentDiv);
+  messagesEl.appendChild(messageWrapper);
+
+  if (shouldScroll) scrollToBottom();
+}
+
+function findImageVerificationOutcome(body) {
+  const executedActions = Array.isArray(body?.executed_actions) ? body.executed_actions : [];
+  const failedActions = Array.isArray(body?.failed_actions) ? body.failed_actions : [];
+  if (executedActions.some((item) => String(item?.action_type || '').trim() === 'image_verification')) {
+    return 'success';
+  }
+  if (failedActions.some((item) => String(item?.action_type || '').trim() === 'image_verification')) {
+    return 'failed';
+  }
+
+  const narration = String(body?.narration || '').toUpperCase();
+  if (narration.includes('VERDICT: PASSED') || narration.endsWith('PASSED.')) return 'success';
+  if (narration.includes('VERDICT: FAILED') || narration.endsWith('FAILED.')) return 'failed';
+  return null;
+}
+
 function scrollToBottom(smooth = true) {
   const container = document.getElementById('messagesContainer');
   if (!container) return;
@@ -832,10 +893,19 @@ function renderPendingActions(pendingActions) {
             verification_action_payload: payload,
             source: selectedImage.pictureName === 'camera.jpg' ? 'camera_capture' : 'upload',
           });
-          appendMessage('assistant', body?.narration || 'Bildprüfung abgeschlossen.');
+          const verificationOutcome = findImageVerificationOutcome(body);
+          if (verificationOutcome === 'success') {
+            appendAssistantInfoCard('Bildprüfung bestanden', body?.narration || 'Die Bildprüfung war erfolgreich.', 'success');
+          } else if (verificationOutcome === 'failed') {
+            appendAssistantInfoCard('Bildprüfung nicht bestanden', body?.narration || 'Die Bildprüfung ist fehlgeschlagen.', 'failed');
+          } else {
+            appendAssistantInfoCard('Bildprüfung abgeschlossen', body?.narration || 'Bildprüfung abgeschlossen.', 'neutral');
+          }
           const pendingAfterAutoExec = await autoExecuteTimerPendingActions(body?.pending_actions || []);
           renderPendingActions(pendingAfterAutoExec);
-          setStatus('Bildprüfung abgeschlossen.');
+          if (verificationOutcome === 'success') setStatus('Bildprüfung bestanden.');
+          else if (verificationOutcome === 'failed') setStatus('Bildprüfung nicht bestanden.', true);
+          else setStatus('Bildprüfung abgeschlossen.');
         } catch (error) {
           reviewState.textContent = 'Bildprüfung fehlgeschlagen. Bitte erneut versuchen.';
           controls.classList.remove('hidden');
