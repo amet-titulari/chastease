@@ -7,6 +7,99 @@ from .models import MemoryEntry, SceneState
 from .session_memory import select_memory_entries_for_prompt, select_scene_beats_for_prompt
 
 
+def _compact_text(value: Any, limit: int = 320) -> str:
+    text = " ".join(str(value or "").split()).strip()
+    if len(text) <= limit:
+        return text
+    return text[: max(1, limit - 3)].rstrip() + "..."
+
+
+def _build_character_block(roleplay_payload: dict[str, Any]) -> str:
+    character_payload = roleplay_payload.get("character_card") if isinstance(roleplay_payload.get("character_card"), dict) else {}
+    if not character_payload:
+        return ""
+    persona_payload = character_payload.get("persona") if isinstance(character_payload.get("persona"), dict) else {}
+    speech_payload = persona_payload.get("speech_style") if isinstance(persona_payload.get("speech_style"), dict) else {}
+    lines = [
+        "Character card:",
+        f"- display_name: {str(character_payload.get('display_name') or persona_payload.get('name') or 'Keyholder').strip()}",
+        f"- persona_name: {str(persona_payload.get('name') or character_payload.get('display_name') or 'Keyholder').strip()}",
+        f"- archetype: {str(persona_payload.get('archetype') or 'keyholder').strip()}",
+        f"- tone: {str(speech_payload.get('tone') or 'balanced').strip()}",
+        f"- dominance_style: {str(speech_payload.get('dominance_style') or 'moderate').strip()}",
+        f"- formatting_style: {str(speech_payload.get('formatting_style') or 'plain').strip()}",
+    ]
+
+    description = _compact_text(persona_payload.get("description"), limit=700)
+    if description:
+        lines.append(f"- description: {description}")
+
+    goals = [str(item).strip() for item in (persona_payload.get("goals") or []) if str(item).strip()]
+    if goals:
+        lines.append("Character goals:")
+        lines.extend(f"- {item}" for item in goals[:6])
+
+    ritual_phrases = [str(item).strip() for item in (speech_payload.get("ritual_phrases") or []) if str(item).strip()]
+    if ritual_phrases:
+        lines.append("Preferred ritual phrases:")
+        lines.extend(f"- {item}" for item in ritual_phrases[:6])
+
+    greeting_template = _compact_text(character_payload.get("greeting_template"), limit=500)
+    if greeting_template:
+        lines.append("Opening pattern:")
+        lines.append(f"- {greeting_template}")
+
+    scenario_hooks = [str(item).strip() for item in (character_payload.get("scenario_hooks") or []) if str(item).strip()]
+    if scenario_hooks:
+        lines.append("Character motifs:")
+        lines.extend(f"- {item}" for item in scenario_hooks[:6])
+
+    return "\n".join(lines) + "\n"
+
+
+def _build_scenario_block(roleplay_payload: dict[str, Any], scene_state: SceneState | None) -> str:
+    scenario_payload = roleplay_payload.get("scenario") if isinstance(roleplay_payload.get("scenario"), dict) else {}
+    if not scenario_payload:
+        return ""
+
+    lines = [
+        "Scenario frame:",
+        f"- title: {str(scenario_payload.get('title') or 'Session').strip()}",
+    ]
+    summary = _compact_text(scenario_payload.get("summary"), limit=500)
+    if summary:
+        lines.append(f"- summary: {summary}")
+
+    phases = [phase for phase in (scenario_payload.get("phases") or []) if isinstance(phase, dict)]
+    selected_phase = phases[0] if phases else None
+    if scene_state is not None:
+        for phase in phases:
+            if str(phase.get("phase_id") or "").strip() == scene_state.phase:
+                selected_phase = phase
+                break
+    if isinstance(selected_phase, dict):
+        lines.append("Active phase:")
+        lines.append(f"- phase_id: {str(selected_phase.get('phase_id') or 'active').strip()}")
+        lines.append(f"- title: {str(selected_phase.get('title') or 'Phase').strip()}")
+        objective = _compact_text(selected_phase.get("objective"), limit=260)
+        guidance = _compact_text(selected_phase.get("guidance"), limit=420)
+        if objective:
+            lines.append(f"- objective: {objective}")
+        if guidance:
+            lines.append(f"- guidance: {guidance}")
+
+    lorebook = [entry for entry in (scenario_payload.get("lorebook") or []) if isinstance(entry, dict)]
+    if lorebook:
+        lorebook_sorted = sorted(lorebook, key=lambda item: int(item.get("priority") or 0), reverse=True)
+        lines.append("Scenario directives:")
+        for entry in lorebook_sorted[:4]:
+            content = _compact_text(entry.get("content"), limit=360)
+            if content:
+                lines.append(f"- {content}")
+
+    return "\n".join(lines) + "\n"
+
+
 def build_attachment_summary(attachments: list[dict[str, Any]] | None) -> tuple[str, list[dict[str, Any]]]:
     attachment_lines: list[str] = []
     attachment_content: list[dict[str, Any]] = []
@@ -100,6 +193,8 @@ def build_roleplay_user_prompt(context: StoryTurnContext, attachments: list[dict
         limit=4,
     )
     memory_lines = [f"- {entry.kind}: {entry.content}" for entry in selected_memory_entries]
+    character_block = _build_character_block(roleplay_payload)
+    scenario_block = _build_scenario_block(roleplay_payload, scene_state)
     continuity_block = ""
     if scene_payload:
         continuity_block = (
@@ -143,6 +238,8 @@ def build_roleplay_user_prompt(context: StoryTurnContext, attachments: list[dict
         f"Session: {context.session_id}\n"
         f"Psychogram summary: {context.psychogram_summary}\n"
         f"{prompt_profile_block}"
+        f"{character_block}"
+        f"{scenario_block}"
         f"{continuity_block}"
         f"Wearer action: {action_block}\n"
         f"Attachments:\n{attachment_summary}{attachment_note}\n"

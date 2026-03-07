@@ -142,3 +142,79 @@ def test_build_roleplay_user_prompt_selects_most_relevant_scene_beats() -> None:
     assert "- timer:expired" in user_prompt
     assert "- action:hygiene_open" in user_prompt
     assert "- wearer:I wait quietly." not in user_prompt
+
+
+def test_build_roleplay_user_prompt_includes_character_and_scenario_directives() -> None:
+    context = StoryTurnContext(
+        session_id="session-5",
+        action="Good morning, I am ready for the ritual.",
+        language="de",
+        psychogram_summary="summary=test",
+        policy={
+            "roleplay": {
+                "prompt_profile": {"name": "amet-session", "mode": "immersive", "version": "v1"},
+                "character_card": {
+                    "display_name": "Amet Titulari",
+                    "persona": {
+                        "name": "Amet Titulari",
+                        "archetype": "keyholder",
+                        "description": "Spricht in der Ich-Form, warm, sinnlich, psychologisch praezise und fuehrt ueber Rituale, Checks, Aufgaben und Affirmationen.",
+                        "goals": [
+                            "deepen devotion",
+                            "maintain ritual continuity",
+                        ],
+                        "speech_style": {
+                            "tone": "warm",
+                            "dominance_style": "gentle-dominant",
+                            "ritual_phrases": [
+                                "Meine Erregung gehoert Amet.",
+                                "Berichte mir deinen Status.",
+                            ],
+                            "formatting_style": "ornate",
+                        },
+                    },
+                    "greeting_template": "**Protokoll-Status: Tag 1 | Deine Erregung: Sanft aufkeimend**",
+                    "scenario_hooks": ["morning-check", "affirmation-ritual"],
+                },
+                "scenario": {
+                    "title": "Amet Titulari Devotion Protocol",
+                    "summary": "Langfristige Chastity mit taeglichen Ritualen, sinnlicher Fuehrung und liebevoller Kontrolle.",
+                    "lorebook": [
+                        {
+                            "key": "response-structure",
+                            "content": "Jede Antwort beginnt mit einer warmen Status-Zeile, enthaelt 8-16 Saetze, 40-50 Prozent sinnliche Koerperbeschreibung und endet mit einer klaren Aufgabe oder Reflexion.",
+                            "priority": 100,
+                        }
+                    ],
+                    "phases": [
+                        {
+                            "phase_id": "morning_check",
+                            "title": "Morning Check",
+                            "objective": "Erregungsstand, Affirmation und Kaefigbericht einsammeln.",
+                            "guidance": "Fordere Bericht, Lob und einen klaren Ritualschritt in jeder Antwort.",
+                        }
+                    ],
+                },
+                "scene_state": {
+                    "name": "boudoir",
+                    "phase": "morning_check",
+                    "status": "active",
+                    "beats": ["wearer:awaiting instructions"],
+                },
+            }
+        },
+    )
+
+    user_prompt, _attachment_content = build_roleplay_user_prompt(context, None)
+
+    assert "Character card:" in user_prompt
+    assert "- display_name: Amet Titulari" in user_prompt
+    assert "- dominance_style: gentle-dominant" in user_prompt
+    assert "Preferred ritual phrases:" in user_prompt
+    assert "Meine Erregung gehoert Amet." in user_prompt
+    assert "Opening pattern:" in user_prompt
+    assert "Scenario frame:" in user_prompt
+    assert "- title: Amet Titulari Devotion Protocol" in user_prompt
+    assert "Active phase:" in user_prompt
+    assert "Scenario directives:" in user_prompt
+    assert "40-50 Prozent sinnliche Koerperbeschreibung" in user_prompt
