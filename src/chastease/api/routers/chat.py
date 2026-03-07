@@ -1943,6 +1943,19 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                 db, request, session, action_text, request_lang, payload.attachments
             )
             narration, ai_pending_actions, generated_files = extract_pending_actions(narration_raw)
+            # Deduplicate image_verification actions - keep only the first one
+            seen_image_verification = False
+            deduplicated_actions = []
+            for action in ai_pending_actions:
+                action_type = _normalize_action_type(str((action or {}).get("action_type") or ""))
+                if action_type == "image_verification":
+                    if not seen_image_verification:
+                        deduplicated_actions.append(action)
+                        seen_image_verification = True
+                    # else: skip duplicate image_verification
+                else:
+                    deduplicated_actions.append(action)
+            ai_pending_actions = deduplicated_actions
             precheck_failed_actions: list[dict] = []
             raw_has_machine_tag = bool(re.search(r"\[\[(REQUEST|ACTION):", narration_raw, flags=re.IGNORECASE))
             if not ai_pending_actions:
