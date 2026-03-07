@@ -1001,6 +1001,21 @@ async function exportRoleplayLibrary() {
   }
 }
 
+function applyImportedRoleplaySelection(importResponse) {
+  const importedCharacters = Array.isArray(importResponse?.characters) ? importResponse.characters : [];
+  const importedScenarios = Array.isArray(importResponse?.scenarios) ? importResponse.scenarios : [];
+  const importedCharacterId = String(importedCharacters[0]?.asset_id || '').trim();
+  const importedScenarioId = String(importedScenarios[0]?.asset_id || '').trim();
+
+  if (roleplayCharacterSelectEl && importedCharacterId) {
+    roleplayCharacterSelectEl.value = importedCharacterId;
+  }
+  if (roleplayScenarioSelectEl && importedScenarioId) {
+    roleplayScenarioSelectEl.value = importedScenarioId;
+  }
+  syncRoleplayFormsFromSelection();
+}
+
 async function importRoleplayLibraryFromText(text) {
   if (!auth) return;
   let parsed;
@@ -1019,8 +1034,17 @@ async function importRoleplayLibraryFromText(text) {
       overwrite_existing: overwriteExisting,
     });
     await loadRoleplayLibrary();
-    syncRoleplayFormsFromSelection();
-    setRoleplayInfo(`Import abgeschlossen: ${Number(body?.imported?.characters || 0)} Character, ${Number(body?.imported?.scenarios || 0)} Scenarios.${overwriteExisting ? ' Bestehende IDs wurden ueberschrieben.' : ''}`);
+    applyImportedRoleplaySelection(body);
+    await persistRoleplaySelection(true);
+    const importedCharacterName = String(body?.characters?.[0]?.display_name || '').trim();
+    const importedScenarioTitle = String(body?.scenarios?.[0]?.title || '').trim();
+    const selectedInfo = [
+      importedCharacterName ? `Character: ${importedCharacterName}` : '',
+      importedScenarioTitle ? `Scenario: ${importedScenarioTitle}` : '',
+    ].filter(Boolean).join(' | ');
+    setRoleplayInfo(
+      `Import abgeschlossen: ${Number(body?.imported?.characters || 0)} Character, ${Number(body?.imported?.scenarios || 0)} Scenarios.${overwriteExisting ? ' Bestehende IDs wurden ueberschrieben.' : ''}${selectedInfo ? ` Aktiv gesetzt: ${selectedInfo}.` : ''}`
+    );
   } catch (error) {
     setRoleplayInfo(String(error?.message || error), true);
   }
