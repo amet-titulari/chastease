@@ -311,6 +311,10 @@ class OpenAIAdapter:
             "for add_time/reduce_time always send {\"seconds\": <positive_integer>}; "
             "for pause_timer/unpause_timer always send {} and no duration fields. "
             "for hygiene_open/hygiene_close always send a JSON object (at least {\"reason\":\"...\"} when meaningful). "
+            "IMPORTANT: When user uploads images, these are for YOUR REVIEW AND CONTEXT ONLY. "
+            "Do NOT automatically request image_verification when images are uploaded. "
+            "Only use image_verification when you need to REQUEST a specific verification photo from the user "
+            "(e.g., user asks 'check if device is locked', 'verify the seal', etc.). "
             "For image_verification send a payload with at least "
             "{\"request\": \"...\", \"verification_instruction\": \"...\"}. "
             "Before requesting image_verification, explain briefly what image should be provided and how you will verify it. "
@@ -376,11 +380,17 @@ class OpenAIAdapter:
         if is_setup_contract:
             user_prompt = context.action
         else:
+            attachment_note = ""
+            if attachment_content:
+                attachment_note = (
+                    "\n\nNote: The user has provided images for your review and context. "
+                    "These are NOT verification requests. Only request image_verification if you need a specific proof/check."
+                )
             user_prompt = (
                 f"Session: {context.session_id}\n"
                 f"Psychogram summary: {context.psychogram_summary}\n"
                 f"Wearer action: {action_block}\n"
-                f"Attachments:\n{attachment_summary}\n"
+                f"Attachments:\n{attachment_summary}{attachment_note}\n"
                 f"Language: {context.language}\n"
                 "Respond as the keyholder with concise narrative and next guidance. "
                 "Do not echo raw machine-readable key/value profile fields."
