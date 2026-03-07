@@ -1943,19 +1943,34 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                 db, request, session, action_text, request_lang, payload.attachments
             )
             narration, ai_pending_actions, generated_files = extract_pending_actions(narration_raw)
-            # Deduplicate image_verification actions - keep only the first one
-            seen_image_verification = False
-            deduplicated_actions = []
-            for action in ai_pending_actions:
-                action_type = _normalize_action_type(str((action or {}).get("action_type") or ""))
-                if action_type == "image_verification":
-                    if not seen_image_verification:
+            # If user uploaded images, filter out ALL image_verification actions
+            # (images are for LLM review/context only, not verification requests)
+            # If no images uploaded, keep only the first image_verification (deduplicate)
+            has_image_attachments = any(
+                str(item.get("type", "")).startswith("image/")
+                for item in (payload.attachments or [])
+            )
+            if has_image_attachments:
+                # User uploaded images → filter out ALL image_verification requests
+                ai_pending_actions = [
+                    action
+                    for action in ai_pending_actions
+                    if _normalize_action_type(str((action or {}).get("action_type") or "")) != "image_verification"
+                ]
+            else:
+                # No image uploads → deduplicate image_verification (keep only first)
+                seen_image_verification = False
+                deduplicated_actions = []
+                for action in ai_pending_actions:
+                    action_type = _normalize_action_type(str((action or {}).get("action_type") or ""))
+                    if action_type == "image_verification":
+                        if not seen_image_verification:
+                            deduplicated_actions.append(action)
+                            seen_image_verification = True
+                        # else: skip duplicate image_verification
+                    else:
                         deduplicated_actions.append(action)
-                        seen_image_verification = True
-                    # else: skip duplicate image_verification
-                else:
-                    deduplicated_actions.append(action)
-            ai_pending_actions = deduplicated_actions
+                ai_pending_actions = deduplicated_actions
             precheck_failed_actions: list[dict] = []
             raw_has_machine_tag = bool(re.search(r"\[\[(REQUEST|ACTION):", narration_raw, flags=re.IGNORECASE))
             if not ai_pending_actions:
