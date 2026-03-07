@@ -82,6 +82,9 @@ def test_setup_session_lifecycle(client):
     assert complete_data["chastity_session"]["status"] == "active"
     assert complete_data["chastity_session"]["user_id"] == user_id
     assert complete_data["chastity_session"]["psychogram_analysis"]
+    roleplay_profile = complete_data["chastity_session"]["policy"]["roleplay"]
+    assert roleplay_profile["character_card"]["display_name"] == "Amet Titulari"
+    assert roleplay_profile["scenario"]["title"] == "Amet Titulari Devotion Protocol"
 
 
 def test_setup_session_returns_english_questions(client):

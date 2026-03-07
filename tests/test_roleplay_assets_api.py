@@ -27,6 +27,11 @@ def test_roleplay_assets_flow_from_library_to_active_session(client):
     library_body = library_response.json()
     assert any(item["asset_id"] == "builtin-keyholder" for item in library_body["characters"])
     assert any(item["asset_id"] == "guided-chastity-session" for item in library_body["scenarios"])
+    builtin_character = next(item for item in library_body["characters"] if item["asset_id"] == "builtin-keyholder")
+    builtin_scenario = next(item for item in library_body["scenarios"] if item["asset_id"] == "guided-chastity-session")
+    assert builtin_character["display_name"] == "Amet Titulari"
+    assert builtin_character["persona"]["speech_style"]["tone"] == "warm"
+    assert builtin_scenario["title"] == "Amet Titulari Devotion Protocol"
 
     character_response = client.post(
         "/api/v1/roleplay/characters",
