@@ -9,6 +9,8 @@ Detaildiagramme liegen unter `docs/architecture/`.
 * Robuste Trennung von API, Domäne, Persistenz und KI-Integration
 * Nachvollziehbarer Story-Verlauf pro Session (Replay-faehig)
 * Solide Testbarkeit auf Unit- und API-Ebene
+* Explizite Trennung von Consent/Runtime-Logik und Roleplay-Inszenierung
+* Erweiterbarkeit fuer Character Cards, Szenario-Module und Session-Memory
 
 ## Architekturansatz
 
@@ -25,7 +27,11 @@ Detaildiagramme liegen unter `docs/architecture/`.
 `src/chastease/`
 
 * `api/`
+* `domains/consent/`
 * `domains/characters/`
+* `domains/roleplay/`
+* `domains/runtime_actions/`
+* `domains/scenarios/`
 * `domains/quests/`
 * `domains/sessions/`
 * `services/ai/`
@@ -38,6 +44,8 @@ Detaildiagramme liegen unter `docs/architecture/`.
 * Domain Layer ist framework-arm und enthaelt Spielregeln.
 * Repository Layer kapselt Datenzugriff und Transaktionen.
 * AI-Service darf nur ueber klar definiertes Interface aus Use Cases aufgerufen werden.
+* Roleplay-Prompting darf Session-State nutzen, aber Session-State nicht ersetzen.
+* Safety-, Consent- und Runtime-Regeln werden serverseitig erzwungen und nicht nur ueber Prompts beschrieben.
 
 ## Qualitaetsanforderungen
 
@@ -96,3 +104,5 @@ Detaildiagramme liegen unter `docs/architecture/`.
   * `docs/architecture/UML_SEQUENCE_DEVOPS_IMAGE_BUILD.md`
 * ADR API Framework:
   * `docs/adr/ADR-002-api-framework.md`
+* Roleplay Refactoring Plan:
+  * `docs/ROLEPLAY_REFACTORING_PLAN.md`

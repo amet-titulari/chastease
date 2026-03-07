@@ -4,6 +4,10 @@ Prioritaetssystem: `0 = Hoch / in Umsetzung`, `1 = Vorbereitet / Folgeplanung`, 
 
 ## Prioritaet 0 (Hoch / in Umsetzung)
 
+- [ ] Roleplay-Refactoring vorbereiten: Narration in Roleplay-Context-Building, Prompt-Assembly und Runtime-Kontext aufteilen
+- [ ] Character-Card-Schema fuer Keyholder-Persona definieren
+- [ ] Scenario-/Lorebook-Schema fuer wiederverwendbare RP-Kontexte definieren
+- [ ] Session-Summary- und Memory-Konzept fuer laengere RP-Sessions definieren
 - [ ] Die AI soll Aktionen die pending sind auch canceln können. Beispiel: Verzicht auf Hygieneöffnung
 - [ ] Der Chat soll immer unten angezeigt werden
 - [ ] Bildbeweise sollen pgp vereschlüsselt abelegt werden
@@ -12,6 +16,9 @@ Prioritaetssystem: `0 = Hoch / in Umsetzung`, `1 = Vorbereitet / Folgeplanung`, 
 
 ## Prioritaet 1 (Vorbereitet / Folgeplanung)
 
+- [ ] Persona-Layer fachlich vom Psychogramm trennen
+- [ ] Prompt-Template-Versionierung auf modulare RP-Prompt-Bausteine erweitern
+- [ ] OpenRouter als optionalen Gateway neben bestehenden OpenAI-kompatiblen Profilen vorbereiten
 - [ ] Chaster OAuth 2.0 Integration statt Developer Token (Authorization Code Flow, Token-Refresh, sichere Token-Persistenz pro User)
 - [ ] Setup-Felder mit Info-Button versehen; pro Feld soll erklaert werden, ob es lokal editierbar, durch Chaster verwaltet, durch die AI gesetzt oder durch Integrationsstatus gesteuert wird
 - [ ] Mehrsprachigkeit (Deutsch/Englisch) in API, UI und Setup-Flow
@@ -20,6 +27,10 @@ Prioritaetssystem: `0 = Hoch / in Umsetzung`, `1 = Vorbereitet / Folgeplanung`, 
 
 ## Prioritaet 2 (Idee / Umsetzung planen)
 
+- [ ] Character- und Scenario-Autorenoberflaeche im Frontend
+- [ ] Optionaler lokaler Model-Gateway ueber Ollama fuer private RP-Sessions
+- [ ] Memory-Retrieval mit Vector Store evaluieren
+- [ ] Multi-Character- oder Ensemble-Szenarien evaluieren
 - [ ] Chaster-Integration: Bestehender Session beitreten (geplant, nach MVP "Session erstellen")
 - [ ] Chaster Lock-Create Payload vervollstaendigen (min/max/minLimit/maxLimit, limitLockTime, allowSessionOffer, isTestLock, hideTimeLogs, extensions)
 - [ ] Setup-Erweiterung fuer Chaster-Optionen inkl. Mapping auf Public-API-Parameter

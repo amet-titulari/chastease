@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.1 - 2026-03-07
+
+- Planungsrelease fuer die RP-Ausrichtung:
+  - Roleplay-Refactoring-Zielbild dokumentiert.
+  - Produktvision, Architektur, Projektplan und Backlog auf Character, Scenario, Persona und Memory ausgerichtet.
+  - Grundlage fuer die naechste technische Refactoringphase vorbereitet.
+
+## 0.4.0 - 2026-03-07
+
+- Roleplay-Refactoring vorbereitet:
+  - Produkt- und Architekturplanung auf eine explizite RP-Zielarchitektur ausgerichtet.
+  - Neues Planungsdokument fuer Character, Scenario, Persona, Memory und Prompt-Assembly angelegt.
+  - Projektplan und Backlog auf einen fachlich gefuehrten Refactoringpfad fuer die Roleplay-Engine umgestellt.
+
 ## 0.3.2 - 2026-03-04
 
 - Betrieb und Release-Härtung:

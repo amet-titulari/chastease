@@ -9,6 +9,8 @@ Sie entwickelt, fordert und foerdert den Wearer im Rollenspiel im Rahmen von Con
 
 Basierend auf dem Consent kann ein Praeferenzprofil (Psychogramm) erstellt werden, das dem KI-Keyholder hilft, Vorlieben und Abneigungen des Wearers besser zu verstehen und die Interaktion passender zu gestalten.
 
+Zukuenftig soll Chastease staerker als spezialisierte Roleplay-Anwendung ausgepraegt werden: mit expliziten Charakterprofilen, Szenario-Bausteinen, Memory und dramaturgischer Sitzungsfuehrung statt nur eines generischen KI-Chats.
+
 ## Zielgruppe
 
 *   Spieler:innen, die erzählerische RPGs moegen
@@ -26,6 +28,7 @@ Basierend auf dem Consent kann ein Praeferenzprofil (Psychogramm) erstellt werde
 *   Entscheidungen haben sichtbare, persistente Folgen
 *   Modulares Regel- und Inhaltssystem fuer spaetere Erweiterungen
 *   Nahtlose Fortsetzung der gleichen Session ueber Smartphone, Tablet und Desktop
+*   Rollenspiel-Identitaet durch Character Persona, Szenario-Rahmen und Session-Memory
 
 ## Produktprinzipien
 
@@ -33,3 +36,4 @@ Basierend auf dem Consent kann ein Praeferenzprofil (Psychogramm) erstellt werde
 *   Schneller Start mit klarem MVP
 *   Technisch stabil, reproduzierbar und testbar
 *   Consent, Sicherheit und Auditierbarkeit als feste Produktgrundlage
+*   Persona, Szenario und Memory sind eigene Produktbausteine und keine impliziten Prompt-Reste
