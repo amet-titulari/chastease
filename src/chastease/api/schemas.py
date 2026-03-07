@@ -45,6 +45,8 @@ class ChatVisionReviewRequest(BaseModel):
 class SetupStartRequest(BaseModel):
     user_id: str = Field(min_length=1)
     character_id: str | None = None
+    roleplay_character_id: str | None = None
+    roleplay_scenario_id: str | None = None
     auth_token: str = Field(min_length=8)
     hard_stop_enabled: bool = True
     autonomy_mode: Literal["execute", "suggest"] = "execute"
@@ -164,6 +166,45 @@ class SetupSealUpdateRequest(BaseModel):
     user_id: str = Field(min_length=1)
     auth_token: str = Field(min_length=8)
     seal_mode: Literal["none", "plomben", "versiegelung"] = "none"
+
+
+class SetupRoleplaySelectionRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    auth_token: str = Field(min_length=8)
+    roleplay_character_id: str | None = None
+    roleplay_scenario_id: str | None = None
+
+
+class RoleplayCharacterUpsertRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    auth_token: str = Field(min_length=8)
+    display_name: str = Field(min_length=1, max_length=120)
+    persona_name: str | None = Field(default=None, max_length=120)
+    archetype: str = Field(default="keyholder", min_length=2, max_length=80)
+    description: str = Field(default="", max_length=2000)
+    greeting_template: str = Field(default="", max_length=1000)
+    tone: str = Field(default="balanced", min_length=2, max_length=80)
+    dominance_style: str = Field(default="moderate", min_length=2, max_length=80)
+    ritual_phrases: list[str] = Field(default_factory=list)
+    goals: list[str] = Field(default_factory=list)
+    scenario_hooks: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+
+class RoleplayScenarioUpsertRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    auth_token: str = Field(min_length=8)
+    title: str = Field(min_length=1, max_length=120)
+    summary: str = Field(default="", max_length=2000)
+    phase_id: str = Field(default="active", min_length=1, max_length=80)
+    phase_title: str = Field(default="Active Session", min_length=1, max_length=120)
+    phase_objective: str = Field(default="", max_length=1000)
+    phase_guidance: str = Field(default="", max_length=2000)
+    lore_key: str = Field(default="session-rules", min_length=1, max_length=80)
+    lore_content: str = Field(default="", max_length=4000)
+    lore_triggers: list[str] = Field(default_factory=list)
+    lore_priority: int = Field(default=100, ge=0, le=1000)
+    tags: list[str] = Field(default_factory=list)
 
 class SetupAIControlledFieldsUpdateRequest(BaseModel):
     """Nur KI darf diese geschützten Felder aktualisieren."""

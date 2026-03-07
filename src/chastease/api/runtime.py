@@ -182,13 +182,18 @@ def require_user_token(user_id: str, auth_token: str, db, request: Request) -> U
 
 
 def serialize_chastity_session(session: ChastitySession) -> dict:
+    policy = json.loads(session.policy_snapshot_json)
+    roleplay = policy.get("roleplay") if isinstance(policy, dict) else {}
+    selection = roleplay.get("selection") if isinstance(roleplay, dict) and isinstance(roleplay.get("selection"), dict) else {}
     return {
         "session_id": session.id,
         "user_id": session.user_id,
         "character_id": session.character_id,
+        "roleplay_character_id": selection.get("character_id"),
+        "roleplay_scenario_id": selection.get("scenario_id"),
         "status": session.status,
         "language": session.language,
-        "policy": json.loads(session.policy_snapshot_json),
+        "policy": policy,
         "psychogram": json.loads(session.psychogram_snapshot_json),
         "created_at": session.created_at.isoformat(),
         "updated_at": session.updated_at.isoformat(),

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.1 - 2026-03-07
+
+- Roleplay-Asset-Library ergaenzt:
+  - Persistente Character- und Scenario-Assets mit CRUD-API eingefuehrt.
+  - Setup-Session kann aktive RP-Auswahl speichern und in aktive Sessions synchronisieren.
+- Frontend fuer RP-Auswahl ausgebaut:
+  - Setup-Seite um Character-/Scenario-Editor und Asset-Auswahl erweitert.
+  - Dashboard zeigt aktive Roleplay-Runtime mit Character-, Scenario- und Guidance-Kontext.
+- Verifikation:
+  - Gezielter Test fuer Asset-CRUD, Setup-Selektion und Session-Synchronisierung hinzugefuegt.
+
 ## 0.5.0 - 2026-03-07
 
 - Roleplay-Backend refaktoriert:

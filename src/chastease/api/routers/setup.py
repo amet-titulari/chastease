@@ -19,6 +19,7 @@ from chastease.api.schemas import (
     SetupChatPreviewRequest,
     SetupContractConsentRequest,
     SetupIntegrationsUpdateRequest,
+    SetupRoleplaySelectionRequest,
     SetupSealUpdateRequest,
     SetupStartRequest,
 )
@@ -37,6 +38,7 @@ from chastease.api.setup_domain import (
     _now_iso,
     _psychogram_brief,
     _refresh_setup_derived_state,
+    _refresh_setup_roleplay_profile,
     _render_contract_with_consent,
     _required_contract_consent_text,
     _resolve_contract_dates,
@@ -791,6 +793,8 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
             "user_id": payload.user_id,
             "user_display_name": str(user.display_name or "").strip() or payload.user_id,
             "character_id": payload.character_id,
+            "roleplay_character_id": str(payload.roleplay_character_id or setup_session.get("roleplay_character_id") or "builtin-keyholder"),
+            "roleplay_scenario_id": str(payload.roleplay_scenario_id or setup_session.get("roleplay_scenario_id") or "guided-chastity-session"),
             "status": "setup_in_progress",
             "hard_stop_enabled": payload.hard_stop_enabled,
             "autonomy_mode": payload.autonomy_mode,
@@ -852,6 +856,8 @@ def start_setup_session(payload: SetupStartRequest, request: Request) -> dict:
         "setup_session_id": setup_session_id,
         "user_id": payload.user_id,
         "character_id": payload.character_id,
+        "roleplay_character_id": setup_session.get("roleplay_character_id"),
+        "roleplay_scenario_id": setup_session.get("roleplay_scenario_id"),
         "status": "setup_in_progress",
         "seal_mode": payload.seal_mode,
         "initial_seal_number": payload.initial_seal_number,
@@ -939,6 +945,39 @@ def submit_setup_answers(setup_session_id: str, payload: SetupAnswersRequest, re
 @router.get("/sessions/{setup_session_id}")
 def get_setup_session(setup_session_id: str) -> dict:
     return _get_session_or_404(setup_session_id)
+
+
+@router.post("/sessions/{setup_session_id}/roleplay")
+def update_setup_roleplay_selection(
+    setup_session_id: str,
+    payload: SetupRoleplaySelectionRequest,
+    request: Request,
+) -> dict:
+    store = load_sessions()
+    setup_session = store.get(setup_session_id)
+    if setup_session is None:
+        raise HTTPException(status_code=404, detail=_t("de", "not_found"))
+    if setup_session.get("user_id") != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid user for setup session.")
+    token_user_id = resolve_user_id_from_token(payload.auth_token, request)
+    if token_user_id != payload.user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth token for user.")
+
+    setup_session["roleplay_character_id"] = str(payload.roleplay_character_id or "builtin-keyholder").strip() or "builtin-keyholder"
+    setup_session["roleplay_scenario_id"] = str(payload.roleplay_scenario_id or "guided-chastity-session").strip() or "guided-chastity-session"
+    roleplay_profile = _refresh_setup_roleplay_profile(setup_session)
+    setup_session["updated_at"] = _now_iso()
+    store[setup_session_id] = setup_session
+    save_sessions(store)
+
+    applied_to_active_session = sync_setup_snapshot_to_active_session(request, setup_session)
+    return {
+        "setup_session_id": setup_session_id,
+        "roleplay_character_id": setup_session["roleplay_character_id"],
+        "roleplay_scenario_id": setup_session["roleplay_scenario_id"],
+        "roleplay_profile": roleplay_profile,
+        "applied_to_active_session": applied_to_active_session,
+    }
 
 
 @router.post("/sessions/{setup_session_id}/integrations")

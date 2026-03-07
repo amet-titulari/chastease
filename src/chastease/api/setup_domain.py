@@ -13,6 +13,7 @@ from chastease.api.questionnaire import (
     TRAIT_KEYS,
     TRANSLATIONS,
 )
+from chastease.repositories.roleplay_store import get_user_roleplay_asset
 from chastease.repositories.setup_store import load_sessions
 
 # Diese Felder können während der aktiven Sitzung NUR von der KI angepasst werden.
@@ -194,6 +195,23 @@ def _required_contract_consent_text(language: str) -> str:
     return "I accept this contract" if _lang(language) == "en" else "Ich akzeptiere diesen Vertrag"
 
 
+def _merge_roleplay_payload(default_payload: dict, selected_payload: dict | None) -> dict:
+    merged = json.loads(json.dumps(default_payload))
+    if not isinstance(selected_payload, dict):
+        return merged
+    for key, value in selected_payload.items():
+        if key in {"asset_id", "user_id", "created_at", "updated_at", "builtin", "kind"}:
+            continue
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            nested = dict(merged.get(key) or {})
+            nested.update(value)
+            merged[key] = nested
+            continue
+        if value is not None and value != "" and value != [] and value != {}:
+            merged[key] = value
+    return merged
+
+
 def _build_roleplay_profile(setup_session: dict, psychogram: dict, policy: dict) -> dict:
     lang = _lang(setup_session.get("language", "de"))
     interaction = psychogram.get("interaction_preferences") if isinstance(psychogram.get("interaction_preferences"), dict) else {}
@@ -240,10 +258,10 @@ def _build_roleplay_profile(setup_session: dict, psychogram: dict, policy: dict)
             else "Operative Entscheidungen koennen automatisch angewandt werden."
         )
 
-    return {
+    profile = {
         "version": "1.0",
         "character_card": {
-            "card_id": str(setup_session.get("character_id") or "builtin-keyholder"),
+            "card_id": "builtin-keyholder",
             "display_name": keyholder_name,
             "persona": {
                 "name": keyholder_name,
@@ -297,6 +315,37 @@ def _build_roleplay_profile(setup_session: dict, psychogram: dict, policy: dict)
             "mode": "session",
         },
     }
+
+    selected_character_id = str(setup_session.get("roleplay_character_id") or "builtin-keyholder").strip() or "builtin-keyholder"
+    selected_scenario_id = str(setup_session.get("roleplay_scenario_id") or "guided-chastity-session").strip() or "guided-chastity-session"
+    user_id = str(setup_session.get("user_id") or "").strip()
+
+    character_payload = None
+    scenario_payload = None
+    if user_id and selected_character_id != "builtin-keyholder":
+        character_payload = get_user_roleplay_asset(user_id, "characters", selected_character_id)
+    if user_id and selected_scenario_id != "guided-chastity-session":
+        scenario_payload = get_user_roleplay_asset(user_id, "scenarios", selected_scenario_id)
+
+    profile["character_card"] = _merge_roleplay_payload(profile["character_card"], character_payload)
+    profile["character_card"]["card_id"] = selected_character_id if character_payload else "builtin-keyholder"
+    profile["scenario"] = _merge_roleplay_payload(profile["scenario"], scenario_payload)
+    profile["scenario"]["scenario_id"] = selected_scenario_id if scenario_payload else "guided-chastity-session"
+    profile["selection"] = {
+        "character_id": profile["character_card"]["card_id"],
+        "scenario_id": profile["scenario"]["scenario_id"],
+    }
+    return profile
+
+
+def _refresh_setup_roleplay_profile(setup_session: dict) -> dict:
+    psychogram = setup_session.get("psychogram") if isinstance(setup_session.get("psychogram"), dict) else _build_psychogram(setup_session)
+    policy = setup_session.get("policy_preview") if isinstance(setup_session.get("policy_preview"), dict) else _build_policy(setup_session, psychogram)
+    roleplay_profile = _build_roleplay_profile(setup_session, psychogram, policy)
+    setup_session.setdefault("policy_preview", policy)
+    setup_session["policy_preview"]["roleplay"] = roleplay_profile
+    setup_session["roleplay_profile"] = roleplay_profile
+    return roleplay_profile
 
 
 def _refresh_setup_derived_state(setup_session: dict) -> tuple[dict, dict, dict]:
@@ -665,6 +714,8 @@ def _create_draft_setup_session(user_id: str, language: str = "de") -> dict:
         "setup_session_id": str(uuid4()),
         "user_id": user_id,
         "character_id": None,
+        "roleplay_character_id": "builtin-keyholder",
+        "roleplay_scenario_id": "guided-chastity-session",
         "status": "draft",
         "hard_stop_enabled": True,
         "autonomy_mode": "execute",

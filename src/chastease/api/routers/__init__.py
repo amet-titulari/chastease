@@ -4,6 +4,7 @@ from .chat import router as chat_router
 from .chaster import router as chaster_router
 from .chaster_auth import router as chaster_auth_router
 from .llm import router as llm_router
+from .roleplay import router as roleplay_router
 from .setup import router as setup_router
 from .sessions import router as sessions_router
 from .story import router as story_router
@@ -18,6 +19,7 @@ __all__ = [
     "chaster_router",
     "chaster_auth_router",
     "llm_router",
+    "roleplay_router",
     "setup_router",
     "sessions_router",
     "users_router",

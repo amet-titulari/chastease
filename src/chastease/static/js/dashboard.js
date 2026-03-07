@@ -24,6 +24,9 @@ const psychSummaryEl = document.getElementById('dashboardPsychSummary');
 const psychMetaEl = document.getElementById('dashboardPsychMeta');
 const psychAnalysisEl = document.getElementById('dashboardPsychAnalysis');
 const psychTraitsEl = document.getElementById('dashboardPsychTraits');
+const roleplaySummaryEl = document.getElementById('dashboardRoleplaySummary');
+const roleplayMetaEl = document.getElementById('dashboardRoleplayMeta');
+const roleplayGuidanceEl = document.getElementById('dashboardRoleplayGuidance');
 
 let currentSession = null;
 let timerInterval = null;
@@ -214,6 +217,50 @@ function renderPsychogram(body) {
   });
 }
 
+function renderRoleplay(body) {
+  const roleplay = body?.chastity_session?.policy?.roleplay;
+  if (!roleplay) {
+    if (roleplaySummaryEl) roleplaySummaryEl.textContent = 'Noch keine RP-Konfiguration aktiv.';
+    if (roleplayMetaEl) roleplayMetaEl.innerHTML = '';
+    if (roleplayGuidanceEl) roleplayGuidanceEl.textContent = '';
+    return;
+  }
+
+  const character = (roleplay.character_card && typeof roleplay.character_card === 'object') ? roleplay.character_card : {};
+  const scenario = (roleplay.scenario && typeof roleplay.scenario === 'object') ? roleplay.scenario : {};
+  const persona = (character.persona && typeof character.persona === 'object') ? character.persona : {};
+  const speechStyle = (persona.speech_style && typeof persona.speech_style === 'object') ? persona.speech_style : {};
+  const phase = Array.isArray(scenario.phases) ? (scenario.phases[0] || {}) : {};
+
+  if (roleplaySummaryEl) {
+    const characterName = String(character.display_name || persona.name || 'Unbekannter Character');
+    const scenarioTitle = String(scenario.title || 'Unbekanntes Scenario');
+    roleplaySummaryEl.textContent = `${characterName} in ${scenarioTitle}`;
+  }
+
+  if (roleplayMetaEl) {
+    roleplayMetaEl.innerHTML = '';
+    [
+      ['Tone', speechStyle.tone || 'balanced'],
+      ['Dominance', speechStyle.dominance_style || 'moderate'],
+      ['Character ID', character.card_id || 'builtin-keyholder'],
+      ['Scenario ID', scenario.scenario_id || 'guided-chastity-session'],
+    ].forEach(([label, value]) => {
+      const row = document.createElement('div');
+      row.className = 'rounded border border-white/10 bg-surface p-2';
+      row.innerHTML = `
+        <div class="text-xs uppercase tracking-wide text-text-tertiary">${label}</div>
+        <div class="text-sm text-text-secondary break-words">${String(value)}</div>
+      `;
+      roleplayMetaEl.appendChild(row);
+    });
+  }
+
+  if (roleplayGuidanceEl) {
+    roleplayGuidanceEl.textContent = String(phase.guidance || scenario.summary || persona.description || '');
+  }
+}
+
 const SESSION_INFO_LABELS = {
   session_id: 'Session-ID',
   status: 'Status',
@@ -352,6 +399,7 @@ function updateView(body) {
   renderTimer(body);
   renderSessionInfo(body);
   renderPsychogram(body);
+  renderRoleplay(body);
 
   if (statusEl) {
     const msg = body?.has_active_session ? 'Session status loaded.' : 'Keine aktive Session. Setup fortsetzen.';

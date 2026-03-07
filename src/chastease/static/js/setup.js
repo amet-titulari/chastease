@@ -11,10 +11,12 @@ const completeSetupConfirmWrap = document.getElementById('completeSetupConfirmWr
 const artifactsBtn = document.getElementById('generateArtifactsBtn');
 const acceptConsentBtn = document.getElementById('acceptConsentBtn');
 const questionAccordionBtn = document.getElementById('accQuestionBtn');
+const roleplayInfoEl = document.getElementById('roleplayInfo');
 
 const accordionDefs = [
   { key: 'base', btn: 'accBaseBtn', body: 'accBaseBody', chevron: 'accBaseChevron' },
   { key: 'llm', btn: 'accLlmBtn', body: 'accLlmBody', chevron: 'accLlmChevron' },
+  { key: 'roleplay', btn: 'accRoleplayBtn', body: 'accRoleplayBody', chevron: 'accRoleplayChevron' },
   { key: 'ttlock', btn: 'accTtlockBtn', body: 'accTtlockBody', chevron: 'accTtlockChevron' },
   { key: 'questionnaire', btn: 'accQuestionBtn', body: 'accQuestionBody', chevron: 'accQuestionChevron' },
   { key: 'completion', btn: 'accCompletionBtn', body: 'accCompletionBody', chevron: 'accCompletionChevron' },
@@ -43,6 +45,30 @@ const instructionStyleEl = document.getElementById('setupInstructionStyle');
 const desiredIntensityEl = document.getElementById('setupDesiredIntensity');
 const groomingPreferenceEl = document.getElementById('setupGroomingPreference');
 const consentEl = document.getElementById('consentText');
+const roleplayCharacterSelectEl = document.getElementById('roleplayCharacterSelect');
+const roleplayScenarioSelectEl = document.getElementById('roleplayScenarioSelect');
+const roleplayCharacterNameEl = document.getElementById('roleplayCharacterName');
+const roleplayCharacterPersonaNameEl = document.getElementById('roleplayCharacterPersonaName');
+const roleplayCharacterToneEl = document.getElementById('roleplayCharacterTone');
+const roleplayCharacterDominanceEl = document.getElementById('roleplayCharacterDominance');
+const roleplayCharacterDescriptionEl = document.getElementById('roleplayCharacterDescription');
+const roleplayCharacterGreetingEl = document.getElementById('roleplayCharacterGreeting');
+const roleplayCharacterGoalsEl = document.getElementById('roleplayCharacterGoals');
+const roleplayCharacterRitualsEl = document.getElementById('roleplayCharacterRituals');
+const roleplayCharacterHooksEl = document.getElementById('roleplayCharacterHooks');
+const roleplayCharacterTagsEl = document.getElementById('roleplayCharacterTags');
+const saveRoleplayCharacterBtn = document.getElementById('saveRoleplayCharacterBtn');
+const deleteRoleplayCharacterBtn = document.getElementById('deleteRoleplayCharacterBtn');
+const roleplayScenarioTitleEl = document.getElementById('roleplayScenarioTitle');
+const roleplayScenarioSummaryEl = document.getElementById('roleplayScenarioSummary');
+const roleplayScenarioPhaseTitleEl = document.getElementById('roleplayScenarioPhaseTitle');
+const roleplayScenarioObjectiveEl = document.getElementById('roleplayScenarioObjective');
+const roleplayScenarioGuidanceEl = document.getElementById('roleplayScenarioGuidance');
+const roleplayScenarioLoreEl = document.getElementById('roleplayScenarioLore');
+const roleplayScenarioTriggersEl = document.getElementById('roleplayScenarioTriggers');
+const roleplayScenarioTagsEl = document.getElementById('roleplayScenarioTags');
+const saveRoleplayScenarioBtn = document.getElementById('saveRoleplayScenarioBtn');
+const deleteRoleplayScenarioBtn = document.getElementById('deleteRoleplayScenarioBtn');
 
 const ttlockUserEl = document.getElementById('ttlockUser');
 const ttlockPasswordEl = document.getElementById('ttlockPassword');
@@ -91,6 +117,7 @@ let currentSetup = null;
 let questionnaire = [];
 let ttlPassMd5Cached = '';
 let chasterConfigCached = null;
+let roleplayLibrary = { characters: [], scenarios: [] };
 let llmLiveTestPassed = false;
 let llmConnectivityVerified = false;
 const BASE_MANAGED_QUESTION_IDS = new Set(['q6_intensity_1_5', 'q8_instruction_style', 'q12_grooming_preference']);
@@ -172,6 +199,42 @@ function setChasterOauthStatus(text, isErr = false) {
   } else {
     chasterOauthStatusEl.textContent = text;
   }
+}
+
+function setRoleplayInfo(text, isErr = false) {
+  if (!roleplayInfoEl) return;
+  if (typeof chastease_common !== 'undefined') {
+    chastease_common.setStatus(roleplayInfoEl, text, isErr ? 'err' : 'ok');
+  } else {
+    roleplayInfoEl.textContent = text;
+  }
+}
+
+function splitCommaList(value) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function joinCommaList(values) {
+  return Array.isArray(values) ? values.filter(Boolean).join(', ') : '';
+}
+
+function currentRoleplayCharacterId() {
+  return String(roleplayCharacterSelectEl?.value || 'builtin-keyholder').trim() || 'builtin-keyholder';
+}
+
+function currentRoleplayScenarioId() {
+  return String(roleplayScenarioSelectEl?.value || 'guided-chastity-session').trim() || 'guided-chastity-session';
+}
+
+function findRoleplayCharacter(assetId) {
+  return (roleplayLibrary.characters || []).find((item) => String(item?.asset_id || '') === String(assetId || '')) || null;
+}
+
+function findRoleplayScenario(assetId) {
+  return (roleplayLibrary.scenarios || []).find((item) => String(item?.asset_id || '') === String(assetId || '')) || null;
 }
 
 function setChasterManagedFieldState(elements, managed) {
@@ -645,7 +708,7 @@ function setupAccordionEvents() {
 }
 
 function openNextAfterBaseSave() {
-  openAccordion('llm');
+  openAccordion('roleplay');
 }
 
 function openNextAfterPsychogramSave() {
@@ -753,6 +816,236 @@ function populateTtlockSelect(selectNode, items, valueKey, labelKey, selectedVal
   updateTtlockSaveVisibility();
 }
 
+
+function fillRoleplayCharacterForm(asset) {
+  const persona = (asset && typeof asset.persona === 'object') ? asset.persona : {};
+  const speechStyle = (persona && typeof persona.speech_style === 'object') ? persona.speech_style : {};
+  if (roleplayCharacterNameEl) roleplayCharacterNameEl.value = String(asset?.display_name || '');
+  if (roleplayCharacterPersonaNameEl) roleplayCharacterPersonaNameEl.value = String(persona.name || asset?.display_name || '');
+  if (roleplayCharacterToneEl) roleplayCharacterToneEl.value = String(speechStyle.tone || 'balanced');
+  if (roleplayCharacterDominanceEl) roleplayCharacterDominanceEl.value = String(speechStyle.dominance_style || 'moderate');
+  if (roleplayCharacterDescriptionEl) roleplayCharacterDescriptionEl.value = String(persona.description || '');
+  if (roleplayCharacterGreetingEl) roleplayCharacterGreetingEl.value = String(asset?.greeting_template || '');
+  if (roleplayCharacterGoalsEl) roleplayCharacterGoalsEl.value = joinCommaList(persona.goals);
+  if (roleplayCharacterRitualsEl) roleplayCharacterRitualsEl.value = joinCommaList(speechStyle.ritual_phrases);
+  if (roleplayCharacterHooksEl) roleplayCharacterHooksEl.value = joinCommaList(asset?.scenario_hooks);
+  if (roleplayCharacterTagsEl) roleplayCharacterTagsEl.value = joinCommaList(asset?.tags);
+  if (deleteRoleplayCharacterBtn) deleteRoleplayCharacterBtn.disabled = Boolean(asset?.builtin);
+}
+
+function fillRoleplayScenarioForm(asset) {
+  const phase = Array.isArray(asset?.phases) ? (asset.phases[0] || {}) : {};
+  const lore = Array.isArray(asset?.lorebook) ? (asset.lorebook[0] || {}) : {};
+  if (roleplayScenarioTitleEl) roleplayScenarioTitleEl.value = String(asset?.title || '');
+  if (roleplayScenarioSummaryEl) roleplayScenarioSummaryEl.value = String(asset?.summary || '');
+  if (roleplayScenarioPhaseTitleEl) roleplayScenarioPhaseTitleEl.value = String(phase.title || 'Active Session');
+  if (roleplayScenarioObjectiveEl) roleplayScenarioObjectiveEl.value = String(phase.objective || '');
+  if (roleplayScenarioGuidanceEl) roleplayScenarioGuidanceEl.value = String(phase.guidance || '');
+  if (roleplayScenarioLoreEl) roleplayScenarioLoreEl.value = String(lore.content || '');
+  if (roleplayScenarioTriggersEl) roleplayScenarioTriggersEl.value = joinCommaList(lore.triggers);
+  if (roleplayScenarioTagsEl) roleplayScenarioTagsEl.value = joinCommaList(asset?.tags);
+  if (deleteRoleplayScenarioBtn) deleteRoleplayScenarioBtn.disabled = Boolean(asset?.builtin);
+}
+
+function syncRoleplayFormsFromSelection() {
+  fillRoleplayCharacterForm(findRoleplayCharacter(currentRoleplayCharacterId()));
+  fillRoleplayScenarioForm(findRoleplayScenario(currentRoleplayScenarioId()));
+}
+
+function renderRoleplayLibrary() {
+  if (roleplayCharacterSelectEl) {
+    const previous = currentRoleplayCharacterId();
+    roleplayCharacterSelectEl.innerHTML = '';
+    (roleplayLibrary.characters || []).forEach((item) => {
+      const option = document.createElement('option');
+      option.value = String(item.asset_id || '');
+      option.textContent = item.builtin ? `${String(item.display_name || item.asset_id)} (builtin)` : String(item.display_name || item.asset_id);
+      roleplayCharacterSelectEl.appendChild(option);
+    });
+    roleplayCharacterSelectEl.value = previous;
+    if (!roleplayCharacterSelectEl.value && roleplayCharacterSelectEl.options.length) {
+      roleplayCharacterSelectEl.value = roleplayCharacterSelectEl.options[0].value;
+    }
+  }
+  if (roleplayScenarioSelectEl) {
+    const previous = currentRoleplayScenarioId();
+    roleplayScenarioSelectEl.innerHTML = '';
+    (roleplayLibrary.scenarios || []).forEach((item) => {
+      const option = document.createElement('option');
+      option.value = String(item.asset_id || '');
+      option.textContent = item.builtin ? `${String(item.title || item.asset_id)} (builtin)` : String(item.title || item.asset_id);
+      roleplayScenarioSelectEl.appendChild(option);
+    });
+    roleplayScenarioSelectEl.value = previous;
+    if (!roleplayScenarioSelectEl.value && roleplayScenarioSelectEl.options.length) {
+      roleplayScenarioSelectEl.value = roleplayScenarioSelectEl.options[0].value;
+    }
+  }
+  syncRoleplayFormsFromSelection();
+}
+
+async function loadRoleplayLibrary() {
+  if (!auth) return;
+  try {
+    const language = languageEl?.value || currentSetup?.language || 'de';
+    const body = await apiCall('GET', `/api/v1/roleplay/library?user_id=${encodeURIComponent(auth.user_id)}&auth_token=${encodeURIComponent(auth.auth_token)}&language=${encodeURIComponent(language)}`);
+    roleplayLibrary = {
+      characters: Array.isArray(body?.characters) ? body.characters : [],
+      scenarios: Array.isArray(body?.scenarios) ? body.scenarios : [],
+    };
+    renderRoleplayLibrary();
+    setRoleplayInfo('Roleplay-Profile geladen.');
+  } catch (error) {
+    setRoleplayInfo(String(error?.message || error), true);
+  }
+}
+
+async function persistRoleplaySelection(silent = false) {
+  if (!auth || !setupSessionId) return null;
+  try {
+    const body = await apiCall('POST', `/api/v1/setup/sessions/${encodeURIComponent(setupSessionId)}/roleplay`, {
+      user_id: auth.user_id,
+      auth_token: auth.auth_token,
+      roleplay_character_id: currentRoleplayCharacterId(),
+      roleplay_scenario_id: currentRoleplayScenarioId(),
+    });
+    currentSetup = {
+      ...(currentSetup || {}),
+      roleplay_character_id: body.roleplay_character_id,
+      roleplay_scenario_id: body.roleplay_scenario_id,
+      roleplay_profile: body.roleplay_profile,
+    };
+    if (!silent) setRoleplayInfo('Roleplay-Auswahl gespeichert.');
+    return body;
+  } catch (error) {
+    if (!silent) setRoleplayInfo(String(error?.message || error), true);
+    return null;
+  }
+}
+
+function buildRoleplayCharacterPayload() {
+  return {
+    user_id: auth.user_id,
+    auth_token: auth.auth_token,
+    display_name: String(roleplayCharacterNameEl?.value || '').trim(),
+    persona_name: String(roleplayCharacterPersonaNameEl?.value || '').trim() || null,
+    archetype: 'keyholder',
+    description: String(roleplayCharacterDescriptionEl?.value || '').trim(),
+    greeting_template: String(roleplayCharacterGreetingEl?.value || '').trim(),
+    tone: String(roleplayCharacterToneEl?.value || 'balanced').trim() || 'balanced',
+    dominance_style: String(roleplayCharacterDominanceEl?.value || 'moderate').trim() || 'moderate',
+    ritual_phrases: splitCommaList(roleplayCharacterRitualsEl?.value),
+    goals: splitCommaList(roleplayCharacterGoalsEl?.value),
+    scenario_hooks: splitCommaList(roleplayCharacterHooksEl?.value),
+    tags: splitCommaList(roleplayCharacterTagsEl?.value),
+  };
+}
+
+function buildRoleplayScenarioPayload() {
+  return {
+    user_id: auth.user_id,
+    auth_token: auth.auth_token,
+    title: String(roleplayScenarioTitleEl?.value || '').trim(),
+    summary: String(roleplayScenarioSummaryEl?.value || '').trim(),
+    phase_id: 'active',
+    phase_title: String(roleplayScenarioPhaseTitleEl?.value || 'Active Session').trim() || 'Active Session',
+    phase_objective: String(roleplayScenarioObjectiveEl?.value || '').trim(),
+    phase_guidance: String(roleplayScenarioGuidanceEl?.value || '').trim(),
+    lore_key: 'session-rules',
+    lore_content: String(roleplayScenarioLoreEl?.value || '').trim(),
+    lore_triggers: splitCommaList(roleplayScenarioTriggersEl?.value),
+    lore_priority: 100,
+    tags: splitCommaList(roleplayScenarioTagsEl?.value),
+  };
+}
+
+async function saveRoleplayCharacter() {
+  if (!auth) return;
+  const payload = buildRoleplayCharacterPayload();
+  if (!payload.display_name) {
+    setRoleplayInfo('Character-Name fehlt.', true);
+    return;
+  }
+  try {
+    const selectedId = currentRoleplayCharacterId();
+    const method = selectedId && selectedId !== 'builtin-keyholder' ? 'PUT' : 'POST';
+    const path = method === 'PUT'
+      ? `/api/v1/roleplay/characters/${encodeURIComponent(selectedId)}`
+      : '/api/v1/roleplay/characters';
+    const body = await apiCall(method, path, payload);
+    await loadRoleplayLibrary();
+    if (roleplayCharacterSelectEl && body?.character?.asset_id) {
+      roleplayCharacterSelectEl.value = body.character.asset_id;
+    }
+    syncRoleplayFormsFromSelection();
+    await persistRoleplaySelection(true);
+    setRoleplayInfo('Character gespeichert.');
+  } catch (error) {
+    setRoleplayInfo(String(error?.message || error), true);
+  }
+}
+
+async function deleteRoleplayCharacter() {
+  if (!auth) return;
+  const selectedId = currentRoleplayCharacterId();
+  if (!selectedId || selectedId === 'builtin-keyholder') {
+    setRoleplayInfo('Builtin-Character kann nicht geloescht werden.', true);
+    return;
+  }
+  try {
+    await apiCall('DELETE', `/api/v1/roleplay/characters/${encodeURIComponent(selectedId)}?user_id=${encodeURIComponent(auth.user_id)}&auth_token=${encodeURIComponent(auth.auth_token)}`);
+    if (roleplayCharacterSelectEl) roleplayCharacterSelectEl.value = 'builtin-keyholder';
+    await loadRoleplayLibrary();
+    await persistRoleplaySelection(true);
+    setRoleplayInfo('Character geloescht.');
+  } catch (error) {
+    setRoleplayInfo(String(error?.message || error), true);
+  }
+}
+
+async function saveRoleplayScenario() {
+  if (!auth) return;
+  const payload = buildRoleplayScenarioPayload();
+  if (!payload.title) {
+    setRoleplayInfo('Scenario-Titel fehlt.', true);
+    return;
+  }
+  try {
+    const selectedId = currentRoleplayScenarioId();
+    const method = selectedId && selectedId !== 'guided-chastity-session' ? 'PUT' : 'POST';
+    const path = method === 'PUT'
+      ? `/api/v1/roleplay/scenarios/${encodeURIComponent(selectedId)}`
+      : '/api/v1/roleplay/scenarios';
+    const body = await apiCall(method, path, payload);
+    await loadRoleplayLibrary();
+    if (roleplayScenarioSelectEl && body?.scenario?.asset_id) {
+      roleplayScenarioSelectEl.value = body.scenario.asset_id;
+    }
+    syncRoleplayFormsFromSelection();
+    await persistRoleplaySelection(true);
+    setRoleplayInfo('Scenario gespeichert.');
+  } catch (error) {
+    setRoleplayInfo(String(error?.message || error), true);
+  }
+}
+
+async function deleteRoleplayScenario() {
+  if (!auth) return;
+  const selectedId = currentRoleplayScenarioId();
+  if (!selectedId || selectedId === 'guided-chastity-session') {
+    setRoleplayInfo('Builtin-Scenario kann nicht geloescht werden.', true);
+    return;
+  }
+  try {
+    await apiCall('DELETE', `/api/v1/roleplay/scenarios/${encodeURIComponent(selectedId)}?user_id=${encodeURIComponent(auth.user_id)}&auth_token=${encodeURIComponent(auth.auth_token)}`);
+    if (roleplayScenarioSelectEl) roleplayScenarioSelectEl.value = 'guided-chastity-session';
+    await loadRoleplayLibrary();
+    await persistRoleplaySelection(true);
+    setRoleplayInfo('Scenario geloescht.');
+  } catch (error) {
+    setRoleplayInfo(String(error?.message || error), true);
+  }
+}
 function renderQuestions(questions) {
   questionnaire = (Array.isArray(questions) ? questions : []).filter((q) => {
     const qid = q?.question_id || q?.id;
@@ -886,6 +1179,8 @@ async function checkActiveChasterSession(apiToken, lockId = '') {
 function applySetupToForm(data) {
   if (!data) return;
   currentSetup = data;
+  if (roleplayCharacterSelectEl && data.roleplay_character_id) roleplayCharacterSelectEl.value = data.roleplay_character_id;
+  if (roleplayScenarioSelectEl && data.roleplay_scenario_id) roleplayScenarioSelectEl.value = data.roleplay_scenario_id;
   if (data.language && languageEl) languageEl.value = data.language;
   if (autonomyEl && data.autonomy_mode) autonomyEl.value = data.autonomy_mode;
   if (hardStopEl) hardStopEl.value = parseBool(data.hard_stop_enabled, true) ? 'true' : 'false';
@@ -994,6 +1289,7 @@ function applySetupToForm(data) {
   updateChasterSaveVisibility();
   updateLlmDependentUi();
   syncFinalizedSetupUi();
+  syncRoleplayFormsFromSelection();
 }
 
 async function loadSetupSession() {
@@ -1046,6 +1342,8 @@ async function startSetup() {
   const payload = {
     user_id: auth.user_id,
     auth_token: auth.auth_token,
+    roleplay_character_id: currentRoleplayCharacterId(),
+    roleplay_scenario_id: currentRoleplayScenarioId(),
     language: languageEl?.value || 'de',
     autonomy_mode: autonomyEl?.value || 'suggest',
     hard_stop_enabled: hardStopEl?.value === 'true',
@@ -1664,6 +1962,7 @@ async function bootstrap() {
     window.location.href = '/app?mode=login';
     return;
   }
+  await loadRoleplayLibrary();
 
   setupSessionId = setupIdFromUrl();
   const params = new URLSearchParams(window.location.search);
@@ -1738,6 +2037,21 @@ contractMaxEndDateEl?.addEventListener('change', syncDurationFromMaxEndDate);
 contractMaxDurationDaysEl?.addEventListener('input', syncMaxEndDateFromDuration);
 contractMinDurationDaysEl?.addEventListener('input', syncMinDurationGuard);
 saveTtlockBtn?.addEventListener('click', saveTtlockConfig);
+saveRoleplayCharacterBtn?.addEventListener('click', saveRoleplayCharacter);
+deleteRoleplayCharacterBtn?.addEventListener('click', deleteRoleplayCharacter);
+saveRoleplayScenarioBtn?.addEventListener('click', saveRoleplayScenario);
+deleteRoleplayScenarioBtn?.addEventListener('click', deleteRoleplayScenario);
+roleplayCharacterSelectEl?.addEventListener('change', async () => {
+  syncRoleplayFormsFromSelection();
+  await persistRoleplaySelection(true);
+});
+roleplayScenarioSelectEl?.addEventListener('change', async () => {
+  syncRoleplayFormsFromSelection();
+  await persistRoleplaySelection(true);
+});
+languageEl?.addEventListener('change', () => {
+  void loadRoleplayLibrary();
+});
 intTtlockEl?.addEventListener('change', () => {
   updateIntegrationSections();
   updateLlmDependentUi();

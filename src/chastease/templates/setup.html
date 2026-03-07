@@ -277,6 +277,120 @@
       </div>
     </div>
 
+    <div class="card p-4">
+      <button id="accRoleplayBtn" class="accordion-header" aria-expanded="false" aria-controls="accRoleplayBody">
+        <span>Roleplay Profiles</span>
+        <svg id="accRoleplayChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div id="accRoleplayBody" class="mt-4 space-y-5 hidden">
+        <p class="label">Waehle eine Character- und Scenario-Basis fuer den RP-Laufzeitkontext oder speichere eigene Profile.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="label">Aktiver Character</label>
+            <select id="roleplayCharacterSelect" class="select mt-1"></select>
+          </div>
+          <div>
+            <label class="label">Aktives Scenario</label>
+            <select id="roleplayScenarioSelect" class="select mt-1"></select>
+          </div>
+        </div>
+        <p id="roleplayInfo" class="label" aria-live="polite"></p>
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <div class="rounded border border-white/10 bg-surface p-4 space-y-3">
+            <h3 class="text-sm font-semibold text-text-secondary">Character Editor</h3>
+            <div>
+              <label class="label">Display name</label>
+              <input id="roleplayCharacterName" class="input mt-1" maxlength="120" />
+            </div>
+            <div>
+              <label class="label">Persona name</label>
+              <input id="roleplayCharacterPersonaName" class="input mt-1" maxlength="120" />
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="label">Tone</label>
+                <input id="roleplayCharacterTone" class="input mt-1" maxlength="80" />
+              </div>
+              <div>
+                <label class="label">Dominance style</label>
+                <input id="roleplayCharacterDominance" class="input mt-1" maxlength="80" />
+              </div>
+            </div>
+            <div>
+              <label class="label">Description</label>
+              <textarea id="roleplayCharacterDescription" class="input mt-1 min-h-24"></textarea>
+            </div>
+            <div>
+              <label class="label">Greeting template</label>
+              <textarea id="roleplayCharacterGreeting" class="input mt-1 min-h-20"></textarea>
+            </div>
+            <div>
+              <label class="label">Goals (comma separated)</label>
+              <input id="roleplayCharacterGoals" class="input mt-1" />
+            </div>
+            <div>
+              <label class="label">Ritual phrases (comma separated)</label>
+              <input id="roleplayCharacterRituals" class="input mt-1" />
+            </div>
+            <div>
+              <label class="label">Scenario hooks (comma separated)</label>
+              <input id="roleplayCharacterHooks" class="input mt-1" />
+            </div>
+            <div>
+              <label class="label">Tags (comma separated)</label>
+              <input id="roleplayCharacterTags" class="input mt-1" />
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button id="saveRoleplayCharacterBtn" class="btn-primary">Character speichern</button>
+              <button id="deleteRoleplayCharacterBtn" class="btn-outline">Character loeschen</button>
+            </div>
+          </div>
+
+          <div class="rounded border border-white/10 bg-surface p-4 space-y-3">
+            <h3 class="text-sm font-semibold text-text-secondary">Scenario Editor</h3>
+            <div>
+              <label class="label">Title</label>
+              <input id="roleplayScenarioTitle" class="input mt-1" maxlength="120" />
+            </div>
+            <div>
+              <label class="label">Summary</label>
+              <textarea id="roleplayScenarioSummary" class="input mt-1 min-h-20"></textarea>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="label">Phase title</label>
+                <input id="roleplayScenarioPhaseTitle" class="input mt-1" maxlength="120" />
+              </div>
+              <div>
+                <label class="label">Phase objective</label>
+                <input id="roleplayScenarioObjective" class="input mt-1" maxlength="1000" />
+              </div>
+            </div>
+            <div>
+              <label class="label">Phase guidance</label>
+              <textarea id="roleplayScenarioGuidance" class="input mt-1 min-h-24"></textarea>
+            </div>
+            <div>
+              <label class="label">Lore content</label>
+              <textarea id="roleplayScenarioLore" class="input mt-1 min-h-24"></textarea>
+            </div>
+            <div>
+              <label class="label">Lore triggers (comma separated)</label>
+              <input id="roleplayScenarioTriggers" class="input mt-1" />
+            </div>
+            <div>
+              <label class="label">Tags (comma separated)</label>
+              <input id="roleplayScenarioTags" class="input mt-1" />
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button id="saveRoleplayScenarioBtn" class="btn-primary">Scenario speichern</button>
+              <button id="deleteRoleplayScenarioBtn" class="btn-outline">Scenario loeschen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="ttlockSection" class="card p-4">
       <button id="accTtlockBtn" class="accordion-header" aria-expanded="false" aria-controls="accTtlockBody">
         <span>TTLock Konfiguration</span>
@@ -368,5 +482,5 @@
 {% block scripts %}
   <script src="/static/js/common.js"></script>
   <script src="/static/js/session.js"></script>
-  <script src="/static/js/setup.js?v=20260307b"></script>
+  <script src="/static/js/setup.js?v=20260307c"></script>
 {% endblock %}

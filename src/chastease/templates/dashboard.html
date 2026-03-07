@@ -110,11 +110,18 @@
         <div id="dashboardPsychTraits" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
       </div>
     </div>
+
+    <div class="card p-4 space-y-3">
+      <h2 class="text-lg font-semibold">Roleplay Runtime</h2>
+      <p id="dashboardRoleplaySummary" class="text-sm text-text-secondary">Noch keine RP-Konfiguration aktiv.</p>
+      <div id="dashboardRoleplayMeta" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+      <p id="dashboardRoleplayGuidance" class="text-sm text-text-secondary whitespace-pre-wrap"></p>
+    </div>
   </section>
 {% endblock %}
 
 {% block scripts %}
   <script src="/static/js/common.js"></script>
   <script src="/static/js/session.js"></script>
-  <script src="/static/js/dashboard.js?v=20260307b"></script>
+  <script src="/static/js/dashboard.js?v=20260307c"></script>
 {% endblock %}

@@ -6,6 +6,7 @@ from chastease.api.routers import (
     chaster_auth_router,
     chat_router,
     llm_router,
+    roleplay_router,
     sessions_router,
     setup_router,
     story_router,
@@ -20,6 +21,7 @@ api_router = APIRouter()
 api_router.include_router(auth_router)
 api_router.include_router(chaster_auth_router)
 api_router.include_router(llm_router)
+api_router.include_router(roleplay_router)
 api_router.include_router(users_router)
 api_router.include_router(story_router)
 api_router.include_router(chat_router)
