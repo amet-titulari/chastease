@@ -14,10 +14,17 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[2] / 
 def app_shell(request: Request):
     session_kill_enabled = bool(getattr(request.app.state.config, "ENABLE_SESSION_KILL", False))
     audit_log_enabled = bool(getattr(request.app.state.config, "ENABLE_AUDIT_LOG_VIEW", False))
+    auth_allow_local_login = bool(getattr(request.app.state.config, "AUTH_ALLOW_LOCAL_LOGIN", True))
+    auth_enable_chaster_login = bool(getattr(request.app.state.config, "AUTH_ENABLE_CHASTER_LOGIN", True))
     return templates.TemplateResponse(
         request,
         "app.html",
-        {"session_kill_enabled": session_kill_enabled, "audit_log_enabled": audit_log_enabled},
+        {
+            "session_kill_enabled": session_kill_enabled,
+            "audit_log_enabled": audit_log_enabled,
+            "auth_allow_local_login": auth_allow_local_login,
+            "auth_enable_chaster_login": auth_enable_chaster_login,
+        },
     )
 
 
@@ -81,3 +88,8 @@ def setup_view(request: Request, setup_session_id: str | None = None):
             "setup_session_id": setup_session_id,
         },
     )
+
+
+@router.get("/chaster/extension", response_class=HTMLResponse)
+def chaster_extension_view(request: Request):
+    return templates.TemplateResponse(request, "chaster_extension.html")

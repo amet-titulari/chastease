@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Chaster Extension{% endblock %}
+
+{% block content %}
+  <section class="mt-4 bg-gray-900 border border-gray-700 rounded-xl p-6 space-y-4">
+    <div>
+      <h1 class="text-2xl font-semibold">Chaster Extension</h1>
+      <p class="text-sm text-gray-400 mt-2">Diese Seite verarbeitet den Chaster Main-Page Handshake und bindet die Extension-Session an dein lokales Setup.</p>
+    </div>
+    <p id="extensionBindStatus" class="text-sm text-gray-400">Warte auf Chaster mainToken…</p>
+    <div id="extensionBindResult" class="text-sm text-gray-300 whitespace-pre-wrap"></div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/common.js"></script>
+  <script src="/static/js/session.js"></script>
+  <script src="/static/js/chaster-extension.js?v=20260307"></script>
+{% endblock %}

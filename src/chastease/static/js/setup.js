@@ -16,7 +16,6 @@ const accordionDefs = [
   { key: 'base', btn: 'accBaseBtn', body: 'accBaseBody', chevron: 'accBaseChevron' },
   { key: 'llm', btn: 'accLlmBtn', body: 'accLlmBody', chevron: 'accLlmChevron' },
   { key: 'ttlock', btn: 'accTtlockBtn', body: 'accTtlockBody', chevron: 'accTtlockChevron' },
-  { key: 'chaster', btn: 'accChasterBtn', body: 'accChasterBody', chevron: 'accChasterChevron' },
   { key: 'questionnaire', btn: 'accQuestionBtn', body: 'accQuestionBody', chevron: 'accQuestionChevron' },
   { key: 'completion', btn: 'accCompletionBtn', body: 'accCompletionBody', chevron: 'accCompletionChevron' },
   { key: 'artifacts', btn: 'accArtifactsBtn', body: 'accArtifactsBody', chevron: 'accArtifactsChevron' },
@@ -32,6 +31,7 @@ const intTtlockEl = document.getElementById('setupIntTtlock');
 const intChasterEl = document.getElementById('setupIntChaster');
 const contractStartDateEl = document.getElementById('contractStartDate');
 const contractMinDurationDaysEl = document.getElementById('contractMinDurationDays');
+const contractMinEndDateEl = document.getElementById('contractMinEndDate');
 const contractMaxEndDateEl = document.getElementById('contractMaxEndDate');
 const contractMaxDurationDaysEl = document.getElementById('contractMaxDurationDays');
 const maxPenaltyPerDayMinutesEl = document.getElementById('maxPenaltyPerDayMinutes');
@@ -62,9 +62,14 @@ const chasterIsTestLockEl = document.getElementById('chasterIsTestLock');
 const chasterHideTimeLogsEl = document.getElementById('chasterHideTimeLogs');
 const chasterEnableVerificationPictureEl = document.getElementById('chasterEnableVerificationPicture');
 const chasterEnableHygieneOpeningEl = document.getElementById('chasterEnableHygieneOpening');
+const chasterLegacyTokenWrapEl = document.getElementById('chasterLegacyTokenWrap');
+const chasterDurationWrapEl = document.getElementById('chasterDurationWrap');
+const chasterLimitWrapEl = document.getElementById('chasterLimitWrap');
 const saveChasterBtn = document.getElementById('saveChasterBtn');
 const createChasterSessionBtn = document.getElementById('createChasterSessionBtn');
 const chasterInfoEl = document.getElementById('chasterInfo');
+const chasterOauthConnectBtnEl = document.getElementById('chasterOauthConnectBtn');
+const chasterOauthStatusEl = document.getElementById('chasterOauthStatus');
 
 const llmProviderEl = document.getElementById('llmProviderName');
 const llmApiUrlEl = document.getElementById('llmApiUrl');
@@ -89,6 +94,12 @@ let chasterConfigCached = null;
 let llmLiveTestPassed = false;
 let llmConnectivityVerified = false;
 const BASE_MANAGED_QUESTION_IDS = new Set(['q6_intensity_1_5', 'q8_instruction_style', 'q12_grooming_preference']);
+const FINALIZED_SETUP_STATUSES = new Set(['configured', 'active', 'completed']);
+const FINALIZED_SETUP_ALLOWED_IDS = new Set([
+  'setupSealMode',
+  'setupInitialSealNumber',
+  'setupStartBtn',
+]);
 
 const defaultBehaviorPrompt = `Du bist meine ruhige, intelligente und psychologisch dominante Herrin / Keyholderin.
 Deine Dominanz ist kontrolliert, leise und absolut praesent. Du brauchst keine Lautstaerke, keine Beleidigungen und keine platte Grausamkeit - deine Macht liegt in Praezision, Geduld und Timing.
@@ -152,6 +163,140 @@ function setChasterInfo(text, isErr = false) {
   } else {
     chasterInfoEl.textContent = text;
   }
+}
+
+function setChasterOauthStatus(text, isErr = false) {
+  if (!chasterOauthStatusEl) return;
+  if (typeof chastease_common !== 'undefined') {
+    chastease_common.setStatus(chasterOauthStatusEl, text, isErr ? 'err' : 'ok');
+  } else {
+    chasterOauthStatusEl.textContent = text;
+  }
+}
+
+function setChasterManagedFieldState(elements, managed) {
+  const list = Array.isArray(elements) ? elements : [elements];
+  list.forEach((node) => {
+    if (!node) return;
+    const controlNode = (
+      node.tagName === 'INPUT'
+      && ['checkbox', 'radio'].includes(String(node.type || '').toLowerCase())
+      && node.closest('label')
+    ) || node;
+    if (!Object.prototype.hasOwnProperty.call(controlNode.dataset, 'baseDisabled')) {
+      controlNode.dataset.baseDisabled = node.disabled ? 'true' : 'false';
+    }
+    if (!Object.prototype.hasOwnProperty.call(controlNode.dataset, 'baseReadonly')) {
+      controlNode.dataset.baseReadonly = node.readOnly ? 'true' : 'false';
+    }
+
+    controlNode.classList.toggle('border', managed);
+    controlNode.classList.toggle('border-emerald-500', managed);
+    controlNode.classList.toggle('rounded-md', managed);
+    controlNode.classList.toggle('px-2', managed);
+    controlNode.classList.toggle('py-1.5', managed);
+    controlNode.classList.toggle('ring-1', managed);
+    controlNode.classList.toggle('ring-emerald-500/25', managed);
+
+    const baseDisabled = controlNode.dataset.baseDisabled === 'true';
+    const baseReadonly = controlNode.dataset.baseReadonly === 'true';
+
+    if (managed) {
+      if (node.tagName === 'INPUT' && ['checkbox', 'radio'].includes(String(node.type || '').toLowerCase())) {
+        node.disabled = true;
+      } else if (node.tagName === 'SELECT') {
+        node.disabled = true;
+      } else if (node.tagName === 'INPUT') {
+        node.disabled = true;
+      } else {
+        node.readOnly = true;
+      }
+      return;
+    }
+
+    node.disabled = baseDisabled;
+    if ('readOnly' in node) {
+      node.readOnly = baseReadonly;
+    }
+  });
+}
+
+function setFinalizedSetupFieldState(node, locked) {
+  if (!node || !node.id) return;
+  if (!Object.prototype.hasOwnProperty.call(node.dataset, 'finalBaseDisabled')) {
+    node.dataset.finalBaseDisabled = node.disabled ? 'true' : 'false';
+  }
+  if (!Object.prototype.hasOwnProperty.call(node.dataset, 'finalBaseReadonly')) {
+    node.dataset.finalBaseReadonly = node.readOnly ? 'true' : 'false';
+  }
+
+  if (locked) {
+    if ('disabled' in node) node.disabled = true;
+    if ('readOnly' in node) node.readOnly = true;
+    node.classList.add('opacity-70');
+    return;
+  }
+
+  if ('disabled' in node) node.disabled = node.dataset.finalBaseDisabled === 'true';
+  if ('readOnly' in node) node.readOnly = node.dataset.finalBaseReadonly === 'true';
+  node.classList.remove('opacity-70');
+}
+
+function syncFinalizedSetupUi() {
+  const status = String(currentSetup?.status || '').trim().toLowerCase();
+  const locked = FINALIZED_SETUP_STATUSES.has(status);
+  const nodes = document.querySelectorAll('#accBaseBody input, #accBaseBody select, #accBaseBody textarea, #accLlmBody input, #accLlmBody select, #accLlmBody textarea, #accQuestionBody input, #accQuestionBody select, #accQuestionBody textarea, #accCompletionBody textarea, #ttlockSection input, #ttlockSection select, #ttlockSection textarea, #chasterSection input, #chasterSection select, #chasterSection textarea, #setupStartBtn, #submitAnswersBtn, #completeSetupBtn, #confirmCompleteSetupBtn, #generateArtifactsBtn, #acceptConsentBtn, #saveLlmProfileBtn, #saveTtlockBtn');
+  nodes.forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    if (!locked) {
+      setFinalizedSetupFieldState(node, false);
+      return;
+    }
+    if (FINALIZED_SETUP_ALLOWED_IDS.has(node.id)) {
+      setFinalizedSetupFieldState(node, false);
+      return;
+    }
+    setFinalizedSetupFieldState(node, true);
+  });
+}
+
+function updateChasterOauthManagedUi(oauthConnected) {
+  const hideManaged = Boolean(oauthConnected);
+  if (chasterLegacyTokenWrapEl) chasterLegacyTokenWrapEl.classList.toggle('hidden', hideManaged);
+  if (chasterDurationWrapEl) chasterDurationWrapEl.classList.toggle('hidden', hideManaged);
+  if (chasterLimitWrapEl) chasterLimitWrapEl.classList.toggle('hidden', hideManaged);
+}
+
+function syncChasterSessionManagedFields(chasterCfg) {
+  const cfg = (chasterCfg && typeof chasterCfg === 'object') ? chasterCfg : {};
+  const lock = (cfg.lock && typeof cfg.lock === 'object') ? cfg.lock : {};
+  const hasLiveSession = Boolean(String(cfg.lock_id || lock.lock_id || '').trim());
+  const hasStartDate = Boolean(String(lock.start_date || '').trim());
+  const hasMinEndDate = Boolean(String(lock.min_end_date || '').trim());
+  const hasMaxEndDate = Boolean(String(lock.max_end_date || '').trim());
+  const hasMinLimit = Number.isFinite(Number(cfg.min_limit_duration_minutes));
+  const hasMaxLimit = Number.isFinite(Number(cfg.max_limit_duration_minutes));
+  const lockTimeLimited = lock.limit_lock_time !== undefined
+    ? Boolean(lock.limit_lock_time)
+    : Boolean(cfg.limit_lock_time);
+
+  const managedPairs = [
+    [contractStartDateEl, hasLiveSession && hasStartDate],
+    [contractMinEndDateEl, hasLiveSession && hasMinEndDate],
+    [contractMaxEndDateEl, hasLiveSession && hasMaxEndDate],
+    [contractMinDurationDaysEl, hasLiveSession && hasMinEndDate],
+    [contractMaxDurationDaysEl, hasLiveSession && hasMaxEndDate],
+    [chasterMinLimitDurationEl, hasLiveSession && lockTimeLimited && hasMinLimit],
+    [chasterMaxLimitDurationEl, hasLiveSession && lockTimeLimited && hasMaxLimit],
+    [chasterLimitLockTimeEl, hasLiveSession],
+    [chasterAllowSessionOfferEl, hasLiveSession],
+    [chasterIsTestLockEl, hasLiveSession],
+    [chasterHideTimeLogsEl, hasLiveSession],
+    [chasterEnableVerificationPictureEl, hasLiveSession],
+    [chasterEnableHygieneOpeningEl, hasLiveSession],
+  ];
+
+  managedPairs.forEach(([node, managed]) => setChasterManagedFieldState(node, Boolean(managed)));
 }
 
 function setSaveLlmEnabled(enabled) {
@@ -306,10 +451,33 @@ function syncMinDurationGuard() {
   const maxDuration = Math.max(0, Number(contractMaxDurationDaysEl.value || 0));
   if (maxDuration > 0 && minDuration > maxDuration) {
     contractMinDurationDaysEl.value = String(maxDuration);
+    syncMinEndDateFromDuration();
     syncChasterDurationsFromBase();
     return;
   }
   contractMinDurationDaysEl.value = String(minDuration);
+  syncMinEndDateFromDuration();
+  syncChasterDurationsFromBase();
+}
+
+function syncDurationFromMinEndDate() {
+  if (!contractStartDateEl || !contractMinEndDateEl || !contractMinDurationDaysEl) return;
+  const diffDays = daysBetween(contractStartDateEl.value, contractMinEndDateEl.value);
+  contractMinDurationDaysEl.value = diffDays === null ? '0' : String(diffDays);
+  syncMinDurationGuard();
+  syncChasterDurationsFromBase();
+}
+
+function syncMinEndDateFromDuration() {
+  if (!contractStartDateEl || !contractMinEndDateEl || !contractMinDurationDaysEl) return;
+  const duration = Math.max(0, Number(contractMinDurationDaysEl.value || 0));
+  if (duration === 0) {
+    contractMinEndDateEl.value = '';
+    syncChasterDurationsFromBase();
+    return;
+  }
+  const targetDate = dateByDuration(contractStartDateEl.value, duration);
+  if (targetDate) contractMinEndDateEl.value = targetDate;
   syncChasterDurationsFromBase();
 }
 
@@ -351,6 +519,10 @@ function setContractDefaults() {
     const maxEnd = dateByDuration(contractStartDateEl.value, Number(contractMaxDurationDaysEl?.value || 365));
     if (maxEnd) contractMaxEndDateEl.value = maxEnd;
   }
+  if (contractMinEndDateEl && !contractMinEndDateEl.value && contractStartDateEl?.value) {
+    const minEnd = dateByDuration(contractStartDateEl.value, Number(contractMinDurationDaysEl?.value || 30));
+    if (minEnd) contractMinEndDateEl.value = minEnd;
+  }
   syncMinDurationGuard();
   syncChasterDurationsFromBase();
 }
@@ -359,7 +531,7 @@ function getContractPayloadValues() {
   const contract_start_date = contractStartDateEl?.value || null;
   const minDuration = Math.max(0, Number(contractMinDurationDaysEl?.value || 0));
   const maxDuration = Math.max(0, Number(contractMaxDurationDaysEl?.value || 0));
-  const contract_min_end_date = dateByDuration(contract_start_date, minDuration);
+  const contract_min_end_date = contractMinEndDateEl?.value || dateByDuration(contract_start_date, minDuration);
   let contract_max_end_date = null;
   if (maxDuration > 0) {
     contract_max_end_date = contractMaxEndDateEl?.value || dateByDuration(contract_start_date, maxDuration);
@@ -385,9 +557,14 @@ function isTtlockReady() {
 function isChasterReady() {
   if (intChasterEl?.value !== 'true') return true;
   const savedChaster = currentSetup?.integration_config?.chaster;
+  const oauthConnected = Boolean(
+    savedChaster?.auth
+      && String(savedChaster.auth.mode || '').toLowerCase() === 'oauth2'
+      && (String(savedChaster.auth.access_token_enc || '').trim() || String(savedChaster.auth.refresh_token_enc || '').trim()),
+  );
   return Boolean(
     savedChaster
-      && String(savedChaster.api_token || '').trim()
+      && (String(savedChaster.api_token || '').trim() || oauthConnected)
       && String(savedChaster.code || '').trim(),
   );
 }
@@ -404,15 +581,6 @@ function openAccordion(targetKey) {
   if (targetKey === 'ttlock' && !llmConnectivityVerified) {
     setStatus('TTLock ist gesperrt: zuerst LLM Live-Test erfolgreich durchführen und speichern.', true);
     targetKey = 'llm';
-  }
-  if (targetKey === 'chaster' && !isChasterStepUnlocked()) {
-    if (!llmConnectivityVerified) {
-      setStatus('Chaster ist gesperrt: zuerst LLM Live-Test erfolgreich durchführen und speichern.', true);
-      targetKey = 'llm';
-    } else {
-      setStatus('Chaster ist gesperrt: zuerst TTLock-Konfiguration speichern.', true);
-      targetKey = 'ttlock';
-    }
   }
   if (targetKey === 'questionnaire' && !isQuestionnaireUnlocked()) {
     setStatus('Psychogramm ist gesperrt: zuerst LLM Live-Test erfolgreich durchführen und speichern.', true);
@@ -487,22 +655,10 @@ function openNextAfterLlmSave() {
     openAccordion('ttlock');
     return;
   }
-  if (intChasterEl?.value === 'true') {
-    openAccordion('chaster');
-    return;
-  }
   openAccordion('questionnaire');
 }
 
 function openNextAfterTtlockSave() {
-  if (intChasterEl?.value === 'true') {
-    openAccordion('chaster');
-    return;
-  }
-  openAccordion('questionnaire');
-}
-
-function openNextAfterChasterSave() {
   openAccordion('questionnaire');
 }
 
@@ -535,10 +691,16 @@ function chasterConfigFromForm() {
   const enabled = intChasterEl?.value === 'true';
   if (!enabled) return null;
   const api_token = String(chasterApiTokenEl?.value || '').trim();
+  const cachedAuth = (chasterConfigCached && typeof chasterConfigCached === 'object') ? chasterConfigCached.auth : null;
+  const hasOauth = Boolean(
+    cachedAuth
+    && String(cachedAuth.mode || '').toLowerCase() === 'oauth2'
+    && (String(cachedAuth.access_token_enc || '').trim() || String(cachedAuth.refresh_token_enc || '').trim()),
+  );
   const code = ensureChasterCode();
   const lock_id = String(chasterConfigCached?.lock_id || '').trim();
   const combination_id = String(chasterConfigCached?.combination_id || '').trim();
-  if (!api_token) return null;
+  if (!api_token && !hasOauth) return null;
   const { minMinutes, maxMinutes } = contractDurationsToChasterMinutes();
   const limit_lock_time = Boolean(chasterLimitLockTimeEl?.checked);
   const requestedMinLimit = Math.max(0, Number(chasterMinLimitDurationEl?.value || 0));
@@ -552,8 +714,10 @@ function chasterConfigFromForm() {
   const hide_time_logs = Boolean(chasterHideTimeLogsEl?.checked);
   const extensions = buildChasterExtensionsFromForm();
   return {
+    schema_version: 2,
     api_base: String(chasterConfigCached?.api_base || 'https://api.chaster.app').trim(),
     api_token,
+    auth: hasOauth ? { ...cachedAuth } : undefined,
     code,
     lock_id,
     combination_id,
@@ -704,12 +868,12 @@ async function apiCall(method, path, payload) {
 
 async function checkActiveChasterSession(apiToken, lockId = '') {
   const token = String(apiToken || '').trim();
-  if (!auth || !token) return null;
+  if (!auth) return null;
   try {
     return await apiCall('POST', '/api/v1/setup/chaster/check-active-session', {
       user_id: auth.user_id,
       auth_token: auth.auth_token,
-      chaster_api_token: token,
+      chaster_api_token: token || null,
       lock_id: String(lockId || '').trim() || null,
     });
   } catch (_error) {
@@ -740,6 +904,7 @@ function applySetupToForm(data) {
   if (desiredIntensityEl && data.desired_intensity) desiredIntensityEl.value = data.desired_intensity;
   if (groomingPreferenceEl && data.grooming_preference) groomingPreferenceEl.value = data.grooming_preference;
   if (contractStartDateEl) contractStartDateEl.value = data.contract_start_date || contractStartDateEl.value || '';
+  if (contractMinEndDateEl) contractMinEndDateEl.value = data.contract_min_end_date || '';
   if (contractMaxEndDateEl) contractMaxEndDateEl.value = data.contract_max_end_date || '';
   if (contractMinDurationDaysEl && data.contract_start_date && data.contract_min_end_date) {
     const minDays = daysBetween(data.contract_start_date, data.contract_min_end_date);
@@ -778,6 +943,18 @@ function applySetupToForm(data) {
   const chasterCfg = data.integration_config?.chaster || {};
   chasterConfigCached = Object.keys(chasterCfg).length ? { ...chasterCfg } : null;
   if (chasterApiTokenEl && chasterCfg.api_token) chasterApiTokenEl.value = String(chasterCfg.api_token);
+  const oauthConnected = Boolean(
+    chasterCfg?.auth
+    && String(chasterCfg.auth.mode || '').toLowerCase() === 'oauth2'
+    && (String(chasterCfg.auth.access_token_enc || '').trim() || String(chasterCfg.auth.refresh_token_enc || '').trim()),
+  );
+  updateChasterOauthManagedUi(oauthConnected);
+  setChasterOauthStatus(
+    oauthConnected
+      ? `OAuth verbunden${chasterCfg?.auth?.expires_at ? ` (Ablauf: ${String(chasterCfg.auth.expires_at)})` : ''}`
+      : 'OAuth: nicht verbunden',
+    false,
+  );
   if (chasterCodeEl) {
     if (chasterCfg.code) chasterCodeEl.value = String(chasterCfg.code);
     else ensureChasterCode();
@@ -801,10 +978,11 @@ function applySetupToForm(data) {
   });
   if (chasterEnableVerificationPictureEl) chasterEnableVerificationPictureEl.checked = Boolean(savedVerification) || savedExtensions.length === 0;
   if (chasterEnableHygieneOpeningEl) chasterEnableHygieneOpeningEl.checked = Boolean(savedHygiene) || savedExtensions.length === 0;
+  syncChasterSessionManagedFields(chasterCfg);
   syncChasterDurationsFromBase();
   if (chasterConfigCached?.lock_id) {
     setChasterInfo(`Chaster Session vorhanden (lock_id=${String(chasterConfigCached.lock_id)}).`);
-  } else if (chasterConfigCached?.api_token) {
+  } else if (chasterConfigCached?.api_token || oauthConnected) {
     setChasterInfo('Chaster-Konfiguration gespeichert. Session wird bei Vertragsakzeptanz erstellt.');
   } else {
     setChasterInfo('');
@@ -813,6 +991,7 @@ function applySetupToForm(data) {
   updateTtlockSaveVisibility();
   updateChasterSaveVisibility();
   updateLlmDependentUi();
+  syncFinalizedSetupUi();
 }
 
 async function loadSetupSession() {
@@ -876,8 +1055,8 @@ async function startSetup() {
     ai_controls_end_date: true,
     max_penalty_per_day_minutes: Math.max(0, Number(maxPenaltyPerDayMinutesEl?.value || 0)),
     max_penalty_per_week_minutes: Math.max(0, Number(maxPenaltyPerWeekMinutesEl?.value || 0)),
-    opening_limit_period: openingLimitPeriodEl?.value || 'week',
-    max_openings_in_period: Number(maxOpeningsInPeriodEl?.value || 2),
+    opening_limit_period: openingLimitPeriodEl?.value || 'month',
+    max_openings_in_period: Number(maxOpeningsInPeriodEl?.value || 7),
     opening_window_minutes: Number(openingWindowMinutesEl?.value || 15),
     instruction_style: instructionStyle,
     desired_intensity: desiredIntensity,
@@ -962,6 +1141,7 @@ async function completeSetup() {
         },
       },
     };
+    syncFinalizedSetupUi();
 
     setStatus('Setup abgeschlossen. Vertrag erstellt. Weiterleitung zur Vertragsseite...');
     setOutput({ complete: completeBody, contract: contractBody });
@@ -1086,15 +1266,25 @@ async function createChasterSessionAfterConsent(strict = false, forceCreate = fa
     return null;
   }
   let savedCfg = (currentSetup?.integration_config || {}).chaster || null;
-  if ((!savedCfg || !String(savedCfg.api_token || '').trim()) && intChasterEl?.value === 'true') {
+  const hasSavedOauth = Boolean(
+    savedCfg?.auth
+    && String(savedCfg.auth.mode || '').toLowerCase() === 'oauth2'
+    && (String(savedCfg.auth.access_token_enc || '').trim() || String(savedCfg.auth.refresh_token_enc || '').trim()),
+  );
+  if ((!savedCfg || (!String(savedCfg.api_token || '').trim() && !hasSavedOauth)) && intChasterEl?.value === 'true') {
     try {
       savedCfg = chasterConfigFromForm();
     } catch (_) {
       savedCfg = null;
     }
   }
-  if (!savedCfg || !String(savedCfg.api_token || '').trim()) {
-    if (strict) throw new Error('Chaster API Token fehlt.');
+  const hasCfgOauth = Boolean(
+    savedCfg?.auth
+    && String(savedCfg.auth.mode || '').toLowerCase() === 'oauth2'
+    && (String(savedCfg.auth.access_token_enc || '').trim() || String(savedCfg.auth.refresh_token_enc || '').trim()),
+  );
+  if (!savedCfg || (!String(savedCfg.api_token || '').trim() && !hasCfgOauth)) {
+    if (strict) throw new Error('Chaster Credentials fehlen (OAuth2 oder API Token).');
     return null;
   }
   if (String(savedCfg.lock_id || '').trim() && !forceCreate) return { already_exists: true, config: savedCfg };
@@ -1110,7 +1300,7 @@ async function createChasterSessionAfterConsent(strict = false, forceCreate = fa
   const createPayload = {
     user_id: auth.user_id,
     auth_token: auth.auth_token,
-    chaster_api_token: String(savedCfg.api_token || '').trim(),
+    chaster_api_token: String(savedCfg.api_token || '').trim() || null,
     code: String(savedCfg.code || ensureChasterCode()).trim(),
     min_duration_minutes: minMinutes,
     max_duration_minutes: maxMinutes,
@@ -1206,8 +1396,8 @@ async function saveChasterConfig() {
   if (chCfg) integration_config.chaster = chCfg;
 
   if (intChasterEl?.value === 'true' && !chCfg) {
-    setChasterInfo('Chaster-Konfiguration unvollständig: API Token erforderlich.', true);
-    setStatus('Chaster speichern fehlgeschlagen: API Token erforderlich.', true);
+    setChasterInfo('Chaster-Konfiguration unvollständig: OAuth2-Verbindung oder API Token erforderlich.', true);
+    setStatus('Chaster speichern fehlgeschlagen: Credentials fehlen.', true);
     return;
   }
 
@@ -1267,7 +1457,7 @@ async function saveChasterConfig() {
     setStatus('Chaster-Konfiguration gespeichert.');
     updateLlmDependentUi();
     setOutput(body);
-    openNextAfterChasterSave();
+    openAccordion('questionnaire');
   } catch (error) {
     setChasterInfo(String(error?.message || error), true);
     setOutput({ error: String(error?.message || error) });
@@ -1474,6 +1664,13 @@ async function bootstrap() {
   }
 
   setupSessionId = setupIdFromUrl();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('chaster_oauth') === 'ok') {
+    setChasterOauthStatus('OAuth erfolgreich verbunden.');
+    setStatus('Chaster OAuth erfolgreich verbunden.');
+  } else if (params.get('chaster_oauth') === 'error') {
+    setChasterOauthStatus(`OAuth Fehler: ${params.get('message') || 'unknown'}`, true);
+  }
   if (setupSessionId) {
     if (instructionsEl) instructionsEl.textContent = `Setup-Session: ${setupSessionId}`;
     await loadSetupSession();
@@ -1496,6 +1693,19 @@ async function bootstrap() {
   await loadLlmProfile();
 }
 
+function connectChasterOauth() {
+  if (!auth) {
+    setStatus('Login fehlt.', true);
+    return;
+  }
+  const params = new URLSearchParams({
+    user_id: String(auth.user_id || ''),
+    auth_token: String(auth.auth_token || ''),
+    return_to: '/setup',
+  });
+  window.location.href = `/api/v1/auth/chaster/login?${params.toString()}`;
+}
+
 startBtn?.addEventListener('click', startSetup);
 submitAnswersBtn?.addEventListener('click', submitAnswers);
 completeSetupBtn?.addEventListener('click', showCompleteSetupConfirmation);
@@ -1506,6 +1716,7 @@ ttlockDiscoverBtn?.addEventListener('click', discoverTtlockDevices);
 ttlockLockEl?.addEventListener('change', updateTtlockSaveVisibility);
 saveChasterBtn?.addEventListener('click', saveChasterConfig);
 if (createChasterSessionBtn) createChasterSessionBtn.classList.add('hidden');
+chasterOauthConnectBtnEl?.addEventListener('click', connectChasterOauth);
 chasterApiTokenEl?.addEventListener('input', updateChasterSaveVisibility);
 chasterCodeEl?.addEventListener('input', updateChasterSaveVisibility);
 chasterMinLimitDurationEl?.addEventListener('input', updateChasterSaveVisibility);
@@ -1516,7 +1727,11 @@ chasterIsTestLockEl?.addEventListener('change', updateChasterSaveVisibility);
 chasterHideTimeLogsEl?.addEventListener('change', updateChasterSaveVisibility);
 chasterEnableVerificationPictureEl?.addEventListener('change', updateChasterSaveVisibility);
 chasterEnableHygieneOpeningEl?.addEventListener('change', updateChasterSaveVisibility);
-contractStartDateEl?.addEventListener('change', syncMaxEndDateFromDuration);
+contractStartDateEl?.addEventListener('change', () => {
+  syncMinEndDateFromDuration();
+  syncMaxEndDateFromDuration();
+});
+contractMinEndDateEl?.addEventListener('change', syncDurationFromMinEndDate);
 contractMaxEndDateEl?.addEventListener('change', syncDurationFromMaxEndDate);
 contractMaxDurationDaysEl?.addEventListener('input', syncMaxEndDateFromDuration);
 contractMinDurationDaysEl?.addEventListener('input', syncMinDurationGuard);

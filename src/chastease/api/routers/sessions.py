@@ -18,7 +18,11 @@ from chastease.api.runtime import (
     serialize_chastity_session,
 )
 from chastease.api.schemas import SetupIntegrationsUpdateRequest
-from chastease.api.routers.chaster import fetch_chaster_lock_runtime
+from chastease.api.routers.chaster import (
+    chaster_has_any_credentials,
+    fetch_chaster_lock_runtime,
+    resolve_chaster_api_token,
+)
 from chastease.models import ChastitySession, Turn, User
 from chastease.repositories.setup_store import load_sessions, save_sessions
 
@@ -118,10 +122,15 @@ def _maybe_sync_timer_with_chaster(db, session: ChastitySession, request: Reques
 
     integration_config = policy.get("integration_config") if isinstance(policy.get("integration_config"), dict) else {}
     chaster_cfg = integration_config.get("chaster") if isinstance(integration_config.get("chaster"), dict) else {}
-    api_token = str(chaster_cfg.get("api_token") or "").strip()
     lock_id = str(chaster_cfg.get("lock_id") or "").strip()
-    if not api_token or not lock_id:
+    if not lock_id or not chaster_has_any_credentials(chaster_cfg):
         return False
+    api_token, resolved_cfg = resolve_chaster_api_token(chaster_cfg, request, allow_refresh=True)
+    if not api_token:
+        return False
+    if resolved_cfg != chaster_cfg:
+        integration_config["chaster"] = resolved_cfg
+        policy["integration_config"] = integration_config
 
     runtime_timer = policy.get("runtime_timer") if isinstance(policy.get("runtime_timer"), dict) else {}
     now = datetime.now(UTC)
@@ -182,6 +191,9 @@ def _maybe_sync_timer_with_chaster(db, session: ChastitySession, request: Reques
         if remaining_seconds is not None:
             runtime_timer["remaining_seconds"] = remaining_seconds
             changed = True
+        runtime_timer["can_be_unlocked"] = runtime.get("can_be_unlocked")
+        runtime_timer["is_ready_to_unlock"] = runtime.get("is_ready_to_unlock")
+        runtime_timer["reasons_preventing_unlocking"] = list(runtime.get("reasons_preventing_unlocking") or [])
     elif runtime.get("has_active_session"):
         # We know there is an active lock, but no timing info could be extracted.
         runtime_timer["source"] = "chaster"
@@ -189,6 +201,9 @@ def _maybe_sync_timer_with_chaster(db, session: ChastitySession, request: Reques
         raw_status = str(runtime.get("raw_status") or "").strip()
         if raw_status:
             runtime_timer["chaster_status"] = raw_status
+        runtime_timer["can_be_unlocked"] = runtime.get("can_be_unlocked")
+        runtime_timer["is_ready_to_unlock"] = runtime.get("is_ready_to_unlock")
+        runtime_timer["reasons_preventing_unlocking"] = list(runtime.get("reasons_preventing_unlocking") or [])
 
     policy["runtime_timer"] = runtime_timer
     updated_json = json.dumps(policy)
@@ -354,11 +369,10 @@ def update_active_session_integrations(
     if "chaster" in normalized_integrations:
         chaster_cfg = integration_config.get("chaster") if isinstance(integration_config, dict) else None
         if isinstance(chaster_cfg, dict):
-            api_token = str(chaster_cfg.get("api_token") or "").strip()
-            if not api_token:
+            if not chaster_has_any_credentials(chaster_cfg):
                 raise HTTPException(
                     status_code=400,
-                    detail="integration_config.chaster requires api_token.",
+                    detail="integration_config.chaster requires credentials (OAuth2 or api_token).",
                 )
 
     db = get_db_session(request)

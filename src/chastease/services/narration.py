@@ -2,9 +2,7 @@ import json
 import logging
 import re
 import unicodedata
-from datetime import date
-from datetime import UTC, datetime
-from difflib import unified_diff
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from fastapi import Request
@@ -719,7 +717,7 @@ def _apply_contract_edits(
     contract_text: str,
     edits: list[dict],
     targets: dict[str, dict[str, int]],
-) -> tuple[str, list[dict[str, str]]]:
+) -> tuple[str, int]:
     replacements_by_target: dict[str, dict[str, int | str]] = {}
     requested_debug: list[dict[str, str | int | bool]] = []
     for edit in edits:
@@ -798,192 +796,158 @@ def _apply_contract_edits(
         body = str(candidate["updated"]).strip()
         replacement = f"{body}\n" if body else "\n"
         updated = f"{updated[:start]}{replacement}{updated[end:]}"
-    applied_meta: list[dict[str, str]] = []
-    for item in accepted:
-        applied_meta.append(
-            {
-                "target": str(item.get("target", "")),
-                "op": str(item.get("op", "")),
-                "before_preview": str(item.get("before_preview", "")),
-                "after_preview": str(item.get("after_preview", "")),
-            }
-        )
-    return updated, applied_meta
+    return updated, len(accepted)
 
 
 def _build_contract_fallback_text(setup_session: dict) -> str:
-    rendered = _render_contract_template_strict(setup_session)
-    if rendered:
-        return rendered
-    return "Contract template unavailable."
-
-
-def _bool_text(value: bool) -> str:
-    return "true" if value else "false"
-
-
-def _safe_iso(value: str | None) -> str:
-    text = str(value or "").strip()
-    return text or "-"
-
-
-def _json_compact(value: object) -> str:
-    try:
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-    except Exception:
-        return "-"
-
-
-def _contract_template_values(setup_session: dict) -> dict[str, str]:
-    lang = _lang(setup_session.get("language", "de"))
-    psychogram = setup_session.get("psychogram") or {}
-    policy = setup_session.get("policy_preview") or {}
-    contract = policy.get("contract") or {}
-    limits = policy.get("limits") or {}
-    interaction = policy.get("interaction_profile") or {}
-    safety = psychogram.get("safety_profile") or {}
-    generated_contract = policy.get("generated_contract") or {}
-    consent = generated_contract.get("consent") or {}
-
-    start_date = str(contract.get("start_date") or setup_session.get("contract_start_date") or "").strip()
-    min_end_date = str(contract.get("min_end_date") or setup_session.get("contract_min_end_date") or "").strip()
-    max_end_date = str(contract.get("max_end_date") or setup_session.get("contract_max_end_date") or "").strip()
-    proposed_end_date = str(contract.get("proposed_end_date") or setup_session.get("ai_proposed_end_date") or "").strip()
-    if not proposed_end_date:
-        proposed_end_date = "AI-decides" if lang == "en" else "KI-entscheidet"
-
-    min_duration_days = _safe_days_between(start_date, min_end_date)
-    user_name = str(setup_session.get("user_display_name") or setup_session.get("username") or "sub").strip() or "sub"
-
-    required_consent = str(consent.get("required_text") or _required_contract_consent_text(lang)).strip()
-    consent_accepted = bool(consent.get("accepted"))
-    consent_text = str(consent.get("consent_text") or "").strip() or "-"
-    consent_accepted_at = str(consent.get("accepted_at") or "").strip() or "-"
-
-    safety_mode = str(safety.get("mode") or "safeword").strip()
-    traffic_words = safety.get("traffic_light_words") if isinstance(safety.get("traffic_light_words"), dict) else {}
-
-    generated_at = str(setup_session.get("contract_generated_at") or "").strip() or datetime.now(UTC).isoformat()
-    action_mode = str(setup_session.get("autonomy_mode") or policy.get("autonomy_mode") or "execute").strip() or "execute"
-
-    return {
-        "session_id": str(setup_session.get("active_session_id") or "-").strip() or "-",
-        "setup_session_id": str(setup_session.get("setup_session_id") or "-").strip() or "-",
-        "contract_version": "1.0.1",
-        "generated_at_iso": generated_at,
-        "generated_by": "ai_keyholder",
-        "contract_start_date": _safe_iso(start_date),
-        "contract_min_end_date": _safe_iso(min_end_date),
-        "contract_max_end_date": _safe_iso(max_end_date),
-        "proposed_end_date_ai": _safe_iso(proposed_end_date),
-        "end_date_control_mode": (
-            "AI-controlled within min/max window"
-            if bool(contract.get("ai_controls_end_date"))
-            else "fixed"
-        )
-        if lang == "en"
-        else (
-            "KI-gesteuert innerhalb Min/Max-Fenster"
-            if bool(contract.get("ai_controls_end_date"))
-            else "fix"
-        ),
-        "min_duration_days": str(min_duration_days if min_duration_days is not None else "-"),
-        "max_extension_per_incident_days": "14",
-        "hard_stop_enabled": _bool_text(bool(policy.get("hard_stop_enabled", setup_session.get("hard_stop_enabled", True)))),
-        "pause_policy": (
-            "Pause allowed for medical/emotional reasons, immediate review by keyholder"
-            if lang == "en"
-            else "Pause bei medizinischen/emotionalen Gruenden erlaubt, sofortige Pruefung durch die Herrin"
-        ),
-        "daily_checkin_required": "true",
-        "inspection_frequency_policy": str(interaction.get("control_frequency_hint") or "medium"),
-        "max_openings_in_period": str(limits.get("max_openings_in_period", setup_session.get("max_openings_in_period", 1))),
-        "opening_limit_period": str(limits.get("opening_limit_period", setup_session.get("opening_limit_period", "day"))),
-        "opening_window_minutes": str(limits.get("opening_window_minutes", setup_session.get("opening_window_minutes", 30))),
-        "max_penalty_per_day_minutes": str(limits.get("max_penalty_per_day_minutes", setup_session.get("max_penalty_per_day_minutes", 60))),
-        "max_penalty_per_week_minutes": str(limits.get("max_penalty_per_week_minutes", setup_session.get("max_penalty_per_week_minutes", 240))),
-        "reward_policy": "behavior-linked, sparse, meaningful",
-        "penalty_policy": "proportional, capped, no random escalation",
-        "safety_mode": safety_mode,
-        "hard_limits_text": str(psychogram.get("hard_limits_text") or "-").strip() or "-",
-        "soft_limits_text": str(psychogram.get("soft_limits_text") or "-").strip() or "-",
-        "health_protocol": (
-            "Immediate stop and wellbeing check on warning signs"
-            if lang == "en"
-            else "Bei Warnzeichen sofortiger Stopp und Gesundheitscheck"
-        ),
-        "psychogram_summary": str(psychogram.get("summary") or "-").strip() or "-",
-        "psychogram_analysis": str(setup_session.get("psychogram_analysis") or psychogram.get("analysis") or "-").strip() or "-",
-        "instruction_style": str((psychogram.get("interaction_preferences") or {}).get("instruction_style") or setup_session.get("instruction_style") or "mixed"),
-        "escalation_mode": str((psychogram.get("interaction_preferences") or {}).get("escalation_mode") or setup_session.get("escalation_mode") or "moderate"),
-        "experience_profile": str((psychogram.get("interaction_preferences") or {}).get("experience_profile") or "intermediate"),
-        "grooming_preference": str((psychogram.get("personal_preferences") or {}).get("grooming_preference") or setup_session.get("grooming_preference") or "no_preference"),
-        "tone_profile": str(interaction.get("preferred_tone") or "balanced"),
-        "integrations": ", ".join(str(item) for item in (policy.get("integrations") or setup_session.get("integrations") or [])) or "-",
-        "autonomy_mode": str(policy.get("autonomy_mode") or setup_session.get("autonomy_mode") or "execute"),
-        "action_execution_mode": action_mode,
-        "audit_enabled": _bool_text(True),
-        "amendment_policy": (
-            "Changes require explicit confirmation from both parties"
-            if lang == "en"
-            else "Aenderungen erfordern explizite Bestaetigung beider Seiten"
-        ),
-        "termination_policy": (
-            "Immediate termination on hard safety breach; otherwise guided de-escalation"
-            if lang == "en"
-            else "Sofortige Beendigung bei hartem Safety-Verstoss, sonst gefuehrte Deeskalation"
-        ),
-        "debrief_policy": "mandatory post-session reflection",
-        "sub_name": user_name,
-        "user_name": user_name,
-        "keyholder_name": ("AI Keyholder" if lang == "en" else "AI Keyholderin"),
-        "signature_date_sub": _safe_iso(start_date or date.today().isoformat()),
-        "signature_sub": "[signature pending]" if lang == "en" else "[signatur ausstehend]",
-        "signature_date_keyholder": _safe_iso(start_date or date.today().isoformat()),
-        "signature_keyholder": "[pending]" if lang == "en" else "[ausstehend]",
-        "consent_required_text": required_consent,
-        "consent_accepted": "true" if consent_accepted else "false",
-        "consent_text": consent_text,
-        "consent_accepted_at": consent_accepted_at,
-        "safeword": str(safety.get("safeword") or "-").strip() or "-",
-        "traffic_light_words": _json_compact(traffic_words) if traffic_words else "-",
-    }
-
-
-def _render_contract_template_strict(setup_session: dict) -> str:
     lang = _lang(setup_session.get("language", "de"))
     template_path = _contract_template_path(lang)
     try:
         raw_template = template_path.read_text(encoding="utf-8")
     except Exception:
-        return ""
-    template_body = _strip_front_matter(raw_template).strip()
-    values = _contract_template_values(setup_session)
-    rendered = template_body
-    placeholders = set(re.findall(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}", template_body))
-    for name in placeholders:
-        value = str(values.get(name, "-")).strip() or "-"
-        rendered = re.sub(r"\{\{\s*" + re.escape(name) + r"\s*\}\}", value, rendered)
-    return rendered.strip()
+        return "Contract template unavailable."
+    template = _strip_front_matter(raw_template).strip()
+    return _render_contract_template_from_setup(setup_session, template)
 
 
-def _contract_diff_preview(base_text: str, edited_text: str, max_lines: int = 120) -> str:
-    diff_lines = list(
-        unified_diff(
-            str(base_text or "").splitlines(),
-            str(edited_text or "").splitlines(),
-            fromfile="template",
-            tofile="ai_edited",
-            lineterm="",
-            n=1,
-        )
+def _render_contract_template_from_setup(setup_session: dict, template: str) -> str:
+    lang = _lang(setup_session.get("language", "de"))
+    policy = setup_session.get("policy_preview") if isinstance(setup_session.get("policy_preview"), dict) else {}
+    policy = policy if isinstance(policy, dict) else {}
+    contract = policy.get("contract") if isinstance(policy.get("contract"), dict) else {}
+    limits = policy.get("limits") if isinstance(policy.get("limits"), dict) else {}
+    interaction_profile = (
+        policy.get("interaction_profile") if isinstance(policy.get("interaction_profile"), dict) else {}
     )
-    if not diff_lines:
-        return ""
-    clipped = diff_lines[:max_lines]
-    if len(diff_lines) > max_lines:
-        clipped.append("... (diff truncated)")
-    return "\n".join(clipped)
+    generated_contract = (
+        policy.get("generated_contract") if isinstance(policy.get("generated_contract"), dict) else {}
+    )
+    consent = generated_contract.get("consent") if isinstance(generated_contract.get("consent"), dict) else {}
+    psychogram = setup_session.get("psychogram") if isinstance(setup_session.get("psychogram"), dict) else {}
+    safety_profile = psychogram.get("safety_profile") if isinstance(psychogram.get("safety_profile"), dict) else {}
+    interaction_prefs = (
+        psychogram.get("interaction_preferences")
+        if isinstance(psychogram.get("interaction_preferences"), dict)
+        else {}
+    )
+    personal_prefs = (
+        psychogram.get("personal_preferences")
+        if isinstance(psychogram.get("personal_preferences"), dict)
+        else {}
+    )
+
+    start_date = str(contract.get("start_date") or setup_session.get("contract_start_date") or "").strip() or None
+    min_end_date = (
+        str(contract.get("min_end_date") or setup_session.get("contract_min_end_date") or "").strip() or None
+    )
+    max_end_date = (
+        str(contract.get("max_end_date") or setup_session.get("contract_max_end_date") or "").strip() or None
+    )
+    proposed_end = (
+        str(contract.get("proposed_end_date") or setup_session.get("ai_proposed_end_date") or "").strip() or None
+    )
+    if not proposed_end:
+        proposed_end = "AI-decides" if lang == "en" else "KI-entscheidet"
+
+    min_duration_days = _safe_days_between(start_date, min_end_date)
+    max_extension_days = _safe_days_between(min_end_date, max_end_date) if min_end_date and max_end_date else None
+    integrations = [str(item).strip().lower() for item in (setup_session.get("integrations") or []) if str(item).strip()]
+    safety_mode = str(safety_profile.get("mode") or "safeword").strip()
+    traffic_words = safety_profile.get("traffic_light_words") if isinstance(safety_profile.get("traffic_light_words"), dict) else {}
+    keyholder_name = (
+        str(setup_session.get("keyholder_name") or "").strip()
+        or ("Mistress" if lang == "en" else "Herrin")
+    )
+    user_name = str(setup_session.get("user_display_name") or "").strip() or "sub"
+
+    context = {
+        "session_id": str(setup_session.get("active_session_id") or "-"),
+        "setup_session_id": str(setup_session.get("setup_session_id") or "-"),
+        "contract_version": "1.0.1",
+        "generated_at_iso": datetime.now(UTC).isoformat(),
+        "generated_by": "chastease",
+        "contract_start_date": start_date,
+        "contract_min_end_date": min_end_date,
+        "contract_max_end_date": max_end_date,
+        "proposed_end_date_ai": proposed_end,
+        "end_date_control_mode": "ai_controls_end_date" if bool(contract.get("ai_controls_end_date", True)) else "fixed",
+        "min_duration_days": min_duration_days,
+        "max_extension_per_incident_days": max_extension_days if max_extension_days is not None else 7,
+        "hard_stop_enabled": "enabled" if bool(setup_session.get("hard_stop_enabled", True)) else "disabled",
+        "pause_policy": (
+            "Immediate pause on medical or emotional warning signs."
+            if lang == "en"
+            else "Sofortige Pause bei medizinischen oder emotionalen Warnsignalen."
+        ),
+        "daily_checkin_required": "yes" if lang == "en" else "ja",
+        "inspection_frequency_policy": str(interaction_profile.get("control_frequency_hint") or "medium"),
+        "max_openings_in_period": int(limits.get("max_openings_in_period", setup_session.get("max_openings_in_period", 1))),
+        "opening_limit_period": str(limits.get("opening_limit_period", setup_session.get("opening_limit_period", "day"))),
+        "opening_window_minutes": int(limits.get("opening_window_minutes", setup_session.get("opening_window_minutes", 30))),
+        "max_penalty_per_day_minutes": int(
+            limits.get("max_penalty_per_day_minutes", setup_session.get("max_penalty_per_day_minutes", 60))
+        ),
+        "max_penalty_per_week_minutes": int(
+            limits.get("max_penalty_per_week_minutes", setup_session.get("max_penalty_per_week_minutes", 240))
+        ),
+        "reward_policy": "adaptive reinforcement",
+        "penalty_policy": "bounded corrective penalties",
+        "safety_mode": safety_mode,
+        "safeword": str(safety_profile.get("safeword") or ""),
+        "traffic_light_words": (
+            f"{traffic_words.get('green', 'green')}/{traffic_words.get('yellow', 'yellow')}/{traffic_words.get('red', 'red')}"
+            if safety_mode == "traffic_light"
+            else ""
+        ),
+        "hard_limits_text": str(psychogram.get("hard_limits_text") or psychogram.get("taboo_text") or ""),
+        "soft_limits_text": str(psychogram.get("soft_limits_text") or _fixed_soft_limits_text(lang)),
+        "health_protocol": "stop, evaluate, debrief",
+        "psychogram_summary": str(psychogram.get("summary") or ""),
+        "psychogram_analysis": str(setup_session.get("psychogram_analysis") or psychogram.get("analysis") or ""),
+        "instruction_style": str(
+            interaction_prefs.get("instruction_style") or setup_session.get("instruction_style") or "mixed"
+        ),
+        "escalation_mode": str(
+            interaction_prefs.get("escalation_mode") or setup_session.get("escalation_mode") or "moderate"
+        ),
+        "experience_profile": str(interaction_prefs.get("experience_profile") or "intermediate"),
+        "grooming_preference": str(
+            personal_prefs.get("grooming_preference") or setup_session.get("grooming_preference") or "no_preference"
+        ),
+        "tone_profile": str(interaction_profile.get("preferred_tone") or "balanced"),
+        "integrations": ", ".join(integrations) if integrations else "none",
+        "autonomy_mode": str(setup_session.get("autonomy_mode") or policy.get("autonomy_mode") or "execute"),
+        "action_execution_mode": "auto_execute" if str(setup_session.get("autonomy_mode") or "execute") == "execute" else "suggest_only",
+        "audit_enabled": "true",
+        "amendment_policy": "changes require explicit acknowledgement",
+        "termination_policy": "terminate at safety limit or explicit abort",
+        "debrief_policy": "post-session review required",
+        "sub_name": user_name,
+        "user_name": user_name,
+        "keyholder_name": keyholder_name,
+        "signature_date_sub": str(date.today().isoformat()),
+        "signature_sub": "[signature pending]",
+        "signature_date_keyholder": str(date.today().isoformat()),
+        "signature_keyholder": "[signature pending]",
+        "consent_required_text": str(consent.get("required_text") or _required_contract_consent_text(lang)),
+        "consent_accepted": "true" if bool(consent.get("accepted")) else "false",
+        "consent_text": str(consent.get("consent_text") or ""),
+        "consent_accepted_at": str(consent.get("accepted_at") or ""),
+    }
+
+    def _fmt(value: object) -> str:
+        if value is None:
+            return "-"
+        text = str(value).strip()
+        return text if text else "-"
+
+    rendered = str(template or "")
+    for key, value in context.items():
+        rendered = rendered.replace(f"{{{{{key}}}}}", _fmt(value))
+
+    # Strict fill: unresolved placeholders must not remain in final contract text.
+    rendered = re.sub(r"\{\{[^{}]+\}\}", "-", rendered)
+    return rendered.strip()
 
 
 def generate_contract_for_setup(db, request: Request, setup_session: dict) -> str:
@@ -996,9 +960,6 @@ def generate_contract_for_setup(db, request: Request, setup_session: dict) -> st
     draft = _build_contract_fallback_text(setup_session)
     if not draft.strip():
         return "Contract draft unavailable."
-    setup_session["_contract_template_text"] = draft.strip()
-    setup_session["_contract_ai_edits"] = []
-    setup_session["_contract_diff_preview"] = ""
     analysis_for_prompt = _limit_text(analysis, 2000)
     draft_for_prompt = _limit_text(draft, 12000)
     targets, target_labels = _contract_edit_targets(draft, lang)
@@ -1052,7 +1013,7 @@ def generate_contract_for_setup(db, request: Request, setup_session: dict) -> st
         raise RuntimeError(str(raw))
     payload = _extract_json_payload(raw)
     if not payload:
-        logger.warning("Contract edit payload could not be parsed. raw=%r using unmodified template draft.", raw[:500])
+        logger.warning("Contract edit payload could not be parsed. using unmodified template draft.")
         return draft.strip()
     logger.debug("Contract edit payload raw JSON keys: %s", list(payload.keys()))
     edits = payload.get("edits")
@@ -1060,12 +1021,9 @@ def generate_contract_for_setup(db, request: Request, setup_session: dict) -> st
         logger.warning("Contract edit payload missing 'edits' list. using unmodified template draft.")
         return draft.strip()
     logger.debug("Contract edit payload received edits=%s", len(edits))
-    edited_contract, applied_meta = _apply_contract_edits(draft, edits, targets)
-    if not applied_meta:
+    edited_contract, applied_count = _apply_contract_edits(draft, edits, targets)
+    if applied_count == 0:
         logger.warning("Contract edit payload produced no applicable edits. using unmodified template draft.")
         return draft.strip()
-    logger.info("Contract edits applied successfully. applied=%s requested=%s", len(applied_meta), len(edits))
-    setup_session["_contract_template_text"] = draft.strip()
-    setup_session["_contract_ai_edits"] = applied_meta
-    setup_session["_contract_diff_preview"] = _contract_diff_preview(draft, edited_contract)
+    logger.info("Contract edits applied successfully. applied=%s requested=%s", applied_count, len(edits))
     return edited_contract.strip()

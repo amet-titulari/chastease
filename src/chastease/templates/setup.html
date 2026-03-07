@@ -45,10 +45,18 @@
           <label class="text-sm text-gray-400">Vertragsstart</label>
           <input id="contractStartDate" type="date" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
         </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="text-sm text-gray-400">Min Enddatum</label>
+          <input id="contractMinEndDate" type="date" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+        </div>
         <div>
           <label class="text-sm text-gray-400">Mindestdauer (Tage)</label>
           <input id="contractMinDurationDays" type="number" min="0" max="3650" value="30" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
         </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label class="text-sm text-gray-400">Max Enddatum</label>
           <input id="contractMaxEndDate" type="date" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
@@ -75,13 +83,13 @@
           <label class="text-sm text-gray-400">Openings period</label>
           <select id="openingLimitPeriod" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
             <option value="day">day</option>
-            <option value="week" selected>week</option>
-            <option value="month">month</option>
+            <option value="week">week</option>
+            <option value="month" selected>month</option>
           </select>
         </div>
         <div>
           <label class="text-sm text-gray-400">Max openings / period</label>
-          <input id="maxOpeningsInPeriod" type="number" min="0" max="200" value="2" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+          <input id="maxOpeningsInPeriod" type="number" min="0" max="200" value="7" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
         </div>
         <div>
           <label class="text-sm text-gray-400">Opening window (min)</label>
@@ -152,6 +160,70 @@
         </div>
       </div>
 
+      <div id="chasterSection" class="hidden mt-2 space-y-4 border-t border-gray-700/70 pt-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div id="chasterLegacyTokenWrap">
+            <label class="text-sm text-gray-400">Chaster API Token (Legacy/Fallback)</label>
+            <input id="chasterApiToken" type="password" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" placeholder="Bearer token" autocomplete="off" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-400">Kombinationscode</label>
+            <input id="chasterCode" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 opacity-80" placeholder="wird automatisch generiert" readonly disabled />
+          </div>
+        </div>
+        <div id="chasterDurationWrap" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm text-gray-400">Min Dauer (Minuten)</label>
+            <input id="chasterMinDurationMinutes" type="number" min="1" max="525600" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 opacity-80" value="43200" readonly disabled />
+          </div>
+          <div>
+            <label class="text-sm text-gray-400">Max Dauer (Minuten)</label>
+            <input id="chasterMaxDurationMinutes" type="number" min="1" max="525600" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 opacity-80" value="525600" readonly disabled />
+          </div>
+        </div>
+        <p class="text-xs text-gray-400">Diese Werte werden automatisch aus dem Basis-Setup (min/max Vertragsdauer) übernommen.</p>
+        <div id="chasterLimitWrap" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm text-gray-400">Min Limit Dauer (Minuten)</label>
+            <input id="chasterMinLimitDurationMinutes" type="number" min="0" max="525600" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="0" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-400">Max Limit Dauer (Minuten)</label>
+            <input id="chasterMaxLimitDurationMinutes" type="number" min="0" max="525600" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="0" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="flex items-center gap-2 text-sm text-gray-300">
+            <input id="chasterLimitLockTime" type="checkbox" class="accent-sky-500" checked />
+            Lock Time limitieren (`limitLockTime`)
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-300">
+            <input id="chasterAllowSessionOffer" type="checkbox" class="accent-sky-500" checked />
+            Session Offer erlauben
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-300">
+            <input id="chasterIsTestLock" type="checkbox" class="accent-sky-500" />
+            Test-Lock (`isTestLock`)
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-300">
+            <input id="chasterHideTimeLogs" type="checkbox" class="accent-sky-500" checked />
+            Time Logs ausblenden
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="flex items-center gap-2 text-sm text-gray-300">
+            <input id="chasterEnableVerificationPicture" type="checkbox" class="accent-sky-500" checked />
+            Extension: Verification Picture
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-300">
+            <input id="chasterEnableHygieneOpening" type="checkbox" class="accent-sky-500" checked />
+            Extension: Hygieneoeffnung
+          </label>
+        </div>
+        <p class="text-xs text-gray-400">Slug + Config werden fest uebergeben (`verification-picture` und `temporary-opening`).</p>
+        <p id="chasterInfo" class="text-sm text-gray-400">Chaster-Daten werden zusammen mit der Basis-Konfiguration gespeichert. Die Session wird weiter erst bei Vertragsakzeptanz erstellt.</p>
+      </div>
+
       <div class="flex flex-wrap gap-2">
         <button id="setupStartBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">Speichern</button>
       </div>
@@ -183,7 +255,7 @@
           </div>
           <div>
             <label class="text-sm text-gray-400">Vision model</label>
-            <input id="llmVisionModel" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="grok-4-latest" />
+            <input id="llmVisionModel" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="grok-4-1-fast-non-reasoning" />
           </div>
           <div>
             <label class="text-sm text-gray-400">Profile active</label>
@@ -245,78 +317,6 @@
       </div>
     </div>
 
-    <div id="chasterSection" class="bg-gray-800 border border-gray-700 rounded-lg p-4">
-      <button id="accChasterBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
-        <span>Chaster Konfiguration</span>
-        <span id="accChasterChevron" class="text-gray-400">+</span>
-      </button>
-      <div id="accChasterBody" class="mt-4 space-y-4 hidden">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label class="text-sm text-gray-400">Chaster API Token</label>
-            <input id="chasterApiToken" type="password" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" placeholder="Bearer token" autocomplete="off" />
-          </div>
-          <div>
-            <label class="text-sm text-gray-400">Kombinationscode</label>
-            <input id="chasterCode" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 opacity-80" placeholder="wird automatisch generiert" readonly disabled />
-          </div>
-          <div>
-            <label class="text-sm text-gray-400">Min Dauer (Minuten)</label>
-            <input id="chasterMinDurationMinutes" type="number" min="1" max="525600" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 opacity-80" value="43200" readonly disabled />
-          </div>
-          <div>
-            <label class="text-sm text-gray-400">Max Dauer (Minuten)</label>
-            <input id="chasterMaxDurationMinutes" type="number" min="1" max="525600" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 opacity-80" value="525600" readonly disabled />
-          </div>
-        </div>
-        <p class="text-xs text-gray-400">Diese Werte werden automatisch aus dem Basis-Setup (min/max Vertragsdauer) übernommen.</p>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label class="text-sm text-gray-400">Min Limit Dauer (Minuten)</label>
-            <input id="chasterMinLimitDurationMinutes" type="number" min="0" max="525600" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="0" />
-          </div>
-          <div>
-            <label class="text-sm text-gray-400">Max Limit Dauer (Minuten)</label>
-            <input id="chasterMaxLimitDurationMinutes" type="number" min="0" max="525600" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="0" />
-          </div>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label class="flex items-center gap-2 text-sm text-gray-300">
-            <input id="chasterLimitLockTime" type="checkbox" class="accent-sky-500" checked />
-            Lock Time limitieren (`limitLockTime`)
-          </label>
-          <label class="flex items-center gap-2 text-sm text-gray-300">
-            <input id="chasterAllowSessionOffer" type="checkbox" class="accent-sky-500" checked />
-            Session Offer erlauben
-          </label>
-          <label class="flex items-center gap-2 text-sm text-gray-300">
-            <input id="chasterIsTestLock" type="checkbox" class="accent-sky-500" />
-            Test-Lock (`isTestLock`)
-          </label>
-          <label class="flex items-center gap-2 text-sm text-gray-300">
-            <input id="chasterHideTimeLogs" type="checkbox" class="accent-sky-500" checked />
-            Time Logs ausblenden
-          </label>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label class="flex items-center gap-2 text-sm text-gray-300">
-            <input id="chasterEnableVerificationPicture" type="checkbox" class="accent-sky-500" checked />
-            Extension: Verification Picture
-          </label>
-          <label class="flex items-center gap-2 text-sm text-gray-300">
-            <input id="chasterEnableHygieneOpening" type="checkbox" class="accent-sky-500" checked />
-            Extension: Hygieneöffnung
-          </label>
-        </div>
-        <p class="text-xs text-gray-400">Slug + Config werden fest übergeben (`verification-picture` und `temporary-opening`).</p>
-        <div class="flex flex-wrap gap-2">
-          <button id="saveChasterBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">Speichern</button>
-          <button id="createChasterSessionBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Session erstellen</button>
-        </div>
-        <p id="chasterInfo" class="text-sm text-gray-400">Hinweis: Die Chaster-Session wird beim Speichern oder per "Session erstellen" angelegt.</p>
-      </div>
-    </div>
-
     <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
       <button id="accQuestionBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
         <span>Psychogramm</span>
@@ -368,5 +368,5 @@
 {% block scripts %}
   <script src="/static/js/common.js"></script>
   <script src="/static/js/session.js"></script>
-  <script src="/static/js/setup.js?v=20260306"></script>
+  <script src="/static/js/setup.js?v=20260307"></script>
 {% endblock %}

@@ -1,11 +1,20 @@
 document.addEventListener('DOMContentLoaded', function () {
   const loginBtn = document.getElementById('loginBtn');
   const registerBtn = document.getElementById('registerBtn');
+  const chasterLoginBtn = document.getElementById('chasterLoginBtn');
   const userInfo = document.getElementById('userInfo');
+  const authCard = document.getElementById('authCard');
+  const localAuthWrap = document.getElementById('localAuthWrap');
+  const chasterLoginWrap = document.getElementById('chasterLoginWrap');
 
   const urlParams = new URLSearchParams(window.location.search);
   const mode = (urlParams.get('mode') || 'login').toLowerCase();
+  const allowLocalLogin = String(authCard?.dataset?.authAllowLocalLogin || 'true') !== 'false';
+  const enableChasterLogin = String(authCard?.dataset?.authEnableChasterLogin || 'true') !== 'false';
+  if (localAuthWrap) localAuthWrap.classList.toggle('hidden', !allowLocalLogin);
+  if (chasterLoginWrap) chasterLoginWrap.classList.toggle('hidden', !enableChasterLogin);
   setAuthMode(mode);
+  handleChasterOAuthCallback(userInfo);
 
   try {
     if (typeof chastease_common !== 'undefined' && typeof chastease_common.renderNavAuth === 'function') {
@@ -15,6 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (loginBtn) loginBtn.addEventListener('click', () => handleLoginClick());
   if (registerBtn) registerBtn.addEventListener('click', () => handleRegisterClick());
+  if (chasterLoginBtn) chasterLoginBtn.addEventListener('click', () => handleChasterLoginClick());
 });
 
 function openContractPage() {
@@ -44,6 +54,13 @@ function handleLoginClick() {
       }
     })
     .catch(() => chastease_common.setStatus(infoEl, 'Login request failed', 'err'));
+}
+
+function handleChasterLoginClick() {
+  const infoEl = document.getElementById('userInfo');
+  const targetReturn = '/app';
+  chastease_common.setStatus(infoEl, 'Weiterleitung zu Chaster OAuth...');
+  window.location.href = `/api/v1/auth/chaster/signin?${new URLSearchParams({ return_to: targetReturn }).toString()}`;
 }
 
 function handleRegisterClick() {
@@ -130,11 +147,52 @@ function redirectAfterAuth(statusEl) {
     });
 }
 
+function handleChasterOAuthCallback(infoEl) {
+  const params = new URLSearchParams(window.location.search);
+  const oauthResult = params.get('chaster_oauth');
+  if (!oauthResult) return;
+  if (oauthResult === 'error') {
+    chastease_common.setStatus(infoEl, `Chaster OAuth Fehler: ${params.get('message') || 'unknown'}`, 'err');
+    return;
+  }
+  if (oauthResult !== 'ok') return;
+  const user_id = String(params.get('user_id') || '').trim();
+  const auth_token = String(params.get('auth_token') || '').trim();
+  const display_name = String(params.get('display_name') || '').trim();
+  const setup_session_id = String(params.get('setup_session_id') || '').trim();
+  if (!user_id || !auth_token) return;
+  persistAuth({
+    user_id,
+    auth_token,
+    display_name: display_name || user_id,
+    username: display_name || user_id,
+    setup_session_id: setup_session_id || null,
+  });
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete('chaster_oauth');
+  cleanUrl.searchParams.delete('user_id');
+  cleanUrl.searchParams.delete('auth_token');
+  cleanUrl.searchParams.delete('display_name');
+  cleanUrl.searchParams.delete('setup_session_id');
+  window.history.replaceState({}, '', cleanUrl.toString());
+  chastease_common.setStatus(infoEl, `Logged in as ${display_name || user_id}`);
+  redirectAfterAuth(infoEl);
+}
+
 function setAuthMode(mode) {
   const emailWrap = document.getElementById('emailWrap');
   const passwordRepeatInput = document.getElementById('passwordRepeat');
   const loginBtn = document.getElementById('loginBtn');
   const registerBtn = document.getElementById('registerBtn');
+  const authCard = document.getElementById('authCard');
+  const allowLocalLogin = String(authCard?.dataset?.authAllowLocalLogin || 'true') !== 'false';
+  if (!allowLocalLogin) {
+    if (emailWrap) emailWrap.classList.add('hidden');
+    if (passwordRepeatInput && passwordRepeatInput.parentElement) passwordRepeatInput.parentElement.classList.add('hidden');
+    if (registerBtn) registerBtn.classList.add('hidden');
+    if (loginBtn) loginBtn.classList.remove('hidden');
+    return;
+  }
   if (mode === 'register') {
     if (emailWrap) emailWrap.classList.remove('hidden');
     if (passwordRepeatInput && passwordRepeatInput.parentElement) passwordRepeatInput.parentElement.classList.remove('hidden');

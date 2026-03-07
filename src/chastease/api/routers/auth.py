@@ -25,6 +25,8 @@ limiter = Limiter(key_func=get_remote_address)
 @router.post("/register")
 @limiter.limit("10/minute")
 def register(payload: RegisterRequest, request: Request) -> dict:
+    if not bool(getattr(request.app.state.config, "AUTH_ALLOW_LOCAL_LOGIN", True)):
+        raise HTTPException(status_code=403, detail="Local register is disabled.")
     db = get_db_session(request)
     try:
         username = payload.username.strip()
@@ -69,6 +71,8 @@ def register(payload: RegisterRequest, request: Request) -> dict:
 @router.post("/login")
 @limiter.limit("20/minute")
 def login(payload: LoginRequest, request: Request) -> dict:
+    if not bool(getattr(request.app.state.config, "AUTH_ALLOW_LOCAL_LOGIN", True)):
+        raise HTTPException(status_code=403, detail="Local login is disabled.")
     db = get_db_session(request)
     try:
         username = payload.username.strip()

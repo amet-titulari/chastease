@@ -58,7 +58,11 @@ from chastease.api.setup_infra import (
     sync_setup_snapshot_to_active_session,
     sync_setup_snapshot_to_active_session_db,
 )
-from chastease.api.routers.chaster import ChasterCreateSessionRequest, create_chaster_session
+from chastease.api.routers.chaster import (
+    ChasterCreateSessionRequest,
+    chaster_has_any_credentials,
+    create_chaster_session,
+)
 from chastease.shared.audit import record_audit_event
 
 router = APIRouter(prefix="/setup", tags=["setup"])
@@ -139,11 +143,10 @@ def _validate_chaster_config(integrations: list[str], integration_config: dict[s
             status_code=400,
             detail="Chaster integration requires integration_config.chaster object.",
         )
-    api_token = str(chaster_cfg.get("api_token") or "").strip()
-    if not api_token:
+    if not chaster_has_any_credentials(chaster_cfg):
         raise HTTPException(
             status_code=400,
-            detail="integration_config.chaster requires api_token.",
+            detail="integration_config.chaster requires credentials (OAuth2 or api_token).",
         )
 
 
@@ -472,11 +475,10 @@ def _maybe_create_chaster_session_on_contract_accept(
     if lock_id:
         return None
 
-    api_token = str(chaster_cfg.get("api_token") or "").strip()
-    if not api_token:
+    if not chaster_has_any_credentials(chaster_cfg):
         raise HTTPException(
             status_code=409,
-            detail="Chaster is enabled but integration_config.chaster.api_token is missing.",
+            detail="Chaster is enabled but integration_config.chaster credentials are missing.",
         )
 
     min_duration = int(chaster_cfg.get("min_duration_minutes") or 60)
@@ -496,7 +498,7 @@ def _maybe_create_chaster_session_on_contract_accept(
     request_payload = ChasterCreateSessionRequest(
         user_id=user_id,
         auth_token=auth_token,
-        chaster_api_token=api_token,
+        chaster_api_token=str(chaster_cfg.get("api_token") or "").strip() or None,
         code=str(chaster_cfg.get("code") or "").strip() or None,
         min_duration_minutes=min_duration,
         max_duration_minutes=max_duration,

@@ -16,6 +16,20 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
+class ExternalIdentity(Base):
+    __tablename__ = "external_identities"
+    __table_args__ = (UniqueConstraint("provider", "external_user_id", name="uq_external_identity_provider_user"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    external_user_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    username: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class AuthToken(Base):
     __tablename__ = "auth_tokens"
 

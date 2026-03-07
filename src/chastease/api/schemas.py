@@ -58,16 +58,16 @@ class SetupStartRequest(BaseModel):
     contract_min_end_date: str | None = None
     contract_max_end_date: str | None = None
     ai_controls_end_date: bool = True
-    max_penalty_per_day_minutes: int = Field(default=60, ge=0, le=1440)
-    max_penalty_per_week_minutes: int = Field(default=240, ge=0, le=10080)
-    opening_limit_period: Literal["day", "week", "month"] = "day"
-    max_openings_in_period: int = Field(default=1, ge=0, le=200)
+    max_penalty_per_day_minutes: int = Field(default=0, ge=0, le=1440)
+    max_penalty_per_week_minutes: int = Field(default=0, ge=0, le=10080)
+    opening_limit_period: Literal["day", "week", "month"] = "month"
+    max_openings_in_period: int = Field(default=7, ge=0, le=200)
     max_openings_per_day: int | None = Field(default=None, ge=0, le=10)  # legacy alias
-    opening_window_minutes: int = Field(default=30, ge=1, le=240)
+    opening_window_minutes: int = Field(default=15, ge=1, le=240)
     seal_mode: Literal["none", "plomben", "versiegelung"] = "none"
     initial_seal_number: str | None = Field(default=None, min_length=3)
-    instruction_style: Literal["direct_command", "polite_authoritative", "suggestive", "mixed"] = "polite_authoritative"
-    desired_intensity: Literal["low", "medium", "strong", "demanding"] = "medium"
+    instruction_style: Literal["direct_command", "polite_authoritative", "suggestive", "mixed"] = "mixed"
+    desired_intensity: Literal["low", "medium", "strong", "demanding"] = "strong"
     grooming_preference: Literal["no_preference", "clean_shaven", "trimmed", "natural"] = "clean_shaven"
 
 

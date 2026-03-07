@@ -1,4 +1,5 @@
 ﻿import base64
+import copy
 import json
 import logging
 import os
@@ -14,10 +15,12 @@ from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import func, select
 
 from chastease.api.runtime import find_setup_session_id_for_active_session, get_db_session, lang
+from chastease.api.routers.chaster import resolve_chaster_api_token, resolve_verified_extension_session_from_main_token_sync
 from chastease.api.schemas import ChatActionExecuteRequest, ChatTurnRequest, ChatVisionReviewRequest
 from chastease.models import ChastitySession, Turn
 from chastease.repositories.setup_store import load_sessions, save_sessions
 from chastease.services.narration import extract_pending_actions, generate_ai_narration_for_session
+from chastease.shared.secrets_crypto import decrypt_secret
 from chastease.shared.audit import record_audit_event
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -39,6 +42,9 @@ _HYGIENE_ACTIONS = {"hygiene_open", "hygiene_close"}
 _ACTION_ALIASES = {
     "addtime": "add_time",
     "reducetime": "reduce_time",
+    "freeze": "pause_timer",
+    "unfreeze": "unpause_timer",
+    "toggle_freeze": "pause_timer",
     "pause": "pause_timer",
     "pausetimer": "pause_timer",
     "freeze": "pause_timer",
@@ -535,9 +541,34 @@ def _timer_expiry_pending_action(request_lang: str, policy: dict, now: datetime)
     policy["runtime_timer"] = timer
     if timer["remaining_seconds"] > 0:
         return None, [], policy
-    if bool(policy.get("runtime_timer_expiry_open_prompted")):
+    if bool(policy.get("runtime_timer_expiry_handled")):
         return None, [], policy
-    policy["runtime_timer_expiry_open_prompted"] = True
+    policy["runtime_timer_expiry_handled"] = True
+    integrations = [str(item).strip().lower() for item in (policy.get("integrations") or []) if str(item).strip()]
+    runtime_timer = policy.get("runtime_timer") if isinstance(policy.get("runtime_timer"), dict) else {}
+    chaster_blocked = (
+        "chaster" in integrations
+        and runtime_timer.get("can_be_unlocked") is False
+        and runtime_timer.get("is_ready_to_unlock") is False
+    )
+    blocking_reasons = [str(item).strip() for item in (runtime_timer.get("reasons_preventing_unlocking") or []) if str(item).strip()]
+    if "chaster" in integrations:
+        if chaster_blocked:
+            reason_suffix = f" Gruende: {', '.join(blocking_reasons)}." if (request_lang == "de" and blocking_reasons) else ""
+            reason_suffix_en = f" Reasons: {', '.join(blocking_reasons)}." if blocking_reasons else ""
+            text = (
+                f"Timer ist abgelaufen. Die Sitzung bleibt aktiv, weil Chaster das Entsperren derzeit nicht erlaubt.{reason_suffix}"
+                if request_lang == "de"
+                else f"Timer has expired. The session stays active because Chaster does not currently allow unlocking.{reason_suffix_en}"
+            )
+            return text, [], policy
+        text = (
+            "Timer ist abgelaufen. Es erfolgt keine automatische Oeffnung. Bitte Chaster pruefen und die Freigabe manuell ausloesen."
+            if request_lang == "de"
+            else "Timer has expired. No automatic opening will be triggered. Please check Chaster and perform the unlock manually."
+        )
+        return text, [], policy
+
     pending = [_build_hygiene_open_pending_action(policy, trigger="timer_expired", reason="timer_expired")]
     text = (
         "Timer ist abgelaufen. Bitte bestaetige die Hygieneoeffnung in der Actionkarte."
@@ -598,6 +629,80 @@ def _fallback_pending_action_from_user_intent(message: str, policy: dict) -> dic
         "hygiene schliessen",
         "kafig schliessen",
     }
+    add_time_hints = {
+        "add time",
+        "addiere",
+        "fuge",
+        "fuege",
+        "hinzu",
+        "verlangere",
+        "verlaengere",
+        "erhohe",
+        "erhöhe",
+        "extend",
+        "increase",
+    }
+    reduce_time_hints = {
+        "reduce time",
+        "verkurze",
+        "verkürze",
+        "ziehe",
+        "abziehen",
+        "remove",
+        "decrease",
+        "reduce",
+        "senke",
+    }
+
+    duration_match = re.search(
+        r"(?P<amount>\d+)\s*(?P<unit>sekunden|sekunde|seconds|second|s|minuten|minute|minutes|minute|min|stunden|stunde|hours|hour|hrs|hr|h|tage|tag|days|day|d)\b",
+        normalized,
+    )
+    duration_seconds = None
+    if duration_match:
+        amount = int(duration_match.group("amount"))
+        unit = str(duration_match.group("unit") or "").strip().lower()
+        unit_map = {
+            "sekunde": "seconds",
+            "sekunden": "seconds",
+            "second": "seconds",
+            "seconds": "seconds",
+            "s": "seconds",
+            "minute": "minutes",
+            "minuten": "minutes",
+            "minutes": "minutes",
+            "min": "minutes",
+            "stunde": "hours",
+            "stunden": "hours",
+            "hour": "hours",
+            "hours": "hours",
+            "hr": "hours",
+            "hrs": "hours",
+            "h": "hours",
+            "tag": "days",
+            "tage": "days",
+            "day": "days",
+            "days": "days",
+            "d": "days",
+        }
+        duration_seconds = _normalize_duration_payload(
+            "add_time",
+            {"amount": amount, "unit": unit_map.get(unit, unit)},
+        ).get("seconds")
+
+    if duration_seconds and any(hint in normalized for hint in add_time_hints):
+        return {
+            "action_type": "add_time",
+            "payload": {"seconds": int(duration_seconds)},
+            "requires_execute_call": True,
+        }
+
+    if duration_seconds and any(hint in normalized for hint in reduce_time_hints):
+        return {
+            "action_type": "reduce_time",
+            "payload": {"seconds": int(duration_seconds)},
+            "requires_execute_call": True,
+        }
 
     if any(hint in normalized for hint in pause_hints):
         if timer_state == "paused":
@@ -722,6 +827,8 @@ def _apply_timer_action(action_type: str, payload: dict, policy: dict, now: date
         timer["effective_end_at"] = _iso_utc(effective_end_at)
         timer["last_action"] = "add_time"
         timer["last_action_at"] = _iso_utc(now)
+        policy.pop("runtime_timer_expiry_handled", None)
+        policy.pop("runtime_timer_expiry_open_prompted", None)
         message = "Time added (clamped to max end date boundary)." if clamped_to_max else "Time added."
     elif action == "reduce_time":
         seconds = int(payload.get("seconds", 0))
@@ -916,6 +1023,225 @@ def _ttlock_from_policy(policy: dict) -> dict:
         return {}
     ttlock = integration_config.get("ttlock")
     return ttlock if isinstance(ttlock, dict) else {}
+
+
+def _chaster_from_policy(policy: dict) -> dict:
+    integration_config = policy.get("integration_config")
+    if not isinstance(integration_config, dict):
+        return {}
+    chaster = integration_config.get("chaster")
+    return chaster if isinstance(chaster, dict) else {}
+
+
+def _get_chaster_developer_headers(request: Request) -> dict[str, str]:
+    token = str(getattr(request.app.state.config, "CHASTER_DEVELOPER_TOKEN", "") or "").strip()
+    if not token:
+        raise HTTPException(status_code=500, detail="CHASTER_DEVELOPER_TOKEN is not configured.")
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+
+def _get_chaster_developer_base(request: Request) -> str:
+    base = str(getattr(request.app.state.config, "CHASTER_DEVELOPER_API_BASE", "https://api.chaster.app/api") or "").strip()
+    base = base.rstrip("/")
+    if not base:
+        raise HTTPException(status_code=500, detail="CHASTER_DEVELOPER_API_BASE is empty.")
+    return base
+
+
+def _resolve_chaster_extension_session(*, policy: dict, request: Request) -> tuple[str, dict]:
+    chaster_cfg = _chaster_from_policy(policy)
+    lock_id = str(chaster_cfg.get("lock_id") or "").strip()
+    if not lock_id:
+        raise HTTPException(status_code=409, detail="Chaster lock_id is missing.")
+
+    main_token_enc = str(chaster_cfg.get("extension_main_token_enc") or "").strip()
+    if main_token_enc:
+        try:
+            main_token = decrypt_secret(main_token_enc, request.app.state.config.SECRET_KEY)
+        except Exception as exc:
+            raise HTTPException(status_code=409, detail="Stored Chaster extension mainToken is invalid.") from exc
+        session_id, verified_payload = resolve_verified_extension_session_from_main_token_sync(main_token, request)
+        integration_config = policy.get("integration_config") if isinstance(policy.get("integration_config"), dict) else {}
+        merged_chaster = dict(chaster_cfg)
+        merged_chaster["extension_session_id"] = session_id
+        merged_chaster["extension_session_snapshot"] = {
+            "id": session_id,
+            "lock_id": lock_id,
+            "slug": str(((verified_payload.get("session") or {}).get("extension") or {}).get("slug") or verified_payload.get("extensionSlug") or chaster_cfg.get("extension_slug") or "").strip() or None,
+        }
+        integration_config["chaster"] = merged_chaster
+        policy["integration_config"] = integration_config
+        return session_id, merged_chaster
+
+    cached_session_id = str(chaster_cfg.get("extension_session_id") or "").strip()
+    if cached_session_id:
+        return cached_session_id, chaster_cfg
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"Chaster extension_session_id is missing for lock_id={lock_id}. "
+            "Open the configured Chaster Extension Main Page once to bind the extension session."
+        ),
+    )
+
+
+def _sync_chaster_lock_time_change(
+    *,
+    action_type: str,
+    seconds: int,
+    policy: dict,
+    request: Request,
+) -> dict | None:
+    action = str(action_type or "").strip().lower()
+    if action not in {"add_time", "reduce_time"}:
+        return None
+    if seconds <= 0:
+        raise HTTPException(status_code=400, detail=f"Action '{action}' requires seconds > 0.")
+
+    integrations = [str(x).strip().lower() for x in (policy.get("integrations") or []) if str(x).strip()]
+    chaster_cfg = _chaster_from_policy(policy)
+    if "chaster" not in integrations and not chaster_cfg:
+        return None
+
+    lock_id = str(chaster_cfg.get("lock_id") or "").strip()
+    if not lock_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Chaster integration is enabled, but no lock_id is configured for this session.",
+        )
+    extension_session_id, merged_cfg = _resolve_chaster_extension_session(policy=policy, request=request)
+    chaster_cfg = merged_cfg
+    delta_seconds = seconds if action == "add_time" else -seconds
+    action_name = "add_time" if action == "add_time" else "remove_time"
+    base_url = _get_chaster_developer_base(request)
+    headers = _get_chaster_developer_headers(request)
+    payload = {
+        "action": {
+            "name": action_name,
+            "params": abs(int(delta_seconds)),
+        }
+    }
+    url = f"{base_url}/extensions/sessions/{extension_session_id}/action"
+    timeout = httpx.Timeout(connect=6.0, read=25.0, write=20.0, pool=6.0)
+    with httpx.Client(timeout=timeout) as client:
+        response = client.post(url, headers=headers, json=payload)
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Chaster extension action failed with HTTP {response.status_code}: {response.text[:500]}",
+        )
+    try:
+        response_json = response.json()
+    except Exception:
+        response_json = {"raw_response": response.text[:500]}
+    return {
+        "endpoint": url,
+        "lock_id": lock_id,
+        "extension_session_id": extension_session_id,
+        "delta_seconds": delta_seconds,
+        "identity_mode": "extension_developer_token",
+        "identity_source": "developer_token",
+        "payload": payload,
+        "response": response_json,
+    }
+
+
+def _sync_chaster_freeze_state(
+    *,
+    freeze_enabled: bool,
+    policy: dict,
+    request: Request,
+) -> dict | None:
+    integrations = [str(x).strip().lower() for x in (policy.get("integrations") or []) if str(x).strip()]
+    chaster_cfg = _chaster_from_policy(policy)
+    if "chaster" not in integrations and not chaster_cfg:
+        return None
+
+    lock_id = str(chaster_cfg.get("lock_id") or "").strip()
+    if not lock_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Chaster integration is enabled, but no lock_id is configured for this session.",
+        )
+    extension_session_id, merged_cfg = _resolve_chaster_extension_session(policy=policy, request=request)
+    chaster_cfg = merged_cfg
+    base_url = _get_chaster_developer_base(request)
+    headers = _get_chaster_developer_headers(request)
+    action_name = "freeze" if freeze_enabled else "unfreeze"
+    url = f"{base_url}/extensions/sessions/{extension_session_id}/action"
+    payload = {
+        "action": {
+            "name": action_name,
+        }
+    }
+    timeout = httpx.Timeout(connect=6.0, read=25.0, write=20.0, pool=6.0)
+    with httpx.Client(timeout=timeout) as client:
+        response = client.post(url, headers=headers, json=payload)
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Chaster extension freeze action failed with HTTP {response.status_code}: {response.text[:500]}",
+        )
+    try:
+        response_json = response.json()
+    except Exception:
+        response_json = {"raw_response": response.text[:500] or ""}
+    return {
+        "endpoint": url,
+        "lock_id": lock_id,
+        "extension_session_id": extension_session_id,
+        "freeze_enabled": freeze_enabled,
+        "identity_mode": "extension_developer_token",
+        "identity_source": "developer_token",
+        "payload": payload,
+        "response": response_json,
+    }
+
+
+def _sync_chaster_temporary_opening(*, policy: dict, request: Request) -> dict | None:
+    integrations = [str(x).strip().lower() for x in (policy.get("integrations") or []) if str(x).strip()]
+    chaster_cfg = _chaster_from_policy(policy)
+    if "chaster" not in integrations and not chaster_cfg:
+        return None
+
+    lock_id = str(chaster_cfg.get("lock_id") or "").strip()
+    if not lock_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Chaster integration is enabled, but no lock_id is configured for this session.",
+        )
+
+    extension_session_id, merged_cfg = _resolve_chaster_extension_session(policy=policy, request=request)
+    chaster_cfg = merged_cfg
+    base_url = _get_chaster_developer_base(request)
+    headers = _get_chaster_developer_headers(request)
+    payload = {"actor": "extension"}
+    url = f"{base_url}/extensions/sessions/{extension_session_id}/temporary-opening/open"
+    timeout = httpx.Timeout(connect=6.0, read=25.0, write=20.0, pool=6.0)
+    with httpx.Client(timeout=timeout) as client:
+        response = client.post(url, headers=headers, json=payload)
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Chaster temporary-opening failed with HTTP {response.status_code}: {response.text[:500]}",
+        )
+    try:
+        response_json = response.json()
+    except Exception:
+        response_json = {"raw_response": response.text[:500] or ""}
+    return {
+        "endpoint": url,
+        "lock_id": lock_id,
+        "extension_session_id": extension_session_id,
+        "identity_mode": "extension_developer_token",
+        "identity_source": "developer_token",
+        "payload": payload,
+        "response": response_json,
+    }
 
 
 def _opening_window_start(now: datetime, period: str) -> datetime:
@@ -1276,16 +1602,32 @@ def _execute_action_with_policy(
     normalized_action, unwrapped_payload = _unwrap_action_request(action_type, payload)
     normalized_payload = _normalize_duration_payload(normalized_action, unwrapped_payload)
     if normalized_action in _TIMER_ACTIONS:
+        working_policy = copy.deepcopy(policy)
         updated_policy, timer_state, action_message = _apply_timer_action(
             normalized_action,
             normalized_payload,
-            policy,
+            working_policy,
             now,
         )
+        chaster_sync = None
+        if normalized_action in {"add_time", "reduce_time"}:
+            chaster_sync = _sync_chaster_lock_time_change(
+                action_type=normalized_action,
+                seconds=int(normalized_payload.get("seconds") or 0),
+                policy=updated_policy,
+                request=request,
+            )
+        elif normalized_action in {"pause_timer", "unpause_timer"}:
+            chaster_sync = _sync_chaster_freeze_state(
+                freeze_enabled=(normalized_action == "pause_timer"),
+                policy=updated_policy,
+                request=request,
+            )
         return updated_policy, {
             "action_type": normalized_action,
             "payload": normalized_payload,
             "timer": timer_state,
+            "chaster": chaster_sync,
             "message": action_message,
         }
     if normalized_action in _TTLOCK_ACTIONS:
@@ -1306,12 +1648,18 @@ def _execute_action_with_policy(
             ),
         )
     if normalized_action in _HYGIENE_ACTIONS:
-        return _execute_ttlock_action(
+        updated_policy, result = _execute_ttlock_action(
             action_type=normalized_action,
             payload=normalized_payload,
             policy=policy,
             request=request,
         )
+        if normalized_action == "hygiene_open":
+            result["chaster"] = _sync_chaster_temporary_opening(
+                policy=updated_policy,
+                request=request,
+            )
+        return updated_policy, result
     if normalized_action == "image_verification":
         raise HTTPException(
             status_code=400,
@@ -1462,6 +1810,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         fallback_applied = False
         reask_attempted = False
         reask_applied = False
+        explicit_intent_action = _fallback_pending_action_from_user_intent(action_text, policy)
 
         timer_narration, timer_pending, policy = _timer_expiry_pending_action(request_lang, policy, now)
         if timer_pending:
@@ -1533,7 +1882,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
 
         if abort_handled:
             narration = abort_narration or timer_narration or ""
-        elif timer_narration:
+        elif timer_narration and explicit_intent_action is None:
             narration = timer_narration
         else:
             narration_raw = generate_ai_narration_for_session(
@@ -1563,19 +1912,30 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                         }
                     )
             if not ai_pending_actions:
-                fallback_action = _fallback_pending_action_from_user_intent(action_text, policy)
+                fallback_action = explicit_intent_action or _fallback_pending_action_from_user_intent(action_text, policy)
                 if fallback_action is not None:
                     if strict_request_tag_mode:
-                        precheck_failed_actions.append(
-                            {
-                                "action_type": str(fallback_action.get("action_type") or ""),
-                                "payload": fallback_action.get("payload") or {},
-                                "detail": (
-                                    "Strict request-tag mode: no valid structured action tag after repair; "
-                                    "action not executed."
-                                ),
-                            }
-                        )
+                        if explicit_intent_action is not None:
+                            ai_pending_actions = [fallback_action]
+                            fallback_applied = True
+                            precheck_failed_actions.append(
+                                {
+                                    "action_type": str(fallback_action.get("action_type") or ""),
+                                    "payload": fallback_action.get("payload") or {},
+                                    "detail": "Applied explicit user-intent fallback while timer-expiry state was active.",
+                                }
+                            )
+                        else:
+                            precheck_failed_actions.append(
+                                {
+                                    "action_type": str(fallback_action.get("action_type") or ""),
+                                    "payload": fallback_action.get("payload") or {},
+                                    "detail": (
+                                        "Strict request-tag mode: no valid structured action tag after repair; "
+                                        "action not executed."
+                                    ),
+                                }
+                            )
                     else:
                         ai_pending_actions = [fallback_action]
                         fallback_applied = True
@@ -1892,6 +2252,7 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
                 "action_type": result.get("action_type"),
                 "payload": result.get("payload") or {},
                 "message": result.get("message") or "",
+                "chaster": result.get("chaster"),
             },
         )
         db.add(session)
@@ -1905,6 +2266,7 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
         "payload": result["payload"],
         "timer": result.get("timer"),
         "ttlock": result.get("ttlock"),
+        "chaster": result.get("chaster"),
         "message": result["message"],
     }
 

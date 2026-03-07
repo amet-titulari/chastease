@@ -3,35 +3,36 @@
 {% block title %}AI Chat — Chastease{% endblock %}
 
 {% block content %}
-  <div class="-mx-4 -mb-4 sm:mx-0 sm:mb-0 sm:rounded-2xl sm:border sm:border-slate-700/70 sm:bg-gradient-to-b sm:from-slate-900/95 sm:via-gray-900/95 sm:to-slate-900/95 sm:shadow-[0_10px_50px_rgba(0,0,0,0.35)]">
+  <div class="mx-auto max-w-5xl">
+    <div class="rounded-2xl border border-slate-700/70 bg-gradient-to-b from-slate-900/95 via-gray-900/95 to-slate-900/95 shadow-[0_10px_50px_rgba(0,0,0,0.35)]">
   <!-- Modern Chat Container -->
-  <div class="flex flex-col h-[calc(100dvh-5rem)] sm:h-[calc(100dvh-8rem)] sm:min-h-[560px]">
-
+  <div class="flex flex-col h-[calc(100dvh-8rem)] min-h-[560px]">
+    
     <!-- Header -->
-    <div class="flex-none bg-gradient-to-r from-slate-800/95 via-slate-800/90 to-slate-900/95 border-b border-slate-700/70 px-4 py-3 sm:px-6 sm:py-4 sm:rounded-t-2xl">
+    <div class="flex-none bg-gradient-to-r from-slate-800/95 via-slate-800/90 to-slate-900/95 border-b border-slate-700/70 px-6 py-4 rounded-t-2xl">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-sm">
+          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
             AI
           </div>
           <div>
-            <h1 class="text-base sm:text-xl font-semibold text-white">Deine Keyholderin</h1>
+            <h1 class="text-xl font-semibold text-white">Deine Keyholderin</h1>
             <p id="chatStatus" class="text-xs text-gray-400">Verbunden</p>
           </div>
         </div>
-        <div class="text-xs text-gray-500 hidden sm:block">
+        <div class="text-xs text-gray-500">
           <span id="chatSessionInfo">Session lädt...</span>
         </div>
       </div>
     </div>
 
     <!-- Messages Area -->
-    <div id="messagesContainer" class="flex-1 overflow-y-auto bg-gradient-to-b from-slate-900/80 via-gray-900/75 to-slate-900/80 px-3 py-4 sm:px-4 sm:py-6">
+    <div id="messagesContainer" class="flex-1 overflow-y-auto bg-gradient-to-b from-slate-900/80 via-gray-900/75 to-slate-900/80 px-4 py-6">
       <div class="max-w-4xl mx-auto">
-        <div id="messages" class="space-y-4 sm:space-y-6"></div>
-
+        <div id="messages" class="space-y-6"></div>
+        
         <!-- Typing Indicator (hidden by default) -->
-        <div id="typingIndicator" class="hidden mt-4 sm:mt-6">
+        <div id="typingIndicator" class="hidden mt-6">
           <div class="flex items-start gap-3">
             <div class="flex-none w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
               AI
@@ -51,7 +52,7 @@
     </div>
 
     <!-- Pending Actions (optional) -->
-    <div id="pendingActionsWrap" class="hidden flex-none bg-slate-800/90 border-t border-slate-700/70 px-4 py-3 sm:px-6">
+    <div id="pendingActionsWrap" class="hidden flex-none bg-slate-800/90 border-t border-slate-700/70 px-6 py-3">
       <div class="max-w-4xl mx-auto">
         <h2 class="text-sm font-semibold text-gray-200 mb-2">Ausstehende Aktionen</h2>
         <div id="pendingActions" class="space-y-2"></div>
@@ -59,14 +60,14 @@
     </div>
 
     <!-- Input Area -->
-    <div class="flex-none bg-gradient-to-r from-slate-800/95 via-slate-800/90 to-slate-900/95 border-t border-slate-700/70 px-3 py-3 sm:px-6 sm:py-4 sm:rounded-b-2xl">
+    <div class="flex-none bg-gradient-to-r from-slate-800/95 via-slate-800/90 to-slate-900/95 border-t border-slate-700/70 px-6 py-4 rounded-b-2xl">
       <div class="max-w-4xl mx-auto">
         <div id="attachmentPreview" class="hidden mb-3 flex flex-wrap gap-2"></div>
         <div class="rounded-2xl border border-slate-600/70 bg-gradient-to-r from-slate-900/90 via-slate-900/75 to-slate-900/90 p-2 shadow-inner shadow-black/30">
           <div class="relative">
             <button
               id="attachImageBtn"
-              class="absolute left-2 bottom-2 w-10 h-10 rounded-xl border border-slate-500/80 bg-slate-800/95 hover:bg-slate-700/95 text-slate-200 flex items-center justify-center transition-all touch-manipulation"
+              class="absolute left-2 bottom-2 w-10 h-10 rounded-xl border border-slate-500/80 bg-slate-800/95 hover:bg-slate-700/95 text-slate-200 flex items-center justify-center transition-all"
               title="Bild anhängen"
               type="button"
             >
@@ -75,17 +76,17 @@
               </svg>
             </button>
             <input id="chatAttachmentInput" type="file" accept="image/*" class="hidden" multiple />
-            <textarea
-              id="messageInput"
-              class="w-full resize-none rounded-xl bg-slate-950/80 text-white placeholder-slate-400 pl-14 pr-14 py-3 sm:py-4 border border-slate-600/60 focus:border-sky-400/70 focus:ring-2 focus:ring-sky-500/25 focus:outline-none transition-all text-base"
-              placeholder="Schreibe deine Nachricht..."
+            <textarea 
+              id="messageInput" 
+              class="w-full resize-none rounded-xl bg-slate-950/80 text-white placeholder-slate-400 pl-14 pr-14 py-4 border border-slate-600/60 focus:border-sky-400/70 focus:ring-2 focus:ring-sky-500/25 focus:outline-none transition-all" 
+              placeholder="Schreibe deine Nachricht..." 
               rows="1"
-              style="max-height: 160px;"
+              style="max-height: 200px;"
             ></textarea>
-            <button
-              id="sendBtn"
-              class="absolute right-2 bottom-2 w-10 h-10 bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl flex items-center justify-center text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
-              title="Senden"
+            <button 
+              id="sendBtn" 
+              class="absolute right-2 bottom-2 w-10 h-10 bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl flex items-center justify-center text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Senden (Enter)"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
@@ -93,20 +94,17 @@
             </button>
           </div>
         </div>
-        <div class="mt-2 hidden sm:flex items-center justify-between text-xs text-gray-500">
+        <div class="mt-2 flex items-center justify-between text-xs text-gray-500">
           <span>Enter zum Senden • Shift+Enter für neue Zeile • Klick oder Paste für Bilder</span>
           <span id="charCount" class="hidden">0 Zeichen</span>
         </div>
-        <div class="mt-1 flex sm:hidden justify-end text-xs text-gray-500">
-          <span id="charCountMobile" class="hidden">0 Zeichen</span>
-        </div>
       </div>
     </div>
-
+    
     <!-- Scroll to Bottom Button -->
-    <button
-      id="scrollToBottomBtn"
-      class="hidden fixed bottom-20 right-4 sm:bottom-24 sm:right-8 w-10 h-10 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-full shadow-lg flex items-center justify-center text-white transition-all touch-manipulation"
+    <button 
+      id="scrollToBottomBtn" 
+      class="hidden fixed bottom-24 right-8 w-10 h-10 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-full shadow-lg flex items-center justify-center text-white transition-all"
       title="Nach unten scrollen"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,6 +112,7 @@
       </svg>
     </button>
   </div>
+    </div>
   </div>
 {% endblock %}
 

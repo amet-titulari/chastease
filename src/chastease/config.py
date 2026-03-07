@@ -62,11 +62,35 @@ class Config:
         self.DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/chastease.db")
         self.ENABLE_SESSION_KILL = _env_bool("ENABLE_SESSION_KILL", False)
         self.AUTH_TOKEN_TTL_DAYS = max(1, _env_int("AUTH_TOKEN_TTL_DAYS", 30))
+        self.AUTH_ALLOW_LOCAL_LOGIN = _env_bool("AUTH_ALLOW_LOCAL_LOGIN", True)
+        self.AUTH_ENABLE_CHASTER_LOGIN = _env_bool("AUTH_ENABLE_CHASTER_LOGIN", True)
         self.IMAGE_VERIFICATION_DIR = os.getenv("IMAGE_VERIFICATION_DIR", "data/image_verifications")
         self.TTL_API_BASE = os.getenv("TTL_API_BASE", "https://euapi.ttlock.com")
         self.TTL_CLIENT_ID = os.getenv("TTL_CLIENT_ID", "")
         self.TTL_CLIENT_SECRET = os.getenv("TTL_CLIENT_SECRET", "")
         self.CHASTER_API_BASE = os.getenv("CHASTER_API_BASE", "https://api.chaster.app").strip()
+        self.CHASTER_DEVELOPER_API_BASE = os.getenv(
+            "CHASTER_DEVELOPER_API_BASE",
+            "https://api.chaster.app/api",
+        ).strip()
+        self.CHASTER_DEVELOPER_TOKEN = os.getenv("CHASTER_DEVELOPER_TOKEN", "").strip()
+        self.CHASTER_EXTENSION_SLUG = os.getenv("CHASTER_EXTENSION_SLUG", "").strip()
+        self.CHASTER_OAUTH_CLIENT_ID = os.getenv("CHASTER_OAUTH_CLIENT_ID", "").strip()
+        self.CHASTER_OAUTH_CLIENT_SECRET = os.getenv("CHASTER_OAUTH_CLIENT_SECRET", "").strip()
+        self.CHASTER_OAUTH_REDIRECT_URI = os.getenv("CHASTER_OAUTH_REDIRECT_URI", "").strip()
+        self.CHASTER_OAUTH_AUTHORIZE_URL = os.getenv(
+            "CHASTER_OAUTH_AUTHORIZE_URL",
+            "https://sso.chaster.app/auth/realms/app/protocol/openid-connect/auth",
+        ).strip()
+        self.CHASTER_OAUTH_TOKEN_URL = os.getenv(
+            "CHASTER_OAUTH_TOKEN_URL",
+            "https://sso.chaster.app/auth/realms/app/protocol/openid-connect/token",
+        ).strip()
+        self.CHASTER_OAUTH_USERINFO_URL = os.getenv(
+            "CHASTER_OAUTH_USERINFO_URL",
+            "https://sso.chaster.app/auth/realms/app/protocol/openid-connect/userinfo",
+        ).strip()
+        self.CHASTER_OAUTH_SCOPES = os.getenv("CHASTER_OAUTH_SCOPES", "openid profile locks").strip()
         self.LLM_STRICT_EXPLICIT_ENDPOINT = _env_bool("LLM_STRICT_EXPLICIT_ENDPOINT", True)
         self.LLM_CHAT_HISTORY_TURNS = max(1, _env_int("LLM_CHAT_HISTORY_TURNS", 3))
         self.LLM_CHAT_HISTORY_CHARS_PER_TURN = max(80, _env_int("LLM_CHAT_HISTORY_CHARS_PER_TURN", 280))

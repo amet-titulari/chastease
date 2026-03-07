@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from chastease.api.routers import (
     auth_router,
     chaster_router,
+    chaster_auth_router,
     chat_router,
     llm_router,
     sessions_router,
@@ -17,6 +18,7 @@ from chastease.api.routers import (
 api_router = APIRouter()
 
 api_router.include_router(auth_router)
+api_router.include_router(chaster_auth_router)
 api_router.include_router(llm_router)
 api_router.include_router(users_router)
 api_router.include_router(story_router)

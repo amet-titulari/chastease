@@ -10,6 +10,7 @@ function logoutUser() {
 
 function renderNavAuth() {
   try {
+    syncProtectedNavVisibility();
     const raw = localStorage.getItem(authStorageKey());
     const node = document.getElementById('navAuth');
     if (!node) return;
@@ -144,10 +145,12 @@ async function updatePrimaryNav() {
 
   const auth = getStoredAuth();
   if (!auth) {
+    syncProtectedNavVisibility(false);
     link.textContent = 'App';
     link.setAttribute('href', '/app');
     return;
   }
+  syncProtectedNavVisibility(true);
 
   try {
     const url = `/api/v1/sessions/active?user_id=${encodeURIComponent(auth.user_id)}&auth_token=${encodeURIComponent(auth.auth_token)}`;
@@ -174,10 +177,23 @@ async function updatePrimaryNav() {
   }
 }
 
+function syncProtectedNavVisibility(forceAuth) {
+  const hasAuth = typeof forceAuth === 'boolean' ? forceAuth : Boolean(getStoredAuth());
+  const protectedIds = ['navPrimary', 'navChat', 'navContract'];
+  protectedIds.forEach((id) => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    node.classList.toggle('hidden', !hasAuth);
+  });
+}
+
 // expose globally
 window.chastease_common = { authStorageKey, logoutUser, setStatus, renderNavAuth, markdownToHtml, updatePrimaryNav };
 
 document.addEventListener('DOMContentLoaded', () => {
+  try {
+    syncProtectedNavVisibility();
+  } catch (e) {}
   try {
     renderNavAuth();
   } catch (e) {}

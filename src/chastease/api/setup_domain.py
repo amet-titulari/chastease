@@ -321,7 +321,7 @@ def _build_psychogram(setup_session: dict) -> dict:
     grooming_preference = str(
         setup_session.get("grooming_preference") or answers.get("q12_grooming_preference") or "no_preference"
     )
-    desired_intensity = str(setup_session.get("desired_intensity") or "medium")
+    desired_intensity = str(setup_session.get("desired_intensity") or "strong")
     experience_level_raw = int(answers.get("q13_experience_level", 50))
     experience_level = max(1, min(10, round(experience_level_raw / 10)))
     hard_limits_text = str(answers.get("q14_hard_limits_text", "")).strip()
@@ -421,8 +421,8 @@ def _derive_allowed_categories(traits: dict) -> list[str]:
     return categories
 
 def _conservative_policy_defaults(setup_session: dict) -> dict:
-    day_cap = setup_session.get("max_penalty_per_day_minutes", 60)
-    week_cap = setup_session.get("max_penalty_per_week_minutes", 240)
+    day_cap = setup_session.get("max_penalty_per_day_minutes", 0)
+    week_cap = setup_session.get("max_penalty_per_week_minutes", 0)
     return {
         "applied": True,
         "reason": "low_confidence",
@@ -443,10 +443,10 @@ def _build_policy(setup_session: dict, psychogram: dict) -> dict:
     conservative = _conservative_policy_defaults(setup_session) if low_confidence else {"applied": False}
     default_limits = conservative if low_confidence else {}
 
-    max_penalty_day = setup_session.get("max_penalty_per_day_minutes", 60)
-    max_penalty_week = setup_session.get("max_penalty_per_week_minutes", 240)
-    opening_period = setup_session.get("opening_limit_period", "day")
-    max_openings = setup_session.get("max_openings_in_period", setup_session.get("max_openings_per_day", 1))
+    max_penalty_day = setup_session.get("max_penalty_per_day_minutes", 0)
+    max_penalty_week = setup_session.get("max_penalty_per_week_minutes", 0)
+    opening_period = setup_session.get("opening_limit_period", "month")
+    max_openings = setup_session.get("max_openings_in_period", setup_session.get("max_openings_per_day", 7))
     requested_intensity = _intensity_choice_to_max_level(setup_session.get("desired_intensity"))
     seal_mode = str(setup_session.get("seal_mode") or "none").strip().lower()
     if seal_mode not in {"none", "plomben", "versiegelung"}:
@@ -478,7 +478,7 @@ def _build_policy(setup_session: dict, psychogram: dict) -> dict:
             "max_openings_per_day": max_openings if opening_period == "day" else 0,
             "opening_limit_period": opening_period,
             "max_openings_in_period": max_openings,
-            "opening_window_minutes": setup_session.get("opening_window_minutes", 30),
+            "opening_window_minutes": setup_session.get("opening_window_minutes", 15),
         },
         "contract": {
             "start_date": setup_session.get("contract_start_date"),
@@ -562,16 +562,16 @@ def _create_draft_setup_session(user_id: str, language: str = "de") -> dict:
         "contract_min_end_date": None,
         "contract_max_end_date": None,
         "ai_controls_end_date": True,
-        "max_penalty_per_day_minutes": 60,
-        "max_penalty_per_week_minutes": 240,
-        "opening_limit_period": "day",
-        "max_openings_in_period": 1,
-        "max_openings_per_day": 1,
-        "opening_window_minutes": 30,
+        "max_penalty_per_day_minutes": 0,
+        "max_penalty_per_week_minutes": 0,
+        "opening_limit_period": "month",
+        "max_openings_in_period": 7,
+        "max_openings_per_day": 0,
+        "opening_window_minutes": 15,
         "seal_mode": "none",
         "initial_seal_number": None,
-        "instruction_style": "polite_authoritative",
-        "desired_intensity": "medium",
+        "instruction_style": "mixed",
+        "desired_intensity": "strong",
         "grooming_preference": "clean_shaven",
         "escalation_mode": "moderate",
         "questionnaire_version": QUESTIONNAIRE_VERSION,

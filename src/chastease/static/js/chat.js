@@ -268,20 +268,19 @@ function appendMessage(role, text, opts = {}) {
 function scrollToBottom(smooth = true) {
   const container = document.getElementById('messagesContainer');
   if (!container) return;
-  requestAnimationFrame(() => {
-    container.scrollTop = container.scrollHeight;
-    if (smooth) {
-      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-    }
+  container.scrollTo({
+    top: container.scrollHeight,
+    behavior: smooth ? 'smooth' : 'auto'
   });
 }
 
 function ensureInputAndLatestVisible() {
-  const container = document.getElementById('messagesContainer');
-  if (!container) return;
-  requestAnimationFrame(() => {
-    container.scrollTop = container.scrollHeight;
-  });
+  scrollToBottom(false);
+  if (inputEl) {
+    try {
+      inputEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    } catch (_error) {}
+  }
 }
 
 function renderAttachmentPreview() {
