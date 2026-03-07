@@ -2108,7 +2108,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         session.updated_at = datetime.now(UTC)
         db.add(turn)
         db.flush()
-        refresh_session_roleplay_state(db, session)
+        refresh_session_roleplay_state(db, session, pending_audit_events=audit_events_to_log)
         db.add(session)
         if audit_events_to_log:
             for event in audit_events_to_log:
@@ -2326,7 +2326,7 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
         )
         db.add(turn)
         db.flush()
-        refresh_session_roleplay_state(db, session)
+        refresh_session_roleplay_state(db, session, pending_audit_events=audit_events_to_log)
         db.add(session)
         for event in audit_events_to_log:
             record_audit_event(
@@ -2397,6 +2397,7 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
                 "chaster": result.get("chaster"),
             },
         )
+        refresh_session_roleplay_state(db, session, recent_action_types=[normalized_action])
         db.add(session)
         db.commit()
     finally:

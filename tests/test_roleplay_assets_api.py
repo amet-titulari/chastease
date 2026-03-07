@@ -111,6 +111,10 @@ def test_roleplay_assets_flow_from_library_to_active_session(client):
     assert active_body["has_active_session"] is True
     assert active_body["chastity_session"]["roleplay_character_id"] == character_id
     assert active_body["chastity_session"]["roleplay_scenario_id"] == scenario_id
+    assert "roleplay_debug" in active_body["chastity_session"]
+    assert "Prompt profile:" in active_body["chastity_session"]["roleplay_debug"]["prompt_preview"]
+    assert isinstance(active_body["chastity_session"]["roleplay_debug"]["selected_memory_entries"], list)
+    assert isinstance(active_body["chastity_session"]["roleplay_debug"]["selected_scene_beats"], list)
     assert active_body["chastity_session"]["policy"]["roleplay"]["selection"] == {
         "character_id": character_id,
         "scenario_id": scenario_id,
@@ -135,3 +139,214 @@ def test_roleplay_assets_flow_from_library_to_active_session(client):
     switched_body = active_after_switch.json()
     assert switched_body["chastity_session"]["roleplay_character_id"] == "builtin-keyholder"
     assert switched_body["chastity_session"]["roleplay_scenario_id"] == "guided-chastity-session"
+
+
+def test_roleplay_asset_export_import_roundtrip(client):
+    source_user_id, source_auth_token = _register_user(client, "rp-export-source")
+
+    created_character = client.post(
+        "/api/v1/roleplay/characters",
+        json={
+            "user_id": source_user_id,
+            "auth_token": source_auth_token,
+            "display_name": "Ledger Keeper",
+            "persona_name": "Ledger",
+            "description": "Tracks continuity and compliance.",
+            "greeting_template": "Open the ledger and report.",
+            "tone": "clinical",
+            "dominance_style": "controlled",
+            "ritual_phrases": ["State your status."],
+            "goals": ["track continuity"],
+            "scenario_hooks": ["ledger"],
+            "tags": ["library"],
+        },
+    )
+    assert created_character.status_code == 200
+
+    created_scenario = client.post(
+        "/api/v1/roleplay/scenarios",
+        json={
+            "user_id": source_user_id,
+            "auth_token": source_auth_token,
+            "title": "Ledger Review",
+            "summary": "Review every report against the running record.",
+            "phase_title": "Review",
+            "phase_objective": "Keep reports concise.",
+            "phase_guidance": "Compare the current answer to earlier statements.",
+            "lore_content": "The ledger is the source of continuity.",
+            "lore_triggers": ["ledger", "review"],
+            "tags": ["library"],
+        },
+    )
+    assert created_scenario.status_code == 200
+
+    exported = client.get(
+        f"/api/v1/roleplay/export?user_id={source_user_id}&auth_token={source_auth_token}&language=en"
+    )
+    assert exported.status_code == 200
+    export_body = exported.json()
+    assert export_body["schema_version"] == 1
+    assert any(item["display_name"] == "Ledger Keeper" for item in export_body["characters"])
+    assert any(item["title"] == "Ledger Review" for item in export_body["scenarios"])
+    assert all(not item.get("builtin") for item in export_body["characters"])
+
+    target_user_id, target_auth_token = _register_user(client, "rp-export-target")
+    imported = client.post(
+        "/api/v1/roleplay/import",
+        json={
+            "user_id": target_user_id,
+            "auth_token": target_auth_token,
+            "library": export_body,
+        },
+    )
+    assert imported.status_code == 200
+    import_body = imported.json()
+    assert import_body["imported"] == {"characters": 1, "scenarios": 1}
+    assert import_body["characters"][0]["display_name"] == "Ledger Keeper"
+    assert import_body["scenarios"][0]["title"] == "Ledger Review"
+
+    target_library = client.get(
+        f"/api/v1/roleplay/library?user_id={target_user_id}&auth_token={target_auth_token}&language=en"
+    )
+    assert target_library.status_code == 200
+    target_library_body = target_library.json()
+    assert any(item["display_name"] == "Ledger Keeper" for item in target_library_body["characters"])
+    assert any(item["title"] == "Ledger Review" for item in target_library_body["scenarios"])
+
+
+def test_roleplay_asset_import_duplicates_when_not_overwriting(client):
+    user_id, auth_token = _register_user(client, "rp-import-duplicate")
+
+    created_character = client.post(
+        "/api/v1/roleplay/characters",
+        json={
+            "user_id": user_id,
+            "auth_token": auth_token,
+            "display_name": "Archive Voice",
+            "persona_name": "Archive Voice",
+            "description": "Original asset.",
+            "greeting_template": "Original greeting.",
+            "tone": "precise",
+            "dominance_style": "measured",
+            "ritual_phrases": [],
+            "goals": [],
+            "scenario_hooks": [],
+            "tags": ["original"],
+        },
+    )
+    assert created_character.status_code == 200
+    character_id = created_character.json()["character"]["asset_id"]
+
+    imported = client.post(
+        "/api/v1/roleplay/import",
+        json={
+            "user_id": user_id,
+            "auth_token": auth_token,
+            "library": {
+                "characters": [
+                    {
+                        "asset_id": character_id,
+                        "display_name": "Archive Voice",
+                        "persona": {
+                            "name": "Archive Voice",
+                            "archetype": "keyholder",
+                            "description": "Imported copy.",
+                            "goals": ["track"],
+                            "speech_style": {
+                                "tone": "calm",
+                                "dominance_style": "firm",
+                                "ritual_phrases": ["Report."],
+                                "formatting_style": "plain",
+                            },
+                        },
+                        "greeting_template": "Imported greeting.",
+                        "scenario_hooks": ["archive"],
+                        "tags": ["imported"],
+                    }
+                ],
+                "scenarios": [],
+            },
+        },
+    )
+    assert imported.status_code == 200
+    import_body = imported.json()
+    assert import_body["imported"] == {"characters": 1, "scenarios": 0}
+    assert import_body["characters"][0]["asset_id"] != character_id
+
+    library = client.get(
+        f"/api/v1/roleplay/library?user_id={user_id}&auth_token={auth_token}&language=en"
+    )
+    assert library.status_code == 200
+    custom_characters = [item for item in library.json()["characters"] if not item.get("builtin")]
+    assert len(custom_characters) == 2
+
+
+def test_roleplay_asset_import_overwrites_when_enabled(client):
+    user_id, auth_token = _register_user(client, "rp-import-overwrite")
+
+    created_character = client.post(
+        "/api/v1/roleplay/characters",
+        json={
+            "user_id": user_id,
+            "auth_token": auth_token,
+            "display_name": "Archive Voice",
+            "persona_name": "Archive Voice",
+            "description": "Original asset.",
+            "greeting_template": "Original greeting.",
+            "tone": "precise",
+            "dominance_style": "measured",
+            "ritual_phrases": [],
+            "goals": [],
+            "scenario_hooks": [],
+            "tags": ["original"],
+        },
+    )
+    assert created_character.status_code == 200
+    character_id = created_character.json()["character"]["asset_id"]
+
+    imported = client.post(
+        "/api/v1/roleplay/import",
+        json={
+            "user_id": user_id,
+            "auth_token": auth_token,
+            "overwrite_existing": True,
+            "library": {
+                "characters": [
+                    {
+                        "asset_id": character_id,
+                        "display_name": "Archive Voice",
+                        "persona": {
+                            "name": "Archive Voice",
+                            "archetype": "keyholder",
+                            "description": "Imported overwrite.",
+                            "goals": ["track"],
+                            "speech_style": {
+                                "tone": "calm",
+                                "dominance_style": "firm",
+                                "ritual_phrases": ["Report."],
+                                "formatting_style": "plain",
+                            },
+                        },
+                        "greeting_template": "Imported greeting.",
+                        "scenario_hooks": ["archive"],
+                        "tags": ["imported"],
+                    }
+                ],
+                "scenarios": [],
+            },
+        },
+    )
+    assert imported.status_code == 200
+    import_body = imported.json()
+    assert import_body["imported"] == {"characters": 1, "scenarios": 0}
+    assert import_body["characters"][0]["asset_id"] == character_id
+
+    library = client.get(
+        f"/api/v1/roleplay/library?user_id={user_id}&auth_token={auth_token}&language=en"
+    )
+    assert library.status_code == 200
+    custom_characters = [item for item in library.json()["characters"] if not item.get("builtin")]
+    assert len(custom_characters) == 1
+    assert custom_characters[0]["asset_id"] == character_id
+    assert custom_characters[0]["greeting_template"] == "Imported greeting."
+    assert custom_characters[0]["persona"]["description"] == "Imported overwrite."

@@ -59,6 +59,13 @@ const roleplayCharacterHooksEl = document.getElementById('roleplayCharacterHooks
 const roleplayCharacterTagsEl = document.getElementById('roleplayCharacterTags');
 const saveRoleplayCharacterBtn = document.getElementById('saveRoleplayCharacterBtn');
 const deleteRoleplayCharacterBtn = document.getElementById('deleteRoleplayCharacterBtn');
+const exportRoleplayLibraryBtn = document.getElementById('exportRoleplayLibraryBtn');
+const importRoleplayLibraryBtn = document.getElementById('importRoleplayLibraryBtn');
+const importRoleplayLibraryInput = document.getElementById('importRoleplayLibraryInput');
+const roleplayImportOverwriteEl = document.getElementById('roleplayImportOverwrite');
+const roleplayPromptProfileNameEl = document.getElementById('roleplayPromptProfileName');
+const roleplayPromptProfileModeEl = document.getElementById('roleplayPromptProfileMode');
+const roleplayPromptProfileVersionEl = document.getElementById('roleplayPromptProfileVersion');
 const roleplayScenarioTitleEl = document.getElementById('roleplayScenarioTitle');
 const roleplayScenarioSummaryEl = document.getElementById('roleplayScenarioSummary');
 const roleplayScenarioPhaseTitleEl = document.getElementById('roleplayScenarioPhaseTitle');
@@ -850,6 +857,12 @@ function fillRoleplayScenarioForm(asset) {
 function syncRoleplayFormsFromSelection() {
   fillRoleplayCharacterForm(findRoleplayCharacter(currentRoleplayCharacterId()));
   fillRoleplayScenarioForm(findRoleplayScenario(currentRoleplayScenarioId()));
+  const promptProfile = (currentSetup?.roleplay_profile && typeof currentSetup.roleplay_profile.prompt_profile === 'object')
+    ? currentSetup.roleplay_profile.prompt_profile
+    : {};
+  if (roleplayPromptProfileNameEl) roleplayPromptProfileNameEl.value = String(promptProfile.name || 'roleplay-session');
+  if (roleplayPromptProfileModeEl) roleplayPromptProfileModeEl.value = String(promptProfile.mode || 'session');
+  if (roleplayPromptProfileVersionEl) roleplayPromptProfileVersionEl.value = String(promptProfile.version || 'v1');
 }
 
 function renderRoleplayLibrary() {
@@ -908,6 +921,9 @@ async function persistRoleplaySelection(silent = false) {
       auth_token: auth.auth_token,
       roleplay_character_id: currentRoleplayCharacterId(),
       roleplay_scenario_id: currentRoleplayScenarioId(),
+      prompt_profile_name: String(roleplayPromptProfileNameEl?.value || 'roleplay-session').trim() || 'roleplay-session',
+      prompt_profile_mode: String(roleplayPromptProfileModeEl?.value || 'session').trim() || 'session',
+      prompt_profile_version: String(roleplayPromptProfileVersionEl?.value || 'v1').trim() || 'v1',
     });
     currentSetup = {
       ...(currentSetup || {}),
@@ -957,6 +973,68 @@ function buildRoleplayScenarioPayload() {
     lore_priority: 100,
     tags: splitCommaList(roleplayScenarioTagsEl?.value),
   };
+}
+
+function triggerRoleplayLibraryDownload(payload) {
+  const language = String(languageEl?.value || currentSetup?.language || 'de').trim() || 'de';
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `chastease-roleplay-library-${language}-${stamp}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportRoleplayLibrary() {
+  if (!auth) return;
+  try {
+    const language = String(languageEl?.value || currentSetup?.language || 'de').trim() || 'de';
+    const body = await apiCall('GET', `/api/v1/roleplay/export?user_id=${encodeURIComponent(auth.user_id)}&auth_token=${encodeURIComponent(auth.auth_token)}&language=${encodeURIComponent(language)}`);
+    triggerRoleplayLibraryDownload(body);
+    setRoleplayInfo('Roleplay-Library exportiert.');
+  } catch (error) {
+    setRoleplayInfo(String(error?.message || error), true);
+  }
+}
+
+async function importRoleplayLibraryFromText(text) {
+  if (!auth) return;
+  let parsed;
+  try {
+    parsed = JSON.parse(String(text || ''));
+  } catch (error) {
+    setRoleplayInfo('Importdatei ist kein gueltiges JSON.', true);
+    return;
+  }
+  try {
+    const overwriteExisting = Boolean(roleplayImportOverwriteEl?.checked);
+    const body = await apiCall('POST', '/api/v1/roleplay/import', {
+      user_id: auth.user_id,
+      auth_token: auth.auth_token,
+      library: parsed,
+      overwrite_existing: overwriteExisting,
+    });
+    await loadRoleplayLibrary();
+    syncRoleplayFormsFromSelection();
+    setRoleplayInfo(`Import abgeschlossen: ${Number(body?.imported?.characters || 0)} Character, ${Number(body?.imported?.scenarios || 0)} Scenarios.${overwriteExisting ? ' Bestehende IDs wurden ueberschrieben.' : ''}`);
+  } catch (error) {
+    setRoleplayInfo(String(error?.message || error), true);
+  }
+}
+
+async function handleRoleplayLibraryImport(event) {
+  const file = event?.target?.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    await importRoleplayLibraryFromText(text);
+  } finally {
+    if (importRoleplayLibraryInput) importRoleplayLibraryInput.value = '';
+  }
 }
 
 async function saveRoleplayCharacter() {
@@ -2039,6 +2117,9 @@ contractMinDurationDaysEl?.addEventListener('input', syncMinDurationGuard);
 saveTtlockBtn?.addEventListener('click', saveTtlockConfig);
 saveRoleplayCharacterBtn?.addEventListener('click', saveRoleplayCharacter);
 deleteRoleplayCharacterBtn?.addEventListener('click', deleteRoleplayCharacter);
+exportRoleplayLibraryBtn?.addEventListener('click', exportRoleplayLibrary);
+importRoleplayLibraryBtn?.addEventListener('click', () => importRoleplayLibraryInput?.click());
+importRoleplayLibraryInput?.addEventListener('change', handleRoleplayLibraryImport);
 saveRoleplayScenarioBtn?.addEventListener('click', saveRoleplayScenario);
 deleteRoleplayScenarioBtn?.addEventListener('click', deleteRoleplayScenario);
 roleplayCharacterSelectEl?.addEventListener('change', async () => {
@@ -2047,6 +2128,15 @@ roleplayCharacterSelectEl?.addEventListener('change', async () => {
 });
 roleplayScenarioSelectEl?.addEventListener('change', async () => {
   syncRoleplayFormsFromSelection();
+  await persistRoleplaySelection(true);
+});
+roleplayPromptProfileNameEl?.addEventListener('change', async () => {
+  await persistRoleplaySelection(true);
+});
+roleplayPromptProfileModeEl?.addEventListener('change', async () => {
+  await persistRoleplaySelection(true);
+});
+roleplayPromptProfileVersionEl?.addEventListener('change', async () => {
   await persistRoleplaySelection(true);
 });
 languageEl?.addEventListener('change', () => {

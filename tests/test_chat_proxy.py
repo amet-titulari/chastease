@@ -170,14 +170,18 @@ def test_chat_turn_updates_roleplay_session_summary_and_memory(client):
         assert session is not None
         policy = json.loads(session.policy_snapshot_json)
         roleplay = policy.get("roleplay") or {}
+        scene_state = roleplay.get("scene_state") or {}
         summary = roleplay.get("session_summary") or {}
         memory_entries = roleplay.get("memory_entries") or []
 
+        assert scene_state.get("name") == "active-session"
+        assert scene_state.get("phase") in {"opening", "active", "control", "reflection"}
+        assert scene_state.get("beats")
         assert "summary_text" in summary
         assert "Wearer reported:" in summary["summary_text"]
         assert memory_entries
-        assert any(entry.get("kind") == "wearer_state" for entry in memory_entries)
-        assert any(entry.get("kind") == "keyholder_guidance" for entry in memory_entries)
+        assert any(entry.get("kind") in {"facts", "rituals", "vows", "unresolved_threads"} for entry in memory_entries)
+        assert any("recent" in (entry.get("tags") or []) for entry in memory_entries)
     finally:
         db.close()
 
@@ -213,6 +217,108 @@ def test_chat_turn_updates_roleplay_session_summary_and_memory(client):
     runtime_timer = session_fetch.json()["policy"]["runtime_timer"]
     assert runtime_timer["state"] == "running"
     assert runtime_timer["remaining_seconds"] >= 0
+
+
+def test_manual_action_updates_roleplay_scene_state_from_runtime(client):
+    auth = _register(client, username="chat-scene-runtime-user")
+    session_id = _create_active_session(client, auth)
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={
+            "session_id": session_id,
+            "message": "I wait quietly.",
+            "language": "en",
+        },
+    )
+    assert turn.status_code == 200
+
+    execute = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "pause_timer", "payload": {}},
+    )
+    assert execute.status_code == 200
+    assert execute.json()["timer"]["state"] == "paused"
+
+    db = client.app.state.db_session_factory()
+    try:
+        session = db.get(ChastitySession, session_id)
+        assert session is not None
+        policy = json.loads(session.policy_snapshot_json)
+        roleplay = policy.get("roleplay") or {}
+        scene_state = roleplay.get("scene_state") or {}
+        assert scene_state.get("phase") == "suspension"
+        assert scene_state.get("status") == "paused"
+        assert "timer:paused" in (scene_state.get("beats") or [])
+    finally:
+        db.close()
+
+
+def test_hygiene_actions_update_roleplay_scene_state_from_runtime(client, monkeypatch):
+    auth = _register(client, username="chat-scene-hygiene-user")
+    session_id = _create_active_session(
+        client,
+        auth,
+        integrations=["ttlock"],
+        seal_mode="plomben",
+        integration_config={
+            "ttlock": {
+                "ttl_user": "wearer@example.com",
+                "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                "ttl_lock_id": "12345",
+            }
+        },
+    )
+    client.app.state.config.TTL_CLIENT_ID = "demo-client"
+    client.app.state.config.TTL_CLIENT_SECRET = "demo-secret"
+    monkeypatch.setattr(chat_router, "_ttlock_access_token", lambda **_kwargs: "access-token")
+    monkeypatch.setattr(
+        chat_router,
+        "_ttlock_command",
+        lambda **_kwargs: {"errcode": 0, "errmsg": "ok", "lockId": "12345"},
+    )
+
+    open_result = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "hygiene_open", "payload": {}},
+    )
+    assert open_result.status_code == 200
+
+    db = client.app.state.db_session_factory()
+    try:
+        session = db.get(ChastitySession, session_id)
+        assert session is not None
+        policy = json.loads(session.policy_snapshot_json)
+        scene_state = ((policy.get("roleplay") or {}).get("scene_state") or {})
+        assert scene_state.get("phase") == "maintenance"
+        assert scene_state.get("status") == "hygiene-open"
+        assert "hygiene:open" in (scene_state.get("beats") or [])
+        assert "action:hygiene_open" in (scene_state.get("beats") or [])
+    finally:
+        db.close()
+
+    close_result = client.post(
+        "/api/v1/chat/actions/execute",
+        json={
+            "session_id": session_id,
+            "action_type": "hygiene_close",
+            "payload": {"seal_text": "PLOMBE-BETA-02"},
+        },
+    )
+    assert close_result.status_code == 200
+
+    db = client.app.state.db_session_factory()
+    try:
+        session = db.get(ChastitySession, session_id)
+        assert session is not None
+        policy = json.loads(session.policy_snapshot_json)
+        scene_state = ((policy.get("roleplay") or {}).get("scene_state") or {})
+        assert scene_state.get("phase") == "transition"
+        assert scene_state.get("status") == "resealed"
+        assert "action:hygiene_close" in (scene_state.get("beats") or [])
+        assert any(str(beat).startswith("seal:sealed:PLOMBE-BETA-02") for beat in (scene_state.get("beats") or []))
+    finally:
+        db.close()
 
 
 def test_chat_add_time_respects_max_end_date_boundary(client):
@@ -1054,6 +1160,19 @@ def test_chat_turn_safeword_abort_requires_two_confirmations_and_reason(client):
     assert failed_action["payload"].get("emergency") is True
     assert data["pending_actions"] == []
 
+    db = client.app.state.db_session_factory()
+    try:
+        session = db.get(ChastitySession, session_id)
+        assert session is not None
+        policy = json.loads(session.policy_snapshot_json)
+        scene_state = ((policy.get("roleplay") or {}).get("scene_state") or {})
+        assert scene_state.get("phase") == "emergency"
+        assert scene_state.get("status") == "abort-blocked"
+        assert "abort:failed-open" in (scene_state.get("beats") or [])
+        assert "failed:ttlock_open" in (scene_state.get("beats") or [])
+    finally:
+        db.close()
+
 
 def test_chat_turn_abort_can_be_cancelled_with_reason(client):
     auth = _register(client, username="chat-user-abort-cancel")
@@ -1118,3 +1237,15 @@ def test_chat_turn_timer_expiry_creates_hygiene_open_pending(client):
     assert len(hygiene_pending) == 1
     assert hygiene_pending[0]["payload"]["trigger"] == "timer_expired"
     assert hygiene_pending[0]["payload"]["opening_window_minutes"] == 12
+
+    db = client.app.state.db_session_factory()
+    try:
+        session = db.get(ChastitySession, session_id)
+        assert session is not None
+        policy = json.loads(session.policy_snapshot_json)
+        scene_state = ((policy.get("roleplay") or {}).get("scene_state") or {})
+        assert scene_state.get("phase") == "transition"
+        assert scene_state.get("status") == "timer-expired"
+        assert "timer:expired" in (scene_state.get("beats") or [])
+    finally:
+        db.close()

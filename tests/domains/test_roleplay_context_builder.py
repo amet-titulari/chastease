@@ -71,6 +71,12 @@ def test_build_setup_preview_roleplay_context_includes_tools_and_scene_state(cli
                     "title": "Preview Scenario",
                     "summary": "Scenario preview",
                 },
+                "scene_state": {
+                    "name": "preview-room",
+                    "phase": "calibration",
+                    "status": "active",
+                    "beats": ["wearer:steady breathing"],
+                },
                 "session_summary": {"summary_text": "- Wearer reported: calm and curious.", "source_turn_no": 3},
                 "memory_entries": [{"kind": "wearer_state", "content": "calm and curious", "source": "turn:3"}],
                 "prompt_profile": {"name": "preview", "version": "v2", "mode": "preview"},
@@ -80,7 +86,9 @@ def test_build_setup_preview_roleplay_context_includes_tools_and_scene_state(cli
 
     assert context.session_id == "setup-preview"
     assert context.scene_state is not None
-    assert context.scene_state.phase == "preview"
+    assert context.scene_state.phase == "calibration"
+    assert context.scene_state.name == "preview-room"
+    assert context.scene_state.beats == ["wearer:steady breathing"]
     assert context.tools_summary is not None
     assert "execute=" in context.tools_summary
     assert context.character_card is not None
@@ -137,6 +145,8 @@ def test_build_roleplay_context_preserves_history_and_live_snapshot(client):
     assert context.character_card.display_name
     assert context.scenario is not None
     assert context.prompt_profile.name == "roleplay-session"
+    assert context.scene_state is not None
+    assert context.scene_state.phase == "active"
 
     story_context = to_story_turn_context(context)
     assert len(story_context.turns_history) == 1

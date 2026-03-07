@@ -91,6 +91,17 @@ def _prompt_profile_from_payload(payload: dict[str, Any] | None) -> PromptProfil
     )
 
 
+def _scene_state_from_payload(payload: dict[str, Any] | None, *, default_name: str, default_phase: str) -> SceneState:
+    if not isinstance(payload, dict):
+        return SceneState(name=default_name, phase=default_phase, status="active")
+    return SceneState(
+        name=str(payload.get("name") or default_name),
+        phase=str(payload.get("phase") or default_phase),
+        status=str(payload.get("status") or "active"),
+        beats=[str(item) for item in (payload.get("beats") or []) if str(item).strip()],
+    )
+
+
 def _session_summary_from_payload(payload: dict[str, Any] | None) -> SessionSummary | None:
     if not isinstance(payload, dict):
         return None
@@ -264,7 +275,7 @@ def build_roleplay_context(
         tools_summary=build_tools_summary(request) if include_tools_summary else None,
         character_card=_character_card_from_payload(roleplay_payload.get("character_card")),
         scenario=_scenario_from_payload(roleplay_payload.get("scenario")),
-        scene_state=SceneState(name="active-session", phase=session.status, status="active"),
+        scene_state=_scene_state_from_payload(roleplay_payload.get("scene_state"), default_name="active-session", default_phase=session.status),
         session_summary=_session_summary_from_payload(roleplay_payload.get("session_summary")),
         memory_entries=_memory_entries_from_payload(roleplay_payload.get("memory_entries")),
         prompt_profile=_prompt_profile_from_payload(roleplay_payload.get("prompt_profile")),
@@ -291,7 +302,7 @@ def build_setup_preview_roleplay_context(
         tools_summary=build_tools_summary(request) if include_tools_summary else None,
         character_card=_character_card_from_payload(roleplay_payload.get("character_card")),
         scenario=_scenario_from_payload(roleplay_payload.get("scenario")),
-        scene_state=SceneState(name="setup-preview", phase="preview", status="active"),
+        scene_state=_scene_state_from_payload(roleplay_payload.get("scene_state"), default_name="setup-preview", default_phase="preview"),
         session_summary=_session_summary_from_payload(roleplay_payload.get("session_summary")),
         memory_entries=_memory_entries_from_payload(roleplay_payload.get("memory_entries")),
         prompt_profile=_prompt_profile_from_payload(roleplay_payload.get("prompt_profile")),

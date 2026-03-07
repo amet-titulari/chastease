@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0 - 2026-03-07
+
+- Roleplay-Library und Setup-Auswahl erweitert:
+  - Character-/Scenario-Library kann jetzt als JSON exportiert und wieder importiert werden.
+  - Setup speichert zusaetzlich bearbeitbare Prompt-Profile (`name`, `mode`, `version`) und aktiviert diese im echten Prompt-Verhalten.
+- RP-Continuity deutlich ausgebaut:
+  - `scene_state` wird nun aus Turn-Historie, Timer-/Seal-/Hygiene-Runtime, Oeffnungslimits, manuellen Aktionen und Audit-Events aufgebaut und im Session-Snapshot serialisiert.
+  - Continuity-Memory wurde von groben Rollenbloecken auf typisierte Eintraege wie `facts`, `rituals`, `vows`, `guidance` und `unresolved_threads` verfeinert.
+  - Prompt-Assembly priorisiert Memory-Eintraege und Scene-Beats jetzt nach Relevanz statt nach reiner Reihenfolge.
+- Dashboard- und Session-Debug erweitert:
+  - Aktive Sessions liefern eine serverseitige RP-Debug-Sicht mit Prompt-Preview, priorisierten Memory-Eintraegen und priorisierten Scene-Beats.
+  - Dashboard zeigt Session-Summary, Continuity-Memory, Scene-State, Prompt-Profil und den effektiven Prompt-Preview fuer die aktuelle Session.
+- Verifikation:
+  - Neue und erweiterte Tests fuer Import/Export, Prompt-Profile, Scene-State-Overlay, Memory-/Beat-Priorisierung, Chat-Runtime-Refresh und Session-Debug-Payload hinzugefuegt.
+
 ## 0.5.2 - 2026-03-07
 
 - Session-Memory fuer Roleplay ergaenzt:

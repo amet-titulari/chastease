@@ -27,6 +27,12 @@ const psychTraitsEl = document.getElementById('dashboardPsychTraits');
 const roleplaySummaryEl = document.getElementById('dashboardRoleplaySummary');
 const roleplayMetaEl = document.getElementById('dashboardRoleplayMeta');
 const roleplayGuidanceEl = document.getElementById('dashboardRoleplayGuidance');
+const roleplayDebugMetaEl = document.getElementById('dashboardRoleplayDebugMeta');
+const roleplaySessionSummaryEl = document.getElementById('dashboardRoleplaySessionSummary');
+const roleplayMemoryEl = document.getElementById('dashboardRoleplayMemory');
+const roleplaySceneBeatsEl = document.getElementById('dashboardRoleplaySceneBeats');
+const roleplayPromptPreviewMetaEl = document.getElementById('dashboardRoleplayPromptPreviewMeta');
+const roleplayPromptPreviewEl = document.getElementById('dashboardRoleplayPromptPreview');
 
 let currentSession = null;
 let timerInterval = null;
@@ -223,6 +229,12 @@ function renderRoleplay(body) {
     if (roleplaySummaryEl) roleplaySummaryEl.textContent = 'Noch keine RP-Konfiguration aktiv.';
     if (roleplayMetaEl) roleplayMetaEl.innerHTML = '';
     if (roleplayGuidanceEl) roleplayGuidanceEl.textContent = '';
+    if (roleplayDebugMetaEl) roleplayDebugMetaEl.innerHTML = '';
+    if (roleplaySessionSummaryEl) roleplaySessionSummaryEl.textContent = '-';
+    if (roleplayMemoryEl) roleplayMemoryEl.innerHTML = '<p class="text-sm text-text-tertiary">Keine Continuity-Memory vorhanden.</p>';
+    if (roleplaySceneBeatsEl) roleplaySceneBeatsEl.innerHTML = '<p class="text-sm text-text-tertiary">Keine Scene-Beats vorhanden.</p>';
+    if (roleplayPromptPreviewMetaEl) roleplayPromptPreviewMetaEl.textContent = '';
+    if (roleplayPromptPreviewEl) roleplayPromptPreviewEl.textContent = '-';
     return;
   }
 
@@ -231,6 +243,17 @@ function renderRoleplay(body) {
   const persona = (character.persona && typeof character.persona === 'object') ? character.persona : {};
   const speechStyle = (persona.speech_style && typeof persona.speech_style === 'object') ? persona.speech_style : {};
   const phase = Array.isArray(scenario.phases) ? (scenario.phases[0] || {}) : {};
+  const promptProfile = (roleplay.prompt_profile && typeof roleplay.prompt_profile === 'object') ? roleplay.prompt_profile : {};
+  const sceneState = (roleplay.scene_state && typeof roleplay.scene_state === 'object') ? roleplay.scene_state : {};
+  const sessionSummary = (roleplay.session_summary && typeof roleplay.session_summary === 'object') ? roleplay.session_summary : {};
+  const memoryEntries = Array.isArray(roleplay.memory_entries) ? roleplay.memory_entries : [];
+  const roleplayDebug = (body?.chastity_session?.roleplay_debug && typeof body.chastity_session.roleplay_debug === 'object')
+    ? body.chastity_session.roleplay_debug
+    : {};
+  const selectedMemoryEntries = Array.isArray(roleplayDebug.selected_memory_entries) ? roleplayDebug.selected_memory_entries : memoryEntries;
+  const selectedSceneBeats = Array.isArray(roleplayDebug.selected_scene_beats)
+    ? roleplayDebug.selected_scene_beats.filter(Boolean)
+    : (Array.isArray(sceneState.beats) ? sceneState.beats.filter(Boolean) : []);
 
   if (roleplaySummaryEl) {
     const characterName = String(character.display_name || persona.name || 'Unbekannter Character');
@@ -258,6 +281,80 @@ function renderRoleplay(body) {
 
   if (roleplayGuidanceEl) {
     roleplayGuidanceEl.textContent = String(phase.guidance || scenario.summary || persona.description || '');
+  }
+
+  if (roleplayDebugMetaEl) {
+    roleplayDebugMetaEl.innerHTML = '';
+    [
+      ['Prompt profile', promptProfile.name || 'roleplay-session'],
+      ['Prompt mode', promptProfile.mode || 'session'],
+      ['Scene phase', sceneState.phase || 'active'],
+      ['Scene status', sceneState.status || 'active'],
+      ['Scene name', sceneState.name || 'active-session'],
+      ['Memory entries', String(memoryEntries.length)],
+      ['Prompt memory', String(selectedMemoryEntries.length)],
+    ].forEach(([label, value]) => {
+      const row = document.createElement('div');
+      row.className = 'rounded border border-white/10 bg-surface p-2';
+      row.innerHTML = `
+        <div class="text-xs uppercase tracking-wide text-text-tertiary">${label}</div>
+        <div class="text-sm text-text-secondary break-words">${String(value)}</div>
+      `;
+      roleplayDebugMetaEl.appendChild(row);
+    });
+  }
+
+  if (roleplaySessionSummaryEl) {
+    roleplaySessionSummaryEl.textContent = String(sessionSummary.summary_text || '-');
+  }
+
+  if (roleplayMemoryEl) {
+    roleplayMemoryEl.innerHTML = '';
+    if (!selectedMemoryEntries.length) {
+      roleplayMemoryEl.innerHTML = '<p class="text-sm text-text-tertiary">Keine Continuity-Memory vorhanden.</p>';
+    } else {
+      selectedMemoryEntries.slice(0, 6).forEach((entry) => {
+        const kind = String(entry?.kind || 'memory');
+        const content = String(entry?.content || '').trim();
+        const tags = Array.isArray(entry?.tags) ? entry.tags.filter(Boolean) : [];
+        const source = String(entry?.source || 'session');
+        const card = document.createElement('div');
+        card.className = 'rounded border border-white/10 bg-surface p-2';
+        card.innerHTML = `
+          <div class="flex items-center justify-between gap-2 text-xs uppercase tracking-wide text-text-tertiary">
+            <span>${kind}</span>
+            <span>${source}</span>
+          </div>
+          <div class="text-sm text-text-secondary mt-1 whitespace-pre-wrap">${content || '-'}</div>
+          <div class="text-xs text-text-tertiary mt-1">${tags.length ? tags.join(', ') : 'no-tags'}</div>
+        `;
+        roleplayMemoryEl.appendChild(card);
+      });
+    }
+  }
+
+  if (roleplaySceneBeatsEl) {
+    roleplaySceneBeatsEl.innerHTML = '';
+    if (!selectedSceneBeats.length) {
+      roleplaySceneBeatsEl.innerHTML = '<p class="text-sm text-text-tertiary">Keine Scene-Beats vorhanden.</p>';
+    } else {
+      selectedSceneBeats.slice(0, 6).forEach((beat) => {
+        const item = document.createElement('div');
+        item.className = 'rounded border border-white/10 bg-surface p-2 text-sm text-text-secondary break-words';
+        item.textContent = String(beat);
+        roleplaySceneBeatsEl.appendChild(item);
+      });
+    }
+  }
+
+  if (roleplayPromptPreviewMetaEl) {
+    const promptChars = Number(roleplayDebug.prompt_preview_chars || 0);
+    const historyTurnLimit = Number(roleplayDebug.history_turn_limit || 0);
+    const includesToolsSummary = Boolean(roleplayDebug.includes_tools_summary);
+    roleplayPromptPreviewMetaEl.textContent = `Zeichen: ${promptChars || 0} · History-Turns: ${historyTurnLimit || 0} · Tools-Summary: ${includesToolsSummary ? 'ja' : 'nein'}`;
+  }
+  if (roleplayPromptPreviewEl) {
+    roleplayPromptPreviewEl.textContent = String(roleplayDebug.prompt_preview || '-');
   }
 }
 

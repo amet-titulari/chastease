@@ -294,6 +294,34 @@
             <select id="roleplayScenarioSelect" class="select mt-1"></select>
           </div>
         </div>
+        <div class="flex flex-wrap gap-2">
+          <button id="exportRoleplayLibraryBtn" class="btn-outline">Library exportieren</button>
+          <button id="importRoleplayLibraryBtn" class="btn-outline">Library importieren</button>
+          <input id="importRoleplayLibraryInput" type="file" accept="application/json,.json" class="hidden" />
+        </div>
+        <label class="inline-flex items-center gap-2 text-sm text-text-secondary">
+          <input id="roleplayImportOverwrite" type="checkbox" class="rounded border-white/10 bg-surface-alt" />
+          <span>Beim Import bestehende Asset-IDs ueberschreiben statt duplizieren</span>
+        </label>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="label">Prompt profile</label>
+            <input id="roleplayPromptProfileName" class="input mt-1" maxlength="80" />
+          </div>
+          <div>
+            <label class="label">Prompt mode</label>
+            <select id="roleplayPromptProfileMode" class="select mt-1">
+              <option value="session">session</option>
+              <option value="immersive">immersive</option>
+              <option value="strict">strict</option>
+              <option value="supportive">supportive</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Prompt version</label>
+            <input id="roleplayPromptProfileVersion" class="input mt-1" maxlength="40" value="v1" />
+          </div>
+        </div>
         <p id="roleplayInfo" class="label" aria-live="polite"></p>
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div class="rounded border border-white/10 bg-surface p-4 space-y-3">

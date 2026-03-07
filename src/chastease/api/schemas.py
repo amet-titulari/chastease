@@ -173,6 +173,9 @@ class SetupRoleplaySelectionRequest(BaseModel):
     auth_token: str = Field(min_length=8)
     roleplay_character_id: str | None = None
     roleplay_scenario_id: str | None = None
+    prompt_profile_name: str | None = Field(default=None, max_length=80)
+    prompt_profile_mode: str | None = Field(default=None, max_length=80)
+    prompt_profile_version: str | None = Field(default=None, max_length=40)
 
 
 class RoleplayCharacterUpsertRequest(BaseModel):
@@ -205,6 +208,15 @@ class RoleplayScenarioUpsertRequest(BaseModel):
     lore_triggers: list[str] = Field(default_factory=list)
     lore_priority: int = Field(default=100, ge=0, le=1000)
     tags: list[str] = Field(default_factory=list)
+
+
+class RoleplayLibraryImportRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    auth_token: str = Field(min_length=8)
+    overwrite_existing: bool = False
+    library: dict[str, Any] = Field(default_factory=dict)
+    characters: list[dict[str, Any]] = Field(default_factory=list)
+    scenarios: list[dict[str, Any]] = Field(default_factory=list)
 
 class SetupAIControlledFieldsUpdateRequest(BaseModel):
     """Nur KI darf diese geschützten Felder aktualisieren."""

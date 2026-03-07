@@ -1,12 +1,14 @@
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 
 from chastease.api.runtime import require_user_token
-from chastease.api.schemas import RoleplayCharacterUpsertRequest, RoleplayScenarioUpsertRequest
+from chastease.api.schemas import RoleplayCharacterUpsertRequest, RoleplayLibraryImportRequest, RoleplayScenarioUpsertRequest
 from chastease.api.setup_infra import get_db_session
 from chastease.repositories.roleplay_store import (
     delete_user_roleplay_asset,
+    get_user_roleplay_asset,
     list_user_roleplay_assets,
     upsert_user_roleplay_asset,
 )
@@ -126,6 +128,133 @@ def _serialize_record(record: dict, kind: str) -> dict:
     }
 
 
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result = []
+    for item in value:
+        text = str(item or "").strip()
+        if text:
+            result.append(text)
+    return result
+
+
+def _normalize_character_import(record: dict) -> dict | None:
+    if not isinstance(record, dict):
+        return None
+    persona = record.get("persona") if isinstance(record.get("persona"), dict) else {}
+    speech_style = persona.get("speech_style") if isinstance(persona.get("speech_style"), dict) else {}
+    display_name = str(record.get("display_name") or persona.get("name") or "").strip()
+    if not display_name:
+        return None
+    return {
+        "display_name": display_name,
+        "persona": {
+            "name": str(persona.get("name") or display_name).strip() or display_name,
+            "archetype": str(persona.get("archetype") or record.get("archetype") or "keyholder").strip() or "keyholder",
+            "description": str(persona.get("description") or record.get("description") or "").strip(),
+            "goals": _string_list(persona.get("goals") or record.get("goals")),
+            "speech_style": {
+                "tone": str(speech_style.get("tone") or record.get("tone") or "balanced").strip() or "balanced",
+                "dominance_style": str(speech_style.get("dominance_style") or record.get("dominance_style") or "moderate").strip() or "moderate",
+                "ritual_phrases": _string_list(speech_style.get("ritual_phrases") or record.get("ritual_phrases")),
+                "formatting_style": str(speech_style.get("formatting_style") or "plain").strip() or "plain",
+            },
+        },
+        "greeting_template": str(record.get("greeting_template") or "").strip(),
+        "scenario_hooks": _string_list(record.get("scenario_hooks")),
+        "tags": _string_list(record.get("tags")),
+    }
+
+
+def _normalize_scenario_import(record: dict) -> dict | None:
+    if not isinstance(record, dict):
+        return None
+    title = str(record.get("title") or "").strip()
+    if not title:
+        return None
+    phases = []
+    for phase in record.get("phases") or []:
+        if not isinstance(phase, dict):
+            continue
+        phase_id = str(phase.get("phase_id") or "active").strip() or "active"
+        phase_title = str(phase.get("title") or phase_id).strip() or phase_id
+        phases.append(
+            {
+                "phase_id": phase_id,
+                "title": phase_title,
+                "objective": str(phase.get("objective") or "").strip(),
+                "guidance": str(phase.get("guidance") or "").strip(),
+            }
+        )
+    if not phases:
+        phases.append(
+            {
+                "phase_id": "active",
+                "title": "Active Session",
+                "objective": "",
+                "guidance": "",
+            }
+        )
+    lorebook = []
+    for entry in record.get("lorebook") or []:
+        if not isinstance(entry, dict):
+            continue
+        content = str(entry.get("content") or "").strip()
+        if not content:
+            continue
+        lorebook.append(
+            {
+                "key": str(entry.get("key") or "entry").strip() or "entry",
+                "content": content,
+                "triggers": _string_list(entry.get("triggers")),
+                "priority": int(entry.get("priority") or 100),
+            }
+        )
+    return {
+        "title": title,
+        "summary": str(record.get("summary") or "").strip(),
+        "lorebook": lorebook,
+        "phases": phases,
+        "tags": _string_list(record.get("tags")),
+    }
+
+
+def _portable_library_payload(user_id: str, language: str, include_builtins: bool) -> dict:
+    characters = []
+    scenarios = []
+    if include_builtins:
+        characters.append(_serialize_record(_builtin_character(language), "characters"))
+        scenarios.append(_serialize_record(_builtin_scenario(language), "scenarios"))
+    characters.extend(_serialize_record(item, "characters") for item in list_user_roleplay_assets(user_id, "characters"))
+    scenarios.extend(_serialize_record(item, "scenarios") for item in list_user_roleplay_assets(user_id, "scenarios"))
+    return {
+        "schema_version": 1,
+        "exported_at": datetime.now(UTC).isoformat(),
+        "characters": characters,
+        "scenarios": scenarios,
+    }
+
+
+def _import_assets(user_id: str, kind: str, records: list[dict], overwrite_existing: bool) -> list[dict]:
+    imported = []
+    builtin_ids = {"builtin-keyholder", "guided-chastity-session"}
+    normalizer = _normalize_character_import if kind == "characters" else _normalize_scenario_import
+    for raw_record in records:
+        if not isinstance(raw_record, dict):
+            continue
+        normalized_payload = normalizer(raw_record)
+        if normalized_payload is None:
+            continue
+        requested_id = str(raw_record.get("asset_id") or "").strip()
+        asset_id = requested_id if requested_id and requested_id not in builtin_ids else str(uuid4())
+        if get_user_roleplay_asset(user_id, kind, asset_id) and not overwrite_existing:
+            asset_id = str(uuid4())
+        record = upsert_user_roleplay_asset(user_id, kind, asset_id, normalized_payload)
+        imported.append(_serialize_record(record, kind))
+    return imported
+
+
 def _character_payload_from_request(payload: RoleplayCharacterUpsertRequest) -> dict:
     persona_name = str(payload.persona_name or payload.display_name).strip() or payload.display_name
     return {
@@ -186,13 +315,42 @@ def _require_user(user_id: str, auth_token: str, request: Request) -> None:
 @router.get("/library")
 def get_roleplay_library(user_id: str, auth_token: str, request: Request, language: str = "de") -> dict:
     _require_user(user_id, auth_token, request)
-    characters = [_serialize_record(_builtin_character(language), "characters")]
-    characters.extend(_serialize_record(item, "characters") for item in list_user_roleplay_assets(user_id, "characters"))
-    scenarios = [_serialize_record(_builtin_scenario(language), "scenarios")]
-    scenarios.extend(_serialize_record(item, "scenarios") for item in list_user_roleplay_assets(user_id, "scenarios"))
+    portable = _portable_library_payload(user_id, language, include_builtins=True)
     return {
-        "characters": characters,
-        "scenarios": scenarios,
+        "characters": portable["characters"],
+        "scenarios": portable["scenarios"],
+    }
+
+
+@router.get("/export")
+def export_roleplay_library(
+    user_id: str,
+    auth_token: str,
+    request: Request,
+    language: str = "de",
+    include_builtins: bool = False,
+) -> dict:
+    _require_user(user_id, auth_token, request)
+    return _portable_library_payload(user_id, language, include_builtins=include_builtins)
+
+
+@router.post("/import")
+def import_roleplay_library(payload: RoleplayLibraryImportRequest, request: Request) -> dict:
+    _require_user(payload.user_id, payload.auth_token, request)
+    library = payload.library if isinstance(payload.library, dict) else {}
+    raw_characters = library.get("characters") if isinstance(library.get("characters"), list) else payload.characters
+    raw_scenarios = library.get("scenarios") if isinstance(library.get("scenarios"), list) else payload.scenarios
+    imported_characters = _import_assets(payload.user_id, "characters", raw_characters or [], payload.overwrite_existing)
+    imported_scenarios = _import_assets(payload.user_id, "scenarios", raw_scenarios or [], payload.overwrite_existing)
+    if not imported_characters and not imported_scenarios:
+        raise HTTPException(status_code=400, detail="No valid roleplay assets found for import.")
+    return {
+        "imported": {
+            "characters": len(imported_characters),
+            "scenarios": len(imported_scenarios),
+        },
+        "characters": imported_characters,
+        "scenarios": imported_scenarios,
     }
 
 

@@ -221,6 +221,9 @@ def _build_roleplay_profile(setup_session: dict, psychogram: dict, policy: dict)
     escalation_mode = str(interaction.get("escalation_mode") or setup_session.get("escalation_mode") or "moderate")
     intensity = int(((policy.get("limits") or {}).get("max_intensity_level") or 2))
     autonomy_mode = str(setup_session.get("autonomy_mode") or policy.get("autonomy_mode") or "execute")
+    prompt_profile_name = str(setup_session.get("roleplay_prompt_profile_name") or "roleplay-session").strip() or "roleplay-session"
+    prompt_profile_mode = str(setup_session.get("roleplay_prompt_profile_mode") or "session").strip() or "session"
+    prompt_profile_version = str(setup_session.get("roleplay_prompt_profile_version") or "v1").strip() or "v1"
     keyholder_name = str(setup_session.get("keyholder_name") or "").strip() or (
         "Keyholder" if lang == "en" else "Keyholderin"
     )
@@ -310,9 +313,9 @@ def _build_roleplay_profile(setup_session: dict, psychogram: dict, policy: dict)
             "tags": ["session", "chastity", "policy-bound", autonomy_mode],
         },
         "prompt_profile": {
-            "name": "roleplay-session",
-            "version": "v1",
-            "mode": "session",
+            "name": prompt_profile_name,
+            "version": prompt_profile_version,
+            "mode": prompt_profile_mode,
         },
     }
 

@@ -23,12 +23,67 @@ from chastease.api.routers.chaster import (
     fetch_chaster_lock_runtime,
     resolve_chaster_api_token,
 )
+from chastease.domains.roleplay import (
+    build_roleplay_context,
+    build_roleplay_user_prompt,
+    select_memory_entries_for_prompt,
+    select_scene_beats_for_prompt,
+    to_story_turn_context,
+)
 from chastease.models import ChastitySession, Turn, User
 from chastease.repositories.setup_store import load_sessions, save_sessions
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 logger = logging.getLogger(__name__)
 CHASTER_TIMER_SYNC_INTERVAL_SECONDS = 60
+_ROLEPLAY_PREVIEW_ACTION = "[dashboard-preview] Continue the current roleplay state without adding new wearer input."
+
+
+def _build_roleplay_debug_payload(db, request: Request, session: ChastitySession) -> dict:
+    config = request.app.state.config
+    history_turn_limit = max(1, int(getattr(config, "LLM_CHAT_HISTORY_TURNS", 3)))
+    include_tools_summary = bool(getattr(config, "LLM_CHAT_INCLUDE_TOOLS_SUMMARY", False))
+    roleplay_context = build_roleplay_context(
+        db,
+        request,
+        session,
+        _ROLEPLAY_PREVIEW_ACTION,
+        session.language,
+        history_turn_limit=history_turn_limit,
+        include_tools_summary=include_tools_summary,
+        live_snapshot_builder=lambda _current_session: None,
+    )
+    story_context = to_story_turn_context(roleplay_context)
+    prompt_preview, _attachment_content = build_roleplay_user_prompt(story_context, [])
+    selected_memory_entries = select_memory_entries_for_prompt(
+        roleplay_context.memory_entries,
+        action_text=roleplay_context.action,
+        scene_state=roleplay_context.scene_state,
+        limit=4,
+    )
+    selected_scene_beats = select_scene_beats_for_prompt(
+        roleplay_context.scene_state.beats if roleplay_context.scene_state is not None else [],
+        action_text=roleplay_context.action,
+        scene_state=roleplay_context.scene_state,
+        limit=4,
+    )
+    return {
+        "prompt_preview": prompt_preview,
+        "prompt_preview_chars": len(prompt_preview),
+        "history_turn_limit": history_turn_limit,
+        "includes_tools_summary": include_tools_summary,
+        "selected_memory_entries": [
+            {
+                "kind": entry.kind,
+                "content": entry.content,
+                "source": entry.source,
+                "tags": list(entry.tags),
+                "weight": entry.weight,
+            }
+            for entry in selected_memory_entries
+        ],
+        "selected_scene_beats": selected_scene_beats,
+    }
 
 
 def _latest_setup_session_for_user(user_id: str) -> tuple[str, dict] | tuple[None, None]:
@@ -351,7 +406,10 @@ def get_active_chastity_session(user_id: str, auth_token: str, request: Request)
             "has_active_session": True,
             "setup_session_id": setup_session_id,
             "setup_status": setup_status,
-            "chastity_session": serialize_chastity_session(session),
+            "chastity_session": {
+                **serialize_chastity_session(session),
+                "roleplay_debug": _build_roleplay_debug_payload(db, request, session),
+            },
         }
     finally:
         db.close()

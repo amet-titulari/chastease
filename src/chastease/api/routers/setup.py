@@ -965,6 +965,12 @@ def update_setup_roleplay_selection(
 
     setup_session["roleplay_character_id"] = str(payload.roleplay_character_id or "builtin-keyholder").strip() or "builtin-keyholder"
     setup_session["roleplay_scenario_id"] = str(payload.roleplay_scenario_id or "guided-chastity-session").strip() or "guided-chastity-session"
+    if payload.prompt_profile_name is not None:
+        setup_session["roleplay_prompt_profile_name"] = str(payload.prompt_profile_name or "roleplay-session").strip() or "roleplay-session"
+    if payload.prompt_profile_mode is not None:
+        setup_session["roleplay_prompt_profile_mode"] = str(payload.prompt_profile_mode or "session").strip() or "session"
+    if payload.prompt_profile_version is not None:
+        setup_session["roleplay_prompt_profile_version"] = str(payload.prompt_profile_version or "v1").strip() or "v1"
     roleplay_profile = _refresh_setup_roleplay_profile(setup_session)
     setup_session["updated_at"] = _now_iso()
     store[setup_session_id] = setup_session
