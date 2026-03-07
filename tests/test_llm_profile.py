@@ -30,7 +30,6 @@ def test_llm_profile_lifecycle(client):
             "api_key": "super-secret-key",
             "chat_model": "grok-4-latest",
             "vision_model": "grok-4-latest",
-            "behavior_prompt": "Dominant but calm.",
             "is_active": True,
         },
     )
@@ -43,7 +42,7 @@ def test_llm_profile_lifecycle(client):
     assert get_profile.status_code == 200
     loaded = get_profile.json()["profile"]
     assert loaded["chat_model"] == "grok-4-latest"
-    assert loaded["behavior_prompt"] == "Dominant but calm."
+    assert "behavior_prompt" not in loaded
 
 
 def test_llm_test_dry_run(client):
@@ -59,7 +58,6 @@ def test_llm_test_dry_run(client):
             "api_url": "https://api.x.ai/v1/chat/completions",
             "api_key": "key-123",
             "chat_model": "grok-4-latest",
-            "behavior_prompt": "Prompt",
             "is_active": True,
         },
     )
@@ -89,7 +87,6 @@ def test_llm_test_dry_run_with_unsaved_payload(client):
             "api_url": "https://api.example.com/v1/chat/completions",
             "chat_model": "test-model",
             "api_key": "key-xyz",
-            "behavior_prompt": "test prompt",
             "is_active": True,
         },
     )

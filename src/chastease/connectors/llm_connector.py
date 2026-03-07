@@ -37,7 +37,6 @@ def generate_narration_with_optional_profile(
             api_url=profile.api_url,
             api_key=api_key,
             chat_model=selected_model,
-            behavior_prompt=profile.behavior_prompt,
             attachments=attachments or [],
         )
     return ai_service.generate_narration(context)

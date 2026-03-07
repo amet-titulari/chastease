@@ -1088,6 +1088,16 @@ def test_chat_vision_review_clears_resolved_image_verification_pending(client, m
     assert data["pending_actions"] == []
     assert any(action.get("action_type") == "image_verification" for action in data.get("executed_actions", []))
 
+    db = client.app.state.db_session_factory()
+    try:
+        session = db.get(ChastitySession, session_id)
+        assert session is not None
+        policy = json.loads(session.policy_snapshot_json or "{}")
+        scene_state = ((policy.get("roleplay") or {}).get("scene_state") or {})
+        assert "verification:passed" in (scene_state.get("beats") or [])
+    finally:
+        db.close()
+
 
 def test_chat_turn_history_endpoint_returns_persisted_turns(client):
     auth = _register(client, username="chat-user-history")

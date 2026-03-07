@@ -31,7 +31,11 @@ def test_roleplay_assets_flow_from_library_to_active_session(client):
     builtin_scenario = next(item for item in library_body["scenarios"] if item["asset_id"] == "guided-chastity-session")
     assert builtin_character["display_name"] == "Amet Titulari"
     assert builtin_character["persona"]["speech_style"]["tone"] == "warm"
+    assert builtin_character["greeting_template"] == ""
+    assert "long-term-denial" in builtin_character["scenario_hooks"]
     assert builtin_scenario["title"] == "Amet Titulari Devotion Protocol"
+    assert builtin_scenario["summary"].startswith("A long-term chastity frame")
+    assert any(entry["key"] == "continuity-rules" for entry in builtin_scenario["lorebook"])
 
     character_response = client.post(
         "/api/v1/roleplay/characters",

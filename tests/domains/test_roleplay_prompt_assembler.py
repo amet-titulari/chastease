@@ -162,6 +162,8 @@ def test_build_roleplay_user_prompt_includes_character_and_scenario_directives()
                         "goals": [
                             "deepen devotion",
                             "maintain ritual continuity",
+                            "request photo verification",
+                            "assign daily devotion tasks",
                         ],
                         "speech_style": {
                             "tone": "warm",
@@ -174,7 +176,7 @@ def test_build_roleplay_user_prompt_includes_character_and_scenario_directives()
                         },
                     },
                     "greeting_template": "**Protokoll-Status: Tag 1 | Deine Erregung: Sanft aufkeimend**",
-                    "scenario_hooks": ["morning-check", "affirmation-ritual"],
+                    "scenario_hooks": ["morning-check", "affirmation-ritual", "photo-verification", "task-assignment"],
                 },
                 "scenario": {
                     "title": "Amet Titulari Devotion Protocol",
@@ -184,6 +186,16 @@ def test_build_roleplay_user_prompt_includes_character_and_scenario_directives()
                             "key": "response-structure",
                             "content": "Jede Antwort beginnt mit einer warmen Status-Zeile, enthaelt 8-16 Saetze, 40-50 Prozent sinnliche Koerperbeschreibung und endet mit einer klaren Aufgabe oder Reflexion.",
                             "priority": 100,
+                        },
+                        {
+                            "key": "photo-verification",
+                            "content": "Fordere gezielt Fotoverifikation zu Kaefigsitz, Schloss oder Hautzustand an und sage klar, was geprueft werden soll.",
+                            "priority": 92,
+                        },
+                        {
+                            "key": "task-patterns",
+                            "content": "Vergib konkrete Aufgaben wie Lieblingsfarbe tragen, Journaleintrag, Haltungsuebung oder ein kurzes Beweisfoto.",
+                            "priority": 91,
                         }
                     ],
                     "phases": [
@@ -191,7 +203,7 @@ def test_build_roleplay_user_prompt_includes_character_and_scenario_directives()
                             "phase_id": "morning_check",
                             "title": "Morning Check",
                             "objective": "Erregungsstand, Affirmation und Kaefigbericht einsammeln.",
-                            "guidance": "Fordere Bericht, Lob und einen klaren Ritualschritt in jeder Antwort.",
+                            "guidance": "Fordere Bericht, Fotoverifikation, Lob und einen klaren Ritualschritt in jeder Antwort.",
                         }
                     ],
                 },
@@ -213,8 +225,12 @@ def test_build_roleplay_user_prompt_includes_character_and_scenario_directives()
     assert "Preferred ritual phrases:" in user_prompt
     assert "Meine Erregung gehoert Amet." in user_prompt
     assert "Opening pattern:" in user_prompt
+    assert "photo-verification" in user_prompt
+    assert "task-assignment" in user_prompt
     assert "Scenario frame:" in user_prompt
     assert "- title: Amet Titulari Devotion Protocol" in user_prompt
     assert "Active phase:" in user_prompt
     assert "Scenario directives:" in user_prompt
     assert "40-50 Prozent sinnliche Koerperbeschreibung" in user_prompt
+    assert "Fotoverifikation" in user_prompt
+    assert "Lieblingsfarbe tragen" in user_prompt

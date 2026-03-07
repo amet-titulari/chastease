@@ -84,7 +84,10 @@ def test_setup_session_lifecycle(client):
     assert complete_data["chastity_session"]["psychogram_analysis"]
     roleplay_profile = complete_data["chastity_session"]["policy"]["roleplay"]
     assert roleplay_profile["character_card"]["display_name"] == "Amet Titulari"
+    assert roleplay_profile["character_card"]["greeting_template"] == ""
+    assert "long-term-denial" in roleplay_profile["character_card"]["scenario_hooks"]
     assert roleplay_profile["scenario"]["title"] == "Amet Titulari Devotion Protocol"
+    assert any(entry["key"] == "continuity-rules" for entry in roleplay_profile["scenario"]["lorebook"])
 
 
 def test_setup_session_returns_english_questions(client):

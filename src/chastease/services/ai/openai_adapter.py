@@ -289,7 +289,6 @@ class OpenAIAdapter:
         api_url: str,
         api_key: str,
         chat_model: str,
-        behavior_prompt: str = "",
         attachments: list[dict[str, Any]] | None = None,
     ) -> str:
         if not api_url or not api_key or not chat_model:
@@ -332,9 +331,6 @@ class OpenAIAdapter:
             "[[REQUEST:add_time|{\"seconds\":900}]] "
             "[[REQUEST:pause_timer|{}]]"
         )
-        if behavior_prompt.strip():
-            system_prompt = f"{system_prompt}\n\nBehavior profile:\n{behavior_prompt.strip()}"
-
         attachment_summary, attachment_content = build_attachment_summary(attachments)
 
         is_setup_contract = self._is_setup_preview_contract_request(context)

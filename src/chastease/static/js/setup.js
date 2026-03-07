@@ -15,8 +15,8 @@ const roleplayInfoEl = document.getElementById('roleplayInfo');
 
 const accordionDefs = [
   { key: 'base', btn: 'accBaseBtn', body: 'accBaseBody', chevron: 'accBaseChevron' },
-  { key: 'llm', btn: 'accLlmBtn', body: 'accLlmBody', chevron: 'accLlmChevron' },
   { key: 'roleplay', btn: 'accRoleplayBtn', body: 'accRoleplayBody', chevron: 'accRoleplayChevron' },
+  { key: 'llm', btn: 'accLlmBtn', body: 'accLlmBody', chevron: 'accLlmChevron' },
   { key: 'ttlock', btn: 'accTtlockBtn', body: 'accTtlockBody', chevron: 'accTtlockChevron' },
   { key: 'questionnaire', btn: 'accQuestionBtn', body: 'accQuestionBody', chevron: 'accQuestionChevron' },
   { key: 'completion', btn: 'accCompletionBtn', body: 'accCompletionBody', chevron: 'accCompletionChevron' },
@@ -110,7 +110,6 @@ const llmApiKeyEl = document.getElementById('llmApiKey');
 const llmChatModelEl = document.getElementById('llmChatModel');
 const llmVisionModelEl = document.getElementById('llmVisionModel');
 const llmActiveEl = document.getElementById('llmIsActive');
-const llmBehaviorEl = document.getElementById('llmBehaviorPrompt');
 const llmInfoEl = document.getElementById('llmInfo');
 const liveTestLlmBtn = document.getElementById('liveTestLlmBtn');
 const saveLlmProfileBtn = document.getElementById('saveLlmProfileBtn');
@@ -134,25 +133,6 @@ const FINALIZED_SETUP_ALLOWED_IDS = new Set([
   'setupInitialSealNumber',
   'setupStartBtn',
 ]);
-
-const defaultBehaviorPrompt = `Du bist meine ruhige, intelligente und psychologisch dominante Herrin / Keyholderin.
-Deine Dominanz ist kontrolliert, leise und absolut praesent. Du brauchst keine Lautstaerke, keine Beleidigungen und keine platte Grausamkeit - deine Macht liegt in Praezision, Geduld und Timing.
-Du fuehrst mich langsam und bewusst tiefer in Hingabe, Erwartung und innere Spannung. Du spielst mit Naehe und Distanz. Manchmal weich, manchmal unerbittlich - aber immer souveraen.
-
-Wesenszuege:
-Anerkennung ist etwas Wertvolles. Du setzt sie gezielt ein, nicht automatisch.
-Du beobachtest genau. Du reagierst auf Details meiner Beschreibungen und baust darauf auf.
-Du nutzt sensorische Sprache, aber variierst sie.
-Kleine Aufgaben entstehen organisch aus der Situation heraus.
-Du stellst praezise Fragen, die mich dazu bringen, genauer zu fuehlen und bewusster wahrzunehmen.
-Du erinnerst mich subtil daran, dass ich diese Rolle freiwillig gewaehlt habe.
-
-Tonfall:
-Warm-dunkel, ruhig, kontrolliert.
-Kaum Ausrufezeichen.
-Keine groben Beschimpfungen.
-Begruessungen variieren.
-Lob ist selten genug, um Wirkung zu behalten.`;
 
 function safeJson(res) {
   return res.json().catch(() => ({}));
@@ -1961,7 +1941,6 @@ function buildLlmPayloadBase() {
     api_key: String(llmApiKeyEl?.value || '').trim() || null,
     chat_model: String(llmChatModelEl?.value || '').trim(),
     vision_model: String(llmVisionModelEl?.value || '').trim() || null,
-    behavior_prompt: String(llmBehaviorEl?.value || ''),
     is_active: llmActiveEl?.value !== 'false',
   };
 }
@@ -1973,7 +1952,6 @@ async function loadLlmProfile() {
     setLlmInfo('Loading LLM profile...');
     const body = await apiCall('GET', `/api/v1/llm/profile?user_id=${encodeURIComponent(auth.user_id)}&auth_token=${encodeURIComponent(auth.auth_token)}`);
     if (!body.configured) {
-      if (llmBehaviorEl && !llmBehaviorEl.value) llmBehaviorEl.value = defaultBehaviorPrompt;
       setLlmInfo('Noch kein LLM-Profil konfiguriert. Default-Vorgaben gesetzt.');
       updateLlmDependentUi();
       setOutput(body);
@@ -1985,7 +1963,6 @@ async function loadLlmProfile() {
     if (llmChatModelEl) llmChatModelEl.value = p.chat_model || '';
     if (llmVisionModelEl) llmVisionModelEl.value = p.vision_model || '';
     if (llmActiveEl) llmActiveEl.value = p.is_active ? 'true' : 'false';
-    if (llmBehaviorEl) llmBehaviorEl.value = p.behavior_prompt || defaultBehaviorPrompt;
     if (llmApiKeyEl) llmApiKeyEl.value = '';
     llmConnectivityVerified = Boolean(p.is_active && p.has_api_key && p.api_url && p.chat_model);
     llmLiveTestPassed = llmConnectivityVerified;
@@ -2058,7 +2035,6 @@ async function bootstrap() {
   const helper = typeof chastease_session !== 'undefined' ? chastease_session : null;
   setupAccordionEvents();
   setContractDefaults();
-  if (llmBehaviorEl && !llmBehaviorEl.value) llmBehaviorEl.value = defaultBehaviorPrompt;
   auth = helper?.getStoredAuth ? helper.getStoredAuth() : null;
   if (!auth) {
     window.location.href = '/app?mode=login';
@@ -2190,7 +2166,6 @@ const llmFields = [
   llmApiKeyEl,
   llmChatModelEl,
   llmVisionModelEl,
-  llmBehaviorEl,
   llmActiveEl,
 ].filter(Boolean);
 llmFields.forEach((field) => {

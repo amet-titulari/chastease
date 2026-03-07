@@ -207,7 +207,6 @@ def serialize_llm_profile(profile: LLMProfile) -> dict:
         "api_url": profile.api_url,
         "chat_model": profile.chat_model,
         "vision_model": profile.vision_model,
-        "behavior_prompt": profile.behavior_prompt,
         "is_active": profile.is_active,
         "has_api_key": bool(profile.api_key_encrypted),
         "created_at": profile.created_at.isoformat(),

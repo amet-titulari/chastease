@@ -173,6 +173,7 @@ def _scene_overlay_from_events(events: list[dict]) -> tuple[str | None, str | No
             continue
 
         pending_actions = metadata.get("pending_actions") if isinstance(metadata.get("pending_actions"), list) else []
+        executed_actions = metadata.get("executed_actions") if isinstance(metadata.get("executed_actions"), list) else []
         failed_actions = metadata.get("failed_actions") if isinstance(metadata.get("failed_actions"), list) else []
 
         for pending_action in pending_actions:
@@ -201,6 +202,14 @@ def _scene_overlay_from_events(events: list[dict]) -> tuple[str | None, str | No
                 phase = "emergency"
                 status = "abort-blocked"
                 beats.append("abort:failed-open")
+
+        for executed_action in executed_actions:
+            if not isinstance(executed_action, dict):
+                continue
+            action_type = str(executed_action.get("action_type") or "unknown").strip().lower() or "unknown"
+            if action_type != "image_verification":
+                continue
+            beats.append("verification:passed")
 
     return phase, status, beats[-4:]
 
@@ -330,6 +339,8 @@ def select_scene_beats_for_prompt(
             score += 1.75
         elif beat.startswith("hygiene:"):
             score += 1.45
+        elif beat.startswith("verification:"):
+            score += 1.4
         elif beat.startswith("seal:"):
             score += 1.35
         elif beat.startswith("openings:"):

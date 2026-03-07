@@ -50,7 +50,7 @@ def upsert_llm_profile(payload: LLMProfileUpsertRequest, request: Request) -> di
                 api_key_encrypted=encrypted_key,
                 chat_model=payload.chat_model.strip(),
                 vision_model=(payload.vision_model.strip() if payload.vision_model else None),
-                behavior_prompt=payload.behavior_prompt,
+                behavior_prompt="",
                 is_active=payload.is_active,
                 created_at=now,
                 updated_at=now,
@@ -63,7 +63,7 @@ def upsert_llm_profile(payload: LLMProfileUpsertRequest, request: Request) -> di
                 profile.api_key_encrypted = encrypted_key
             profile.chat_model = payload.chat_model.strip()
             profile.vision_model = payload.vision_model.strip() if payload.vision_model else None
-            profile.behavior_prompt = payload.behavior_prompt
+            profile.behavior_prompt = ""
             profile.is_active = payload.is_active
             profile.updated_at = now
             db.add(profile)
@@ -99,11 +99,6 @@ def test_llm_profile(payload: LLMProfileTestRequest, request: Request) -> dict:
             str(payload.vision_model).strip()
             if payload.vision_model is not None
             else (str(profile.vision_model).strip() if (profile is not None and profile.vision_model) else "")
-        )
-        behavior_prompt = (
-            str(payload.behavior_prompt)
-            if payload.behavior_prompt is not None
-            else (str(profile.behavior_prompt or "") if profile is not None else "")
         )
         is_active = payload.is_active if payload.is_active is not None else (bool(profile.is_active) if profile is not None else True)
         provided_api_key = str(payload.api_key or "").strip()
@@ -159,7 +154,6 @@ def test_llm_profile(payload: LLMProfileTestRequest, request: Request) -> dict:
                 api_url=api_url,
                 api_key=api_key,
                 chat_model=chat_model,
-                behavior_prompt=behavior_prompt,
             )
         else:
             narration = ai_service.generate_narration(context)

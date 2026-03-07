@@ -126,7 +126,6 @@ class LLMProfileUpsertRequest(BaseModel):
     api_key: str | None = None
     chat_model: str = Field(min_length=2)
     vision_model: str | None = None
-    behavior_prompt: str = Field(default="", min_length=0)
     is_active: bool = True
 
 
@@ -139,7 +138,6 @@ class LLMProfileTestRequest(BaseModel):
     api_key: str | None = None
     chat_model: str | None = None
     vision_model: str | None = None
-    behavior_prompt: str | None = None
     is_active: bool | None = None
 
 

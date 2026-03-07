@@ -231,53 +231,6 @@
     </div>
 
     <div class="card p-4">
-      <button id="accLlmBtn" class="accordion-header" aria-expanded="false" aria-controls="accLlmBody">
-        <span>LLM Konfiguration</span>
-        <svg id="accLlmChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-      </button>
-      <div id="accLlmBody" class="mt-4 space-y-4 hidden">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label class="label">Provider</label>
-            <input id="llmProviderName" class="input mt-1" value="custom" />
-          </div>
-          <div>
-            <label class="label">LLM API URL</label>
-            <input id="llmApiUrl" class="input mt-1" placeholder="https://..." value="https://api.x.ai/v1/chat/completions" />
-          </div>
-          <div>
-            <label class="label">LLM API Key</label>
-            <input id="llmApiKey" type="password" class="input mt-1" placeholder="leave empty to keep existing key" />
-          </div>
-          <div>
-            <label class="label">Chat model</label>
-            <input id="llmChatModel" class="input mt-1" value="grok-4-1-fast-non-reasoning" />
-          </div>
-          <div>
-            <label class="label">Vision model</label>
-            <input id="llmVisionModel" class="input mt-1" value="grok-4-1-fast-non-reasoning" />
-          </div>
-          <div>
-            <label class="label">Profile active</label>
-            <select id="llmIsActive" class="select mt-1">
-              <option value="true">enabled</option>
-              <option value="false">disabled</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <label class="label">Behavior prompt</label>
-          <textarea id="llmBehaviorPrompt" class="input mt-1 min-h-28"></textarea>
-        </div>
-        <p id="llmInfo" class="label" aria-live="polite"></p>
-        <div class="flex flex-wrap gap-2">
-          <button id="liveTestLlmBtn" class="btn-outline">Test live</button>
-          <button id="saveLlmProfileBtn" class="btn-primary hidden" disabled>Speichern</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="card p-4">
       <button id="accRoleplayBtn" class="accordion-header" aria-expanded="false" aria-controls="accRoleplayBody">
         <span>Roleplay Profiles</span>
         <svg id="accRoleplayChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -415,6 +368,49 @@
               <button id="deleteRoleplayScenarioBtn" class="btn-outline">Scenario loeschen</button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-4">
+      <button id="accLlmBtn" class="accordion-header" aria-expanded="false" aria-controls="accLlmBody">
+        <span>LLM Konfiguration</span>
+        <svg id="accLlmChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div id="accLlmBody" class="mt-4 space-y-4 hidden">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="label">Provider</label>
+            <input id="llmProviderName" class="input mt-1" value="custom" />
+          </div>
+          <div>
+            <label class="label">LLM API URL</label>
+            <input id="llmApiUrl" class="input mt-1" placeholder="https://..." value="https://api.x.ai/v1/chat/completions" />
+          </div>
+          <div>
+            <label class="label">LLM API Key</label>
+            <input id="llmApiKey" type="password" class="input mt-1" placeholder="leave empty to keep existing key" />
+          </div>
+          <div>
+            <label class="label">Chat model</label>
+            <input id="llmChatModel" class="input mt-1" value="grok-4-1-fast-non-reasoning" />
+          </div>
+          <div>
+            <label class="label">Vision model</label>
+            <input id="llmVisionModel" class="input mt-1" value="grok-4-1-fast-non-reasoning" />
+          </div>
+          <div>
+            <label class="label">Profile active</label>
+            <select id="llmIsActive" class="select mt-1">
+              <option value="true">enabled</option>
+              <option value="false">disabled</option>
+            </select>
+          </div>
+        </div>
+        <p id="llmInfo" class="label" aria-live="polite"></p>
+        <div class="flex flex-wrap gap-2">
+          <button id="liveTestLlmBtn" class="btn-outline">Test live</button>
+          <button id="saveLlmProfileBtn" class="btn-primary hidden" disabled>Speichern</button>
         </div>
       </div>
     </div>
