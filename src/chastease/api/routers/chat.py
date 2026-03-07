@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from chastease.api.runtime import find_setup_session_id_for_active_session, get_db_session, lang
 from chastease.api.routers.chaster import resolve_chaster_api_token, resolve_verified_extension_session_from_main_token_sync
 from chastease.api.schemas import ChatActionExecuteRequest, ChatTurnRequest, ChatVisionReviewRequest
-from chastease.models import ChastitySession, Turn
+from chastease.models import AuditEntry, ChastitySession, Turn
 from chastease.repositories.setup_store import load_sessions, save_sessions
 from chastease.services.narration import extract_pending_actions, generate_ai_narration_for_session
 from chastease.shared.secrets_crypto import decrypt_secret
@@ -1798,6 +1798,28 @@ def _clear_resolved_image_verification_pending(
     return remaining
 
 
+def _load_latest_pending_actions(db, session_id: str) -> list[dict]:
+    """Load pending_actions from the most recent activity_snapshot audit entry."""
+    latest_snapshot = (
+        db.query(AuditEntry)
+        .filter(
+            AuditEntry.session_id == session_id,
+            AuditEntry.event_type == "activity_snapshot",
+        )
+        .order_by(AuditEntry.created_at.desc())
+        .first()
+    )
+    if latest_snapshot is None:
+        return []
+    metadata = json.loads(latest_snapshot.metadata_json or "{}") if latest_snapshot.metadata_json else {}
+    if not isinstance(metadata, dict):
+        return []
+    pending = metadata.get("pending_actions")
+    if not isinstance(pending, list):
+        return []
+    return pending
+
+
 @router.post("/turn")
 def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
     request_lang = lang(payload.language)
@@ -1833,6 +1855,9 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         reask_attempted = False
         reask_applied = False
         explicit_intent_action = _fallback_pending_action_from_user_intent(action_text, policy)
+
+        # Load existing pending_actions from the latest activity_snapshot
+        existing_pending_actions = _load_latest_pending_actions(db, payload.session_id)
 
         timer_narration, timer_pending, policy = _timer_expiry_pending_action(request_lang, policy, now)
         if timer_pending:
@@ -1901,6 +1926,13 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                         if request_lang == "de"
                         else f"{abort_narration} Emergency opening failed: {fail_detail}. Session remains active until opening succeeds."
                     )
+            else:
+                # Abort was cancelled - clear any existing abort_decision pending actions
+                existing_pending_actions = [
+                    action
+                    for action in existing_pending_actions
+                    if _normalize_action_type(str((action or {}).get("action_type") or "")) != "abort_decision"
+                ]
 
         if abort_handled:
             narration = abort_narration or timer_narration or ""
@@ -1979,6 +2011,8 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
             )
             failed_actions = [*precheck_failed_actions, *auto_failed_actions]
             policy = updated_policy
+            # Merge existing pending_actions with new ai_pending_actions
+            pending_actions.extend(existing_pending_actions)
             pending_actions.extend(ai_pending_actions)
             if executed_actions:
                 policy_dirty = True
@@ -2173,14 +2207,23 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
         narration_raw = generate_ai_narration_for_session(
             db, request, session, enriched_prompt, request_lang, attachments
         )
-        narration, pending_actions, generated_files = extract_pending_actions(narration_raw)
+        narration, new_pending_actions, generated_files = extract_pending_actions(narration_raw)
+        # Filter out any image_verification actions from new_pending_actions
+        # (vision-review should not trigger new verification requests)
+        new_pending_actions = [
+            action
+            for action in new_pending_actions
+            if _normalize_action_type(str((action or {}).get("action_type") or "")) != "image_verification"
+        ]
         policy = json.loads(session.policy_snapshot_json) if session.policy_snapshot_json else {}
         if not isinstance(policy, dict):
             policy = {}
-        pending_actions, executed_actions, failed_actions, updated_policy = _auto_execute_pending_actions(
+        # Load existing pending_actions from the latest activity_snapshot
+        existing_pending_actions = _load_latest_pending_actions(db, payload.session_id)
+        new_pending_actions, executed_actions, failed_actions, updated_policy = _auto_execute_pending_actions(
             request=request,
             policy=policy,
-            pending_actions=pending_actions,
+            pending_actions=new_pending_actions,
         )
         verification_status = _extract_verification_status(narration)
         verification_payload = {
@@ -2189,7 +2232,13 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
             "stored_image_path": saved_image_path,
         }
         if verification_status == "failed":
-            pending_actions = _clear_resolved_image_verification_pending(pending_actions, verification_payload)
+            # Clear resolved image_verification from both existing and new pending_actions
+            existing_pending_actions = _clear_resolved_image_verification_pending(
+                existing_pending_actions, verification_payload
+            )
+            new_pending_actions = _clear_resolved_image_verification_pending(
+                new_pending_actions, verification_payload
+            )
             failed_actions.append(
                 {
                     "action_type": "image_verification",
@@ -2198,7 +2247,13 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
                 }
             )
         elif verification_status == "success":
-            pending_actions = _clear_resolved_image_verification_pending(pending_actions, verification_payload)
+            # Clear resolved image_verification from both existing and new pending_actions
+            existing_pending_actions = _clear_resolved_image_verification_pending(
+                existing_pending_actions, verification_payload
+            )
+            new_pending_actions = _clear_resolved_image_verification_pending(
+                new_pending_actions, verification_payload
+            )
             executed_actions.append(
                 {
                     "action_type": "image_verification",
@@ -2206,6 +2261,8 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
                     "message": "Image verification verdict: PASSED.",
                 }
             )
+        # Merge existing (minus resolved) + new pending_actions
+        pending_actions = existing_pending_actions + new_pending_actions
         if executed_actions:
             session.policy_snapshot_json = json.dumps(updated_policy)
 
