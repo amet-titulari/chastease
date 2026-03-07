@@ -7,6 +7,7 @@ from fastapi import Request
 from sqlalchemy.orm import Session
 
 from chastease.models import ChastitySession, Turn, TurnJob
+from chastease.domains.roleplay import refresh_session_roleplay_state
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,8 @@ def _run_turn_job(
         )
         session.updated_at = datetime.now(UTC)
         db.add(turn)
+        db.flush()
+        refresh_session_roleplay_state(db, session)
         db.add(session)
 
         job.status = "done"

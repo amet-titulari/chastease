@@ -149,6 +149,38 @@ def test_chat_proxy_turn_and_execute_action_endpoint(client):
     finally:
         db.close()
 
+
+def test_chat_turn_updates_roleplay_session_summary_and_memory(client):
+    auth = _register(client, username="chat-memory-user")
+    session_id = _create_active_session(client, auth)
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={
+            "session_id": session_id,
+            "message": "I kneel, steady my breathing, and report my status.",
+            "language": "en",
+        },
+    )
+    assert turn.status_code == 200
+
+    db = client.app.state.db_session_factory()
+    try:
+        session = db.get(ChastitySession, session_id)
+        assert session is not None
+        policy = json.loads(session.policy_snapshot_json)
+        roleplay = policy.get("roleplay") or {}
+        summary = roleplay.get("session_summary") or {}
+        memory_entries = roleplay.get("memory_entries") or []
+
+        assert "summary_text" in summary
+        assert "Wearer reported:" in summary["summary_text"]
+        assert memory_entries
+        assert any(entry.get("kind") == "wearer_state" for entry in memory_entries)
+        assert any(entry.get("kind") == "keyholder_guidance" for entry in memory_entries)
+    finally:
+        db.close()
+
     execute_add_time = client.post(
         "/api/v1/chat/actions/execute",
         json={"session_id": session_id, "action_type": "add_time", "payload": {"amount": 15, "unit": "minutes"}},

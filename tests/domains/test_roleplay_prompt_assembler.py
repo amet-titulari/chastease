@@ -30,6 +30,15 @@ def test_build_roleplay_user_prompt_mentions_image_review_note() -> None:
         action="Please review this.",
         language="en",
         psychogram_summary="summary=test",
+        policy={
+            "roleplay": {
+                "session_summary": {"summary_text": "- Wearer reported: steady breathing."},
+                "memory_entries": [
+                    {"kind": "wearer_state", "content": "steady breathing"},
+                    {"kind": "keyholder_guidance", "content": "maintain the ritual cadence"},
+                ],
+            }
+        },
     )
     attachments = [{"name": "proof.png", "type": "image/png", "data_url": "data:image/png;base64,abc"}]
 
@@ -37,6 +46,9 @@ def test_build_roleplay_user_prompt_mentions_image_review_note() -> None:
 
     assert "Session: session-2" in user_prompt
     assert "Psychogram summary: summary=test" in user_prompt
+    assert "Session summary:" in user_prompt
+    assert "Continuity memory:" in user_prompt
+    assert "steady breathing" in user_prompt
     assert "These are NOT verification requests." in user_prompt
     assert attachment_content == [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]
 

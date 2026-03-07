@@ -54,6 +54,20 @@ def build_action_block(context: StoryTurnContext, attachments: list[dict[str, An
 def build_roleplay_user_prompt(context: StoryTurnContext, attachments: list[dict[str, Any]] | None) -> tuple[str, list[dict[str, Any]]]:
     attachment_summary, attachment_content = build_attachment_summary(attachments)
     action_block = build_action_block(context, attachments)
+    roleplay_payload = context.policy.get("roleplay") if isinstance(context.policy, dict) and isinstance(context.policy.get("roleplay"), dict) else {}
+    summary_payload = roleplay_payload.get("session_summary") if isinstance(roleplay_payload.get("session_summary"), dict) else {}
+    summary_text = str(summary_payload.get("summary_text") or "").strip()
+    memory_payload = roleplay_payload.get("memory_entries") if isinstance(roleplay_payload.get("memory_entries"), list) else []
+    memory_lines = [
+        f"- {str(item.get('kind') or 'memory')}: {str(item.get('content') or '').strip()}"
+        for item in memory_payload
+        if isinstance(item, dict) and str(item.get("content") or "").strip()
+    ]
+    continuity_block = ""
+    if summary_text:
+        continuity_block = f"Session summary:\n{summary_text}\n"
+    if memory_lines:
+        continuity_block = f"{continuity_block}Continuity memory:\n" + "\n".join(memory_lines[:4]) + "\n"
     attachment_note = ""
     if attachment_content:
         attachment_note = (
@@ -63,6 +77,7 @@ def build_roleplay_user_prompt(context: StoryTurnContext, attachments: list[dict
     user_prompt = (
         f"Session: {context.session_id}\n"
         f"Psychogram summary: {context.psychogram_summary}\n"
+        f"{continuity_block}"
         f"Wearer action: {action_block}\n"
         f"Attachments:\n{attachment_summary}{attachment_note}\n"
         f"Language: {context.language}\n"

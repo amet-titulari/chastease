@@ -19,6 +19,7 @@ from chastease.api.routers.chaster import resolve_chaster_api_token, resolve_ver
 from chastease.api.schemas import ChatActionExecuteRequest, ChatTurnRequest, ChatVisionReviewRequest
 from chastease.models import AuditEntry, ChastitySession, Turn
 from chastease.repositories.setup_store import load_sessions, save_sessions
+from chastease.domains.roleplay import refresh_session_roleplay_state
 from chastease.services.narration import extract_pending_actions, generate_ai_narration_for_session
 from chastease.shared.secrets_crypto import decrypt_secret
 from chastease.shared.audit import record_audit_event
@@ -2106,6 +2107,8 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
         )
         session.updated_at = datetime.now(UTC)
         db.add(turn)
+        db.flush()
+        refresh_session_roleplay_state(db, session)
         db.add(session)
         if audit_events_to_log:
             for event in audit_events_to_log:
@@ -2322,6 +2325,8 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
             }
         )
         db.add(turn)
+        db.flush()
+        refresh_session_roleplay_state(db, session)
         db.add(session)
         for event in audit_events_to_log:
             record_audit_event(

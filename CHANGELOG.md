@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.2 - 2026-03-07
+
+- Session-Memory fuer Roleplay ergaenzt:
+  - Deterministische Session-Summaries und Continuity-Memory aus aktuellen Turns abgeleitet.
+  - Roleplay-Context und Prompt-Assembly lesen die gespeicherten Summary-/Memory-Bloecke jetzt mit ein.
+  - Chat- und Turn-Job-Pfade aktualisieren die RP-Continuity automatisch nach jedem gespeicherten Turn.
+- Verifikation:
+  - Neue Domain- und Integrations-Tests fuer Session-Memory, Prompt-Injektion und Chat-Snapshot hinzugefuegt.
+
 ## 0.5.1 - 2026-03-07
 
 - Roleplay-Asset-Library ergaenzt:

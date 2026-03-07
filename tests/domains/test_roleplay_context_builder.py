@@ -71,6 +71,8 @@ def test_build_setup_preview_roleplay_context_includes_tools_and_scene_state(cli
                     "title": "Preview Scenario",
                     "summary": "Scenario preview",
                 },
+                "session_summary": {"summary_text": "- Wearer reported: calm and curious.", "source_turn_no": 3},
+                "memory_entries": [{"kind": "wearer_state", "content": "calm and curious", "source": "turn:3"}],
                 "prompt_profile": {"name": "preview", "version": "v2", "mode": "preview"},
             },
         },
@@ -85,6 +87,9 @@ def test_build_setup_preview_roleplay_context_includes_tools_and_scene_state(cli
     assert context.character_card.display_name == "Preview Keyholder"
     assert context.scenario is not None
     assert context.scenario.scenario_id == "preview-scenario"
+    assert context.session_summary is not None
+    assert context.session_summary.source_turn_no == 3
+    assert context.memory_entries[0].content == "calm and curious"
     assert context.prompt_profile.name == "preview"
     story_context = to_story_turn_context(context)
     assert story_context.session_id == "setup-preview"

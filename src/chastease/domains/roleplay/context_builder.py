@@ -13,7 +13,7 @@ from chastease.models import ChastitySession, Turn, User
 from chastease.repositories.setup_store import load_sessions
 from chastease.services.ai.base import StoryTurnContext, TurnHistoryEntry
 
-from .models import PromptProfile, RoleplayContext, RoleplayTurn, SceneState
+from .models import MemoryEntry, PromptProfile, RoleplayContext, RoleplayTurn, SceneState, SessionSummary
 
 
 def _character_card_from_payload(payload: dict[str, Any] | None) -> CharacterCard | None:
@@ -89,6 +89,40 @@ def _prompt_profile_from_payload(payload: dict[str, Any] | None) -> PromptProfil
         version=str(payload.get("version") or "v1"),
         mode=str(payload.get("mode") or "session"),
     )
+
+
+def _session_summary_from_payload(payload: dict[str, Any] | None) -> SessionSummary | None:
+    if not isinstance(payload, dict):
+        return None
+    summary_text = str(payload.get("summary_text") or "").strip()
+    if not summary_text:
+        return None
+    source_turn_no = payload.get("source_turn_no")
+    return SessionSummary(
+        summary_text=summary_text,
+        source_turn_no=int(source_turn_no) if isinstance(source_turn_no, int) else None,
+        created_at_iso=str(payload.get("created_at_iso") or "") or None,
+    )
+
+
+def _memory_entries_from_payload(payload: list[dict[str, Any]] | None) -> list[MemoryEntry]:
+    entries: list[MemoryEntry] = []
+    for entry in payload or []:
+        if not isinstance(entry, dict):
+            continue
+        content = str(entry.get("content") or "").strip()
+        if not content:
+            continue
+        entries.append(
+            MemoryEntry(
+                kind=str(entry.get("kind") or "session"),
+                content=content,
+                source=str(entry.get("source") or "session"),
+                tags=[str(item) for item in (entry.get("tags") or []) if str(item).strip()],
+                weight=float(entry.get("weight") or 1.0),
+            )
+        )
+    return entries
 
 
 def build_psychogram_summary(psychogram: dict, policy: dict) -> str:
@@ -231,6 +265,8 @@ def build_roleplay_context(
         character_card=_character_card_from_payload(roleplay_payload.get("character_card")),
         scenario=_scenario_from_payload(roleplay_payload.get("scenario")),
         scene_state=SceneState(name="active-session", phase=session.status, status="active"),
+        session_summary=_session_summary_from_payload(roleplay_payload.get("session_summary")),
+        memory_entries=_memory_entries_from_payload(roleplay_payload.get("memory_entries")),
         prompt_profile=_prompt_profile_from_payload(roleplay_payload.get("prompt_profile")),
     )
 
@@ -256,6 +292,8 @@ def build_setup_preview_roleplay_context(
         character_card=_character_card_from_payload(roleplay_payload.get("character_card")),
         scenario=_scenario_from_payload(roleplay_payload.get("scenario")),
         scene_state=SceneState(name="setup-preview", phase="preview", status="active"),
+        session_summary=_session_summary_from_payload(roleplay_payload.get("session_summary")),
+        memory_entries=_memory_entries_from_payload(roleplay_payload.get("memory_entries")),
         prompt_profile=_prompt_profile_from_payload(roleplay_payload.get("prompt_profile")),
     )
 
