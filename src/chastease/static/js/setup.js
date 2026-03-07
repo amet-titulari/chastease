@@ -589,9 +589,11 @@ function openAccordion(targetKey) {
   accordionDefs.forEach((definition) => {
     const body = document.getElementById(definition.body);
     const chevron = document.getElementById(definition.chevron);
+    const btn = document.getElementById(definition.btn);
     const isActive = definition.key === targetKey;
     if (body) body.classList.toggle('hidden', !isActive);
-    if (chevron) chevron.textContent = isActive ? '−' : '+';
+    if (chevron) chevron.setAttribute('data-open', isActive ? 'true' : 'false');
+    if (btn) btn.setAttribute('aria-expanded', isActive ? 'true' : 'false');
   });
 }
 
@@ -758,7 +760,7 @@ function renderQuestions(questions) {
   });
   if (!questionsWrap) return;
   if (!questionnaire.length) {
-    questionsWrap.innerHTML = '<p class="text-sm text-gray-400">Noch keine Fragen geladen. Bitte zuerst "Start setup" ausführen.</p>';
+    questionsWrap.innerHTML = '<p class="text-sm text-text-tertiary">Noch keine Fragen geladen. Bitte zuerst "Start setup" ausführen.</p>';
     return;
   }
   questionsWrap.innerHTML = '';
@@ -768,10 +770,10 @@ function renderQuestions(questions) {
     if (!questionId) return;
 
     const container = document.createElement('div');
-    container.className = 'bg-gray-900 border border-gray-700 rounded p-3';
+    container.className = 'bg-surface border border-white/10 rounded p-3';
 
     const label = document.createElement('label');
-    label.className = 'text-sm text-gray-300 block';
+    label.className = 'text-sm text-text-secondary block';
     label.textContent = question.text || questionId;
     label.setAttribute('for', `q-${questionId}`);
     container.appendChild(label);
@@ -786,7 +788,7 @@ function renderQuestions(questions) {
       input.className = 'mt-2 w-full';
 
       const valueInfo = document.createElement('div');
-      valueInfo.className = 'text-xs text-gray-400 mt-1';
+      valueInfo.className = 'text-xs text-text-tertiary mt-1';
       valueInfo.textContent = `Wert: ${input.value}`;
       input.addEventListener('input', () => {
         valueInfo.textContent = `Wert: ${input.value}`;
@@ -795,7 +797,7 @@ function renderQuestions(questions) {
       container.appendChild(valueInfo);
     } else if (question.type === 'choice') {
       input = document.createElement('select');
-      input.className = 'mt-2 w-full rounded-md bg-gray-800 p-2 border border-gray-700';
+      input.className = 'mt-2 w-full rounded-md bg-surface-alt p-2 border border-white/10';
       (question.options || []).forEach((option) => {
         const opt = document.createElement('option');
         opt.value = option.value;
@@ -805,7 +807,7 @@ function renderQuestions(questions) {
       });
     } else {
       input = document.createElement('textarea');
-      input.className = 'mt-2 w-full rounded-md bg-gray-800 p-2 border border-gray-700 min-h-20';
+      input.className = 'mt-2 w-full rounded-md bg-surface-alt p-2 border border-white/10 min-h-20';
       input.value = question.default_value || '';
       if (question.read_only) {
         input.readOnly = true;

@@ -3,43 +3,43 @@
 {% block title %}AI Chat — Chastease{% endblock %}
 
 {% block content %}
-  <div class="mx-auto max-w-5xl">
-    <div class="rounded-2xl border border-slate-700/70 bg-gradient-to-b from-slate-900/95 via-gray-900/95 to-slate-900/95 shadow-[0_10px_50px_rgba(0,0,0,0.35)]">
+  <div class="section max-w-5xl animate-fade-in">
+    <div class="card-elevated overflow-hidden">
   <!-- Modern Chat Container -->
   <div class="flex flex-col h-[calc(100dvh-8rem)] min-h-[560px]">
-    
+
     <!-- Header -->
-    <div class="flex-none bg-gradient-to-r from-slate-800/95 via-slate-800/90 to-slate-900/95 border-b border-slate-700/70 px-6 py-4 rounded-t-2xl">
+    <div class="flex-none bg-surface-alt/95 border-b border-white/10 px-6 py-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
+          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold" aria-hidden="true">
             AI
           </div>
           <div>
-            <h1 class="text-xl font-semibold text-white">Deine Keyholderin</h1>
-            <p id="chatStatus" class="text-xs text-gray-400">Verbunden</p>
+            <h1 class="text-xl font-semibold text-text">Deine Keyholderin</h1>
+            <p id="chatStatus" class="text-xs text-text-tertiary" aria-live="polite">Verbunden</p>
           </div>
         </div>
-        <div class="text-xs text-gray-500">
+        <div class="text-xs text-text-tertiary">
           <span id="chatSessionInfo">Session lädt...</span>
         </div>
       </div>
     </div>
 
     <!-- Messages Area -->
-    <div id="messagesContainer" class="flex-1 overflow-y-auto bg-gradient-to-b from-slate-900/80 via-gray-900/75 to-slate-900/80 px-4 py-6">
+    <div id="messagesContainer" class="flex-1 overflow-y-auto bg-surface/80 px-4 py-6" role="log" aria-live="polite">
       <div class="max-w-4xl mx-auto">
         <div id="messages" class="space-y-6"></div>
-        
+
         <!-- Typing Indicator (hidden by default) -->
         <div id="typingIndicator" class="hidden mt-6">
           <div class="flex items-start gap-3">
-            <div class="flex-none w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
+            <div class="flex-none w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold" aria-hidden="true">
               AI
             </div>
             <div class="flex-1">
-              <div class="inline-flex items-center gap-2 px-4 py-3 bg-gray-800/80 rounded-2xl border border-gray-700/70 text-sm text-gray-300">
-                <svg class="w-4 h-4 animate-spin text-sky-300" viewBox="0 0 24 24" fill="none">
+              <div class="inline-flex items-center gap-2 px-4 py-3 bg-surface-alt/80 rounded-2xl border border-white/10 text-sm text-text-secondary">
+                <svg class="w-4 h-4 animate-spin text-brand" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" class="opacity-25"></circle>
                   <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
                 </svg>
@@ -52,49 +52,49 @@
     </div>
 
     <!-- Pending Actions (optional) -->
-    <div id="pendingActionsWrap" class="hidden flex-none bg-slate-800/90 border-t border-slate-700/70 px-6 py-3">
+    <div id="pendingActionsWrap" class="hidden flex-none bg-surface-alt/90 border-t border-white/10 px-6 py-3">
       <div class="max-w-4xl mx-auto">
-        <h2 class="text-sm font-semibold text-gray-200 mb-2">Ausstehende Aktionen</h2>
+        <h2 class="text-sm font-semibold text-text mb-2">Ausstehende Aktionen</h2>
         <div id="pendingActions" class="space-y-2"></div>
       </div>
     </div>
 
     <!-- Input Area -->
-    <div class="flex-none bg-gradient-to-r from-slate-800/95 via-slate-800/90 to-slate-900/95 border-t border-slate-700/70 px-6 py-4 rounded-b-2xl">
+    <div class="flex-none bg-surface-alt/95 border-t border-white/10 px-6 py-4">
       <div class="max-w-4xl mx-auto">
         <div id="attachmentPreview" class="hidden mb-3 flex flex-wrap gap-2"></div>
-        <div class="rounded-2xl border border-slate-600/70 bg-gradient-to-r from-slate-900/90 via-slate-900/75 to-slate-900/90 p-2 shadow-inner shadow-black/30">
+        <div class="rounded-2xl border border-white/10 bg-surface/90 p-2 shadow-inner shadow-black/30">
           <div class="relative">
             <button
               id="attachImageBtn"
-              class="absolute left-2 bottom-2 w-10 h-10 rounded-xl border border-slate-500/80 bg-slate-800/95 hover:bg-slate-700/95 text-slate-200 flex items-center justify-center transition-all"
+              class="absolute left-2 bottom-2 w-10 h-10 rounded-xl border border-white/20 bg-surface-alt hover:bg-surface-elevated text-text-secondary flex items-center justify-center transition-all"
               title="Bild anhängen"
               type="button"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
               </svg>
             </button>
             <input id="chatAttachmentInput" type="file" accept="image/*" class="hidden" multiple />
-            <textarea 
-              id="messageInput" 
-              class="w-full resize-none rounded-xl bg-slate-950/80 text-white placeholder-slate-400 pl-14 pr-14 py-4 border border-slate-600/60 focus:border-sky-400/70 focus:ring-2 focus:ring-sky-500/25 focus:outline-none transition-all" 
-              placeholder="Schreibe deine Nachricht..." 
+            <textarea
+              id="messageInput"
+              class="input w-full resize-none rounded-xl pl-14 pr-14 py-4 focus:ring-2 focus:ring-brand/25"
+              placeholder="Schreibe deine Nachricht..."
               rows="1"
               style="max-height: 200px;"
             ></textarea>
-            <button 
-              id="sendBtn" 
+            <button
+              id="sendBtn"
               class="absolute right-2 bottom-2 w-10 h-10 bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl flex items-center justify-center text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               title="Senden (Enter)"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
               </svg>
             </button>
           </div>
         </div>
-        <div class="mt-2 flex items-center justify-between text-xs text-gray-500">
+        <div class="mt-2 flex items-center justify-between text-xs text-text-tertiary">
           <span>Enter zum Senden • Shift+Enter für neue Zeile • Klick oder Paste für Bilder</span>
           <span id="charCount" class="hidden">0 Zeichen</span>
         </div>
@@ -102,12 +102,12 @@
     </div>
     
     <!-- Scroll to Bottom Button -->
-    <button 
-      id="scrollToBottomBtn" 
-      class="hidden fixed bottom-24 right-8 w-10 h-10 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-full shadow-lg flex items-center justify-center text-white transition-all"
+    <button
+      id="scrollToBottomBtn"
+      class="hidden fixed bottom-24 right-8 w-10 h-10 bg-surface-alt hover:bg-surface-elevated border border-white/10 rounded-full shadow-lg flex items-center justify-center text-text transition-all"
       title="Nach unten scrollen"
     >
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
       </svg>
     </button>

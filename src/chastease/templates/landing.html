@@ -3,18 +3,18 @@
 {% block title %}Chastease — Landing{% endblock %}
 
 {% block content %}
-  <section class="bg-gray-800 border border-gray-700 rounded-xl p-8">
+  <section class="card-elevated p-8 animate-fade-in">
     <h1 class="text-3xl font-extrabold mb-2">Chastease</h1>
     <div class="flex flex-wrap gap-2 mb-4">
       {% if auth_enable_chaster_login %}
-      <a class="px-4 py-2 rounded-md border border-sky-600 text-sky-300 hover:bg-sky-900/30" href="/api/v1/auth/chaster/signin?return_to=/app">Chaster</a>
+      <a class="btn-outline" href="/api/v1/auth/chaster/signin?return_to=/app">Chaster</a>
       {% endif %}
       {% if auth_allow_local_login %}
-      <a class="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500" href="/app?mode=login">Local</a>
-      <a class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600" href="/app?mode=register">Register</a>
+      <a class="btn-primary" href="/app?mode=login">Local</a>
+      <a class="btn-secondary" href="/app?mode=register">Register</a>
       {% endif %}
     </div>
-    <p class="text-gray-300">
+    <p class="text-text-secondary">
       Diese Seite dient nur als Einstieg. Die sichtbaren Login-Optionen werden direkt aus der Server-Konfiguration übernommen.
       {% if auth_enable_chaster_login and not auth_allow_local_login %}
       Aktuell ist nur Chaster OAuth2 aktiviert.

@@ -3,38 +3,38 @@
 {% block title %}Turn Log — Chastease{% endblock %}
 
 {% block content %}
-  <section class="space-y-6 bg-gray-900 border border-gray-700 rounded-xl p-6">
+  <section class="section space-y-6 animate-fade-in">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold">Turn Log</h1>
-        <p class="text-sm text-gray-400">
+        <p class="text-sm text-text-tertiary">
           Sitzung: <span id="turnLogSessionId" data-initial-session-id="{{ session_id or '' }}">{{ session_id or '—' }}</span>
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <a href="/dashboard" class="px-4 py-2 text-sm font-medium rounded bg-gray-800 hover:bg-gray-700">Zurück zum Dashboard</a>
-        <button id="turnLogReloadBtn" class="px-4 py-2 text-sm font-medium rounded bg-blue-600 hover:bg-blue-500">Neu laden</button>
+        <a href="/dashboard" class="btn-secondary text-sm">Zurück zum Dashboard</a>
+        <button id="turnLogReloadBtn" class="btn-primary text-sm">Neu laden</button>
       </div>
     </div>
 
-    <p id="turnLogSummary" class="text-sm text-gray-400">Turn-Daten werden geladen...</p>
-    <p id="turnLogStatus" class="text-sm text-gray-400">Status wird aktualisiert...</p>
+    <p id="turnLogSummary" class="text-sm text-text-tertiary" aria-live="polite">Turn-Daten werden geladen...</p>
+    <p id="turnLogStatus" class="text-sm text-text-tertiary" aria-live="polite">Status wird aktualisiert...</p>
 
-    <div class="bg-gray-800 border border-gray-700 rounded-2xl p-4">
+    <div class="card p-4">
       <div class="overflow-x-auto">
-        <table class="min-w-full text-sm text-gray-200 table-fixed">
-          <thead class="text-xs uppercase tracking-wide text-gray-400">
+        <table class="min-w-full text-sm text-text table-fixed">
+          <thead class="text-xs uppercase tracking-wide text-text-tertiary">
             <tr>
-              <th class="px-3 py-2 text-left w-16">Turn #</th>
-              <th class="px-3 py-2 text-left w-1/3">Player Action</th>
-              <th class="px-3 py-2 text-left w-1/3">AI Narration</th>
-              <th class="px-3 py-2 text-left w-32">Sprache</th>
-              <th class="px-3 py-2 text-left">Erstellt</th>
+              <th class="table-header w-16">Turn #</th>
+              <th class="table-header w-1/3">Player Action</th>
+              <th class="table-header w-1/3">AI Narration</th>
+              <th class="table-header w-32">Sprache</th>
+              <th class="table-header">Erstellt</th>
             </tr>
           </thead>
           <tbody id="turnLogEntriesBody">
             <tr>
-              <td colspan="5" class="px-3 py-4 text-center text-gray-500 border border-gray-700">Keine Turns geladen.</td>
+              <td colspan="5" class="table-cell text-center text-text-tertiary">Keine Turns geladen.</td>
             </tr>
           </tbody>
         </table>

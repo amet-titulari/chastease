@@ -25,7 +25,7 @@ function updateSummary(text) {
 
 function clearEntries(message = 'Keine Turn-Einträge vorhanden.') {
   if (!entriesBodyEl) return;
-  const cell = `<td colspan="5" class="px-3 py-4 text-center text-gray-500 border border-gray-700">${escapeHtml(message)}</td>`;
+  const cell = `<td colspan="5" class="px-3 py-4 text-center text-text-tertiary border border-white/10">${escapeHtml(message)}</td>`;
   entriesBodyEl.innerHTML = `<tr>${cell}</tr>`;
 }
 
@@ -61,12 +61,12 @@ function renderTurnRows(turns) {
       const created = escapeHtml(new Date(turn.created_at || '').toLocaleString('de-DE') || '-');
       const turnNo = escapeHtml(turn.turn_no ?? '-');
       return `
-        <tr class="border-t border-gray-700">
-          <td class="px-3 py-2 align-top border border-gray-700 text-sm font-semibold">${turnNo}</td>
-          <td class="px-3 py-2 align-top border border-gray-700"><pre class="text-xs whitespace-pre-wrap break-words mb-0">${playerAction}</pre></td>
-          <td class="px-3 py-2 align-top border border-gray-700"><pre class="text-xs whitespace-pre-wrap break-words mb-0">${aiNarration}</pre></td>
-          <td class="px-3 py-2 align-top border border-gray-700">${language}</td>
-          <td class="px-3 py-2 align-top border border-gray-700">${created}</td>
+        <tr class="border-t border-white/10">
+          <td class="px-3 py-2 align-top border border-white/10 text-sm font-semibold">${turnNo}</td>
+          <td class="px-3 py-2 align-top border border-white/10"><pre class="text-xs whitespace-pre-wrap break-words mb-0">${playerAction}</pre></td>
+          <td class="px-3 py-2 align-top border border-white/10"><pre class="text-xs whitespace-pre-wrap break-words mb-0">${aiNarration}</pre></td>
+          <td class="px-3 py-2 align-top border border-white/10">${language}</td>
+          <td class="px-3 py-2 align-top border border-white/10">${created}</td>
         </tr>`;
     })
     .join('');

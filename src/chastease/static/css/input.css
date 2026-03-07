@@ -1,0 +1,329 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design Tokens (Dark Mode) ─── */
+:root {
+  /* Surface colors (RGB triplets for Tailwind opacity) */
+  --color-surface: 6, 9, 14;
+  --color-surface-alt: 17, 24, 39;
+  --color-surface-elevated: 31, 41, 55;
+  --color-surface-input: 15, 23, 42;
+
+  /* Border colors */
+  --color-border: 55, 65, 81;
+  --color-border-muted: rgba(55, 65, 81, 0.6);
+
+  /* Text colors */
+  --color-text: 243, 244, 246;
+  --color-text-secondary: 156, 163, 175;
+  --color-text-tertiary: 107, 114, 128;
+
+  /* Accent (primary action) */
+  --color-accent: 37, 99, 235;
+  --color-accent-hover: 59, 130, 246;
+  --color-accent-muted: rgba(37, 99, 235, 0.15);
+
+  /* Danger */
+  --color-danger: 220, 38, 38;
+  --color-danger-hover: 239, 68, 68;
+
+  /* Success */
+  --color-success: 5, 150, 105;
+  --color-success-hover: 16, 185, 129;
+}
+
+/* Light mode overrides */
+:root:not(.dark) {
+  --color-surface: 255, 255, 255;
+  --color-surface-alt: 249, 250, 251;
+  --color-surface-elevated: 255, 255, 255;
+  --color-surface-input: 243, 244, 246;
+
+  --color-border: 209, 213, 219;
+  --color-border-muted: rgba(209, 213, 219, 0.6);
+
+  --color-text: 17, 24, 39;
+  --color-text-secondary: 75, 85, 99;
+  --color-text-tertiary: 156, 163, 175;
+
+  --color-accent: 37, 99, 235;
+  --color-accent-hover: 29, 78, 216;
+  --color-accent-muted: rgba(37, 99, 235, 0.1);
+
+  --color-danger: 220, 38, 38;
+  --color-danger-hover: 185, 28, 28;
+
+  --color-success: 5, 150, 105;
+  --color-success-hover: 4, 120, 87;
+}
+
+/* ─── Base Layer ─── */
+@layer base {
+  html {
+    @apply antialiased;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    @apply font-sans;
+  }
+
+  /* Improve default focus ring for accessibility */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-sky-500;
+  }
+
+  /* Smoother scrollbar for WebKit */
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-surface-alt);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    @apply rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-tertiary);
+  }
+}
+
+/* ─── Component Layer ─── */
+@layer components {
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2
+           font-medium rounded-lg
+           min-h-[44px] px-4 py-2
+           transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn:focus-visible {
+    @apply outline-2 outline-offset-2;
+  }
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .btn-primary {
+    @apply btn bg-blue-600 text-white hover:bg-blue-500;
+  }
+  .btn-primary:focus-visible {
+    @apply outline-blue-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-500;
+  }
+  .btn-danger:focus-visible {
+    @apply outline-red-500;
+  }
+
+  .btn-success {
+    @apply btn bg-emerald-600 text-white hover:bg-emerald-500;
+  }
+  .btn-success:focus-visible {
+    @apply outline-emerald-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-gray-700 text-gray-100 border border-gray-600
+           hover:bg-gray-600;
+    background-color: rgb(var(--color-surface-alt));
+    border-color: rgba(255,255,255,0.1);
+    color: rgb(var(--color-text));
+  }
+  .btn-secondary:hover {
+    background-color: rgb(var(--color-surface-elevated));
+  }
+
+  .btn-outline {
+    @apply btn border border-sky-600 text-sky-300
+           hover:bg-sky-900/30;
+  }
+
+  .btn-ghost {
+    @apply btn hover:bg-gray-800;
+    color: rgb(var(--color-text-tertiary));
+  }
+  .btn-ghost:hover {
+    background-color: rgb(var(--color-surface-alt));
+  }
+
+  /* Card */
+  .card {
+    @apply bg-gray-800 border border-gray-700 rounded-xl p-4
+           transition-colors duration-200;
+    background-color: rgb(var(--color-surface-alt));
+    border-color: rgba(255,255,255,0.1);
+  }
+
+  .card-elevated {
+    @apply card shadow-lg shadow-black/10;
+  }
+
+  /* Input fields */
+  .input {
+    @apply w-full rounded-lg bg-gray-900 px-4 py-3
+           border border-gray-700 text-gray-100
+           placeholder:text-gray-500
+           focus:border-sky-500 focus:ring-2 focus:ring-sky-500/25 focus:outline-none
+           transition-all duration-200
+           min-h-[44px];
+    background-color: rgb(var(--color-surface-input));
+    border-color: rgba(255,255,255,0.1);
+    color: rgb(var(--color-text));
+  }
+
+  .input-error {
+    @apply input border-red-500 focus:border-red-500 focus:ring-red-500/25;
+  }
+
+  .select {
+    @apply input appearance-none cursor-pointer;
+  }
+
+  .label {
+    @apply text-sm font-medium;
+    color: rgb(var(--color-text-tertiary));
+  }
+
+  /* Form validation */
+  .field-error {
+    @apply text-sm text-red-400 mt-1 animate-fade-in;
+  }
+
+  .field-success {
+    @apply text-sm text-emerald-400 mt-1 animate-fade-in;
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    @apply bg-gray-800 rounded-lg animate-pulse-soft;
+    background-color: rgb(var(--color-surface-alt));
+  }
+
+  .skeleton-text {
+    @apply skeleton h-4 w-full;
+  }
+
+  .skeleton-text-sm {
+    @apply skeleton h-3 w-3/4;
+  }
+
+  .skeleton-heading {
+    @apply skeleton h-6 w-1/2;
+  }
+
+  .skeleton-avatar {
+    @apply skeleton rounded-full w-10 h-10;
+  }
+
+  .skeleton-card {
+    @apply skeleton h-24 w-full;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-emerald-500/20 text-emerald-300;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-500/20 text-red-300;
+  }
+
+  .badge-info {
+    @apply badge bg-sky-500/20 text-sky-300;
+  }
+
+  .badge-warning {
+    @apply badge bg-amber-500/20 text-amber-300;
+  }
+
+  /* Nav link */
+  .nav-link {
+    @apply px-3 py-2 rounded-lg
+           hover:bg-gray-800
+           transition-colors duration-200
+           min-h-[44px] inline-flex items-center;
+    color: rgb(var(--color-text-tertiary));
+  }
+  .nav-link:hover {
+    background-color: rgb(var(--color-surface-alt));
+    color: rgb(var(--color-text));
+  }
+
+  /* Accordion */
+  .accordion-header {
+    @apply w-full flex items-center justify-between text-left text-lg font-semibold
+           py-2 transition-colors hover:text-sky-400;
+  }
+
+  .accordion-chevron {
+    @apply transition-transform duration-200;
+    color: rgb(var(--color-text-tertiary));
+  }
+
+  .accordion-chevron[data-open="true"] {
+    @apply rotate-180;
+  }
+
+  /* Table */
+  .table-header {
+    @apply text-xs uppercase tracking-wide px-3 py-2 text-left;
+    color: rgb(var(--color-text-tertiary));
+  }
+
+  .table-cell {
+    @apply px-3 py-3 text-sm;
+  }
+
+  /* Status indicators */
+  .status-ok {
+    @apply text-emerald-400;
+  }
+
+  .status-err {
+    @apply text-red-400;
+  }
+
+  /* Section wrapper */
+  .section {
+    @apply bg-gray-900 border border-gray-700 rounded-xl p-6 space-y-4
+           transition-colors duration-200;
+    background-color: rgb(var(--color-surface));
+    border-color: rgba(255,255,255,0.1);
+  }
+
+  /* Toast / notification */
+  .toast {
+    @apply fixed bottom-6 right-6 z-50
+           px-4 py-3 rounded-lg shadow-lg
+           text-sm font-medium
+           animate-slide-up;
+  }
+
+  .toast-success {
+    @apply toast bg-emerald-600 text-white;
+  }
+
+  .toast-error {
+    @apply toast bg-red-600 text-white;
+  }
+}
+
+/* ─── Utility Layer ─── */
+@layer utilities {
+  /* Smooth transitions for theme switching */
+  .theme-transition {
+    @apply transition-colors duration-300;
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "chastease-frontend",
+  "version": "0.3.3",
+  "private": true,
+  "scripts": {
+    "css:build": "tailwindcss -i ./src/chastease/static/css/input.css -o ./src/chastease/static/css/app.css --minify",
+    "css:watch": "tailwindcss -i ./src/chastease/static/css/input.css -o ./src/chastease/static/css/app.css --watch",
+    "build": "npm run css:build"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  },
+  "dependencies": {
+    "alpinejs": "^3.14.9",
+    "htmx.org": "^2.0.4",
+    "marked": "^15.0.7"
+  }
+}

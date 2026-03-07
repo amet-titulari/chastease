@@ -25,7 +25,7 @@ function updateSummary(text) {
 
 function clearEntries(message = 'Keine Activity-Eintraege vorhanden.') {
   if (!entriesBodyEl) return;
-  const cell = `<td colspan="7" class="px-3 py-4 text-center text-gray-500 border border-gray-700">${escapeHtml(message)}</td>`;
+  const cell = `<td colspan="7" class="px-3 py-4 text-center text-text-tertiary border border-white/10">${escapeHtml(message)}</td>`;
   entriesBodyEl.innerHTML = `<tr>${cell}</tr>`;
 }
 
@@ -75,14 +75,14 @@ function renderActivities(activities) {
       const payloadText = escapeHtml(JSON.stringify(payload, null, 2));
       const created = escapeHtml(new Date(item.created_at || '').toLocaleString('de-DE') || '-');
       return `
-        <tr class="border-t border-gray-700">
-          <td class="px-3 py-2 align-top border border-gray-700">${statusHtml}</td>
-          <td class="px-3 py-2 align-top border border-gray-700 max-w-[180px] break-words">${actionType}</td>
-          <td class="px-3 py-2 align-top border border-gray-700">${source}</td>
-          <td class="px-3 py-2 align-top border border-gray-700">${turnNo}</td>
-          <td class="px-3 py-2 align-top border border-gray-700">${detail}</td>
-          <td class="px-3 py-2 align-top border border-gray-700 w-48"><pre class="text-xs whitespace-pre-wrap break-words mb-0">${payloadText}</pre></td>
-          <td class="px-3 py-2 align-top border border-gray-700 min-w-[140px]">${created}</td>
+        <tr class="border-t border-white/10">
+          <td class="px-3 py-2 align-top border border-white/10">${statusHtml}</td>
+          <td class="px-3 py-2 align-top border border-white/10 max-w-[180px] break-words">${actionType}</td>
+          <td class="px-3 py-2 align-top border border-white/10">${source}</td>
+          <td class="px-3 py-2 align-top border border-white/10">${turnNo}</td>
+          <td class="px-3 py-2 align-top border border-white/10">${detail}</td>
+          <td class="px-3 py-2 align-top border border-white/10 w-48"><pre class="text-xs whitespace-pre-wrap break-words mb-0">${payloadText}</pre></td>
+          <td class="px-3 py-2 align-top border border-white/10 min-w-[140px]">${created}</td>
         </tr>`;
     })
     .join('');

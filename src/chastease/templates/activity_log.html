@@ -3,40 +3,40 @@
 {% block title %}Activity Log - Chastease{% endblock %}
 
 {% block content %}
-  <section class="space-y-6 bg-gray-900 border border-gray-700 rounded-xl p-6">
+  <section class="section space-y-6 animate-fade-in">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold">Activity Log</h1>
-        <p class="text-sm text-gray-400">
+        <p class="text-sm text-text-tertiary">
           Sitzung: <span id="activityLogSessionId" data-initial-session-id="{{ session_id or '' }}">{{ session_id or '-' }}</span>
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <a href="/dashboard" class="px-4 py-2 text-sm font-medium rounded bg-gray-800 hover:bg-gray-700">Zurueck zum Dashboard</a>
-        <button id="activityLogReloadBtn" class="px-4 py-2 text-sm font-medium rounded bg-emerald-600 hover:bg-emerald-500">Neu laden</button>
+        <a href="/dashboard" class="btn-secondary text-sm">Zurueck zum Dashboard</a>
+        <button id="activityLogReloadBtn" class="btn-success text-sm">Neu laden</button>
       </div>
     </div>
 
-    <p id="activityLogSummary" class="text-sm text-gray-400">Activity-Eintraege werden geladen...</p>
-    <p id="activityLogStatus" class="text-sm text-gray-400">Status wird aktualisiert...</p>
+    <p id="activityLogSummary" class="text-sm text-text-tertiary" aria-live="polite">Activity-Eintraege werden geladen...</p>
+    <p id="activityLogStatus" class="text-sm text-text-tertiary" aria-live="polite">Status wird aktualisiert...</p>
 
-    <div class="bg-gray-800 border border-gray-700 rounded-2xl p-4">
+    <div class="card p-4">
       <div class="overflow-x-auto">
-        <table class="min-w-full text-sm text-gray-200">
-          <thead class="text-xs uppercase tracking-wide text-gray-400">
+        <table class="min-w-full text-sm text-text">
+          <thead class="text-xs uppercase tracking-wide text-text-tertiary">
             <tr>
-              <th class="px-3 py-2 text-left">Status</th>
-              <th class="px-3 py-2 text-left">Action</th>
-              <th class="px-3 py-2 text-left">Quelle</th>
-              <th class="px-3 py-2 text-left">Turn</th>
-              <th class="px-3 py-2 text-left">Detail</th>
-              <th class="px-3 py-2 text-left">Payload</th>
-              <th class="px-3 py-2 text-left">Erstellt</th>
+              <th class="table-header">Status</th>
+              <th class="table-header">Action</th>
+              <th class="table-header">Quelle</th>
+              <th class="table-header">Turn</th>
+              <th class="table-header">Detail</th>
+              <th class="table-header">Payload</th>
+              <th class="table-header">Erstellt</th>
             </tr>
           </thead>
           <tbody id="activityLogEntriesBody">
             <tr>
-              <td colspan="7" class="px-3 py-4 text-center text-gray-500 border border-gray-700">Keine Eintraege geladen.</td>
+              <td colspan="7" class="table-cell text-center text-text-tertiary">Keine Eintraege geladen.</td>
             </tr>
           </tbody>
         </table>

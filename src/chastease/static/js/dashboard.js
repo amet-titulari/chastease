@@ -192,7 +192,7 @@ function renderPsychogram(body) {
   if (!psychTraitsEl) return;
   psychTraitsEl.innerHTML = '';
   if (!entries.length) {
-    psychTraitsEl.innerHTML = '<p class="text-sm text-gray-400">Keine Trait-Werte verfügbar.</p>';
+    psychTraitsEl.innerHTML = '<p class="text-sm text-text-tertiary">Keine Trait-Werte verfügbar.</p>';
     return;
   }
 
@@ -200,13 +200,13 @@ function renderPsychogram(body) {
     const normalized = Math.max(0, Math.min(100, Number(value)));
     const label = traitLabels[key] || key;
     const row = document.createElement('div');
-    row.className = 'rounded border border-gray-700 p-2 bg-gray-900';
+    row.className = 'rounded border border-white/10 p-2 bg-surface';
     row.innerHTML = `
-      <div class="flex items-center justify-between text-sm text-gray-300 mb-1">
+      <div class="flex items-center justify-between text-sm text-text-secondary mb-1">
         <span>${label}</span>
         <span>${normalized}</span>
       </div>
-      <div class="h-2 rounded bg-gray-700 overflow-hidden">
+      <div class="h-2 rounded bg-surface-alt overflow-hidden">
         <div class="h-full bg-blue-500" style="width: ${normalized}%;"></div>
       </div>
     `;
@@ -311,8 +311,8 @@ function renderSessionInfo(body) {
     const tr = document.createElement('tr');
     tr.className = 'align-top';
     tr.innerHTML = `
-      <td class="py-2 pr-4 text-gray-400 font-medium whitespace-nowrap w-1/3">${SESSION_INFO_LABELS[key] || key}</td>
-      <td class="py-2 text-gray-100 break-all">${String(value)}</td>
+      <td class="py-2 pr-4 text-text-tertiary font-medium whitespace-nowrap w-1/3">${SESSION_INFO_LABELS[key] || key}</td>
+      <td class="py-2 text-text break-all">${String(value)}</td>
     `;
     tbodyEl.appendChild(tr);
   });
@@ -340,6 +340,15 @@ function updateView(body) {
   currentSession = body;
   if (activeEl) activeEl.textContent = describeActiveSession(body);
   if (setupEl) setupEl.textContent = describeSetup(body);
+  // Hide skeletons and show actual content
+  const countdownSkeleton = document.getElementById('countdownSkeleton');
+  const countdownActual = document.getElementById('countdownActual');
+  if (countdownSkeleton) countdownSkeleton.classList.add('hidden');
+  if (countdownActual) countdownActual.classList.remove('hidden');
+  const activeSessionSkeleton = document.getElementById('activeSessionSkeleton');
+  const setupSessionSkeleton = document.getElementById('setupSessionSkeleton');
+  if (activeSessionSkeleton) activeSessionSkeleton.classList.add('hidden');
+  if (setupSessionSkeleton) setupSessionSkeleton.classList.add('hidden');
   renderTimer(body);
   renderSessionInfo(body);
   renderPsychogram(body);

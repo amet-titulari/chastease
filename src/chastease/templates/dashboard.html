@@ -3,93 +3,110 @@
 {% block title %}Dashboard — Chastease{% endblock %}
 
 {% block content %}
-  <section class="mt-4 bg-gray-900 border border-gray-700 rounded-xl p-6 space-y-4">
+  <section class="section mt-4 animate-fade-in">
     <div>
       <h1 class="text-2xl font-semibold">Dashboard</h1>
-      <p id="dashboardStatus" class="text-sm text-gray-400 mt-2">Lade Sitzungsstatus...</p>
+      <p id="dashboardStatus" class="text-sm text-text-tertiary mt-2" aria-live="polite">Lade Sitzungsstatus...</p>
     </div>
 
-    <div class="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+    <div class="card p-5">
       <div class="flex items-center justify-between gap-2 mb-3">
         <h2 class="text-lg font-semibold">Countdown</h2>
-        <p id="dashboardTimerSummary" class="text-sm text-gray-400">-</p>
+        <p id="dashboardTimerSummary" class="text-sm text-text-tertiary">-</p>
       </div>
+      <!-- Skeleton state (shown while loading) -->
+      <div id="countdownSkeleton" class="flex items-center justify-center gap-3">
+        <div class="skeleton w-28 h-14 rounded-xl"></div>
+        <span class="text-text-tertiary">:</span>
+        <div class="skeleton w-20 h-14 rounded-xl"></div>
+        <span class="text-text-tertiary">:</span>
+        <div class="skeleton w-20 h-14 rounded-xl"></div>
+        <span class="text-text-tertiary">:</span>
+        <div class="skeleton w-20 h-14 rounded-xl"></div>
+      </div>
+      <!-- Actual countdown (hidden until loaded) -->
+      <div id="countdownActual" class="hidden">
       <div class="flex items-start justify-center gap-2 sm:gap-3 flex-nowrap overflow-x-auto" aria-label="Countdown">
         <div class="flex flex-col items-center gap-1 sm:gap-2 flex-none">
           <div class="flex items-center gap-0.5 sm:gap-1">
-            <span id="timerDayA" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-xl sm:text-3xl font-semibold">0</span>
-            <span id="timerDayB" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-xl sm:text-3xl font-semibold">0</span>
-            <span id="timerDayC" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-xl sm:text-3xl font-semibold">0</span>
+            <span id="timerDayA" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-white/10 bg-surface-alt flex items-center justify-center text-xl sm:text-3xl font-semibold transition-all">0</span>
+            <span id="timerDayB" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-white/10 bg-surface-alt flex items-center justify-center text-xl sm:text-3xl font-semibold transition-all">0</span>
+            <span id="timerDayC" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-white/10 bg-surface-alt flex items-center justify-center text-xl sm:text-3xl font-semibold transition-all">0</span>
           </div>
-          <span class="text-xs text-gray-400 uppercase">Tage</span>
+          <span class="text-xs text-text-tertiary uppercase">Tage</span>
         </div>
-        <span class="text-lg sm:text-2xl text-gray-400 mt-2 sm:mt-3 flex-none">:</span>
+        <span class="text-lg sm:text-2xl text-text-tertiary mt-2 sm:mt-3 flex-none">:</span>
         <div class="flex flex-col items-center gap-1 sm:gap-2 flex-none">
           <div class="flex items-center gap-0.5 sm:gap-1">
-            <span id="timerHourA" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-xl sm:text-3xl font-semibold">0</span>
-            <span id="timerHourB" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-xl sm:text-3xl font-semibold">0</span>
+            <span id="timerHourA" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-white/10 bg-surface-alt flex items-center justify-center text-xl sm:text-3xl font-semibold transition-all">0</span>
+            <span id="timerHourB" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-white/10 bg-surface-alt flex items-center justify-center text-xl sm:text-3xl font-semibold transition-all">0</span>
           </div>
-          <span class="text-xs text-gray-400 uppercase">Stunden</span>
+          <span class="text-xs text-text-tertiary uppercase">Stunden</span>
         </div>
-        <span class="text-lg sm:text-2xl text-gray-400 mt-2 sm:mt-3 flex-none">:</span>
+        <span class="text-lg sm:text-2xl text-text-tertiary mt-2 sm:mt-3 flex-none">:</span>
         <div class="flex flex-col items-center gap-1 sm:gap-2 flex-none">
           <div class="flex items-center gap-0.5 sm:gap-1">
-            <span id="timerMinA" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-xl sm:text-3xl font-semibold">0</span>
-            <span id="timerMinB" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-xl sm:text-3xl font-semibold">0</span>
+            <span id="timerMinA" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-white/10 bg-surface-alt flex items-center justify-center text-xl sm:text-3xl font-semibold transition-all">0</span>
+            <span id="timerMinB" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-white/10 bg-surface-alt flex items-center justify-center text-xl sm:text-3xl font-semibold transition-all">0</span>
           </div>
-          <span class="text-xs text-gray-400 uppercase">Minuten</span>
+          <span class="text-xs text-text-tertiary uppercase">Minuten</span>
         </div>
-        <span class="text-lg sm:text-2xl text-gray-400 mt-2 sm:mt-3 flex-none">:</span>
+        <span class="text-lg sm:text-2xl text-text-tertiary mt-2 sm:mt-3 flex-none">:</span>
         <div class="flex flex-col items-center gap-1 sm:gap-2 flex-none">
           <div class="flex items-center gap-0.5 sm:gap-1">
-            <span id="timerSecA" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-xl sm:text-3xl font-semibold">0</span>
-            <span id="timerSecB" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-gray-600 bg-gray-700 flex items-center justify-center text-xl sm:text-3xl font-semibold">0</span>
+            <span id="timerSecA" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-white/10 bg-surface-alt flex items-center justify-center text-xl sm:text-3xl font-semibold transition-all">0</span>
+            <span id="timerSecB" class="w-8 h-10 sm:min-w-11 sm:h-14 rounded-lg sm:rounded-xl border border-white/10 bg-surface-alt flex items-center justify-center text-xl sm:text-3xl font-semibold transition-all">0</span>
           </div>
-          <span class="text-xs text-gray-400 uppercase">Sekunden</span>
+          <span class="text-xs text-text-tertiary uppercase">Sekunden</span>
         </div>
+      </div>
       </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-2">
-        <p class="text-xs text-gray-500 uppercase tracking-wide">Active session</p>
-        <p id="activeSessionInfo" class="text-lg text-white">—</p>
+      <div class="card p-4 space-y-2">
+        <p class="text-xs text-text-tertiary uppercase tracking-wide">Active session</p>
+        <p id="activeSessionInfo" class="text-lg text-white">
+          <span class="skeleton-text inline-block" id="activeSessionSkeleton"></span>
+        </p>
       </div>
-      <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-2">
-        <p class="text-xs text-gray-500 uppercase tracking-wide">Setup status</p>
-        <p id="setupSessionInfo" class="text-lg text-white">—</p>
+      <div class="card p-4 space-y-2">
+        <p class="text-xs text-text-tertiary uppercase tracking-wide">Setup status</p>
+        <p id="setupSessionInfo" class="text-lg text-white">
+          <span class="skeleton-text inline-block" id="setupSessionSkeleton"></span>
+        </p>
       </div>
     </div>
     <div class="flex flex-wrap gap-2">
-      <button id="dashboardSetupBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">Go to setup</button>
+      <button id="dashboardSetupBtn" class="btn-primary">Go to setup</button>
       {% if session_kill_enabled %}
-        <button id="dashboardKillBtn" class="px-4 py-2 rounded bg-red-600 hover:bg-red-500">Kill session</button>
+        <button id="dashboardKillBtn" class="btn-danger">Kill session</button>
       {% endif %}
       {% if audit_log_enabled %}
-        <button id="dashboardAuditBtn" class="px-4 py-2 rounded bg-red-600 hover:bg-red-500">Audit log</button>
-        <button id="dashboardTurnBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">Turn log</button>
-        <button id="dashboardActivityBtn" class="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-500">Activity log</button>
+        <button id="dashboardAuditBtn" class="btn-danger">Audit log</button>
+        <button id="dashboardTurnBtn" class="btn-primary">Turn log</button>
+        <button id="dashboardActivityBtn" class="btn-success">Activity log</button>
       {% endif %}
-      <button id="dashboardRefreshBtn" class="px-4 py-2 rounded bg-gray-700 hover:bg-gray-600">Refresh</button>
+      <button id="dashboardRefreshBtn" class="btn-secondary">Refresh</button>
     </div>
 
     <!-- Session Info Table -->
-    <div id="sessionInfoSection" class="hidden bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
+    <div id="sessionInfoSection" class="hidden card p-4 space-y-3 animate-fade-in">
       <h2 class="text-lg font-semibold">Session-Informationen</h2>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
-          <tbody id="sessionInfoTableBody" class="divide-y divide-gray-700"></tbody>
+          <tbody id="sessionInfoTableBody" class="divide-y divide-white/10"></tbody>
         </table>
       </div>
     </div>
 
-    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
+    <div class="card p-4 space-y-3">
       <h2 class="text-lg font-semibold">Psychogramm</h2>
-      <p id="dashboardPsychSummary" class="text-sm text-gray-300">Noch kein Psychogramm verfügbar.</p>
-      <p id="dashboardPsychMeta" class="text-xs text-gray-400"></p>
-      <p id="dashboardPsychAnalysis" class="text-sm text-gray-300 whitespace-pre-wrap"></p>
+      <p id="dashboardPsychSummary" class="text-sm text-text-secondary">Noch kein Psychogramm verfügbar.</p>
+      <p id="dashboardPsychMeta" class="text-xs text-text-tertiary"></p>
+      <p id="dashboardPsychAnalysis" class="text-sm text-text-secondary whitespace-pre-wrap"></p>
       <div>
-        <h3 class="text-sm font-semibold text-gray-300 mb-2">Traits</h3>
+        <h3 class="text-sm font-semibold text-text-secondary mb-2">Traits</h3>
         <div id="dashboardPsychTraits" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
       </div>
     </div>
@@ -99,5 +116,5 @@
 {% block scripts %}
   <script src="/static/js/common.js"></script>
   <script src="/static/js/session.js"></script>
-  <script src="/static/js/dashboard.js?v=20260306"></script>
+  <script src="/static/js/dashboard.js?v=20260307b"></script>
 {% endblock %}

@@ -107,10 +107,10 @@ function showHygieneCountdownCard(resultBody) {
   contentDiv.className = 'flex-1';
 
   const bubble = document.createElement('div');
-  bubble.className = 'max-w-[90%] rounded-2xl bg-gray-800/80 text-gray-100 px-5 py-3 border border-cyan-600/50 shadow-lg';
+  bubble.className = 'max-w-[90%] rounded-2xl bg-surface-alt/80 text-text px-5 py-3 border border-cyan-600/50 shadow-lg';
 
   const card = document.createElement('div');
-  card.className = 'rounded-lg border border-cyan-600/50 bg-gray-900/50 p-4';
+  card.className = 'rounded-lg border border-cyan-600/50 bg-surface/50 p-4';
   card.setAttribute('data-hygiene-countdown-card', 'true');
 
   const title = document.createElement('div');
@@ -118,10 +118,10 @@ function showHygieneCountdownCard(resultBody) {
   title.textContent = 'Hygieneöffnung aktiv';
 
   const timer = document.createElement('div');
-  timer.className = 'mt-2 text-lg font-mono text-gray-100';
+  timer.className = 'mt-2 text-lg font-mono text-text';
 
   const hint = document.createElement('div');
-  hint.className = 'mt-1 text-xs text-gray-400';
+  hint.className = 'mt-1 text-xs text-text-tertiary';
   hint.textContent = 'Maximale Dauer (Countdown)';
 
   const closeBtn = document.createElement('button');
@@ -253,7 +253,7 @@ function appendMessage(role, text, opts = {}) {
     contentDiv.className = 'flex-1';
     
     const bubble = document.createElement('div');
-    bubble.className = 'max-w-[90%] rounded-2xl bg-gray-800/80 text-gray-100 px-5 py-3 border border-gray-700/50 shadow-lg prose prose-invert prose-sm max-w-none';
+    bubble.className = 'max-w-[90%] rounded-2xl bg-surface-alt/80 text-text px-5 py-3 border border-white/10 shadow-lg prose prose-invert prose-sm max-w-none';
     bubble.innerHTML = renderMarkdown(text);
     
     contentDiv.appendChild(bubble);
@@ -280,12 +280,12 @@ function appendAssistantInfoCard(titleText, bodyText, tone = 'neutral', opts = {
   contentDiv.className = 'flex-1';
 
   const bubble = document.createElement('div');
-  bubble.className = 'max-w-[90%] rounded-2xl bg-gray-800/80 text-gray-100 px-5 py-3 border border-gray-700/50 shadow-lg';
+  bubble.className = 'max-w-[90%] rounded-2xl bg-surface-alt/80 text-text px-5 py-3 border border-white/10 shadow-lg';
 
   const toneClasses = {
     success: 'border-emerald-500/40 bg-emerald-950/30 text-emerald-200',
     failed: 'border-rose-500/40 bg-rose-950/30 text-rose-200',
-    neutral: 'border-slate-600/60 bg-slate-900/50 text-slate-200',
+    neutral: 'border-white/10 bg-surface/50 text-text-secondary',
   };
 
   const card = document.createElement('div');
@@ -354,19 +354,19 @@ function renderAttachmentPreview() {
   attachmentPreviewEl.classList.remove('hidden');
   pendingAttachments.forEach((item, index) => {
     const chip = document.createElement('div');
-    chip.className = 'inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/90 px-2 py-1 text-xs text-slate-200';
+    chip.className = 'inline-flex items-center gap-2 rounded-lg border border-white/10 bg-surface-alt/90 px-2 py-1 text-xs text-text-secondary';
 
     const thumb = document.createElement('img');
     thumb.src = item.data_url;
     thumb.alt = item.name || 'Bild';
-    thumb.className = 'h-8 w-8 rounded object-cover border border-slate-600';
+    thumb.className = 'h-8 w-8 rounded object-cover border border-white/10';
 
     const label = document.createElement('span');
     label.textContent = item.name || `Bild ${index + 1}`;
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
-    removeBtn.className = 'rounded px-1 text-slate-300 hover:text-white';
+    removeBtn.className = 'rounded px-1 text-text-tertiary hover:text-text';
     removeBtn.textContent = '✕';
     removeBtn.title = 'Entfernen';
     removeBtn.addEventListener('click', () => {
@@ -422,7 +422,7 @@ function appendInlineActionCard(cardNode) {
   contentDiv.className = 'flex-1';
 
   const bubble = document.createElement('div');
-  bubble.className = 'max-w-[90%] rounded-2xl bg-gray-800/80 text-gray-100 px-5 py-3 border border-gray-700/50 shadow-lg';
+  bubble.className = 'max-w-[90%] rounded-2xl bg-surface-alt/80 text-text px-5 py-3 border border-white/10 shadow-lg';
   bubble.appendChild(cardNode);
 
   contentDiv.appendChild(bubble);
@@ -545,13 +545,13 @@ function renderPendingActions(pendingActions) {
     const isAbortDecision = actionType === 'abort_decision';
 
     const card = document.createElement('div');
-    card.className = 'rounded border border-gray-700 bg-gray-800 p-3';
+    card.className = 'rounded border border-white/10 bg-surface-alt p-3';
 
     const header = document.createElement('div');
     header.className = 'flex items-center justify-between';
 
     const title = document.createElement('div');
-    title.className = 'text-sm font-semibold text-gray-200';
+    title.className = 'text-sm font-semibold text-text';
     title.textContent = toPrettyActionName(actionType);
 
     const btn = document.createElement('button');
@@ -561,11 +561,11 @@ function renderPendingActions(pendingActions) {
     else btn.textContent = 'Ausführen';
 
     const payloadNode = document.createElement('pre');
-    payloadNode.className = 'mt-2 text-xs text-gray-300 bg-gray-900 border border-gray-700 rounded p-2 overflow-x-auto';
+    payloadNode.className = 'mt-2 text-xs text-text-secondary bg-surface border border-white/10 rounded p-2 overflow-x-auto';
     payloadNode.textContent = JSON.stringify(payload, null, 2);
 
     const hygieneHint = document.createElement('div');
-    hygieneHint.className = 'mt-2 text-xs text-gray-300';
+    hygieneHint.className = 'mt-2 text-xs text-text-secondary';
     if (actionType === 'hygiene_open') {
       const durationSeconds = Number(payload.duration_seconds || payload.opening_window_seconds || 0);
       const durationMinutes = durationSeconds > 0 ? Math.max(1, Math.floor(durationSeconds / 60)) : null;
@@ -579,11 +579,11 @@ function renderPendingActions(pendingActions) {
     const sealInputWrap = document.createElement('div');
     sealInputWrap.className = 'mt-2 hidden';
     const sealInputLabel = document.createElement('label');
-    sealInputLabel.className = 'text-xs text-gray-300 block';
+    sealInputLabel.className = 'text-xs text-text-secondary block';
     sealInputLabel.textContent = 'Neuer Plomben-/Siegeltext (Pflicht bei Plomben/Versiegelung)';
     const sealInput = document.createElement('input');
     sealInput.type = 'text';
-    sealInput.className = 'mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 text-sm';
+    sealInput.className = 'input mt-1 w-full text-sm';
     sealInput.placeholder = 'z.B. PLOMBE-2026-02-27-A';
     sealInputWrap.appendChild(sealInputLabel);
     sealInputWrap.appendChild(sealInput);
@@ -595,20 +595,20 @@ function renderPendingActions(pendingActions) {
     header.appendChild(title);
     if (isAbortDecision) {
       const helper = document.createElement('div');
-      helper.className = 'mt-2 text-xs text-gray-300';
+      helper.className = 'mt-2 text-xs text-text-secondary';
       helper.textContent = 'Ich habe ein mögliches Notfallsignal erkannt. Bitte kurz einordnen: ABBRECHEN oder NICHT ABBRECHEN (mit Begründung).';
 
       const reasonLabel = document.createElement('label');
-      reasonLabel.className = 'mt-2 text-xs text-gray-300 block';
+      reasonLabel.className = 'mt-2 text-xs text-text-secondary block';
       reasonLabel.textContent = 'Kurze Einordnung (Pflichtfeld)';
       const reasonInput = document.createElement('textarea');
-      reasonInput.className = 'mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 text-sm min-h-20';
+      reasonInput.className = 'input mt-1 w-full text-sm min-h-20';
       reasonInput.placeholder = 'Was ist der Kontext in 1–2 Sätzen?';
 
       const continueChecksWrap = document.createElement('div');
-      continueChecksWrap.className = 'mt-2 space-y-1 text-xs text-gray-300';
+      continueChecksWrap.className = 'mt-2 space-y-1 text-xs text-text-secondary';
       const checksTitle = document.createElement('div');
-      checksTitle.className = 'text-xs text-gray-400';
+      checksTitle.className = 'text-xs text-text-tertiary';
       checksTitle.textContent = 'Für "Kein Abbruch" bitte bestätigen:';
       const check1 = document.createElement('label');
       const check1Input = document.createElement('input');
@@ -776,15 +776,15 @@ function renderPendingActions(pendingActions) {
       const requestText = String(payload?.request || 'Bitte ein Verifikationsbild aufnehmen/hochladen.');
       const instructionText = String(payload?.verification_instruction || 'Prüfe, ob die angeforderte Bedingung im Bild sichtbar erfüllt ist.');
 
-      card.className = 'rounded border border-gray-700 bg-gray-800 p-3';
-      title.className = 'text-sm font-semibold text-gray-200';
+      card.className = 'rounded border border-white/10 bg-surface-alt p-3';
+      title.className = 'text-sm font-semibold text-text';
 
       const hint = document.createElement('div');
-      hint.className = 'mt-2 rounded border border-gray-700 bg-gray-900 p-2 text-sm text-gray-200';
+      hint.className = 'mt-2 rounded border border-white/10 bg-surface p-2 text-sm text-text';
       hint.textContent = `Anforderung: ${requestText}`;
 
       const instruction = document.createElement('div');
-      instruction.className = 'mt-2 rounded border border-gray-700 bg-gray-900 p-2 text-sm text-gray-300';
+      instruction.className = 'mt-2 rounded border border-white/10 bg-surface p-2 text-sm text-text-secondary';
       instruction.textContent = `Verifikation: ${instructionText}`;
 
       const controls = document.createElement('div');
@@ -801,17 +801,17 @@ function renderPendingActions(pendingActions) {
       fileInput.className = 'hidden';
 
       const previewWrap = document.createElement('div');
-      previewWrap.className = 'mt-2 hidden rounded border border-gray-700 bg-gray-900 p-2';
+      previewWrap.className = 'mt-2 hidden rounded border border-white/10 bg-surface p-2';
 
       const previewImage = document.createElement('img');
-      previewImage.className = 'max-h-44 rounded border border-gray-700';
+      previewImage.className = 'max-h-44 rounded border border-white/10';
       previewImage.alt = 'Vorschau Bildverifikation';
 
       const reviewControls = document.createElement('div');
       reviewControls.className = 'mt-2 hidden flex flex-wrap items-center gap-2';
 
       const selectedInfo = document.createElement('div');
-      selectedInfo.className = 'mt-1 text-xs text-gray-400';
+      selectedInfo.className = 'mt-1 text-xs text-text-tertiary';
       selectedInfo.textContent = 'Noch kein Bild gewählt.';
 
       const reviewState = document.createElement('div');

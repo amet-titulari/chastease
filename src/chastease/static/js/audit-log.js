@@ -25,7 +25,7 @@ function updateSummary(text) {
 
 function clearEntries(message = 'Keine Einträge vorhanden.') {
   if (!entriesBodyEl) return;
-  const cell = `<td colspan="4" class="px-3 py-4 text-center text-gray-500 border border-gray-700">${escapeHtml(message)}</td>`;
+  const cell = `<td colspan="4" class="px-3 py-4 text-center text-text-tertiary border border-white/10">${escapeHtml(message)}</td>`;
   entriesBodyEl.innerHTML = `<tr>${cell}</tr>`;
 }
 
@@ -62,13 +62,13 @@ function renderEntries(entries) {
       const detail = escapeHtml(entry.detail || '-');
       const timestamp = escapeHtml(new Date(entry.created_at || '').toLocaleString('de-DE') || '-');
       return `        
-        <tr class="border-t border-gray-700">
-          <td class="px-3 py-2 align-top border border-gray-700 max-w-[160px] break-words">${eventType}</td>
-          <td class="px-3 py-2 align-top border border-gray-700">${detail}</td>
-          <td class="px-3 py-2 align-top border border-gray-700 w-44">
-            <pre class="text-xs leading-snug text-gray-200 whitespace-pre-wrap break-words mb-0">${metadataHtml}</pre>
+        <tr class="border-t border-white/10">
+          <td class="px-3 py-2 align-top border border-white/10 max-w-[160px] break-words">${eventType}</td>
+          <td class="px-3 py-2 align-top border border-white/10">${detail}</td>
+          <td class="px-3 py-2 align-top border border-white/10 w-44">
+            <pre class="text-xs leading-snug text-text whitespace-pre-wrap break-words mb-0">${metadataHtml}</pre>
           </td>
-          <td class="px-3 py-2 align-top border border-gray-700 min-w-[140px]">${timestamp}</td>
+          <td class="px-3 py-2 align-top border border-white/10 min-w-[140px]">${timestamp}</td>
         </tr>`;
     })
     .join('');

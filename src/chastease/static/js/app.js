@@ -27,6 +27,20 @@ document.addEventListener('DOMContentLoaded', function () {
   if (chasterLoginBtn) chasterLoginBtn.addEventListener('click', () => handleChasterLoginClick());
 });
 
+function showFieldError(id, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function clearFieldErrors() {
+  document.querySelectorAll('.field-error').forEach(el => {
+    el.textContent = '';
+    el.classList.add('hidden');
+  });
+}
+
 function openContractPage() {
   window.location.href = '/contract';
 }
@@ -35,8 +49,18 @@ function handleLoginClick() {
   const username = document.getElementById('username')?.value || '';
   const password = document.getElementById('password')?.value || '';
   const infoEl = document.getElementById('userInfo');
-  if (!username || !password) {
-    chastease_common.setStatus(infoEl, 'Username and password required', 'err');
+  clearFieldErrors();
+  let hasError = false;
+  if (!username) {
+    showFieldError('usernameError', 'Username ist erforderlich');
+    hasError = true;
+  }
+  if (!password) {
+    showFieldError('passwordError', 'Passwort ist erforderlich');
+    hasError = true;
+  }
+  if (hasError) {
+    chastease_common.setStatus(infoEl, 'Bitte alle Pflichtfelder ausfüllen', 'err');
     return;
   }
   chastease_common.setStatus(infoEl, 'Logging in...');
@@ -69,12 +93,22 @@ function handleRegisterClick() {
   const password = document.getElementById('password')?.value || '';
   const passwordRepeat = document.getElementById('passwordRepeat')?.value || '';
   const infoEl = document.getElementById('userInfo');
-  if (!username || !password) {
-    chastease_common.setStatus(infoEl, 'Username and password required for register', 'err');
-    return;
+  clearFieldErrors();
+  let hasError = false;
+  if (!username) {
+    showFieldError('usernameError', 'Username ist erforderlich');
+    hasError = true;
   }
-  if (password !== passwordRepeat) {
-    chastease_common.setStatus(infoEl, 'Passwords do not match', 'err');
+  if (!password) {
+    showFieldError('passwordError', 'Passwort ist erforderlich');
+    hasError = true;
+  }
+  if (password && password !== passwordRepeat) {
+    showFieldError('passwordError', 'Passwörter stimmen nicht überein');
+    hasError = true;
+  }
+  if (hasError) {
+    chastease_common.setStatus(infoEl, 'Bitte alle Pflichtfelder korrekt ausfüllen', 'err');
     return;
   }
   chastease_common.setStatus(infoEl, 'Registering...');

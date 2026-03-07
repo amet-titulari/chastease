@@ -3,37 +3,37 @@
 {% block title %}Setup — Chastease{% endblock %}
 
 {% block content %}
-  <section class="mt-4 bg-gray-900 border border-gray-700 rounded-xl p-6 space-y-6">
+  <section class="section mt-4 space-y-6 animate-fade-in">
     <div>
       <h1 class="text-2xl font-semibold">Setup</h1>
-      <p id="setupInstructions" class="text-sm text-gray-400 mt-2">Setup-Session wird geladen…</p>
-      <p id="setupSessionInfo" class="text-sm text-gray-400 mt-1">-</p>
+      <p id="setupInstructions" class="text-sm text-text-tertiary mt-2" aria-live="polite">Setup-Session wird geladen…</p>
+      <p id="setupSessionInfo" class="text-sm text-text-tertiary mt-1">-</p>
     </div>
 
-    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
-      <button id="accBaseBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+    <div class="card p-4">
+      <button id="accBaseBtn" class="accordion-header" aria-expanded="true" aria-controls="accBaseBody">
         <span>Basis-Konfiguration</span>
-        <span id="accBaseChevron" class="text-gray-400">−</span>
+        <svg id="accBaseChevron" class="accordion-chevron w-5 h-5" data-open="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div id="accBaseBody" class="mt-4 space-y-4">
+      <div id="accBaseBody" class="mt-4 space-y-4" role="region">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
-          <label class="text-sm text-gray-400">Language</label>
-          <select id="setupLanguage" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+          <label class="label">Language</label>
+          <select id="setupLanguage" class="select mt-1">
             <option value="de">Deutsch</option>
             <option value="en">English</option>
           </select>
         </div>
         <div>
-          <label class="text-sm text-gray-400">Autonomy mode</label>
-          <select id="setupAutonomy" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+          <label class="label">Autonomy mode</label>
+          <select id="setupAutonomy" class="select mt-1">
             <option value="execute" selected>execute</option>
             <option value="suggest">suggest</option>
           </select>
         </div>
         <div>
-          <label class="text-sm text-gray-400">Hard stop</label>
-          <select id="setupHardStop" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+          <label class="label">Hard stop</label>
+          <select id="setupHardStop" class="select mt-1">
             <option value="true">enabled</option>
             <option value="false">disabled</option>
           </select>
@@ -42,81 +42,81 @@
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label class="text-sm text-gray-400">Vertragsstart</label>
-          <input id="contractStartDate" type="date" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+          <label class="label">Vertragsstart</label>
+          <input id="contractStartDate" type="date" class="input mt-1" />
         </div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label class="text-sm text-gray-400">Min Enddatum</label>
-          <input id="contractMinEndDate" type="date" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+          <label class="label">Min Enddatum</label>
+          <input id="contractMinEndDate" type="date" class="input mt-1" />
         </div>
         <div>
-          <label class="text-sm text-gray-400">Mindestdauer (Tage)</label>
-          <input id="contractMinDurationDays" type="number" min="0" max="3650" value="30" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+          <label class="label">Mindestdauer (Tage)</label>
+          <input id="contractMinDurationDays" type="number" min="0" max="3650" value="30" class="input mt-1" />
         </div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label class="text-sm text-gray-400">Max Enddatum</label>
-          <input id="contractMaxEndDate" type="date" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+          <label class="label">Max Enddatum</label>
+          <input id="contractMaxEndDate" type="date" class="input mt-1" />
         </div>
         <div>
-          <label class="text-sm text-gray-400">Max Dauer (Tage)</label>
-          <input id="contractMaxDurationDays" type="number" min="0" max="3650" value="365" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+          <label class="label">Max Dauer (Tage)</label>
+          <input id="contractMaxDurationDays" type="number" min="0" max="3650" value="365" class="input mt-1" />
         </div>
       </div>
-      <p id="durationHint" class="text-xs text-gray-500">0 Tage bei "Max Dauer" bedeutet: Enddatum wird durch die KI bestimmt.</p>
+      <p id="durationHint" class="text-xs text-text-tertiary">0 Tage bei "Max Dauer" bedeutet: Enddatum wird durch die KI bestimmt.</p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label class="text-sm text-gray-400">Penalty-Cap pro Tag (Minuten)</label>
-          <input id="maxPenaltyPerDayMinutes" type="number" min="0" max="1440" value="0" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+          <label class="label">Penalty-Cap pro Tag (Minuten)</label>
+          <input id="maxPenaltyPerDayMinutes" type="number" min="0" max="1440" value="0" class="input mt-1" />
         </div>
         <div>
-          <label class="text-sm text-gray-400">Penalty-Cap pro Woche (Minuten)</label>
-          <input id="maxPenaltyPerWeekMinutes" type="number" min="0" max="10080" value="0" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+          <label class="label">Penalty-Cap pro Woche (Minuten)</label>
+          <input id="maxPenaltyPerWeekMinutes" type="number" min="0" max="10080" value="0" class="input mt-1" />
         </div>
       </div>
-      <p class="text-xs text-gray-500">Hinweis: 0 deaktiviert das jeweilige Penalty-Cap.</p>
+      <p class="text-xs text-text-tertiary">Hinweis: 0 deaktiviert das jeweilige Penalty-Cap.</p>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
-          <label class="text-sm text-gray-400">Openings period</label>
-          <select id="openingLimitPeriod" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+          <label class="label">Openings period</label>
+          <select id="openingLimitPeriod" class="select mt-1">
             <option value="day">day</option>
             <option value="week">week</option>
             <option value="month" selected>month</option>
           </select>
         </div>
         <div>
-          <label class="text-sm text-gray-400">Max openings / period</label>
-          <input id="maxOpeningsInPeriod" type="number" min="0" max="200" value="7" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+          <label class="label">Max openings / period</label>
+          <input id="maxOpeningsInPeriod" type="number" min="0" max="200" value="7" class="input mt-1" />
         </div>
         <div>
-          <label class="text-sm text-gray-400">Opening window (min)</label>
-          <input id="openingWindowMinutes" type="number" min="1" max="240" value="15" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
+          <label class="label">Opening window (min)</label>
+          <input id="openingWindowMinutes" type="number" min="1" max="240" value="15" class="input mt-1" />
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label class="text-sm text-gray-400">Plomben / Siegelung</label>
-          <select id="setupSealMode" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+          <label class="label">Plomben / Siegelung</label>
+          <select id="setupSealMode" class="select mt-1">
             <option value="none" selected>Keine (freie Öffnungen)</option>
             <option value="versiegelung">Versiegelung (Nummern erforderlich)</option>
           </select>
-          <small class="text-xs text-gray-500 block mt-1">Bei aktivierter Versiegelung: Eine neue Nummer muss bei jeder Hygieneöffnung eingetragen werden</small>
+          <small class="text-xs text-text-tertiary block mt-1">Bei aktivierter Versiegelung: Eine neue Nummer muss bei jeder Hygieneöffnung eingetragen werden</small>
         </div>
         <div id="initialSealNumberWrap" class="hidden">
-          <label class="text-sm text-gray-400">Erste Plombennummer</label>
-          <input id="setupInitialSealNumber" type="text" placeholder="z.B. PLOMBE-2026-03-01-A" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" />
-          <small class="text-xs text-gray-500 block mt-1">Mindestens 3 Zeichen erforderlich</small>
+          <label class="label">Erste Plombennummer</label>
+          <input id="setupInitialSealNumber" type="text" placeholder="z.B. PLOMBE-2026-03-01-A" class="input mt-1" />
+          <small class="text-xs text-text-tertiary block mt-1">Mindestens 3 Zeichen erforderlich</small>
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
-          <label class="text-sm text-gray-400">Wie sollen Anweisungen gegeben werden</label>
-          <select id="setupInstructionStyle" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" required>
+          <label class="label">Wie sollen Anweisungen gegeben werden</label>
+          <select id="setupInstructionStyle" class="select mt-1" required>
             <option value="direct_command">direkt & befehlsartig</option>
             <option value="polite_authoritative">höflich-autoritär</option>
             <option value="suggestive">suggestiv / verführerisch</option>
@@ -124,8 +124,8 @@
           </select>
         </div>
         <div>
-          <label class="text-sm text-gray-400">Welche Intensität möchtest du spielen</label>
-          <select id="setupDesiredIntensity" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" required>
+          <label class="label">Welche Intensität möchtest du spielen</label>
+          <select id="setupDesiredIntensity" class="select mt-1" required>
             <option value="low">niedrig</option>
             <option value="medium">mittel</option>
             <option value="strong" selected>stark</option>
@@ -133,8 +133,8 @@
           </select>
         </div>
         <div>
-          <label class="text-sm text-gray-400">Welche Intimrasur-Präferenz soll beachtet werden</label>
-          <select id="setupGroomingPreference" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" required>
+          <label class="label">Welche Intimrasur-Präferenz soll beachtet werden</label>
+          <select id="setupGroomingPreference" class="select mt-1" required>
             <option value="no_preference">keine Präferenz</option>
             <option value="clean_shaven" selected>glatt rasiert</option>
             <option value="trimmed">getrimmt</option>
@@ -145,220 +145,220 @@
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label class="text-sm text-gray-400">TTLock integration</label>
-          <select id="setupIntTtlock" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+          <label class="label">TTLock integration</label>
+          <select id="setupIntTtlock" class="select mt-1">
             <option value="true" selected>enabled</option>
             <option value="false">disabled</option>
           </select>
         </div>
         <div>
-          <label class="text-sm text-gray-400">Chaster integration</label>
-          <select id="setupIntChaster" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+          <label class="label">Chaster integration</label>
+          <select id="setupIntChaster" class="select mt-1">
             <option value="false">disabled</option>
             <option value="true">enabled</option>
           </select>
         </div>
       </div>
 
-      <div id="chasterSection" class="hidden mt-2 space-y-4 border-t border-gray-700/70 pt-4">
+      <div id="chasterSection" class="hidden mt-2 space-y-4 border-t border-white/10 pt-4">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div id="chasterLegacyTokenWrap">
-            <label class="text-sm text-gray-400">Chaster API Token (Legacy/Fallback)</label>
-            <input id="chasterApiToken" type="password" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" placeholder="Bearer token" autocomplete="off" />
+            <label class="label">Chaster API Token (Legacy/Fallback)</label>
+            <input id="chasterApiToken" type="password" class="input mt-1" placeholder="Bearer token" autocomplete="off" />
           </div>
           <div>
-            <label class="text-sm text-gray-400">Kombinationscode</label>
-            <input id="chasterCode" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 opacity-80" placeholder="wird automatisch generiert" readonly disabled />
+            <label class="label">Kombinationscode</label>
+            <input id="chasterCode" class="input mt-1 opacity-80" placeholder="wird automatisch generiert" readonly disabled />
           </div>
         </div>
         <div id="chasterDurationWrap" class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label class="text-sm text-gray-400">Min Dauer (Minuten)</label>
-            <input id="chasterMinDurationMinutes" type="number" min="1" max="525600" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 opacity-80" value="43200" readonly disabled />
+            <label class="label">Min Dauer (Minuten)</label>
+            <input id="chasterMinDurationMinutes" type="number" min="1" max="525600" class="input mt-1 opacity-80" value="43200" readonly disabled />
           </div>
           <div>
-            <label class="text-sm text-gray-400">Max Dauer (Minuten)</label>
-            <input id="chasterMaxDurationMinutes" type="number" min="1" max="525600" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700 opacity-80" value="525600" readonly disabled />
+            <label class="label">Max Dauer (Minuten)</label>
+            <input id="chasterMaxDurationMinutes" type="number" min="1" max="525600" class="input mt-1 opacity-80" value="525600" readonly disabled />
           </div>
         </div>
-        <p class="text-xs text-gray-400">Diese Werte werden automatisch aus dem Basis-Setup (min/max Vertragsdauer) übernommen.</p>
+        <p class="text-xs text-text-tertiary">Diese Werte werden automatisch aus dem Basis-Setup (min/max Vertragsdauer) übernommen.</p>
         <div id="chasterLimitWrap" class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label class="text-sm text-gray-400">Min Limit Dauer (Minuten)</label>
-            <input id="chasterMinLimitDurationMinutes" type="number" min="0" max="525600" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="0" />
+            <label class="label">Min Limit Dauer (Minuten)</label>
+            <input id="chasterMinLimitDurationMinutes" type="number" min="0" max="525600" class="input mt-1" value="0" />
           </div>
           <div>
-            <label class="text-sm text-gray-400">Max Limit Dauer (Minuten)</label>
-            <input id="chasterMaxLimitDurationMinutes" type="number" min="0" max="525600" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="0" />
+            <label class="label">Max Limit Dauer (Minuten)</label>
+            <input id="chasterMaxLimitDurationMinutes" type="number" min="0" max="525600" class="input mt-1" value="0" />
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label class="flex items-center gap-2 text-sm text-gray-300">
+          <label class="flex items-center gap-2 text-sm text-text-secondary">
             <input id="chasterLimitLockTime" type="checkbox" class="accent-sky-500" checked />
             Lock Time limitieren (`limitLockTime`)
           </label>
-          <label class="flex items-center gap-2 text-sm text-gray-300">
+          <label class="flex items-center gap-2 text-sm text-text-secondary">
             <input id="chasterAllowSessionOffer" type="checkbox" class="accent-sky-500" checked />
             Session Offer erlauben
           </label>
-          <label class="flex items-center gap-2 text-sm text-gray-300">
+          <label class="flex items-center gap-2 text-sm text-text-secondary">
             <input id="chasterIsTestLock" type="checkbox" class="accent-sky-500" />
             Test-Lock (`isTestLock`)
           </label>
-          <label class="flex items-center gap-2 text-sm text-gray-300">
+          <label class="flex items-center gap-2 text-sm text-text-secondary">
             <input id="chasterHideTimeLogs" type="checkbox" class="accent-sky-500" checked />
             Time Logs ausblenden
           </label>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label class="flex items-center gap-2 text-sm text-gray-300">
+          <label class="flex items-center gap-2 text-sm text-text-secondary">
             <input id="chasterEnableVerificationPicture" type="checkbox" class="accent-sky-500" checked />
             Extension: Verification Picture
           </label>
-          <label class="flex items-center gap-2 text-sm text-gray-300">
+          <label class="flex items-center gap-2 text-sm text-text-secondary">
             <input id="chasterEnableHygieneOpening" type="checkbox" class="accent-sky-500" checked />
             Extension: Hygieneoeffnung
           </label>
         </div>
-        <p class="text-xs text-gray-400">Slug + Config werden fest uebergeben (`verification-picture` und `temporary-opening`).</p>
-        <p id="chasterInfo" class="text-sm text-gray-400">Chaster-Daten werden zusammen mit der Basis-Konfiguration gespeichert. Die Session wird weiter erst bei Vertragsakzeptanz erstellt.</p>
+        <p class="text-xs text-text-tertiary">Slug + Config werden fest uebergeben (`verification-picture` und `temporary-opening`).</p>
+        <p id="chasterInfo" class="label">Chaster-Daten werden zusammen mit der Basis-Konfiguration gespeichert. Die Session wird weiter erst bei Vertragsakzeptanz erstellt.</p>
       </div>
 
       <div class="flex flex-wrap gap-2">
-        <button id="setupStartBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">Speichern</button>
+        <button id="setupStartBtn" class="btn-primary">Speichern</button>
       </div>
       </div>
     </div>
 
-    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
-      <button id="accLlmBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+    <div class="card p-4">
+      <button id="accLlmBtn" class="accordion-header" aria-expanded="false" aria-controls="accLlmBody">
         <span>LLM Konfiguration</span>
-        <span id="accLlmChevron" class="text-gray-400">+</span>
+        <svg id="accLlmChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div id="accLlmBody" class="mt-4 space-y-4 hidden">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label class="text-sm text-gray-400">Provider</label>
-            <input id="llmProviderName" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="custom" />
+            <label class="label">Provider</label>
+            <input id="llmProviderName" class="input mt-1" value="custom" />
           </div>
           <div>
-            <label class="text-sm text-gray-400">LLM API URL</label>
-            <input id="llmApiUrl" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" placeholder="https://..." value="https://api.x.ai/v1/chat/completions" />
+            <label class="label">LLM API URL</label>
+            <input id="llmApiUrl" class="input mt-1" placeholder="https://..." value="https://api.x.ai/v1/chat/completions" />
           </div>
           <div>
-            <label class="text-sm text-gray-400">LLM API Key</label>
-            <input id="llmApiKey" type="password" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" placeholder="leave empty to keep existing key" />
+            <label class="label">LLM API Key</label>
+            <input id="llmApiKey" type="password" class="input mt-1" placeholder="leave empty to keep existing key" />
           </div>
           <div>
-            <label class="text-sm text-gray-400">Chat model</label>
-            <input id="llmChatModel" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="grok-4-1-fast-non-reasoning" />
+            <label class="label">Chat model</label>
+            <input id="llmChatModel" class="input mt-1" value="grok-4-1-fast-non-reasoning" />
           </div>
           <div>
-            <label class="text-sm text-gray-400">Vision model</label>
-            <input id="llmVisionModel" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" value="grok-4-1-fast-non-reasoning" />
+            <label class="label">Vision model</label>
+            <input id="llmVisionModel" class="input mt-1" value="grok-4-1-fast-non-reasoning" />
           </div>
           <div>
-            <label class="text-sm text-gray-400">Profile active</label>
-            <select id="llmIsActive" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+            <label class="label">Profile active</label>
+            <select id="llmIsActive" class="select mt-1">
               <option value="true">enabled</option>
               <option value="false">disabled</option>
             </select>
           </div>
         </div>
         <div>
-          <label class="text-sm text-gray-400">Behavior prompt</label>
-          <textarea id="llmBehaviorPrompt" class="mt-1 w-full min-h-28 rounded-md bg-gray-900 p-2 border border-gray-700"></textarea>
+          <label class="label">Behavior prompt</label>
+          <textarea id="llmBehaviorPrompt" class="input mt-1 min-h-28"></textarea>
         </div>
-        <p id="llmInfo" class="text-sm text-gray-400"></p>
-        <div class="space-y-2">
-          <button id="liveTestLlmBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Test live</button>
-          <button id="saveLlmProfileBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 hidden" disabled>Speichern</button>
+        <p id="llmInfo" class="label" aria-live="polite"></p>
+        <div class="flex flex-wrap gap-2">
+          <button id="liveTestLlmBtn" class="btn-outline">Test live</button>
+          <button id="saveLlmProfileBtn" class="btn-primary hidden" disabled>Speichern</button>
         </div>
       </div>
     </div>
 
-    <div id="ttlockSection" class="bg-gray-800 border border-gray-700 rounded-lg p-4">
-      <button id="accTtlockBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+    <div id="ttlockSection" class="card p-4">
+      <button id="accTtlockBtn" class="accordion-header" aria-expanded="false" aria-controls="accTtlockBody">
         <span>TTLock Konfiguration</span>
-        <span id="accTtlockChevron" class="text-gray-400">+</span>
+        <svg id="accTtlockChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div id="accTtlockBody" class="mt-4 space-y-4 hidden">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label class="text-sm text-gray-400">TTLock user</label>
-            <input id="ttlockUser" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" placeholder="email or account" value="eritque.clausus@gmx.net" />
+            <label class="label">TTLock user</label>
+            <input id="ttlockUser" class="input mt-1" placeholder="email or account" value="eritque.clausus@gmx.net" />
           </div>
           <div>
-            <label class="text-sm text-gray-400">TTLock password</label>
-            <input id="ttlockPassword" type="password" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700" autocomplete="current-password" />
+            <label class="label">TTLock password</label>
+            <input id="ttlockPassword" type="password" class="input mt-1" autocomplete="current-password" />
           </div>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button id="ttlockDiscoverBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Geräte suchen</button>
+          <button id="ttlockDiscoverBtn" class="btn-outline">Geräte suchen</button>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label class="text-sm text-gray-400">Gateway</label>
-            <select id="ttlockGatewayId" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+            <label class="label">Gateway</label>
+            <select id="ttlockGatewayId" class="select mt-1">
               <option value="">-</option>
             </select>
           </div>
           <div>
-            <label class="text-sm text-gray-400">Lock</label>
-            <select id="ttlockLockId" class="mt-1 w-full rounded-md bg-gray-900 p-2 border border-gray-700">
+            <label class="label">Lock</label>
+            <select id="ttlockLockId" class="select mt-1">
               <option value="">-</option>
             </select>
           </div>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button id="saveTtlockBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 hidden" disabled>Speichern</button>
+          <button id="saveTtlockBtn" class="btn-primary hidden" disabled>Speichern</button>
         </div>
-        <p id="ttlockDiscoverInfo" class="text-sm text-gray-400"></p>
+        <p id="ttlockDiscoverInfo" class="label" aria-live="polite"></p>
       </div>
     </div>
 
-    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
-      <button id="accQuestionBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+    <div class="card p-4">
+      <button id="accQuestionBtn" class="accordion-header" aria-expanded="false" aria-controls="accQuestionBody">
         <span>Psychogramm</span>
-        <span id="accQuestionChevron" class="text-gray-400">+</span>
+        <svg id="accQuestionChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div id="accQuestionBody" class="mt-4 space-y-4 hidden">
-        <p class="text-sm text-gray-400">Voraussetzung: LLM Live-Test muss erfolgreich sein und gespeichert werden.</p>
+        <p class="label">Voraussetzung: LLM Live-Test muss erfolgreich sein und gespeichert werden.</p>
         <div id="questionnaireWrap" class="space-y-3"></div>
         <div class="flex flex-wrap gap-2">
-          <button id="submitAnswersBtn" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">Speichern</button>
+          <button id="submitAnswersBtn" class="btn-primary">Speichern</button>
         </div>
       </div>
     </div>
 
-    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
-      <button id="accCompletionBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+    <div class="card p-4">
+      <button id="accCompletionBtn" class="accordion-header" aria-expanded="false" aria-controls="accCompletionBody">
         <span>Setup abschließen</span>
-        <span id="accCompletionChevron" class="text-gray-400">+</span>
+        <svg id="accCompletionChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div id="accCompletionBody" class="mt-4 space-y-4 hidden">
-        <p class="text-sm text-gray-400">Wenn das Psychogramm gespeichert wurde, kannst du das Setup hier abschließen und zur Dashboard-Ansicht wechseln.</p>
+        <p class="label">Wenn das Psychogramm gespeichert wurde, kannst du das Setup hier abschließen und zur Dashboard-Ansicht wechseln.</p>
         <div class="flex flex-wrap gap-2">
-            <button id="completeSetupBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Setup abschließen</button>
+            <button id="completeSetupBtn" class="btn-outline">Setup abschließen</button>
         </div>
         <div id="completeSetupConfirmWrap" class="hidden space-y-3">
           <p class="text-sm text-red-300">ACHTUNG: Nach dem akzeptieren können keine weiteren Anpassungen mehr vorgenommen werden.</p>
-          <button id="confirmCompleteSetupBtn" class="px-4 py-2 rounded bg-red-600 hover:bg-red-500">Akzeptieren und weiterfahren</button>
+          <button id="confirmCompleteSetupBtn" class="btn-danger">Akzeptieren und weiterfahren</button>
         </div>
       </div>
     </div>
 
-    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
-      <button id="accArtifactsBtn" class="w-full flex items-center justify-between text-left text-lg font-semibold">
+    <div class="card p-4">
+      <button id="accArtifactsBtn" class="accordion-header" aria-expanded="false" aria-controls="accArtifactsBody">
         <span>Artifacts</span>
-        <span id="accArtifactsChevron" class="text-gray-400">+</span>
+        <svg id="accArtifactsChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div id="accArtifactsBody" class="mt-4 space-y-4 hidden">
       <div class="flex flex-wrap gap-2">
-          <button id="generateArtifactsBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Analyse + Vertrag erstellen</button>
-          <button id="acceptConsentBtn" class="px-4 py-2 rounded border border-sky-600 text-sky-300 hover:bg-sky-900/30 transition">Einwilligung akzeptieren</button>
+          <button id="generateArtifactsBtn" class="btn-outline">Analyse + Vertrag erstellen</button>
+          <button id="acceptConsentBtn" class="btn-outline">Einwilligung akzeptieren</button>
       </div>
-      <textarea id="consentText" class="w-full min-h-20 rounded-md bg-gray-900 p-2 border border-gray-700" placeholder="Consent text (optional, will auto-fill required text if empty)"></textarea>
+      <textarea id="consentText" class="input min-h-20" placeholder="Consent text (optional, will auto-fill required text if empty)"></textarea>
       </div>
     </div>
 
@@ -368,5 +368,5 @@
 {% block scripts %}
   <script src="/static/js/common.js"></script>
   <script src="/static/js/session.js"></script>
-  <script src="/static/js/setup.js?v=20260307"></script>
+  <script src="/static/js/setup.js?v=20260307b"></script>
 {% endblock %}
