@@ -848,9 +848,12 @@ function renderPendingActions(pendingActions) {
         const file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
         if (!file) return;
         try {
+          console.log('[ImageVerification] File selected:', file.name, 'Type:', file.type, 'Size:', file.size, 'bytes');
           const dataUrl = await fileToDataUrl(file);
+          console.log('[ImageVerification] DataURL generated, length:', dataUrl.length, 'Preview:', dataUrl.substring(0, 100));
           setSelectedImage(dataUrl, file.name || 'image.jpg', file.type || 'image/jpeg', `Bild gewählt: ${file.name || 'image.jpg'}`);
         } catch (error) {
+          console.error('[ImageVerification] Error reading file:', error);
           setStatus(String(error?.message || error), true);
         }
       });
@@ -874,6 +877,12 @@ function renderPendingActions(pendingActions) {
         if (!selectedImage?.dataUrl) return setStatus('Bitte ein Bild aufnehmen oder auswählen.', true);
 
         try {
+          console.log('[ImageVerification] Sending review request...');
+          console.log('[ImageVerification] - Session:', activeSessionId);
+          console.log('[ImageVerification] - Picture name:', selectedImage.pictureName);
+          console.log('[ImageVerification] - Picture type:', selectedImage.pictureType);
+          console.log('[ImageVerification] - DataURL length:', selectedImage.dataUrl.length);
+          console.log('[ImageVerification] - DataURL prefix:', selectedImage.dataUrl.substring(0, 100));
           setStatus('Bildprüfung gestartet...');
           reviewBtn.disabled = true;
           reviewBtn.textContent = 'Prüfung läuft...';
@@ -893,6 +902,7 @@ function renderPendingActions(pendingActions) {
             verification_action_payload: payload,
             source: selectedImage.pictureName === 'camera.jpg' ? 'camera_capture' : 'upload',
           });
+          console.log('[ImageVerification] Review response received:', body?.result);
           const verificationOutcome = findImageVerificationOutcome(body);
           if (verificationOutcome === 'success') {
             appendAssistantInfoCard('Bildprüfung bestanden', body?.narration || 'Die Bildprüfung war erfolgreich.', 'success');
@@ -927,8 +937,20 @@ function renderPendingActions(pendingActions) {
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+    reader.onload = () => {
+      const result = reader.result;
+      if (!result || typeof result !== 'string' || result.length < 50) {
+        console.error('[FileReader] Invalid or empty result:', result);
+        reject(new Error('Datei konnte nicht korrekt gelesen werden (leeres Ergebnis).'));
+        return;
+      }
+      console.log('[FileReader] Read success, result length:', result.length);
+      resolve(result);
+    };
+    reader.onerror = () => {
+      console.error('[FileReader] Read error:', reader.error);
+      reject(new Error('Datei konnte nicht gelesen werden.'));
+    };
     reader.readAsDataURL(file);
   });
 }

@@ -2084,6 +2084,8 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
 
 @router.post("/vision-review")
 def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> dict:
+    import logging
+    logger = logging.getLogger(__name__)
     request_lang = lang(payload.language)
     prompt = payload.message.strip()
     if not prompt:
@@ -2091,13 +2093,20 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
     content_type = payload.picture_content_type.lower()
     if not content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="picture_content_type must be image/*")
+    logger.info(f"[ImageVerification] Received vision-review request for session {payload.session_id}")
+    logger.info(f"[ImageVerification] - Picture name: {payload.picture_name}")
+    logger.info(f"[ImageVerification] - Content type: {content_type}")
+    logger.info(f"[ImageVerification] - DataURL length: {len(payload.picture_data_url)} chars")
+    logger.info(f"[ImageVerification] - DataURL prefix: {payload.picture_data_url[:100]}")
     if not payload.picture_data_url.startswith(f"data:{content_type};base64,"):
         raise HTTPException(status_code=400, detail="Invalid picture_data_url format.")
     image_b64 = payload.picture_data_url.split(",", 1)[1]
+    logger.info(f"[ImageVerification] - Base64 length: {len(image_b64)} chars")
     try:
         image_bytes = base64.b64decode(image_b64)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid base64 image payload.") from exc
+    logger.info(f"[ImageVerification] - Decoded image size: {len(image_bytes)} bytes")
     if len(image_bytes) > 8 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="picture too large (max 8MB)")
     # Validate actual image content by checking magic bytes
