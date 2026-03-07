@@ -1,3 +1,7 @@
+import json
+from pathlib import Path
+
+
 def _register_user(client, username: str) -> tuple[str, str]:
     response = client.post(
         "/api/v1/auth/register",
@@ -350,3 +354,32 @@ def test_roleplay_asset_import_overwrites_when_enabled(client):
     assert custom_characters[0]["asset_id"] == character_id
     assert custom_characters[0]["greeting_template"] == "Imported greeting."
     assert custom_characters[0]["persona"]["description"] == "Imported overwrite."
+
+
+def test_roleplay_asset_import_accepts_committed_character_card_conversion(client):
+    user_id, auth_token = _register_user(client, "rp-amet-import")
+    fixture_path = Path(__file__).resolve().parents[1] / "docs" / "roleplay" / "Amet_Titulari_chastease_import.json"
+    library_payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+
+    imported = client.post(
+        "/api/v1/roleplay/import",
+        json={
+            "user_id": user_id,
+            "auth_token": auth_token,
+            "library": library_payload,
+        },
+    )
+    assert imported.status_code == 200
+    import_body = imported.json()
+    assert import_body["imported"] == {"characters": 1, "scenarios": 1}
+    assert import_body["characters"][0]["display_name"] == "Amet Titulari"
+    assert import_body["characters"][0]["persona"]["speech_style"]["dominance_style"] == "gentle-dominant"
+    assert import_body["scenarios"][0]["title"] == "Amet Titulari Devotion Protocol"
+
+    library = client.get(
+        f"/api/v1/roleplay/library?user_id={user_id}&auth_token={auth_token}&language=de"
+    )
+    assert library.status_code == 200
+    library_body = library.json()
+    assert any(item["asset_id"] == "amet-titulari-gentle-keyholder" for item in library_body["characters"])
+    assert any(item["asset_id"] == "amet-titulari-devotion-protocol" for item in library_body["scenarios"])
