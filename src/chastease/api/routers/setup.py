@@ -26,6 +26,7 @@ from chastease.models import Character, ChastitySession, Turn, User
 from chastease.api.setup_domain import (
     _build_policy,
     _build_psychogram,
+    _build_roleplay_profile,
     _create_draft_setup_session,
     _ensure_generated_contract_consent,
     _find_user_setup_session,
@@ -35,6 +36,7 @@ from chastease.api.setup_domain import (
     _normalize_consent_for_compare,
     _now_iso,
     _psychogram_brief,
+    _refresh_setup_derived_state,
     _render_contract_with_consent,
     _required_contract_consent_text,
     _resolve_contract_dates,
@@ -410,8 +412,7 @@ def _apply_calibration_to_setup(setup_session: dict, inferred: dict[str, str], n
         for question_id, value in answers_by_question.items()
     ]
 
-    setup_session["psychogram"] = _build_psychogram(setup_session)
-    setup_session["policy_preview"] = _build_policy(setup_session, setup_session["psychogram"])
+    _refresh_setup_derived_state(setup_session)
     setup_session["updated_at"] = now_iso
     return changed
 
@@ -614,9 +615,11 @@ def ai_calibration_turn(setup_session_id: str, payload: SetupAICalibrationTurnRe
         db = get_db_session(request)
         try:
             if setup_session.get("psychogram") is None:
-                setup_session["psychogram"] = _build_psychogram(setup_session)
+                _refresh_setup_derived_state(setup_session)
             if setup_session.get("policy_preview") is None:
                 setup_session["policy_preview"] = _build_policy(setup_session, setup_session["psychogram"])
+                if setup_session.get("roleplay_profile") is not None:
+                    setup_session["policy_preview"]["roleplay"] = setup_session["roleplay_profile"]
 
             instruction = (
                 "You are calibrating a roleplay session setup. Return JSON only (no markdown) with exactly this shape: "
@@ -904,8 +907,7 @@ def submit_setup_answers(setup_session_id: str, payload: SetupAnswersRequest, re
         {"question_id": question_id, "value": value}
         for question_id, value in answers_by_question.items()
     ]
-    setup_session["psychogram"] = _build_psychogram(setup_session)
-    setup_session["policy_preview"] = _build_policy(setup_session, setup_session["psychogram"])
+    _refresh_setup_derived_state(setup_session)
     setup_session["policy_preview"].setdefault("contract", {})
     setup_session["policy_preview"]["contract"]["proposed_end_date"] = None
     generated_contract = (setup_session["policy_preview"] or {}).get("generated_contract")
@@ -1038,9 +1040,11 @@ def complete_setup_session(setup_session_id: str, request: Request) -> dict:
     _validate_safety_answers({entry["question_id"]: entry["value"] for entry in setup_session["answers"]})
 
     if setup_session["psychogram"] is None:
-        setup_session["psychogram"] = _build_psychogram(setup_session)
+        _refresh_setup_derived_state(setup_session)
     if setup_session["policy_preview"] is None:
         setup_session["policy_preview"] = _build_policy(setup_session, setup_session["psychogram"])
+        if setup_session.get("roleplay_profile") is not None:
+            setup_session["policy_preview"]["roleplay"] = setup_session["roleplay_profile"]
 
     setup_session["psychogram_analysis_status"] = "generating"
     setup_session["updated_at"] = _now_iso()
@@ -1167,10 +1171,12 @@ def generate_setup_analysis(setup_session_id: str, payload: SetupArtifactsReques
         setup_session["psychogram_analysis_generated_at"] = generated_at
         setup_session["ai_proposed_end_date"] = proposed_end_date
         if setup_session.get("psychogram") is None:
-            setup_session["psychogram"] = _build_psychogram(setup_session)
+            _refresh_setup_derived_state(setup_session)
         setup_session["psychogram"]["analysis"] = analysis_text
         if setup_session.get("policy_preview") is None:
             setup_session["policy_preview"] = _build_policy(setup_session, setup_session["psychogram"])
+        if setup_session.get("roleplay_profile") is not None:
+            setup_session["policy_preview"]["roleplay"] = setup_session["roleplay_profile"]
         setup_session["policy_preview"].setdefault("contract", {})
         setup_session["policy_preview"]["contract"]["proposed_end_date"] = proposed_end_date
         setup_session["updated_at"] = generated_at
@@ -1282,6 +1288,8 @@ def generate_setup_contract(setup_session_id: str, payload: SetupArtifactsReques
         generated_at = _now_iso()
         if setup_session.get("policy_preview") is None:
             setup_session["policy_preview"] = _build_policy(setup_session, setup_session.get("psychogram") or {})
+        if setup_session.get("roleplay_profile") is not None:
+            setup_session["policy_preview"]["roleplay"] = setup_session["roleplay_profile"]
         consent_state = _ensure_generated_contract_consent(setup_session)
         consent_state["required_text"] = _required_contract_consent_text(setup_session.get("language", "de"))
         consent_state["accepted"] = False
@@ -1498,10 +1506,12 @@ def generate_setup_artifacts(setup_session_id: str, payload: SetupArtifactsReque
         setup_session["psychogram_analysis_generated_at"] = generated_at
         setup_session["ai_proposed_end_date"] = proposed_end_date
         if setup_session.get("psychogram") is None:
-            setup_session["psychogram"] = _build_psychogram(setup_session)
+            _refresh_setup_derived_state(setup_session)
         setup_session["psychogram"]["analysis"] = analysis
         if setup_session.get("policy_preview") is None:
             setup_session["policy_preview"] = _build_policy(setup_session, setup_session["psychogram"])
+        if setup_session.get("roleplay_profile") is not None:
+            setup_session["policy_preview"]["roleplay"] = setup_session["roleplay_profile"]
         setup_session["policy_preview"].setdefault("contract", {})
         setup_session["policy_preview"]["contract"]["proposed_end_date"] = proposed_end_date
         consent_state = _ensure_generated_contract_consent(setup_session)
@@ -1595,7 +1605,7 @@ def recalibrate_psychogram(setup_session_id: str, payload: PsychogramRecalibrati
     lang = _lang(setup_session["language"])
 
     if setup_session["psychogram"] is None:
-        setup_session["psychogram"] = _build_psychogram(setup_session)
+        _refresh_setup_derived_state(setup_session)
 
     for key, value in payload.trait_overrides.items():
         if key in TRAIT_KEYS:
@@ -1604,6 +1614,9 @@ def recalibrate_psychogram(setup_session_id: str, payload: PsychogramRecalibrati
     setup_session["psychogram"]["updated_at"] = _now_iso()
     setup_session["psychogram"]["update_reason"] = payload.update_reason
     setup_session["policy_preview"] = _build_policy(setup_session, setup_session["psychogram"])
+    roleplay_profile = _build_roleplay_profile(setup_session, setup_session["psychogram"], setup_session["policy_preview"])
+    setup_session["policy_preview"]["roleplay"] = roleplay_profile
+    setup_session["roleplay_profile"] = roleplay_profile
     setup_session["updated_at"] = _now_iso()
     store[setup_session_id] = setup_session
     save_sessions(store)
@@ -1775,6 +1788,9 @@ def ai_update_controlled_fields(setup_session_id: str, payload: SetupAIControlle
 
     if setup_session.get("policy_preview") is None:
         setup_session["policy_preview"] = _build_policy(setup_session, psychogram)
+    if setup_session.get("roleplay_profile") is None:
+        setup_session["roleplay_profile"] = _build_roleplay_profile(setup_session, psychogram, setup_session["policy_preview"])
+    setup_session["policy_preview"]["roleplay"] = setup_session["roleplay_profile"]
 
     if psychogram_updates:
         previous_policy = setup_session.get("policy_preview") if isinstance(setup_session.get("policy_preview"), dict) else {}
@@ -1789,6 +1805,9 @@ def ai_update_controlled_fields(setup_session_id: str, payload: SetupAIControlle
         if previous_proposed_end_date is not None:
             setup_session["policy_preview"].setdefault("contract", {})
             setup_session["policy_preview"]["contract"]["proposed_end_date"] = previous_proposed_end_date
+        roleplay_profile = _build_roleplay_profile(setup_session, psychogram, setup_session["policy_preview"])
+        setup_session["policy_preview"]["roleplay"] = roleplay_profile
+        setup_session["roleplay_profile"] = roleplay_profile
 
     policy_preview = setup_session.setdefault("policy_preview", {})
     limits = policy_preview.setdefault("limits", {})
@@ -1855,6 +1874,10 @@ def ai_update_controlled_fields(setup_session_id: str, payload: SetupAIControlle
             {"question_id": question_id, "value": value}
             for question_id, value in answers_by_question.items()
         ]
+
+    roleplay_profile = _build_roleplay_profile(setup_session, setup_session["psychogram"], setup_session["policy_preview"])
+    setup_session["policy_preview"]["roleplay"] = roleplay_profile
+    setup_session["roleplay_profile"] = roleplay_profile
 
     update_ts = _now_iso()
     setup_session["psychogram"]["updated_at"] = update_ts

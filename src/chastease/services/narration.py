@@ -6,14 +6,14 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 from fastapi import Request
-from sqlalchemy import select
 
 from chastease.api.runtime import find_setup_session_id_for_active_session
 from chastease.api.setup_domain import _fixed_soft_limits_text, _lang, _required_contract_consent_text
 from chastease.connectors import generate_narration_with_optional_profile
+from chastease.domains.roleplay import build_roleplay_context, build_setup_preview_roleplay_context, to_story_turn_context
 from chastease.models import ChastitySession, Turn, User
 from chastease.repositories.setup_store import load_sessions
-from chastease.services.ai.base import StoryTurnContext, TurnHistoryEntry
+from chastease.services.ai.base import StoryTurnContext
 
 logger = logging.getLogger(__name__)
 
@@ -212,92 +212,6 @@ def extract_pending_actions(narration: str) -> tuple[str, list[dict], list[dict]
     return cleaned, actions, generated_files
 
 
-def _build_ai_context_summary(psychogram: dict, policy: dict) -> str:
-    traits = psychogram.get("traits", {})
-    top_traits = ", ".join(
-        f"{name}:{score}"
-        for name, score in sorted(traits.items(), key=lambda item: item[1], reverse=True)[:4]
-    )
-    interaction = psychogram.get("interaction_preferences", {})
-    safety = psychogram.get("safety_profile", {})
-    personal = psychogram.get("personal_preferences", {})
-    hard_limits = str(psychogram.get("hard_limits_text") or psychogram.get("taboo_text") or "").strip()
-    soft_limits = str(psychogram.get("soft_limits_text") or _fixed_soft_limits_text("de")).strip()
-    generated_contract = (policy or {}).get("generated_contract", {}) or {}
-    contract_consent = generated_contract.get("consent", {}) if isinstance(generated_contract, dict) else {}
-    consent_required = str(contract_consent.get("required_text") or "")
-    consent_accepted = bool(contract_consent.get("accepted"))
-    consent_accepted_at = str(contract_consent.get("accepted_at") or "")
-    consent_state = (
-        f"accepted@{consent_accepted_at or '-'}"
-        if consent_accepted
-        else f"pending(required='{consent_required or '-'}')"
-    )
-    limits = (policy or {}).get("limits", {})
-    interaction_policy = (policy or {}).get("interaction_profile", {})
-    seal_cfg = (policy or {}).get("seal", {})
-    seal_mode = str(seal_cfg.get("mode") or "none").strip().lower()
-    runtime_seal = (policy or {}).get("runtime_seal", {})
-    seal_status = str(runtime_seal.get("status") or "none").strip().lower()
-    seal_text = str(runtime_seal.get("current_text") or "").strip()
-    seal_broken = bool(runtime_seal.get("needs_new_seal", False))
-    seal_info = (
-        f"mode={seal_mode}"
-        + (f", status={seal_status}, current_number={seal_text}" if seal_mode != "none" and seal_status and seal_text else "")
-        + (", needs_renewal=true" if seal_broken else "")
-    )
-
-    safety_mode = safety.get("mode", "safeword")
-    safety_text = f"mode={safety_mode}"
-    abort_protocol = None
-    if safety_mode == "safeword" and safety.get("safeword"):
-        safety_text = f"{safety_text}, safeword={safety.get('safeword')}"
-        abort_protocol = safety.get("safeword_abort_protocol")
-    if safety_mode == "traffic_light" and isinstance(safety.get("traffic_light_words"), dict):
-        tl = safety.get("traffic_light_words")
-        safety_text = f"{safety_text}, tl={tl.get('green','')}/{tl.get('yellow','')}/{tl.get('red','')}"
-        abort_protocol = safety.get("red_abort_protocol")
-    if isinstance(abort_protocol, dict):
-        q_count = int(abort_protocol.get("confirmation_questions_required", 2))
-        reason_required = bool(abort_protocol.get("reason_required", True))
-        safety_text = f"{safety_text}, emergency_abort=immediate_after_{q_count}_checks(reason_required={reason_required})"
-
-    return (
-        f"summary={psychogram.get('summary', 'n/a')}; "
-        f"top_traits={top_traits or 'n/a'}; "
-        f"instruction_style={interaction.get('instruction_style', 'mixed')}; "
-        f"escalation_mode={interaction.get('escalation_mode', 'moderate')}; "
-        f"experience={interaction.get('experience_level', 5)}/"
-        f"{interaction.get('experience_profile', 'intermediate')}; "
-        f"grooming_preference={personal.get('grooming_preference', 'no_preference')}; "
-        f"hard_limits={hard_limits or '-'}; "
-        f"soft_limits={soft_limits or '-'}; "
-        f"contract_consent={consent_state}; "
-        f"safety={safety_text}; "
-        f"seal={seal_info}; "
-        f"tone={interaction_policy.get('preferred_tone', 'balanced')}; "
-        f"intensity={limits.get('max_intensity_level', 2)}; "
-        f"hard_stop={policy.get('hard_stop_enabled', True)}"
-    )
-
-
-def _available_tools_summary(request: Request) -> str:
-    registry = getattr(request.app.state, "tool_registry", None)
-    if registry is None or not hasattr(registry, "list_tools"):
-        return "-"
-    execute_tools = registry.list_tools(mode="execute")
-    suggest_tools = registry.list_tools(mode="suggest")
-    return (
-        f"execute={','.join(execute_tools) or '-'}; "
-        f"suggest={','.join(suggest_tools) or '-'}; "
-        "live_session_read=GET /api/v1/sessions/{session_id}/live (?auth_token=wearer_token OR ?ai_access_token=ai_token) "
-        "[optional: ?detail_level=light|full (default:light, light=only time/status ~270tok, full=+setup/psychogram ~350tok)]; "
-        "seal_status=GET /api/v1/chat/seal/{session_id} (?ai_access_token=ai_token) [returns seal_mode + current_text/status]; "
-        "payload_rules=add_time/reduce_time require {seconds:int>0}; "
-        "pause_timer/unpause_timer require {}"
-    )
-
-
 def _safe_days_between(start_value: str | None, end_value: str | None) -> int | None:
     start_raw = str(start_value or "").strip()
     end_raw = str(end_value or "").strip()
@@ -416,47 +330,20 @@ def _resolve_setup_user_display_name(db, setup_session: dict) -> str:
 def generate_ai_narration_for_session(
     db, request: Request, session: ChastitySession, action: str, language: str, attachments: list[dict] | None = None
 ) -> str:
-    psychogram_raw = session.psychogram_snapshot_json
-    policy_raw = session.policy_snapshot_json if session.policy_snapshot_json else "{}"
-    psychogram = json.loads(psychogram_raw) if isinstance(psychogram_raw, str) else (psychogram_raw or {})
-    policy = json.loads(policy_raw) if isinstance(policy_raw, str) else (policy_raw or {})
-    psychogram_summary = _build_ai_context_summary(psychogram, policy)
-
     config = request.app.state.config
     history_turn_limit = max(1, int(getattr(config, "LLM_CHAT_HISTORY_TURNS", 3)))
     include_tools_summary = bool(getattr(config, "LLM_CHAT_INCLUDE_TOOLS_SUMMARY", False))
-
-    recent_turns = (
-        db.scalars(
-            select(Turn)
-            .where(Turn.session_id == session.id)
-            .order_by(Turn.turn_no.desc())
-            .limit(history_turn_limit)
-        )
-        .all()
+    roleplay_context = build_roleplay_context(
+        db,
+        request,
+        session,
+        action,
+        language,
+        history_turn_limit=history_turn_limit,
+        include_tools_summary=include_tools_summary,
+        live_snapshot_builder=_build_live_snapshot_for_ai,
     )
-    turns_history = [
-        TurnHistoryEntry(
-            turn_no=t.turn_no,
-            player_action=t.player_action,
-            ai_narration=t.ai_narration,
-        )
-        for t in reversed(recent_turns)
-    ]
-
-    live_snapshot = _build_live_snapshot_for_ai(session)
-    tools_summary = _available_tools_summary(request) if include_tools_summary else None
-
-    context = StoryTurnContext(
-        session_id=session.id,
-        action=action,
-        language=language,
-        psychogram_summary=psychogram_summary,
-        turns_history=turns_history,
-        live_snapshot=live_snapshot,
-        tools_summary=tools_summary,
-        policy=policy,
-    )
+    context = to_story_turn_context(roleplay_context)
     return generate_narration_with_optional_profile(
         db,
         request,
@@ -476,12 +363,14 @@ def generate_ai_narration_for_setup_preview(
     policy: dict,
     attachments: list[dict] | None = None,
 ) -> str:
-    context = StoryTurnContext(
-        session_id="setup-preview",
-        action=f"{action}\n\nAvailable tools: {_available_tools_summary(request)}",
+    roleplay_context = build_setup_preview_roleplay_context(
+        request,
+        action=action,
         language=language,
-        psychogram_summary=_build_ai_context_summary(psychogram, policy),
+        psychogram=psychogram,
+        policy=policy,
     )
+    context = to_story_turn_context(roleplay_context)
     return generate_narration_with_optional_profile(
         db,
         request,

@@ -300,6 +300,9 @@ def _sanitize_setup_session_for_live(setup_session: dict | None) -> dict | None:
             generated_contract["text"] = None
             generated_contract["text_omitted"] = bool(full_text)
             generated_contract["text_length"] = len(full_text)
+    roleplay_profile = sanitized.get("roleplay_profile")
+    if isinstance(roleplay_profile, dict):
+        sanitized["roleplay_profile"] = roleplay_profile
     return sanitized
 
 

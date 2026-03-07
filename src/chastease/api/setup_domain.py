@@ -193,6 +193,122 @@ def _fixed_soft_limits_text(language: str) -> str:
 def _required_contract_consent_text(language: str) -> str:
     return "I accept this contract" if _lang(language) == "en" else "Ich akzeptiere diesen Vertrag"
 
+
+def _build_roleplay_profile(setup_session: dict, psychogram: dict, policy: dict) -> dict:
+    lang = _lang(setup_session.get("language", "de"))
+    interaction = psychogram.get("interaction_preferences") if isinstance(psychogram.get("interaction_preferences"), dict) else {}
+    interaction_profile = policy.get("interaction_profile") if isinstance(policy.get("interaction_profile"), dict) else {}
+    tone = str(interaction_profile.get("preferred_tone") or "balanced")
+    instruction_style = str(interaction.get("instruction_style") or setup_session.get("instruction_style") or "mixed")
+    escalation_mode = str(interaction.get("escalation_mode") or setup_session.get("escalation_mode") or "moderate")
+    intensity = int(((policy.get("limits") or {}).get("max_intensity_level") or 2))
+    autonomy_mode = str(setup_session.get("autonomy_mode") or policy.get("autonomy_mode") or "execute")
+    keyholder_name = str(setup_session.get("keyholder_name") or "").strip() or (
+        "Keyholder" if lang == "en" else "Keyholderin"
+    )
+    summary = str(psychogram.get("summary") or "").strip()
+    greeting_template = (
+        f"{keyholder_name}: Session initialized. I am tracking your state and will guide the progression."
+        if lang == "en"
+        else f"{keyholder_name}: Die Session ist initialisiert. Ich verfolge deinen Zustand und fuehre durch den Ablauf."
+    )
+    scenario_summary = (
+        "A structured chastity roleplay session with policy-bound progression, explicit safety and persistent state."
+        if lang == "en"
+        else "Eine strukturierte Keuschheits-Roleplay-Session mit policy-gebundener Entwicklung, klarer Sicherheit und persistentem Zustand."
+    )
+    phase_guidance = (
+        "Guide the wearer with concise authority, keep continuity, and respect all explicit boundaries."
+        if lang == "en"
+        else "Fuehre den Wearer mit knapper Autoritaet, halte Kontinuitaet und respektiere alle expliziten Grenzen."
+    )
+    persona_description = (
+        summary
+        or (
+            "A deliberate keyholder persona balancing structure, immersion and operational control."
+            if lang == "en"
+            else "Eine bewusste Keyholder-Persona mit Balance aus Struktur, Immersion und operativer Kontrolle."
+        )
+    )
+    ritual_phrases: list[str] = []
+    if instruction_style in {"direct_command", "polite_authoritative"}:
+        ritual_phrases.append("Report your status clearly." if lang == "en" else "Melde deinen Status klar.")
+    if autonomy_mode == "execute":
+        ritual_phrases.append(
+            "Operational decisions may be applied automatically."
+            if lang == "en"
+            else "Operative Entscheidungen koennen automatisch angewandt werden."
+        )
+
+    return {
+        "version": "1.0",
+        "character_card": {
+            "card_id": str(setup_session.get("character_id") or "builtin-keyholder"),
+            "display_name": keyholder_name,
+            "persona": {
+                "name": keyholder_name,
+                "archetype": "keyholder",
+                "description": persona_description,
+                "goals": [
+                    "maintain_session_control",
+                    "preserve_consent_boundaries",
+                    "sustain_roleplay_continuity",
+                ],
+                "speech_style": {
+                    "tone": tone,
+                    "dominance_style": escalation_mode,
+                    "ritual_phrases": ritual_phrases,
+                    "formatting_style": "plain",
+                },
+            },
+            "greeting_template": greeting_template,
+            "scenario_hooks": [
+                f"instruction_style:{instruction_style}",
+                f"autonomy_mode:{autonomy_mode}",
+                f"intensity:{intensity}",
+            ],
+            "tags": ["roleplay", "keyholder", tone, escalation_mode],
+        },
+        "scenario": {
+            "scenario_id": "guided-chastity-session",
+            "title": "Guided Chastity Session" if lang == "en" else "Gefuehrte Keuschheitssitzung",
+            "summary": scenario_summary,
+            "lorebook": [
+                {
+                    "key": "session-rules",
+                    "content": phase_guidance,
+                    "triggers": ["session", "guidance", "control"],
+                    "priority": 100,
+                }
+            ],
+            "phases": [
+                {
+                    "phase_id": "active",
+                    "title": "Active Session" if lang == "en" else "Aktive Sitzung",
+                    "objective": "Maintain continuity and controlled escalation." if lang == "en" else "Kontinuitaet und kontrollierte Eskalation halten.",
+                    "guidance": phase_guidance,
+                }
+            ],
+            "tags": ["session", "chastity", "policy-bound", autonomy_mode],
+        },
+        "prompt_profile": {
+            "name": "roleplay-session",
+            "version": "v1",
+            "mode": "session",
+        },
+    }
+
+
+def _refresh_setup_derived_state(setup_session: dict) -> tuple[dict, dict, dict]:
+    psychogram = _build_psychogram(setup_session)
+    policy = _build_policy(setup_session, psychogram)
+    roleplay_profile = _build_roleplay_profile(setup_session, psychogram, policy)
+    policy["roleplay"] = roleplay_profile
+    setup_session["psychogram"] = psychogram
+    setup_session["policy_preview"] = policy
+    setup_session["roleplay_profile"] = roleplay_profile
+    return psychogram, policy, roleplay_profile
+
 def _normalize_consent_for_compare(value: str) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
@@ -578,6 +694,7 @@ def _create_draft_setup_session(user_id: str, language: str = "de") -> dict:
         "answers": [],
         "psychogram": None,
         "policy_preview": None,
+        "roleplay_profile": None,
         "active_session_id": None,
         "psychogram_analysis": None,
         "psychogram_analysis_status": "idle",

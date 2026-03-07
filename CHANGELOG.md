@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 - 2026-03-07
+
+- Roleplay-Backend refaktoriert:
+  - Neue Domain-Module fuer Character, Scenario und Roleplay-Kontext eingefuehrt.
+  - Narration und Prompt-Assembly aus den bisherigen Service-Monolithen extrahiert.
+  - Setup- und Session-Snapshots tragen jetzt ein serialisiertes `roleplay_profile` fuer die RP-Laufzeit.
+- Verifikation:
+  - Gezielte Tests fuer Roleplay-Context-Builder, Prompt-Assembler, Story-Turn und Setup-Flow erfolgreich.
+
 ## 0.4.1 - 2026-03-07
 
 - Planungsrelease fuer die RP-Ausrichtung:

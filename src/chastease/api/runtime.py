@@ -250,6 +250,9 @@ def sync_setup_snapshot_to_active_session_db(db, setup_session: dict) -> bool:
     policy = setup_session.get("policy_preview") or {}
     if isinstance(policy, dict):
         policy = dict(policy)  # Make a copy
+        roleplay_profile = setup_session.get("roleplay_profile")
+        if isinstance(roleplay_profile, dict) and roleplay_profile:
+            policy["roleplay"] = json.loads(json.dumps(roleplay_profile))
         
         # Initialize runtime_seal with initial seal number if not already present
         if "runtime_seal" not in policy:
