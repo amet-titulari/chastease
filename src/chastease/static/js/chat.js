@@ -996,7 +996,11 @@ async function sendMessage() {
     failedActions.forEach((entry) => {
       const name = toPrettyActionName(entry?.action_type || 'action');
       const detail = String(entry?.detail || 'Unbekannter Fehler');
-      appendMessage('assistant', `⚠️ Action nicht ausgelöst (${name}): ${detail}`);
+      if (entry?.severity === 'info') {
+        appendMessage('assistant', `ℹ️ ${detail}`);
+      } else {
+        appendMessage('assistant', `⚠️ Action nicht ausgelöst (${name}): ${detail}`);
+      }
     });
 
     const pendingAfterAutoExec = await autoExecuteTimerPendingActions(body?.pending_actions || []);

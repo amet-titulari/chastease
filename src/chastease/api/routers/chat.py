@@ -1931,6 +1931,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                             "action_type": str(ai_pending_actions[0].get("action_type") or ""),
                             "payload": ai_pending_actions[0].get("payload") or {},
                             "detail": "LLM repair round generated structured action tag.",
+                            "severity": "info",
                         }
                     )
             if not ai_pending_actions:
@@ -1945,6 +1946,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                                     "action_type": str(fallback_action.get("action_type") or ""),
                                     "payload": fallback_action.get("payload") or {},
                                     "detail": "Applied explicit user-intent fallback while timer-expiry state was active.",
+                                    "severity": "info",
                                 }
                             )
                         else:
@@ -1956,6 +1958,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                                         "Strict request-tag mode: no valid structured action tag after repair; "
                                         "action not executed."
                                     ),
+                                    "severity": "error",
                                 }
                             )
                     else:
@@ -1966,6 +1969,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                                 "action_type": str(fallback_action.get("action_type") or ""),
                                 "payload": fallback_action.get("payload") or {},
                                 "detail": "LLM returned no structured action tag; applied user-intent fallback.",
+                                "severity": "info",
                             }
                         )
             ai_pending_actions, executed_actions, auto_failed_actions, updated_policy = _auto_execute_pending_actions(
