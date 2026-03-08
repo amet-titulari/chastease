@@ -1,4 +1,5 @@
 import json
+import hashlib
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import desc, select
 
@@ -31,6 +32,14 @@ def _activity_key(action_type: str, payload: dict) -> tuple[str, str]:
     except Exception:
         payload_key = "{}"
     return normalized_action, payload_key
+
+
+def _activity_action_id(event_id: str, turn_id: str | None, action_type: str, payload: dict) -> str:
+    raw = (
+        f"{event_id}:{turn_id or '-'}:{str(action_type or '').strip().lower()}:"
+        f"{json.dumps(payload if isinstance(payload, dict) else {}, sort_keys=True, ensure_ascii=True)}"
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
 @router.get("/audit/session/{session_id}")
@@ -100,27 +109,32 @@ def list_activity_entries(session_id: str, auth_token: str, request: Request) ->
             select(AuditEntry)
             .where(
                 AuditEntry.session_id == session_id,
-                AuditEntry.event_type.in_(["activity_snapshot", "activity_manual_execute"]),
+                AuditEntry.event_type.in_(["activity_snapshot", "activity_manual_execute", "activity_manual_resolve"]),
             )
             .order_by(desc(AuditEntry.created_at))
         ).all()
 
         activity_rows: list[dict] = []
         resolved_keys: set[tuple[str, str]] = set()
+        resolved_action_ids: set[str] = set()
         for event in activity_events:
             metadata = _load_entry_metadata(event)
-            if event.event_type == "activity_manual_execute":
+            if event.event_type in {"activity_manual_execute", "activity_manual_resolve"}:
                 action_type = str(metadata.get("action_type") or "")
                 payload = metadata.get("payload") if isinstance(metadata.get("payload"), dict) else {}
                 status = str(metadata.get("status") or "success")
                 if status in {"success", "failed"}:
+                    action_id = str(metadata.get("action_id") or "").strip()
+                    if action_id:
+                        resolved_action_ids.add(action_id)
                     resolved_keys.add(_activity_key(action_type, payload))
                 activity_rows.append(
                     {
                         "event_id": event.id,
+                        "action_id": str(metadata.get("action_id") or "").strip() or None,
                         "turn_id": None,
                         "turn_no": None,
-                        "source": "manual_execute",
+                        "source": "manual_resolve" if event.event_type == "activity_manual_resolve" else "manual_execute",
                         "status": status,
                         "action_type": action_type,
                         "payload": payload,
@@ -144,6 +158,7 @@ def list_activity_entries(session_id: str, auth_token: str, request: Request) ->
                 activity_rows.append(
                     {
                         "event_id": event.id,
+                        "action_id": None,
                         "turn_id": event.turn_id,
                         "turn_no": turn.turn_no if turn else None,
                         "source": "turn",
@@ -162,6 +177,7 @@ def list_activity_entries(session_id: str, auth_token: str, request: Request) ->
                 activity_rows.append(
                     {
                         "event_id": event.id,
+                        "action_id": None,
                         "turn_id": event.turn_id,
                         "turn_no": turn.turn_no if turn else None,
                         "source": "turn",
@@ -176,11 +192,13 @@ def list_activity_entries(session_id: str, auth_token: str, request: Request) ->
             for action in pending_actions:
                 payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
                 action_type = str(action.get("action_type") or "")
-                if _activity_key(action_type, payload) in resolved_keys:
+                action_id = _activity_action_id(event.id, event.turn_id, action_type, payload)
+                if action_id in resolved_action_ids or _activity_key(action_type, payload) in resolved_keys:
                     continue
                 activity_rows.append(
                     {
                         "event_id": event.id,
+                        "action_id": action_id,
                         "turn_id": event.turn_id,
                         "turn_no": turn.turn_no if turn else None,
                         "source": "turn",

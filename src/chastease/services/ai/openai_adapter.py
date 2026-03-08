@@ -321,6 +321,8 @@ class OpenAIAdapter:
             "Before requesting image_verification, explain briefly what image should be provided and how you will verify it. "
             "If you need the latest persisted session state, use the backend live-read endpoint "
             "GET /api/v1/sessions/{session_id}/live. "
+            "If you need to know which operational requests are still unresolved, use "
+            "GET /api/v1/chat/pending/{session_id}. "
             "Use ai_access_token for service-side AI access (configured via AI_SESSION_READ_TOKEN). "
             "Never invent session state when the endpoint cannot be reached. "
             "When the prompt contains a block named LIVE_SESSION_SNAPSHOT_JSON, treat it as authoritative source of truth. "

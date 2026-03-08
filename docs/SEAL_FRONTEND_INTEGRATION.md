@@ -119,6 +119,77 @@ POST /chat/actions/execute
 }
 ```
 
+### 4. Offene Pending-Aktionen abfragen
+
+Sowohl Frontend als auch AI koennen offene, noch nicht aufgeloeste Aktionen explizit abfragen:
+
+```javascript
+GET /api/v1/chat/pending/{session_id}?auth_token=<token>
+```
+
+Response:
+
+```json
+{
+  "session_id": "sess_123",
+  "total": 2,
+  "pending_actions": [
+    {
+      "action_id": "0d9b4a8db2f7d8f1d6e94a41",
+      "event_id": "evt_abc",
+      "turn_id": "turn_xyz",
+      "turn_no": 48,
+      "action_type": "hygiene_open",
+      "payload": {
+        "reason": "Neue Plombe eintragen Hygiene"
+      },
+      "detail": "Waiting for execute confirmation.",
+      "created_at": "2026-03-08T10:15:00Z",
+      "expected_status": "pending"
+    }
+  ]
+}
+```
+
+Hinweise:
+
+- `action_id` ist die stabile OCC-Referenz fuer eine konkrete Pending-Action.
+- `turn_no` kann im UI oder in der AI-Narration verwendet werden, um den Ursprung der offenen Aktion klar zu benennen.
+- Fuer AI-Zugriffe kann alternativ `ai_access_token` verwendet werden.
+
+### 5. Pending-Aktionen manuell aufloesen (OCC)
+
+Das Activity-Log kann offene Aktionen manuell als `success` oder `failed` markieren.
+Die Aufloesung verwendet Optimistic Concurrency Control: Die Mutation wird nur akzeptiert, wenn die Action noch im erwarteten Zustand `pending` ist.
+
+```javascript
+POST /api/v1/chat/actions/resolve
+{
+  "session_id": "sess_123",
+  "action_id": "0d9b4a8db2f7d8f1d6e94a41",
+  "resolution_status": "success",
+  "expected_status": "pending",
+  "note": "Manuell bestaetigt nach externer Pruefung"
+}
+```
+
+Response:
+
+```json
+{
+  "resolved": true,
+  "session_id": "sess_123",
+  "action_id": "0d9b4a8db2f7d8f1d6e94a41",
+  "status": "success",
+  "message": "Pending action manually marked as success."
+}
+```
+
+Fehlerfall:
+
+- `409 Conflict`, wenn die Aktion zwischenzeitlich bereits ausgefuehrt, fehlgeschlagen oder anderweitig aufgeloest wurde
+- keine direkte Mutation historischer Audit-Zeilen; stattdessen entsteht ein neuer Resolve-Audit-Event
+
 ## Dashboard / Übersicht (Optional)
 
 ```javascript
@@ -152,6 +223,7 @@ if (response.runtime_seal) {
 - **Seal-Text Mindestlänge**: 3 Zeichen (JavaScript + Server)
 - **Pflichtfeld**: Nur wenn `seal_mode !== 'none'` und `action_type = 'hygiene_close'`
 - **Error-Handling**: API (v1.1.1+) gibt 400 zurück, wenn seal_text fehlt/zu kurz ist
+- **OCC fuer manuelle Aufloesung**: API gibt 409 zurueck, wenn `expected_status="pending"` nicht mehr stimmt
 
 ## Responsive Verhalten
 
@@ -206,6 +278,6 @@ def test_get_seal_status_api():
 ## Deployment Notes
 
 - **Datenbank-Migration**: Nicht erforderlich (seal_mode bereits in schema)
-- **Environment Variables**: `AI_SESSION_READ_TOKEN` muss für GET /chat/seal gesetzt sein
+- **Environment Variables**: `AI_SESSION_READ_TOKEN` muss fuer AI-Lesezugriffe auf `GET /chat/seal/{session_id}` und `GET /chat/pending/{session_id}` gesetzt sein
 - **Abwärts-Kompatibilität**: seal_mode="none" ist Standard (keine Plomben)
 - **Versionierung**: API v1.1.1 (Seal-Support)

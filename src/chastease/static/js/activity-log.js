@@ -25,7 +25,7 @@ function updateSummary(text) {
 
 function clearEntries(message = 'Keine Activity-Eintraege vorhanden.') {
   if (!entriesBodyEl) return;
-  const cell = `<td colspan="7" class="px-3 py-4 text-center text-text-tertiary border border-white/10">${escapeHtml(message)}</td>`;
+  const cell = `<td colspan="8" class="px-3 py-4 text-center text-text-tertiary border border-white/10">${escapeHtml(message)}</td>`;
   entriesBodyEl.innerHTML = `<tr>${cell}</tr>`;
 }
 
@@ -57,6 +57,26 @@ function statusBadge(status) {
   return '<span class="px-2 py-1 rounded text-xs bg-amber-900 text-amber-300">pending</span>';
 }
 
+async function resolvePendingAction(sessionId, actionId, resolutionStatus) {
+  const label = resolutionStatus === 'success' ? 'erfolgreich' : 'fehlgeschlagen';
+  updateStatus(`Pending Action wird als ${label} markiert...`);
+  const response = await fetch('/api/v1/chat/actions/resolve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      session_id: sessionId,
+      action_id: actionId,
+      resolution_status: resolutionStatus,
+      expected_status: 'pending',
+    }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body?.detail || 'Pending Action konnte nicht aufgeloest werden.');
+  }
+  return body;
+}
+
 function renderActivities(activities) {
   if (!entriesBodyEl) return;
   if (!activities.length) {
@@ -74,6 +94,15 @@ function renderActivities(activities) {
       const payload = item.payload && typeof item.payload === 'object' ? item.payload : {};
       const payloadText = escapeHtml(JSON.stringify(payload, null, 2));
       const created = escapeHtml(new Date(item.created_at || '').toLocaleString('de-DE') || '-');
+      const canResolve = String(item.status || '').toLowerCase() === 'pending' && item.action_id;
+      const actionControls = canResolve
+        ? `
+          <div class="flex flex-wrap gap-2">
+            <button class="btn-success text-xs js-resolve-action" data-action-id="${escapeHtml(item.action_id)}" data-resolution="success">success</button>
+            <button class="btn-danger text-xs js-resolve-action" data-action-id="${escapeHtml(item.action_id)}" data-resolution="failed">failed</button>
+          </div>
+        `
+        : '<span class="text-xs text-text-tertiary">-</span>';
       return `
         <tr class="border-t border-white/10">
           <td class="px-3 py-2 align-top border border-white/10">${statusHtml}</td>
@@ -82,12 +111,30 @@ function renderActivities(activities) {
           <td class="px-3 py-2 align-top border border-white/10">${turnNo}</td>
           <td class="px-3 py-2 align-top border border-white/10">${detail}</td>
           <td class="px-3 py-2 align-top border border-white/10 w-48"><pre class="text-xs whitespace-pre-wrap break-words mb-0">${payloadText}</pre></td>
+          <td class="px-3 py-2 align-top border border-white/10 min-w-[160px]">${actionControls}</td>
           <td class="px-3 py-2 align-top border border-white/10 min-w-[140px]">${created}</td>
         </tr>`;
     })
     .join('');
 
   entriesBodyEl.innerHTML = rows;
+  entriesBodyEl.querySelectorAll('.js-resolve-action').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const sessionId = getQuerySessionId() || fallbackSessionId();
+      const actionId = button.getAttribute('data-action-id') || '';
+      const resolution = button.getAttribute('data-resolution') || '';
+      if (!sessionId || !actionId || !resolution) return;
+      try {
+        button.disabled = true;
+        await resolvePendingAction(sessionId, actionId, resolution);
+        updateStatus(`Pending Action als ${resolution} markiert.`, 'ok');
+        loadActivityLog();
+      } catch (error) {
+        button.disabled = false;
+        updateStatus(error?.message || 'Pending Action konnte nicht aufgeloest werden.', 'err');
+      }
+    });
+  });
 }
 
 async function loadActivityLog(event) {

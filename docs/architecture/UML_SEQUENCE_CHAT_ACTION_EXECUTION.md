@@ -32,6 +32,16 @@ sequenceDiagram
 
     ChatAPI->>DB: Turn + ggf. aktualisierte Policy speichern
     ChatAPI-->>UI: narration + pending/executed/failed actions
+
+    opt Offene Aktionen spaeter pruefen oder manuell aufloesen
+        UI->>ChatAPI: GET /api/v1/chat/pending/{session_id}
+        ChatAPI->>DB: Audit-Events + Turns lesen
+        ChatAPI-->>UI: unresolved pending_actions mit action_id + turn_no
+        UI->>ChatAPI: POST /api/v1/chat/actions/resolve
+        ChatAPI->>DB: OCC-Pruefung auf status=pending
+        ChatAPI->>DB: activity_manual_resolve auditieren
+        ChatAPI-->>UI: success oder 409 Conflict
+    end
 ```
 
 ## Kernregeln
@@ -39,5 +49,7 @@ sequenceDiagram
 - Ausfuehrbare Aktionen werden nur ueber das Gateway verarbeitet.
 - Bei `suggest` werden keine Side-Effects ausgefuehrt.
 - Narration wird um maschinenlesbare Tags bereinigt, bevor sie im UI erscheint.
+- Offene Pending-Aktionen koennen spaeter ueber `GET /api/v1/chat/pending/{session_id}` abgefragt werden.
+- Manuelle Aufloesung verwendet OCC und erzeugt einen separaten `activity_manual_resolve`-Audit-Event.
 
 ````

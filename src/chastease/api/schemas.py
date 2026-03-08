@@ -30,6 +30,14 @@ class ChatActionExecuteRequest(BaseModel):
     payload: dict = Field(default_factory=dict)
 
 
+class ChatActionResolveRequest(BaseModel):
+    session_id: str = Field(min_length=1)
+    action_id: str = Field(min_length=8)
+    resolution_status: Literal["success", "failed"]
+    expected_status: Literal["pending"] = "pending"
+    note: str = Field(default="", max_length=500)
+
+
 class ChatVisionReviewRequest(BaseModel):
     session_id: str = Field(min_length=1)
     message: str = Field(min_length=1)

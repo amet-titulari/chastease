@@ -45,7 +45,7 @@ Das System soll modular, testbar und langfristig erweiterbar sein.
 5. Projektplan + Backlog
 6. ADRs
 
-## Aktueller Stand (2026-02-26)
+## Aktueller Stand (2026-03-08)
 
 - Release-Stand: `0.2.0` (inkl. nachgelagerter Hotfixes auf `main`).
 - Backend/Chat:
@@ -53,19 +53,29 @@ Das System soll modular, testbar und langfristig erweiterbar sein.
 	- Notfall-Abbruch fuehrt direkte `ttlock_open`-Notfalloeffnung aus; Session/Vertrag werden erst nach erfolgreicher Oeffnung invalidiert/archiviert.
 	- Bestaetigungs- und Trigger-Erkennung fuer Notfallabbruch wurde gehaertet (`rot/red`, `abbrechen`, `stop/stopp`, etc.).
 	- Oeffnungslimits werden serverseitig erzwungen (`opening_limit_period` + `max_openings_in_period`) mit laufender Ereignis-Historie.
+	- Hygieneoeffnungen funktionieren jetzt auch ohne aktive TTLock-Integration; Limits und Siegelstatus bleiben serverseitig wirksam.
+	- Offene Pending-Aktionen koennen ueber `GET /api/v1/chat/pending/{session_id}` gezielt abgefragt werden.
+	- Manuelle Pending-Aufloesung ist OCC-basiert ueber `POST /api/v1/chat/actions/resolve` verfuegbar und wird auditierbar protokolliert.
+	- Die AI kann offene Pendings explizit pruefen und in ihre weitere Steuerung einbeziehen.
 - Frontend/UI:
+	- App-Shell, Navigation und zentrale Oberflaechen wurden auf ein konsistenteres Dark-UI umgestellt.
 	- Dashboard-Polling deutlich reduziert (Cache + Dedupe + Sichtbarkeitslogik).
 	- Image-Verification-Action-Card auf One-Button-Flow umgestellt (`Bild aufnehmen` -> Vorschau -> `Bild prüfen`), ohne JSON-Rohpayload.
 	- Sichtbarer Status waehrend Bildpruefung integriert.
+	- Chat fuer Mobile entschlackt; Keyboard-/Viewport-Scrollverhalten wurde robuster gemacht.
+	- Activity-Log kann offene Pending-Aktionen direkt als `success` oder `failed` aufloesen.
 - Setup/Session:
 	- Setup-/Session-Sync fuer Integrationen und Consent stabilisiert.
 	- Session-/Contract-Status nach Notfallabbruch konsistent auf Neustart-Pfad ausgelegt.
+	- Verbleibende Hygieneoeffnungen bis zum naechsten Reset werden im Dashboard sichtbar gemacht.
 - DevOps:
 	- Docker-Compose Dev-Setup (Option A) umgesetzt.
 	- Manueller GHCR-Image-Build via GitHub Action verfuegbar.
+	- Bekannter Healthcheck-Hinweis fuer Container-Deployments: produktiver Probe-Pfad ist `/api/v1/health`.
 
 ## Naechste sinnvolle Schritte
 
 - Regressionstests fuer Notfallabbruch + Oeffnungslimit-Pfade erweitern (inkl. `ttlock_open`-Fail/Retry-Szenarien).
 - Optionales observability-Logging fuer entfernte/unterdrueckte Machine-Tags und Notfallpfad-Transitions.
+- Optionaler Cancel-/Resolve-Flow fuer Pendings direkt aus dem Chat heraus, nicht nur aus dem Activity-Log.
 - Release-Nachzug mit Tagging (z. B. `v0.2.0`) falls noch nicht gesetzt.

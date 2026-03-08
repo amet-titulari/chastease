@@ -221,6 +221,7 @@ def build_tools_summary(owner: Any) -> str:
         f"suggest={','.join(suggest_tools) or '-'}; "
         "live_session_read=GET /api/v1/sessions/{session_id}/live (?auth_token=wearer_token OR ?ai_access_token=ai_token) "
         "[optional: ?detail_level=light|full (default:light, light=only time/status ~270tok, full=+setup/psychogram ~350tok)]; "
+        "pending_actions_read=GET /api/v1/chat/pending/{session_id} (?ai_access_token=ai_token) [returns unresolved pending actions with turn_no + action_id]; "
         "seal_status=GET /api/v1/chat/seal/{session_id} (?ai_access_token=ai_token) [returns seal_mode + current_text/status]; "
         "payload_rules=add_time/reduce_time require {seconds:int>0}; "
         "pause_timer/unpause_timer require {}"

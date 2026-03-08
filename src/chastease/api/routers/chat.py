@@ -1,6 +1,7 @@
 ﻿import base64
 import copy
 import json
+import hashlib
 import logging
 import os
 import re
@@ -14,9 +15,9 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import func, select
 
-from chastease.api.runtime import find_setup_session_id_for_active_session, get_db_session, lang
+from chastease.api.runtime import find_setup_session_id_for_active_session, get_db_session, lang, resolve_user_id_from_token
 from chastease.api.routers.chaster import resolve_chaster_api_token, resolve_verified_extension_session_from_main_token_sync
-from chastease.api.schemas import ChatActionExecuteRequest, ChatTurnRequest, ChatVisionReviewRequest
+from chastease.api.schemas import ChatActionExecuteRequest, ChatActionResolveRequest, ChatTurnRequest, ChatVisionReviewRequest
 from chastease.models import AuditEntry, ChastitySession, Turn
 from chastease.repositories.setup_store import load_sessions, save_sessions
 from chastease.domains.roleplay import refresh_session_roleplay_state
@@ -966,6 +967,108 @@ def _normalize_pending_actions(pending_actions: list[dict]) -> list[dict]:
             }
         )
     return normalized
+
+
+def _dedupe_pending_actions(pending_actions: list[dict]) -> list[dict]:
+    normalized = _normalize_pending_actions(pending_actions)
+    deduplicated: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for action in normalized:
+        action_type = str(action.get("action_type") or "").strip().lower()
+        payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
+        fingerprint = (
+            action_type,
+            json.dumps(payload, sort_keys=True, ensure_ascii=True),
+        )
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        deduplicated.append(action)
+    return deduplicated
+
+
+def _pending_action_key(action_type: str, payload: dict) -> tuple[str, str]:
+    normalized_action = str(action_type or "").strip().lower()
+    normalized_payload = payload if isinstance(payload, dict) else {}
+    return (
+        normalized_action,
+        json.dumps(normalized_payload, sort_keys=True, ensure_ascii=True),
+    )
+
+
+def _pending_action_id(event_id: str, turn_id: str | None, action_type: str, payload: dict) -> str:
+    raw = (
+        f"{event_id}:{turn_id or '-'}:{str(action_type or '').strip().lower()}:"
+        f"{json.dumps(payload if isinstance(payload, dict) else {}, sort_keys=True, ensure_ascii=True)}"
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def _collect_pending_actions_for_session(db, session_id: str) -> list[dict]:
+    entries = db.scalars(
+        select(AuditEntry)
+        .where(
+            AuditEntry.session_id == session_id,
+            AuditEntry.event_type.in_(["activity_snapshot", "activity_manual_execute", "activity_manual_resolve"]),
+        )
+        .order_by(AuditEntry.created_at.desc())
+    ).all()
+    turns = db.scalars(
+        select(Turn)
+        .where(Turn.session_id == session_id)
+        .order_by(Turn.turn_no.desc())
+    ).all()
+    turn_map = {turn.id: turn for turn in turns}
+
+    resolved_action_ids: set[str] = set()
+    resolved_action_keys: set[tuple[str, str]] = set()
+    pending_rows: list[dict] = []
+
+    for entry in entries:
+        metadata = _load_entry_metadata(entry)
+        if entry.event_type in {"activity_manual_execute", "activity_manual_resolve"}:
+            status = str(metadata.get("status") or "").strip().lower()
+            if status in {"success", "failed"}:
+                action_id = str(metadata.get("action_id") or "").strip()
+                if action_id:
+                    resolved_action_ids.add(action_id)
+                action_type = str(metadata.get("action_type") or "")
+                payload = metadata.get("payload") if isinstance(metadata.get("payload"), dict) else {}
+                resolved_action_keys.add(_pending_action_key(action_type, payload))
+            continue
+
+        turn = turn_map.get(entry.turn_id) if entry.turn_id else None
+        pending_actions = metadata.get("pending_actions") if isinstance(metadata.get("pending_actions"), list) else []
+        executed_actions = metadata.get("executed_actions") if isinstance(metadata.get("executed_actions"), list) else []
+        failed_actions = metadata.get("failed_actions") if isinstance(metadata.get("failed_actions"), list) else []
+
+        for action in executed_actions + failed_actions:
+            action_type = str((action or {}).get("action_type") or "")
+            payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
+            resolved_action_keys.add(_pending_action_key(action_type, payload))
+
+        for action in pending_actions:
+            action_type = str((action or {}).get("action_type") or "")
+            payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
+            action_id = _pending_action_id(entry.id, entry.turn_id, action_type, payload)
+            action_key = _pending_action_key(action_type, payload)
+            if action_id in resolved_action_ids or action_key in resolved_action_keys:
+                continue
+            pending_rows.append(
+                {
+                    "action_id": action_id,
+                    "event_id": entry.id,
+                    "turn_id": entry.turn_id,
+                    "turn_no": turn.turn_no if turn else None,
+                    "action_type": action_type,
+                    "payload": payload,
+                    "detail": "Waiting for execute confirmation.",
+                    "created_at": entry.created_at.isoformat(),
+                    "expected_status": "pending",
+                }
+            )
+
+    return pending_rows
 
 
 def _normalize_duration_payload(action_type: str, payload: dict) -> dict:
@@ -2054,6 +2157,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
             # Merge existing pending_actions with new ai_pending_actions
             pending_actions.extend(existing_pending_actions)
             pending_actions.extend(ai_pending_actions)
+            pending_actions = _dedupe_pending_actions(pending_actions)
             if executed_actions:
                 policy_dirty = True
             if raw_has_machine_tag:
@@ -2304,7 +2408,7 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
                 }
             )
         # Merge existing (minus resolved) + new pending_actions
-        pending_actions = existing_pending_actions + new_pending_actions
+        pending_actions = _dedupe_pending_actions(existing_pending_actions + new_pending_actions)
         if executed_actions:
             session.policy_snapshot_json = json.dumps(updated_policy)
 
@@ -2423,6 +2527,95 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
         "chaster": result.get("chaster"),
         "message": result["message"],
     }
+
+
+@router.get("/pending/{session_id}")
+def get_pending_actions(
+    session_id: str,
+    request: Request,
+    auth_token: str | None = None,
+    ai_access_token: str | None = None,
+) -> dict:
+    db = get_db_session(request)
+    try:
+        session = db.get(ChastitySession, session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Chastity session not found.")
+
+        if ai_access_token and str(ai_access_token).strip():
+            expected_ai_token = str(os.getenv("AI_SESSION_READ_TOKEN") or "").strip()
+            if not expected_ai_token or expected_ai_token != str(ai_access_token).strip():
+                raise HTTPException(status_code=401, detail="Invalid AI access token.")
+        else:
+            user_id = resolve_user_id_from_token(str(auth_token or "").strip(), request)
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Invalid auth token.")
+            if session.user_id != user_id:
+                raise HTTPException(status_code=403, detail="Session does not belong to user.")
+
+        pending_actions = _collect_pending_actions_for_session(db, session_id)
+        return {
+            "session_id": session_id,
+            "total": len(pending_actions),
+            "pending_actions": pending_actions,
+        }
+    finally:
+        db.close()
+
+
+@router.post("/actions/resolve")
+def chat_action_resolve(payload: ChatActionResolveRequest, request: Request) -> dict:
+    db = get_db_session(request)
+    try:
+        session = db.get(ChastitySession, payload.session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Chastity session not found.")
+
+        if payload.expected_status != "pending":
+            raise HTTPException(status_code=409, detail="Only pending actions can be resolved.")
+
+        pending_actions = _collect_pending_actions_for_session(db, payload.session_id)
+        target = next((item for item in pending_actions if item.get("action_id") == payload.action_id), None)
+        if target is None:
+            raise HTTPException(status_code=409, detail="Pending action no longer exists or was already resolved.")
+
+        resolution_message = str(payload.note or "").strip()
+        if not resolution_message:
+            resolution_message = (
+                "Pending action manually marked as successful."
+                if payload.resolution_status == "success"
+                else "Pending action manually marked as failed."
+            )
+
+        record_audit_event(
+            db=db,
+            session_id=session.id,
+            user_id=session.user_id,
+            turn_id=target.get("turn_id"),
+            event_type="activity_manual_resolve",
+            detail="Manual pending action resolution recorded.",
+            metadata={
+                "source": "chat_action_resolve",
+                "status": payload.resolution_status,
+                "expected_status": payload.expected_status,
+                "action_id": target.get("action_id"),
+                "action_type": target.get("action_type"),
+                "payload": target.get("payload") or {},
+                "message": resolution_message,
+                "event_id": target.get("event_id"),
+                "turn_no": target.get("turn_no"),
+            },
+        )
+        db.commit()
+        return {
+            "resolved": True,
+            "session_id": payload.session_id,
+            "action_id": target.get("action_id"),
+            "status": payload.resolution_status,
+            "message": resolution_message,
+        }
+    finally:
+        db.close()
 
 @router.get("/seal/{session_id}")
 def get_seal_status(session_id: str, request: Request, ai_access_token: str | None = None) -> dict:
