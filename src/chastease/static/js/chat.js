@@ -13,6 +13,8 @@ let activeSessionId = null;
 let currentLanguage = 'de';
 let currentAutonomyMode = 'execute';
 let pendingAttachments = [];
+let maintainBottomLock = true;
+let bottomLockRaf = 0;
 const MAX_RENDERED_HISTORY_TURNS = 12;
 const AUTO_TIMER_ACTIONS = new Set(['add_time', 'reduce_time', 'pause_timer', 'unpause_timer']);
 const HYGIENE_COUNTDOWN_STORAGE_PREFIX = 'chastease_hygiene_countdown:';
@@ -183,7 +185,8 @@ function showHygieneCountdownCard(resultBody) {
   messageWrapper.appendChild(avatar);
   messageWrapper.appendChild(contentDiv);
   messagesEl.appendChild(messageWrapper);
-  scrollToBottom();
+  maintainBottomLock = true;
+  scheduleScrollToBottom();
 
   persistHygieneCountdownState(new Date(endAtMs).toISOString());
 
@@ -262,7 +265,10 @@ function appendMessage(role, text, opts = {}) {
   }
   
   messagesEl.appendChild(messageWrapper);
-  if (shouldScroll) scrollToBottom();
+  if (shouldScroll) {
+    maintainBottomLock = true;
+    scheduleScrollToBottom();
+  }
 }
 
 function appendAssistantInfoCard(titleText, bodyText, tone = 'neutral', opts = {}) {
@@ -307,7 +313,10 @@ function appendAssistantInfoCard(titleText, bodyText, tone = 'neutral', opts = {
   messageWrapper.appendChild(contentDiv);
   messagesEl.appendChild(messageWrapper);
 
-  if (shouldScroll) scrollToBottom();
+  if (shouldScroll) {
+    maintainBottomLock = true;
+    scheduleScrollToBottom();
+  }
 }
 
 function findImageVerificationOutcome(body) {
@@ -329,14 +338,42 @@ function findImageVerificationOutcome(body) {
 function scrollToBottom(smooth = true) {
   const container = document.getElementById('messagesContainer');
   if (!container) return;
-  container.scrollTo({
-    top: container.scrollHeight,
-    behavior: smooth ? 'smooth' : 'auto'
+  const targetNode = document.getElementById('typingIndicator')?.classList.contains('hidden') === false
+    ? document.getElementById('typingIndicator')
+    : messagesEl?.lastElementChild;
+
+  const scrollBehavior = smooth ? 'smooth' : 'auto';
+  const applyScroll = () => {
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: scrollBehavior
+    });
+    if (targetNode && typeof targetNode.scrollIntoView === 'function') {
+      try {
+        targetNode.scrollIntoView({ block: 'end', inline: 'nearest', behavior: scrollBehavior });
+      } catch (_error) {
+        // Ignore browsers that reject this combination.
+      }
+    }
+    container.scrollTop = container.scrollHeight;
+  };
+
+  applyScroll();
+  window.requestAnimationFrame(applyScroll);
+}
+
+function scheduleScrollToBottom(smooth = false) {
+  if (bottomLockRaf) {
+    window.cancelAnimationFrame(bottomLockRaf);
+  }
+  bottomLockRaf = window.requestAnimationFrame(() => {
+    bottomLockRaf = 0;
+    scrollToBottom(smooth);
   });
 }
 
 function ensureInputAndLatestVisible() {
-  scrollToBottom(false);
+  scheduleScrollToBottom(false);
   if (inputEl) {
     try {
       inputEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -1052,9 +1089,20 @@ function wireEvents() {
     if (scrollBtn && messagesContainer) {
       messagesContainer.addEventListener('scroll', () => {
         const isNearBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 150;
+        maintainBottomLock = isNearBottom;
         scrollBtn.classList.toggle('hidden', isNearBottom);
       });
-      scrollBtn.addEventListener('click', () => scrollToBottom());
+      scrollBtn.addEventListener('click', () => {
+        maintainBottomLock = true;
+        scheduleScrollToBottom();
+      });
+      if (typeof ResizeObserver !== 'undefined') {
+        const observer = new ResizeObserver(() => {
+          if (maintainBottomLock) scheduleScrollToBottom(false);
+        });
+        observer.observe(messagesContainer);
+        if (messagesEl) observer.observe(messagesEl);
+      }
     }
 
   if (attachImageBtn && chatAttachmentInput) {
@@ -1127,13 +1175,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const indicator = document.getElementById('typingIndicator');
     if (indicator) {
       indicator.classList.remove('hidden');
-      scrollToBottom();
+      maintainBottomLock = true;
+      scheduleScrollToBottom();
     }
   }
 
   function hideTypingIndicator() {
     const indicator = document.getElementById('typingIndicator');
-    if (indicator) indicator.classList.add('hidden');
+    if (indicator) {
+      indicator.classList.add('hidden');
+      maintainBottomLock = true;
+      scheduleScrollToBottom(false);
+    }
   }
 
   function autoResizeTextarea() {

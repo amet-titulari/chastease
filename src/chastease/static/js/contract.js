@@ -48,9 +48,41 @@ document.addEventListener('DOMContentLoaded', function () {
     const renderer = window.chastease_common?.markdownToHtml;
     if (typeof renderer === 'function') {
       node.innerHTML = renderer(text);
+      dedupeAdjacentContractHeadings(node);
       return;
     }
     node.textContent = text;
+  }
+
+  function dedupeAdjacentContractHeadings(node) {
+    if (!node) return;
+    const headings = Array.from(node.querySelectorAll('h1, h2, h3, h4'));
+    let previousHeading = null;
+    headings.forEach((heading) => {
+      if (
+        previousHeading
+        && previousHeading.tagName === heading.tagName
+        && String(previousHeading.textContent || '').trim() === String(heading.textContent || '').trim()
+      ) {
+        let onlyWhitespaceBetween = true;
+        let cursor = previousHeading.nextSibling;
+        while (cursor && cursor !== heading) {
+          if (
+            (cursor.nodeType === Node.TEXT_NODE && String(cursor.textContent || '').trim())
+            || (cursor.nodeType === Node.ELEMENT_NODE && String(cursor.textContent || '').trim())
+          ) {
+            onlyWhitespaceBetween = false;
+            break;
+          }
+          cursor = cursor.nextSibling;
+        }
+        if (onlyWhitespaceBetween) {
+          heading.remove();
+          return;
+        }
+      }
+      previousHeading = heading;
+    });
   }
 
   async function apiCall(method, path, payload) {

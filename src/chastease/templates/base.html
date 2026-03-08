@@ -9,12 +9,172 @@
   <script src="/static/vendor/htmx.min.js" defer></script>
   <script src="/static/vendor/alpine.min.js" defer></script>
   <script src="/static/vendor/marked.min.js"></script>
+  <style>
+    body.app-shell {
+      min-height: 100dvh;
+      background:
+        radial-gradient(circle at top, rgba(34, 211, 238, 0.14), transparent 28%),
+        radial-gradient(circle at 85% 12%, rgba(29, 78, 216, 0.12), transparent 24%),
+        linear-gradient(180deg, rgba(8, 12, 20, 0.98), rgba(6, 9, 14, 1));
+    }
+
+    .app-shell::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.32), transparent 80%);
+      opacity: 0.22;
+    }
+
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      backdrop-filter: blur(18px);
+      background: rgba(8, 12, 20, 0.76);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .app-header-inner,
+    .app-main,
+    .app-footer {
+      width: min(100%, 1120px);
+      margin: 0 auto;
+    }
+
+    .app-header-inner {
+      padding: 0.9rem 1rem;
+    }
+
+    .app-brand {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .app-main {
+      padding: 1.25rem 1rem 3rem;
+    }
+
+    .app-footer {
+      padding: 0 1rem 2rem;
+      color: rgba(var(--color-text-tertiary), 1);
+    }
+
+    .section,
+    .card,
+    .card-elevated {
+      border-color: rgba(255, 255, 255, 0.1);
+      background:
+        linear-gradient(180deg, rgba(17, 24, 39, 0.9), rgba(8, 12, 20, 0.96));
+      box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.24),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .section {
+      padding: 1.35rem;
+      border-radius: 1.2rem;
+    }
+
+    .card,
+    .card-elevated {
+      border-radius: 1rem;
+    }
+
+    .btn-primary,
+    .btn-secondary,
+    .btn-outline,
+    .btn-danger,
+    .btn-success,
+    .nav-link {
+      border-radius: 0.9rem;
+    }
+
+    .btn-primary,
+    .btn-success,
+    .btn-danger,
+    .btn-secondary,
+    .btn-outline {
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, rgb(8 145 178), rgb(29 78 216));
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, rgb(6 182 212), rgb(37 99 235));
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .btn-outline {
+      border-color: rgba(34, 211, 238, 0.45);
+      color: rgb(165 243 252);
+      background: rgba(8, 145, 178, 0.08);
+    }
+
+    .btn-outline:hover {
+      background: rgba(8, 145, 178, 0.16);
+    }
+
+    .nav-link {
+      color: rgba(var(--color-text-secondary), 1);
+    }
+
+    .nav-link:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .input,
+    .select {
+      border-radius: 0.9rem;
+      border-color: rgba(255, 255, 255, 0.12);
+      background: rgba(15, 23, 42, 0.84);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .input:focus,
+    .select:focus {
+      border-color: rgba(34, 211, 238, 0.62);
+      --tw-ring-color: rgba(34, 211, 238, 0.18);
+    }
+
+    @media (max-width: 767px) {
+      .app-header-inner {
+        padding: 0.75rem 0.85rem;
+      }
+
+      .app-main {
+        padding: 0.85rem 0.75rem 2rem;
+      }
+
+      .app-footer {
+        padding: 0 0.75rem 1.5rem;
+      }
+
+      .section {
+        padding: 1rem;
+        border-radius: 1rem;
+      }
+    }
+  </style>
   {% block head %}{% endblock %}
 </head>
-<body class="bg-surface text-text antialiased theme-transition">
-  <header class="max-w-6xl mx-auto p-4">
-    <nav class="flex items-center justify-between">
-      <a href="/" class="text-lg font-bold hover:text-sky-400 transition-colors">Chastease</a>
+<body class="app-shell bg-surface text-text antialiased theme-transition">
+  <header class="app-header">
+    <div class="app-header-inner">
+    <nav class="flex items-center justify-between gap-3">
+      <a href="/" class="app-brand hover:text-sky-300 transition-colors">Chastease</a>
       <div class="flex items-center gap-1">
         <a id="navPrimary" class="nav-link hidden" href="/app">App</a>
         <a id="navChat" class="nav-link hidden" href="/chat">Chat</a>
@@ -33,13 +193,14 @@
         </button>
       </div>
     </nav>
+    </div>
   </header>
 
-  <main class="max-w-6xl mx-auto p-4">
+  <main class="app-main">
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="max-w-6xl mx-auto p-4 text-sm text-text-tertiary">
+  <footer class="app-footer text-sm">
     &copy; Chastease
   </footer>
 
