@@ -2,117 +2,299 @@
 
 {% block title %}AI Chat — Chastease{% endblock %}
 
-{% block content %}
-  <div class="section max-w-5xl animate-fade-in">
-    <div class="card-elevated overflow-hidden">
-  <!-- Modern Chat Container -->
-  <div class="flex flex-col h-[calc(100dvh-8rem)] min-h-[560px]">
+{% block head %}
+  <style>
+    .chat-bleed {
+      margin-left: calc(50% - 50vw);
+      margin-right: calc(50% - 50vw);
+    }
 
-    <!-- Header -->
-    <div class="flex-none bg-surface-alt/95 border-b border-white/10 px-6 py-4">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold" aria-hidden="true">
-            AI
+    .chat-shell {
+      min-height: calc(100dvh - 11rem);
+      background:
+        radial-gradient(circle at top, rgba(34, 211, 238, 0.12), transparent 32%),
+        linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(6, 9, 14, 1));
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .chat-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(18px);
+      background: rgba(8, 12, 20, 0.88);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 0.9rem 1rem;
+    }
+
+    .chat-topbar-inner,
+    .chat-log-inner,
+    .chat-pending-inner,
+    .chat-composer-inner {
+      width: min(100%, 980px);
+      margin: 0 auto;
+    }
+
+    .chat-topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .chat-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      min-width: 0;
+    }
+
+    .chat-avatar {
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: white;
+      background: linear-gradient(135deg, #0891b2, #1d4ed8);
+      box-shadow: 0 10px 30px rgba(14, 165, 233, 0.22);
+    }
+
+    .chat-meta {
+      min-width: 0;
+    }
+
+    .chat-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    .chat-subtitle {
+      margin-top: 0.15rem;
+      font-size: 0.78rem;
+      color: rgba(var(--color-text-tertiary), 1);
+    }
+
+    .chat-session-chip {
+      flex-shrink: 0;
+      max-width: 46%;
+      padding: 0.55rem 0.8rem;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 0.75rem;
+      color: rgba(var(--color-text-secondary), 1);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chat-log {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 1rem 1rem 0;
+      scroll-padding-bottom: 9rem;
+    }
+
+    .chat-log-inner {
+      padding-bottom: 1.25rem;
+    }
+
+    .chat-pending {
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(14px);
+      padding: 0.75rem 1rem;
+    }
+
+    .chat-composer {
+      position: sticky;
+      bottom: 0;
+      z-index: 20;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(6, 9, 14, 0.92);
+      backdrop-filter: blur(22px);
+      padding: 0.85rem 1rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .chat-composer-card {
+      border-radius: 1.35rem;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background:
+        linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(8, 12, 20, 0.98));
+      box-shadow:
+        0 -6px 30px rgba(0, 0, 0, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      padding: 0.55rem;
+    }
+
+    .chat-help {
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-size: 0.72rem;
+      color: rgba(var(--color-text-tertiary), 1);
+    }
+
+    .chat-scroll-btn {
+      right: 1rem;
+      bottom: 6.8rem;
+    }
+
+    @media (max-width: 767px) {
+      .chat-shell {
+        min-height: calc(100dvh - 8.5rem);
+        border-top: 0;
+      }
+
+      .chat-topbar {
+        padding: 0.8rem 0.9rem;
+      }
+
+      .chat-topbar-inner {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .chat-session-chip {
+        max-width: 100%;
+        width: 100%;
+        white-space: normal;
+      }
+
+      .chat-log {
+        padding: 0.75rem 0.75rem 0;
+        scroll-padding-bottom: 10.5rem;
+      }
+
+      .chat-composer {
+        padding: 0.7rem 0.75rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+      }
+
+      .chat-composer-card {
+        border-radius: 1.1rem;
+      }
+
+      .chat-help {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .chat-scroll-btn {
+        right: 0.75rem;
+        bottom: 7.75rem;
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="chat-bleed animate-fade-in">
+    <section class="chat-shell">
+      <div class="chat-topbar">
+        <div class="chat-topbar-inner">
+          <div class="chat-brand">
+            <div class="chat-avatar" aria-hidden="true">AI</div>
+            <div class="chat-meta">
+              <h1 class="chat-title text-text">Deine Keyholderin</h1>
+              <p id="chatStatus" class="chat-subtitle" aria-live="polite">Verbunden</p>
+            </div>
           </div>
-          <div>
-            <h1 class="text-xl font-semibold text-text">Deine Keyholderin</h1>
-            <p id="chatStatus" class="text-xs text-text-tertiary" aria-live="polite">Verbunden</p>
+          <div class="chat-session-chip">
+            <span id="chatSessionInfo">Session lädt...</span>
           </div>
-        </div>
-        <div class="text-xs text-text-tertiary">
-          <span id="chatSessionInfo">Session lädt...</span>
         </div>
       </div>
-    </div>
 
-    <!-- Messages Area -->
-    <div id="messagesContainer" class="flex-1 overflow-y-auto bg-surface/80 px-4 py-6" role="log" aria-live="polite">
-      <div class="max-w-4xl mx-auto">
-        <div id="messages" class="space-y-6"></div>
+      <div id="messagesContainer" class="chat-log" role="log" aria-live="polite">
+        <div class="chat-log-inner">
+          <div id="messages" class="space-y-6"></div>
 
-        <!-- Typing Indicator (hidden by default) -->
-        <div id="typingIndicator" class="hidden mt-6">
-          <div class="flex items-start gap-3">
-            <div class="flex-none w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold" aria-hidden="true">
-              AI
-            </div>
-            <div class="flex-1">
-              <div class="inline-flex items-center gap-2 px-4 py-3 bg-surface-alt/80 rounded-2xl border border-white/10 text-sm text-text-secondary">
-                <svg class="w-4 h-4 animate-spin text-brand" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" class="opacity-25"></circle>
-                  <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
-                </svg>
-                <span>Antwort wird vorbereitet...</span>
+          <div id="typingIndicator" class="hidden mt-6">
+            <div class="flex items-start gap-3">
+              <div class="flex-none w-8 h-8 rounded-full bg-gradient-to-br from-cyan-600 to-blue-600 flex items-center justify-center text-white text-sm font-bold" aria-hidden="true">
+                AI
+              </div>
+              <div class="flex-1">
+                <div class="inline-flex items-center gap-2 px-4 py-3 bg-surface-alt/80 rounded-2xl border border-white/10 text-sm text-text-secondary">
+                  <svg class="w-4 h-4 animate-spin text-brand" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" class="opacity-25"></circle>
+                    <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                  </svg>
+                  <span>Antwort wird vorbereitet...</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Pending Actions (optional) -->
-    <div id="pendingActionsWrap" class="hidden flex-none bg-surface-alt/90 border-t border-white/10 px-6 py-3">
-      <div class="max-w-4xl mx-auto">
-        <h2 class="text-sm font-semibold text-text mb-2">Ausstehende Aktionen</h2>
-        <div id="pendingActions" class="space-y-2"></div>
+      <div id="pendingActionsWrap" class="hidden chat-pending">
+        <div class="chat-pending-inner">
+          <h2 class="text-sm font-semibold text-text mb-2">Ausstehende Aktionen</h2>
+          <div id="pendingActions" class="space-y-2"></div>
+        </div>
       </div>
-    </div>
 
-    <!-- Input Area -->
-    <div class="flex-none bg-surface-alt/95 border-t border-white/10 px-6 py-4">
-      <div class="max-w-4xl mx-auto">
-        <div id="attachmentPreview" class="hidden mb-3 flex flex-wrap gap-2"></div>
-        <div class="rounded-2xl border border-white/10 bg-surface/90 p-2 shadow-inner shadow-black/30">
-          <div class="relative">
-            <button
-              id="attachImageBtn"
-              class="absolute left-2 bottom-2 w-10 h-10 rounded-xl border border-white/20 bg-surface-alt hover:bg-surface-elevated text-text-secondary flex items-center justify-center transition-all"
-              title="Bild anhängen"
-              type="button"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-              </svg>
-            </button>
-            <input id="chatAttachmentInput" type="file" accept="image/*" class="hidden" multiple />
-            <textarea
-              id="messageInput"
-              class="input w-full resize-none rounded-xl pl-14 pr-14 py-4 focus:ring-2 focus:ring-brand/25"
-              placeholder="Schreibe deine Nachricht..."
-              rows="1"
-              style="max-height: 200px;"
-            ></textarea>
-            <button
-              id="sendBtn"
-              class="absolute right-2 bottom-2 w-10 h-10 bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl flex items-center justify-center text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Senden (Enter)"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-              </svg>
-            </button>
+      <div class="chat-composer">
+        <div class="chat-composer-inner">
+          <div id="attachmentPreview" class="hidden mb-3 flex flex-wrap gap-2"></div>
+          <div class="chat-composer-card">
+            <div class="relative">
+              <button
+                id="attachImageBtn"
+                class="absolute left-2 bottom-2 w-10 h-10 rounded-xl border border-white/20 bg-surface-alt hover:bg-surface-elevated text-text-secondary flex items-center justify-center transition-all"
+                title="Bild anhängen"
+                type="button"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+              </button>
+              <input id="chatAttachmentInput" type="file" accept="image/*" class="hidden" multiple />
+              <textarea
+                id="messageInput"
+                class="input w-full resize-none rounded-xl pl-14 pr-14 py-4 focus:ring-2 focus:ring-brand/25"
+                placeholder="Schreibe deine Nachricht..."
+                rows="1"
+                style="max-height: 200px;"
+              ></textarea>
+              <button
+                id="sendBtn"
+                class="absolute right-2 bottom-2 w-10 h-10 bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl flex items-center justify-center text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Senden (Enter)"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="chat-help">
+            <span>Enter zum Senden, Shift+Enter für neue Zeile, Bilder per Klick oder Paste.</span>
+            <span id="charCount" class="hidden">0 Zeichen</span>
           </div>
         </div>
-        <div class="mt-2 flex items-center justify-between text-xs text-text-tertiary">
-          <span>Enter zum Senden • Shift+Enter für neue Zeile • Klick oder Paste für Bilder</span>
-          <span id="charCount" class="hidden">0 Zeichen</span>
-        </div>
       </div>
-    </div>
-    
-    <!-- Scroll to Bottom Button -->
-    <button
-      id="scrollToBottomBtn"
-      class="hidden fixed bottom-24 right-8 w-10 h-10 bg-surface-alt hover:bg-surface-elevated border border-white/10 rounded-full shadow-lg flex items-center justify-center text-text transition-all"
-      title="Nach unten scrollen"
-    >
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
-      </svg>
-    </button>
-  </div>
-    </div>
+
+      <button
+        id="scrollToBottomBtn"
+        class="chat-scroll-btn hidden fixed w-10 h-10 bg-surface-alt hover:bg-surface-elevated border border-white/10 rounded-full shadow-lg flex items-center justify-center text-text transition-all"
+        title="Nach unten scrollen"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+        </svg>
+      </button>
+    </section>
   </div>
 {% endblock %}
 
