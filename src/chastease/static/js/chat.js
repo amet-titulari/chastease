@@ -8,6 +8,8 @@ const chatAttachmentInput = document.getElementById('chatAttachmentInput');
 const attachmentPreviewEl = document.getElementById('attachmentPreview');
 const pendingActionsWrapEl = document.getElementById('pendingActionsWrap');
 const pendingActionsEl = document.getElementById('pendingActions');
+const messagesContainerEl = document.getElementById('messagesContainer');
+const composerEl = document.getElementById('chatComposer');
 
 let activeSessionId = null;
 let currentLanguage = 'de';
@@ -15,6 +17,7 @@ let currentAutonomyMode = 'execute';
 let pendingAttachments = [];
 let maintainBottomLock = true;
 let bottomLockRaf = 0;
+let keyboardInsetPx = 0;
 const MAX_RENDERED_HISTORY_TURNS = 12;
 const AUTO_TIMER_ACTIONS = new Set(['add_time', 'reduce_time', 'pause_timer', 'unpause_timer']);
 const HYGIENE_COUNTDOWN_STORAGE_PREFIX = 'chastease_hygiene_countdown:';
@@ -336,7 +339,7 @@ function findImageVerificationOutcome(body) {
 }
 
 function scrollToBottom(smooth = true) {
-  const container = document.getElementById('messagesContainer');
+  const container = messagesContainerEl;
   if (!container) return;
   const targetNode = document.getElementById('typingIndicator')?.classList.contains('hidden') === false
     ? document.getElementById('typingIndicator')
@@ -372,12 +375,37 @@ function scheduleScrollToBottom(smooth = false) {
   });
 }
 
-function ensureInputAndLatestVisible() {
-  scheduleScrollToBottom(false);
-  if (inputEl) {
-    try {
-      inputEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    } catch (_error) {}
+function isNearBottom() {
+  const container = messagesContainerEl;
+  if (!container) return true;
+  return container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+}
+
+function updateViewportMetrics() {
+  const root = document.documentElement;
+  const viewport = window.visualViewport;
+  const viewportHeight = viewport?.height || window.innerHeight;
+  const layoutHeight = window.innerHeight || viewportHeight;
+  const offsetTop = viewport?.offsetTop || 0;
+  const inferredKeyboardInset = Math.max(0, layoutHeight - viewportHeight - offsetTop);
+  keyboardInsetPx = inferredKeyboardInset > 80 ? inferredKeyboardInset : 0;
+  root.style.setProperty('--chat-viewport-height', `${viewportHeight}px`);
+  root.style.setProperty('--chat-keyboard-offset', `${keyboardInsetPx}px`);
+}
+
+function keepComposerVisible() {
+  updateViewportMetrics();
+  if (!composerEl || !messagesContainerEl) return;
+  const composerHeight = composerEl.offsetHeight || 0;
+  messagesContainerEl.style.scrollPaddingBottom = `${composerHeight + keyboardInsetPx + 24}px`;
+}
+
+function ensureInputAndLatestVisible(options = {}) {
+  const { forceScroll = false } = options;
+  keepComposerVisible();
+  if (forceScroll || maintainBottomLock || isNearBottom()) {
+    maintainBottomLock = true;
+    scheduleScrollToBottom(false);
   }
 }
 
@@ -466,6 +494,7 @@ function appendInlineActionCard(cardNode) {
   messageWrapper.appendChild(avatar);
   messageWrapper.appendChild(contentDiv);
   messagesEl.appendChild(messageWrapper);
+  maintainBottomLock = true;
   scrollToBottom();
 }
 
@@ -561,7 +590,7 @@ async function loadRecentTurns() {
     if (!recentTurns.length) {
       appendMessage('assistant', 'Noch keine Nachrichten in dieser Session.', { scroll: false });
     }
-    ensureInputAndLatestVisible();
+    ensureInputAndLatestVisible({ forceScroll: true });
   } catch (_error) {
     // Keep chat usable even if history endpoint fails.
   }
@@ -1072,7 +1101,7 @@ async function sendMessage() {
     hideTypingIndicator();
     if (sendBtn) sendBtn.disabled = false;
     if (inputEl) inputEl.focus();
-    ensureInputAndLatestVisible();
+    ensureInputAndLatestVisible({ forceScroll: true });
   }
 }
 
@@ -1098,10 +1127,12 @@ function wireEvents() {
       });
       if (typeof ResizeObserver !== 'undefined') {
         const observer = new ResizeObserver(() => {
+          keepComposerVisible();
           if (maintainBottomLock) scheduleScrollToBottom(false);
         });
         observer.observe(messagesContainer);
         if (messagesEl) observer.observe(messagesEl);
+        if (composerEl) observer.observe(composerEl);
       }
     }
 
@@ -1136,7 +1167,10 @@ function wireEvents() {
         sendMessage();
       }
     });
-    inputEl.addEventListener('focus', () => ensureInputAndLatestVisible());
+    inputEl.addEventListener('focus', () => {
+      maintainBottomLock = true;
+      ensureInputAndLatestVisible({ forceScroll: true });
+    });
     inputEl.addEventListener('paste', async (event) => {
       const items = Array.from(event.clipboardData?.items || []);
       const imageFiles = items
@@ -1156,19 +1190,20 @@ function wireEvents() {
 
   window.addEventListener('resize', () => ensureInputAndLatestVisible());
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', ensureInputAndLatestVisible);
-    window.visualViewport.addEventListener('scroll', ensureInputAndLatestVisible);
+    window.visualViewport.addEventListener('resize', () => ensureInputAndLatestVisible());
+    window.visualViewport.addEventListener('scroll', () => ensureInputAndLatestVisible());
   }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
   wireEvents();
+  keepComposerVisible();
   if (typeof window.chastease_common !== 'undefined' && typeof window.chastease_common.renderNavAuth === 'function') {
     window.chastease_common.renderNavAuth();
   }
   if (sendBtn) sendBtn.disabled = true;
   await resolveActiveSession();
-  ensureInputAndLatestVisible();
+  ensureInputAndLatestVisible({ forceScroll: true });
 });
 
   function showTypingIndicator() {

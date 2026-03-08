@@ -24,6 +24,8 @@ const psychSummaryEl = document.getElementById('dashboardPsychSummary');
 const psychMetaEl = document.getElementById('dashboardPsychMeta');
 const psychAnalysisEl = document.getElementById('dashboardPsychAnalysis');
 const psychTraitsEl = document.getElementById('dashboardPsychTraits');
+const openingLimitSummaryEl = document.getElementById('dashboardOpeningLimitSummary');
+const openingLimitMetaEl = document.getElementById('dashboardOpeningLimitMeta');
 const roleplaySummaryEl = document.getElementById('dashboardRoleplaySummary');
 const roleplayMetaEl = document.getElementById('dashboardRoleplayMeta');
 const roleplayGuidanceEl = document.getElementById('dashboardRoleplayGuidance');
@@ -102,6 +104,85 @@ function splitSeconds(totalSecondsRaw) {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   return { days, hours, minutes, seconds };
+}
+
+function openingPeriodLabel(period) {
+  const normalized = String(period || 'month').toLowerCase();
+  if (normalized === 'day') return 'Tag';
+  if (normalized === 'week') return 'Woche';
+  return 'Monat';
+}
+
+function nextOpeningReset(now, period) {
+  const current = new Date(now.getTime());
+  if (String(period || '').toLowerCase() === 'day') {
+    current.setHours(24, 0, 0, 0);
+    return current;
+  }
+  if (String(period || '').toLowerCase() === 'week') {
+    const weekday = current.getDay();
+    const daysUntilNextMonday = weekday === 0 ? 1 : (8 - weekday);
+    current.setHours(0, 0, 0, 0);
+    current.setDate(current.getDate() + daysUntilNextMonday);
+    return current;
+  }
+  return new Date(current.getFullYear(), current.getMonth() + 1, 1, 0, 0, 0, 0);
+}
+
+function renderOpeningLimit(body) {
+  if (!openingLimitSummaryEl || !openingLimitMetaEl) return;
+  if (!body?.has_active_session) {
+    openingLimitSummaryEl.textContent = 'Keine aktive Session';
+    openingLimitMetaEl.textContent = '—';
+    return;
+  }
+
+  const policy = (body?.chastity_session?.policy && typeof body.chastity_session.policy === 'object')
+    ? body.chastity_session.policy
+    : {};
+  const limits = (policy.limits && typeof policy.limits === 'object') ? policy.limits : {};
+  const runtimeLimits = (policy.runtime_opening_limits && typeof policy.runtime_opening_limits === 'object')
+    ? policy.runtime_opening_limits
+    : {};
+  const period = String(limits.opening_limit_period || 'month').toLowerCase();
+  const maxOpenings = Math.max(0, Number(limits.max_openings_in_period ?? limits.max_openings_per_day ?? 0) || 0);
+  const rawEvents = Array.isArray(runtimeLimits.open_events) ? runtimeLimits.open_events : [];
+  const now = new Date();
+
+  const windowStart = (() => {
+    if (period === 'month') return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    if (period === 'week') {
+      const weekday = now.getDay();
+      const diffToMonday = weekday === 0 ? 6 : weekday - 1;
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      start.setDate(start.getDate() - diffToMonday);
+      return start;
+    }
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  })();
+
+  const usedOpenings = rawEvents
+    .map((item) => new Date(item))
+    .filter((item) => !Number.isNaN(item.getTime()) && item >= windowStart)
+    .length;
+
+  const remaining = Math.max(0, maxOpenings - usedOpenings);
+  const resetAt = nextOpeningReset(now, period);
+  const resetDateText = resetAt.toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  if (maxOpenings <= 0) {
+    openingLimitSummaryEl.textContent = 'Keine Öffnungen erlaubt';
+    openingLimitMetaEl.textContent = `Reset je ${openingPeriodLabel(period)} am ${resetDateText}`;
+    return;
+  }
+
+  openingLimitSummaryEl.textContent = `Noch ${remaining} Öffnungen`;
+  openingLimitMetaEl.textContent = `Bis ${resetDateText} · ${usedOpenings}/${maxOpenings} genutzt · Reset je ${openingPeriodLabel(period)}`;
 }
 
 function renderTimer(body) {
@@ -494,6 +575,7 @@ function updateView(body) {
   if (activeSessionSkeleton) activeSessionSkeleton.classList.add('hidden');
   if (setupSessionSkeleton) setupSessionSkeleton.classList.add('hidden');
   renderTimer(body);
+  renderOpeningLimit(body);
   renderSessionInfo(body);
   renderPsychogram(body);
   renderRoleplay(body);

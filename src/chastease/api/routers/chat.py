@@ -1472,24 +1472,18 @@ def _execute_ttlock_action(
 ) -> tuple[dict, dict]:
     config = _ttlock_from_policy(policy)
     integrations = [str(x).strip().lower() for x in (policy.get("integrations") or []) if str(x).strip()]
-    if "ttlock" not in integrations and not config:
+    ttlock_enabled = "ttlock" in integrations or bool(config)
+    hygiene_without_ttlock = action_type in _HYGIENE_ACTIONS and not ttlock_enabled
+    if not ttlock_enabled and not hygiene_without_ttlock:
         raise HTTPException(status_code=400, detail="TT-Lock integration is not enabled in this session policy.")
 
     ttl_user = str(config.get("ttl_user") or "").strip()
     ttl_pass_md5 = str(config.get("ttl_pass_md5") or "").strip().lower()
     lock_id = str(payload.get("ttl_lock_id") or payload.get("lock_id") or config.get("ttl_lock_id") or "").strip()
     gateway_id = str(config.get("ttl_gateway_id") or "").strip() or None
-    if not ttl_user or not ttl_pass_md5 or not lock_id:
-        raise HTTPException(
-            status_code=400,
-            detail="TT-Lock configuration incomplete. Required: ttl_user, ttl_pass_md5, ttl_lock_id.",
-        )
-
     client_id = str(getattr(request.app.state.config, "TTL_CLIENT_ID", "") or "").strip()
     client_secret = str(getattr(request.app.state.config, "TTL_CLIENT_SECRET", "") or "").strip()
     base_url = str(getattr(request.app.state.config, "TTL_API_BASE", "https://euapi.ttlock.com") or "").strip()
-    if not client_id or not client_secret:
-        raise HTTPException(status_code=400, detail="TT-Lock server config missing: TTL_CLIENT_ID / TTL_CLIENT_SECRET.")
 
     command = "open" if str(action_type).endswith("_open") else "close"
     now = datetime.now(UTC)
@@ -1510,20 +1504,29 @@ def _execute_ttlock_action(
         )
     if command == "open":
         _assert_opening_limit_allows_open(policy, payload, now)
-    access_token = _ttlock_access_token(
-        base_url=base_url,
-        client_id=client_id,
-        client_secret=client_secret,
-        ttl_user=ttl_user,
-        ttl_pass_md5=ttl_pass_md5,
-    )
-    result_payload = _ttlock_command(
-        base_url=base_url,
-        client_id=client_id,
-        access_token=access_token,
-        lock_id=lock_id,
-        command=command,
-    )
+    result_payload = None
+    if ttlock_enabled:
+        if not ttl_user or not ttl_pass_md5 or not lock_id:
+            raise HTTPException(
+                status_code=400,
+                detail="TT-Lock configuration incomplete. Required: ttl_user, ttl_pass_md5, ttl_lock_id.",
+            )
+        if not client_id or not client_secret:
+            raise HTTPException(status_code=400, detail="TT-Lock server config missing: TTL_CLIENT_ID / TTL_CLIENT_SECRET.")
+        access_token = _ttlock_access_token(
+            base_url=base_url,
+            client_id=client_id,
+            client_secret=client_secret,
+            ttl_user=ttl_user,
+            ttl_pass_md5=ttl_pass_md5,
+        )
+        result_payload = _ttlock_command(
+            base_url=base_url,
+            client_id=client_id,
+            access_token=access_token,
+            lock_id=lock_id,
+            command=command,
+        )
     if command == "open":
         _record_open_event(policy, now)
         runtime_hygiene["is_open"] = True
@@ -1546,12 +1549,15 @@ def _execute_ttlock_action(
     policy["runtime_hygiene"] = runtime_hygiene
     if seal_required_on_close:
         policy["runtime_seal"] = runtime_seal
-    logger.info(
-        "TT-Lock command executed: action=%s lock_id=%s gateway_id=%s",
-        action_type,
-        lock_id,
-        gateway_id or "-",
-    )
+    if ttlock_enabled:
+        logger.info(
+            "TT-Lock command executed: action=%s lock_id=%s gateway_id=%s",
+            action_type,
+            lock_id,
+            gateway_id or "-",
+        )
+    else:
+        logger.info("Hygiene action executed without TT-Lock integration: action=%s", action_type)
     limits = policy.get("limits") if isinstance(policy.get("limits"), dict) else {}
     opening_window_minutes = int(limits.get("opening_window_minutes") or 15)
     opening_window_minutes = max(1, min(opening_window_minutes, 240))
@@ -1580,14 +1586,19 @@ def _execute_ttlock_action(
         },
         "ttlock": {
             "command": command,
-            "lock_id": lock_id,
+            "lock_id": lock_id or None,
             "gateway_id": gateway_id,
             "response": result_payload,
+            "executed": ttlock_enabled,
         },
         "message": (
-            f"TT-Lock opened. Hygiene window: {opening_window_minutes} minute(s)."
+            (
+                f"TT-Lock opened. Hygiene window: {opening_window_minutes} minute(s)."
+                if ttlock_enabled
+                else f"Hygieneöffnung gestartet. Hygiene window: {opening_window_minutes} minute(s)."
+            )
             if command == "open"
-            else "TT-Lock closed."
+            else ("TT-Lock closed." if ttlock_enabled else "Hygieneöffnung beendet.")
         ),
     }
 
