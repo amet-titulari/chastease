@@ -29,19 +29,26 @@
     .contract-markdown h1 {
       font-size: 1.65rem;
       font-weight: 800;
+      color: rgb(253 186 116);
     }
 
     .contract-markdown h2 {
       font-size: 1.2rem;
       font-weight: 700;
       padding-bottom: 0.4rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(249, 115, 22, 0.28);
+      color: rgb(253 186 116);
+      text-shadow: 0 0 18px rgba(249, 115, 22, 0.12);
     }
 
     .contract-markdown h3 {
       font-size: 1rem;
       font-weight: 700;
-      color: rgb(165 243 252);
+      color: rgb(253 186 116);
+    }
+
+    .contract-markdown h2:first-of-type {
+      margin-top: 0.25rem;
     }
 
     .contract-markdown p,
@@ -102,7 +109,7 @@
     }
 
     .contract-markdown blockquote {
-      border-left: 3px solid rgba(34, 211, 238, 0.45);
+      border-left: 3px solid rgba(249, 115, 22, 0.45);
       padding-left: 1rem;
       color: rgb(var(--color-text-secondary));
     }
@@ -115,15 +122,8 @@
 {% endblock %}
 
 {% block content %}
-  <section class="card-elevated p-6 animate-fade-in">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold">Keuschheitsvertrag</h1>
-        <div class="text-sm text-text-tertiary">Der Keuschheitsvertrag wird aus den Session-Daten erstellt.</div>
-      </div>
-    </div>
-
-    <div id="contractBox" class="contract-markdown mt-4 card p-4 min-h-[200px] prose prose-invert prose-sm max-w-none">
+  <section class="animate-fade-in">
+    <div id="contractBox" class="contract-markdown card p-4 min-h-[200px] prose prose-invert prose-sm max-w-none">
       <div class="space-y-3">
         <div class="skeleton-heading"></div>
         <div class="skeleton-text"></div>
@@ -137,7 +137,7 @@
       <div class="text-sm text-text font-semibold">AI-Aenderungen gegenueber Template</div>
       <ul id="contractChangesList" class="mt-2 list-disc pl-5 text-sm text-text-secondary space-y-1"></ul>
       <details id="contractDiffDetails" class="mt-3">
-        <summary class="cursor-pointer text-sm text-sky-300 hover:text-sky-200 transition-colors">Diff anzeigen</summary>
+        <summary class="cursor-pointer text-sm text-orange-300 hover:text-orange-200 transition-colors">Diff anzeigen</summary>
         <pre id="contractDiffPreview" class="mt-2 text-xs bg-surface border border-white/10 rounded-lg p-3 overflow-x-auto"></pre>
       </details>
     </div>

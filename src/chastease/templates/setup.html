@@ -2,15 +2,88 @@
 
 {% block title %}Setup — Chastease{% endblock %}
 
+{% block head %}
+  <style>
+    .setup-shell {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .setup-hero {
+      padding: 1.35rem;
+    }
+
+    .setup-nav {
+      display: flex;
+      gap: 0.55rem;
+      overflow-x: auto;
+      padding-bottom: 0.15rem;
+      scroll-snap-type: x proximity;
+    }
+
+    .setup-nav a {
+      flex: 0 0 auto;
+      scroll-snap-align: start;
+    }
+
+    .setup-card {
+      scroll-margin-top: 6rem;
+    }
+
+    .setup-primary-action {
+      display: flex;
+      justify-content: flex-end;
+      padding-top: 0.25rem;
+    }
+
+    @media (max-width: 767px) {
+      .setup-hero {
+        padding: 1rem;
+      }
+
+      .setup-primary-action {
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+        padding: 0.85rem 0 calc(0.4rem + env(safe-area-inset-bottom, 0px));
+        background: linear-gradient(180deg, rgba(6, 9, 14, 0), rgba(6, 9, 14, 0.92) 40%);
+      }
+
+      .setup-primary-action .btn-primary {
+        width: 100%;
+      }
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
-  <section class="section mt-4 space-y-6 animate-fade-in">
-    <div>
-      <h1 class="text-2xl font-semibold">Setup</h1>
-      <p id="setupInstructions" class="text-sm text-text-tertiary mt-2" aria-live="polite">Setup-Session wird geladen…</p>
-      <p id="setupSessionInfo" class="text-sm text-text-tertiary mt-1">-</p>
+  <section class="setup-shell animate-fade-in">
+    <div class="app-surface-hero setup-hero">
+      <span class="app-kicker">Setup Flow</span>
+      <h1 class="mt-3 text-3xl font-extrabold text-text">Konfiguration in klaren Abschnitten statt als Formularwand.</h1>
+      <p class="mt-3 text-text-secondary">Nutze die Abschnitts-Navigation, arbeite die Blöcke der Reihe nach ab und speichere die Basisdaten zuerst.</p>
+      <div class="setup-nav mt-4">
+        <a class="app-chip" href="#setupSectionBase">1 Basis</a>
+        <a class="app-chip" href="#setupSectionRoleplay">2 Roleplay</a>
+        <a class="app-chip" href="#setupSectionLlm">3 LLM</a>
+        <a class="app-chip" href="#setupSectionTtlock">4 TTLock</a>
+        <a class="app-chip" href="#setupSectionQuestionnaire">5 Psychogramm</a>
+        <a class="app-chip" href="#setupSectionCompletion">6 Abschluss</a>
+        <a class="app-chip" href="#setupSectionArtifacts">7 Ausgaben</a>
+      </div>
+      <div class="mt-4">
+        <p id="setupInstructions" class="text-sm text-text-tertiary" aria-live="polite">Setup-Session wird geladen…</p>
+        <p id="setupSessionInfo" class="text-sm text-text-tertiary mt-1">-</p>
+      </div>
     </div>
 
-    <div class="card p-4">
+    <div class="section space-y-6">
+    <div>
+      <h2 class="text-xl font-semibold">Abschnitte</h2>
+      <p class="text-sm text-text-tertiary mt-2">Beginne mit den Basisdaten und arbeite dann in den spezialisierten Blöcken weiter.</p>
+    </div>
+
+    <div id="setupSectionBase" class="setup-card card p-4">
       <button id="accBaseBtn" class="accordion-header" aria-expanded="true" aria-controls="accBaseBody">
         <span>Basis-Konfiguration</span>
         <svg id="accBaseChevron" class="accordion-chevron w-5 h-5" data-open="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -18,21 +91,21 @@
       <div id="accBaseBody" class="mt-4 space-y-4" role="region">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
-          <label class="label">Language</label>
+          <label class="label">Sprache</label>
           <select id="setupLanguage" class="select mt-1">
             <option value="de">Deutsch</option>
             <option value="en">English</option>
           </select>
         </div>
         <div>
-          <label class="label">Autonomy mode</label>
+          <label class="label">Autonomie-Modus</label>
           <select id="setupAutonomy" class="select mt-1">
             <option value="execute" selected>execute</option>
             <option value="suggest">suggest</option>
           </select>
         </div>
         <div>
-          <label class="label">Hard stop</label>
+          <label class="label">Hard-Stop</label>
           <select id="setupHardStop" class="select mt-1">
             <option value="true">enabled</option>
             <option value="false">disabled</option>
@@ -80,7 +153,7 @@
       <p class="text-xs text-text-tertiary">Hinweis: 0 deaktiviert das jeweilige Penalty-Cap.</p>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
-          <label class="label">Openings period</label>
+          <label class="label">Öffnungszeitraum</label>
           <select id="openingLimitPeriod" class="select mt-1">
             <option value="day">day</option>
             <option value="week">week</option>
@@ -88,11 +161,11 @@
           </select>
         </div>
         <div>
-          <label class="label">Max openings / period</label>
+          <label class="label">Max. Öffnungen / Zeitraum</label>
           <input id="maxOpeningsInPeriod" type="number" min="0" max="200" value="7" class="input mt-1" />
         </div>
         <div>
-          <label class="label">Opening window (min)</label>
+          <label class="label">Öffnungsfenster (Min)</label>
           <input id="openingWindowMinutes" type="number" min="1" max="240" value="15" class="input mt-1" />
         </div>
       </div>
@@ -145,14 +218,14 @@
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label class="label">TTLock integration</label>
+          <label class="label">TTLock-Integration</label>
           <select id="setupIntTtlock" class="select mt-1">
             <option value="true" selected>enabled</option>
             <option value="false">disabled</option>
           </select>
         </div>
         <div>
-          <label class="label">Chaster integration</label>
+          <label class="label">Chaster-Integration</label>
           <select id="setupIntChaster" class="select mt-1">
             <option value="false">disabled</option>
             <option value="true">enabled</option>
@@ -224,15 +297,15 @@
         <p id="chasterInfo" class="label">Chaster-Daten werden zusammen mit der Basis-Konfiguration gespeichert. Die Session wird weiter erst bei Vertragsakzeptanz erstellt.</p>
       </div>
 
-      <div class="flex flex-wrap gap-2">
+      <div class="setup-primary-action">
         <button id="setupStartBtn" class="btn-primary">Speichern</button>
       </div>
       </div>
     </div>
 
-    <div class="card p-4">
+    <div id="setupSectionRoleplay" class="setup-card card p-4">
       <button id="accRoleplayBtn" class="accordion-header" aria-expanded="false" aria-controls="accRoleplayBody">
-        <span>Roleplay Profiles</span>
+        <span>Roleplay-Profile</span>
         <svg id="accRoleplayChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div id="accRoleplayBody" class="mt-4 space-y-5 hidden">
@@ -372,7 +445,7 @@
       </div>
     </div>
 
-    <div class="card p-4">
+    <div id="setupSectionLlm" class="setup-card card p-4">
       <button id="accLlmBtn" class="accordion-header" aria-expanded="false" aria-controls="accLlmBody">
         <span>LLM Konfiguration</span>
         <svg id="accLlmChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -415,7 +488,8 @@
       </div>
     </div>
 
-    <div id="ttlockSection" class="card p-4">
+    <div id="ttlockSection" class="setup-card card p-4">
+      <div id="setupSectionTtlock"></div>
       <button id="accTtlockBtn" class="accordion-header" aria-expanded="false" aria-controls="accTtlockBody">
         <span>TTLock Konfiguration</span>
         <svg id="accTtlockChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -455,7 +529,7 @@
       </div>
     </div>
 
-    <div class="card p-4">
+    <div id="setupSectionQuestionnaire" class="setup-card card p-4">
       <button id="accQuestionBtn" class="accordion-header" aria-expanded="false" aria-controls="accQuestionBody">
         <span>Psychogramm</span>
         <svg id="accQuestionChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -469,7 +543,7 @@
       </div>
     </div>
 
-    <div class="card p-4">
+    <div id="setupSectionCompletion" class="setup-card card p-4">
       <button id="accCompletionBtn" class="accordion-header" aria-expanded="false" aria-controls="accCompletionBody">
         <span>Setup abschließen</span>
         <svg id="accCompletionChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -486,9 +560,9 @@
       </div>
     </div>
 
-    <div class="card p-4">
+    <div id="setupSectionArtifacts" class="setup-card card p-4">
       <button id="accArtifactsBtn" class="accordion-header" aria-expanded="false" aria-controls="accArtifactsBody">
-        <span>Artifacts</span>
+        <span>Ausgaben</span>
         <svg id="accArtifactsChevron" class="accordion-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div id="accArtifactsBody" class="mt-4 space-y-4 hidden">
@@ -499,7 +573,7 @@
       <textarea id="consentText" class="input min-h-20" placeholder="Consent text (optional, will auto-fill required text if empty)"></textarea>
       </div>
     </div>
-
+    </div>
   </section>
 {% endblock %}
 

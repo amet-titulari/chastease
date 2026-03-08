@@ -2,27 +2,106 @@
 
 {% block title %}Chastease — Landing{% endblock %}
 
+{% block head %}
+  <style>
+    .landing-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 1.25rem;
+      align-items: stretch;
+    }
+
+    .landing-copy {
+      padding: 2rem;
+    }
+
+    .landing-copy h1 {
+      font-size: clamp(2.2rem, 6vw, 4.2rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .landing-panel {
+      padding: 1.4rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .landing-list {
+      display: grid;
+      gap: 0.7rem;
+    }
+
+    .landing-list li {
+      padding: 0.8rem 0.95rem;
+      border-radius: 0.9rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(var(--color-text-secondary), 1);
+    }
+
+    @media (max-width: 767px) {
+      .landing-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .landing-copy {
+        padding: 1.1rem;
+      }
+
+      .landing-panel {
+        padding: 1rem;
+      }
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
-  <section class="card-elevated p-8 animate-fade-in">
-    <h1 class="text-3xl font-extrabold mb-2">Chastease</h1>
-    <div class="flex flex-wrap gap-2 mb-4">
-      {% if auth_enable_chaster_login %}
-      <a class="btn-outline" href="/api/v1/auth/chaster/signin?return_to=/app">Chaster</a>
-      {% endif %}
-      {% if auth_allow_local_login %}
-      <a class="btn-primary" href="/app?mode=login">Local</a>
-      <a class="btn-secondary" href="/app?mode=register">Register</a>
-      {% endif %}
+  <section class="landing-grid animate-fade-in">
+    <div class="app-surface-hero landing-copy">
+      <span class="app-kicker">Session Control</span>
+      <h1 class="mt-4 font-extrabold text-text">Klare Führung, ruhige Struktur, mobile-fähige Sessionsteuerung.</h1>
+      <p class="mt-5 max-w-2xl text-lg text-text-secondary">
+        Chastease bündelt Setup, Vertrag, Live-Chat und Integrationen in einer Oberfläche, die auch auf kleinen Displays nutzbar bleibt.
+      </p>
+      <div class="app-chip-row mt-5">
+        <span class="app-chip">Responsives Setup</span>
+        <span class="app-chip">Live-Chat mit Aktionen</span>
+        <span class="app-chip">Vertrag als lesbares Dokument</span>
+      </div>
+      <div class="mt-6 flex flex-wrap gap-3">
+        {% if auth_allow_local_login %}
+          <a class="btn-primary" href="/app?mode=login">Mit lokalem Konto starten</a>
+          <a class="btn-secondary" href="/app?mode=register">Neues Konto anlegen</a>
+        {% endif %}
+        {% if auth_enable_chaster_login %}
+          <a class="btn-outline" href="/api/v1/auth/chaster/signin?return_to=/app">Mit Chaster verbinden</a>
+        {% endif %}
+      </div>
     </div>
-    <p class="text-text-secondary">
-      Diese Seite dient nur als Einstieg. Die sichtbaren Login-Optionen werden direkt aus der Server-Konfiguration übernommen.
-      {% if auth_enable_chaster_login and not auth_allow_local_login %}
-      Aktuell ist nur Chaster OAuth2 aktiviert.
-      {% elif auth_allow_local_login and not auth_enable_chaster_login %}
-      Aktuell ist nur lokaler Login/Registrierung aktiviert.
-      {% elif not auth_enable_chaster_login and not auth_allow_local_login %}
-      Aktuell ist keine Login-Methode aktiv.
-      {% endif %}
-    </p>
+
+    <aside class="card-elevated landing-panel">
+      <div>
+        <h2 class="text-xl font-semibold text-text">Was die App aktuell gut kann</h2>
+        <ul class="landing-list mt-4">
+          <li>Setup-, Dashboard- und Vertragsfluss in derselben visuellen Sprache.</li>
+          <li>Chat mit mehr vertikalem Platz und besserem Mobile-Verhalten.</li>
+          <li>OAuth- und lokaler Einstieg je nach Server-Konfiguration.</li>
+        </ul>
+      </div>
+      <p class="text-sm text-text-secondary">
+        {% if auth_enable_chaster_login and not auth_allow_local_login %}
+          Aktuell ist nur Chaster OAuth aktiviert.
+        {% elif auth_allow_local_login and not auth_enable_chaster_login %}
+          Aktuell ist nur lokaler Login und Registrierung aktiviert.
+        {% elif not auth_enable_chaster_login and not auth_allow_local_login %}
+          Aktuell ist keine Login-Methode aktiv.
+        {% else %}
+          Beide Einstiegswege sind aktiv und können parallel genutzt werden.
+        {% endif %}
+      </p>
+    </aside>
   </section>
 {% endblock %}

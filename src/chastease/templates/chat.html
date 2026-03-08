@@ -12,8 +12,9 @@
     .chat-shell {
       min-height: calc(100dvh - 11rem);
       background:
-        radial-gradient(circle at top, rgba(34, 211, 238, 0.12), transparent 32%),
-        linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(6, 9, 14, 1));
+        radial-gradient(circle at top, rgba(249, 115, 22, 0.08), transparent 28%),
+        radial-gradient(circle at 82% 12%, rgba(220, 38, 38, 0.05), transparent 20%),
+        linear-gradient(180deg, rgba(6, 11, 22, 0.98), rgba(2, 4, 10, 1));
       display: flex;
       flex-direction: column;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -25,7 +26,7 @@
       top: 0;
       z-index: 20;
       backdrop-filter: blur(18px);
-      background: rgba(8, 12, 20, 0.88);
+      background: rgba(4, 7, 14, 0.9);
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       padding: 0.9rem 1rem;
     }
@@ -61,8 +62,8 @@
       justify-content: center;
       font-weight: 700;
       color: white;
-      background: linear-gradient(135deg, #0891b2, #1d4ed8);
-      box-shadow: 0 10px 30px rgba(14, 165, 233, 0.22);
+      background: linear-gradient(135deg, #f97316, #dc2626);
+      box-shadow: 0 10px 30px rgba(234, 88, 12, 0.24);
     }
 
     .chat-meta {
@@ -108,7 +109,7 @@
 
     .chat-pending {
       border-top: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(15, 23, 42, 0.78);
+      background: rgba(8, 13, 25, 0.84);
       backdrop-filter: blur(14px);
       padding: 0.75rem 1rem;
     }
@@ -118,7 +119,7 @@
       bottom: 0;
       z-index: 20;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(6, 9, 14, 0.92);
+      background: rgba(3, 5, 11, 0.94);
       backdrop-filter: blur(22px);
       padding: 0.85rem 1rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
     }
@@ -127,7 +128,7 @@
       border-radius: 1.35rem;
       border: 1px solid rgba(255, 255, 255, 0.12);
       background:
-        linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(8, 12, 20, 0.98));
+        linear-gradient(180deg, rgba(9, 14, 27, 0.97), rgba(3, 6, 13, 0.99));
       box-shadow:
         0 -6px 30px rgba(0, 0, 0, 0.18),
         inset 0 1px 0 rgba(255, 255, 255, 0.04);

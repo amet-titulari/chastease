@@ -1,65 +1,140 @@
 {% extends "base.html" %}
 
-{% block title %}Prototype App — Chastease{% endblock %}
+{% block title %}Login — Chastease{% endblock %}
+
+{% block head %}
+  <style>
+    .auth-layout {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 1.25rem;
+      align-items: stretch;
+    }
+
+    .auth-hero {
+      padding: 1.7rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .auth-card-shell {
+      padding: 1.5rem;
+    }
+
+    .auth-card-shell .card {
+      padding: 1.15rem;
+    }
+
+    .auth-divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: rgba(var(--color-text-tertiary), 1);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .auth-divider::before,
+    .auth-divider::after {
+      content: "";
+      flex: 1 1 auto;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    @media (max-width: 767px) {
+      .auth-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .auth-hero,
+      .auth-card-shell {
+        padding: 1rem;
+      }
+    }
+  </style>
+{% endblock %}
 
 {% block content %}
-  <section class="card-elevated p-6 animate-fade-in"
+  <section class="auth-layout animate-fade-in"
     x-data="{
       mode: new URLSearchParams(location.search).get('mode') === 'register' ? 'register' : 'login',
       allowLocal: {{ 'true' if auth_allow_local_login else 'false' }},
       enableChaster: {{ 'true' if auth_enable_chaster_login else 'false' }}
     }">
-    <h1 class="text-2xl font-bold" x-text="mode === 'register' ? 'Registrierung' : 'Login'">Login</h1>
+    <div class="app-surface-hero auth-hero">
+      <span class="app-kicker">Authentifizierung</span>
+      <h1 class="text-3xl font-extrabold text-text" x-text="mode === 'register' ? 'Konto anlegen' : 'Willkommen zurück'">Login</h1>
+      <p class="text-text-secondary">
+        Der Einstieg ist jetzt klarer priorisiert: zuerst Identität, danach direkter Sprung in Setup oder Dashboard.
+      </p>
+      <div class="app-chip-row">
+        <span class="app-chip">Lokales Konto</span>
+        <span class="app-chip">Chaster OAuth</span>
+        <span class="app-chip">Automatische Weiterleitung</span>
+      </div>
+    </div>
+
+    <section class="card-elevated auth-card-shell">
+      <h2 class="text-xl font-semibold text-text" x-text="mode === 'register' ? 'Registrierung' : 'Login'">Login</h2>
+      <p class="mt-2 text-sm text-text-secondary">Wähle die passende Anmeldemethode und nutze dieselbe Oberfläche auf Desktop und Mobilgerät.</p>
       <div
         id="authCard"
         class="mt-4 card p-4"
         data-auth-allow-local-login="{{ 'true' if auth_allow_local_login else 'false' }}"
         data-auth-enable-chaster-login="{{ 'true' if auth_enable_chaster_login else 'false' }}"
       >
-      <div x-show="enableChaster" id="chasterLoginWrap" class="mt-3">
-        <button id="chasterLoginBtn" class="btn-outline w-full">
-          Login mit Chaster (OAuth2)
-        </button>
-      </div>
-      <div x-show="allowLocal" id="localAuthWrap">
-      <div class="mt-3 grid grid-cols-1 gap-3">
-        <div>
-          <label class="label" for="username">Username</label>
-          <input id="username" class="input mt-1" autocomplete="username" />
-          <p id="usernameError" class="field-error hidden" role="alert"></p>
+        <div x-show="enableChaster" id="chasterLoginWrap" class="space-y-3">
+          <button id="chasterLoginBtn" class="btn-outline w-full">
+            Mit Chaster anmelden
+          </button>
+          <p class="text-sm text-text-secondary">Sinnvoll, wenn bereits eine Chaster-Identität vorhanden ist.</p>
         </div>
-        <div x-show="mode === 'register'" x-transition id="emailWrap">
-          <label class="label" for="email">Email</label>
-          <input id="email" type="email" class="input mt-1" autocomplete="email" />
-          <p id="emailError" class="field-error hidden" role="alert"></p>
+
+        <div x-show="enableChaster && allowLocal" class="auth-divider mt-4">oder lokal</div>
+
+        <div x-show="allowLocal" id="localAuthWrap">
+          <div class="mt-3 grid grid-cols-1 gap-3">
+            <div>
+              <label class="label" for="username">Benutzername</label>
+              <input id="username" class="input mt-1" autocomplete="username" />
+              <p id="usernameError" class="field-error hidden" role="alert"></p>
+            </div>
+            <div x-show="mode === 'register'" x-transition id="emailWrap">
+              <label class="label" for="email">E-Mail</label>
+              <input id="email" type="email" class="input mt-1" autocomplete="email" />
+              <p id="emailError" class="field-error hidden" role="alert"></p>
+            </div>
+          </div>
+          <div class="mt-3 flex flex-wrap gap-3 items-end">
+            <div class="flex-1 min-w-[200px]">
+              <label class="label" for="password">Passwort</label>
+              <input id="password" type="password" class="input mt-1" autocomplete="current-password" />
+              <p id="passwordError" class="field-error hidden" role="alert"></p>
+            </div>
+            <div x-show="mode === 'register'" x-transition class="flex-1 min-w-[200px]" id="passwordRepeatWrap">
+              <label class="label" for="passwordRepeat">Passwort wiederholen</label>
+              <input id="passwordRepeat" type="password" class="input mt-1" autocomplete="new-password" />
+            </div>
+            <div class="flex items-center gap-2">
+              <button x-show="mode === 'login'" id="loginBtn" class="btn-primary">Einloggen</button>
+              <button x-show="mode === 'register'" id="registerBtn" class="btn-secondary">Konto erstellen</button>
+            </div>
+          </div>
+          <div class="mt-3 text-sm text-text-secondary">
+            <template x-if="mode === 'login'">
+              <span>Noch kein Konto? <button type="button" @click="mode = 'register'" class="text-brand hover:underline">Registrieren</button></span>
+            </template>
+            <template x-if="mode === 'register'">
+              <span>Bereits ein Konto? <button type="button" @click="mode = 'login'" class="text-brand hover:underline">Zum Login</button></span>
+            </template>
+          </div>
         </div>
+        <p id="userInfo" class="text-sm text-text-secondary mt-3" aria-live="polite"></p>
       </div>
-      <div class="mt-3 flex flex-wrap gap-3 items-end">
-        <div class="flex-1 min-w-[200px]">
-          <label class="label" for="password">Password</label>
-          <input id="password" type="password" class="input mt-1" autocomplete="current-password" />
-          <p id="passwordError" class="field-error hidden" role="alert"></p>
-        </div>
-        <div x-show="mode === 'register'" x-transition class="flex-1 min-w-[200px]" id="passwordRepeatWrap">
-          <label class="label" for="passwordRepeat">Password (repeat)</label>
-          <input id="passwordRepeat" type="password" class="input mt-1" autocomplete="new-password" />
-        </div>
-        <div class="flex items-center gap-2">
-          <button x-show="mode === 'login'" id="loginBtn" class="btn-primary">Login</button>
-          <button x-show="mode === 'register'" id="registerBtn" class="btn-secondary">Register</button>
-        </div>
-      </div>
-      <div class="mt-3 text-sm text-text-secondary">
-        <template x-if="mode === 'login'">
-          <span>Noch kein Konto? <button type="button" @click="mode = 'register'" class="text-brand hover:underline">Registrieren</button></span>
-        </template>
-        <template x-if="mode === 'register'">
-          <span>Bereits ein Konto? <button type="button" @click="mode = 'login'" class="text-brand hover:underline">Login</button></span>
-        </template>
-      </div>
-      </div>
-      <p id="userInfo" class="text-sm text-text-secondary mt-2" aria-live="polite"></p>
-    </div>
+    </section>
   </section>
 {% endblock %}
 

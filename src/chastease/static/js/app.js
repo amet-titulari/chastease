@@ -63,7 +63,7 @@ function handleLoginClick() {
     chastease_common.setStatus(infoEl, 'Bitte alle Pflichtfelder ausfüllen', 'err');
     return;
   }
-  chastease_common.setStatus(infoEl, 'Logging in...');
+  chastease_common.setStatus(infoEl, 'Login wird ausgeführt...');
   fetch('/api/v1/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -74,10 +74,10 @@ function handleLoginClick() {
       if (status === 200) {
         authSuccess(infoEl, body);
       } else {
-        chastease_common.setStatus(infoEl, body.detail || 'Login failed', 'err');
+        chastease_common.setStatus(infoEl, body.detail || 'Login fehlgeschlagen', 'err');
       }
     })
-    .catch(() => chastease_common.setStatus(infoEl, 'Login request failed', 'err'));
+    .catch(() => chastease_common.setStatus(infoEl, 'Login-Anfrage fehlgeschlagen', 'err'));
 }
 
 function handleChasterLoginClick() {
@@ -111,7 +111,7 @@ function handleRegisterClick() {
     chastease_common.setStatus(infoEl, 'Bitte alle Pflichtfelder korrekt ausfüllen', 'err');
     return;
   }
-  chastease_common.setStatus(infoEl, 'Registering...');
+  chastease_common.setStatus(infoEl, 'Konto wird erstellt...');
   fetch('/api/v1/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -122,16 +122,16 @@ function handleRegisterClick() {
       if (status === 200) {
         authSuccess(infoEl, body, true);
       } else {
-        chastease_common.setStatus(infoEl, body.detail || 'Register failed', 'err');
+        chastease_common.setStatus(infoEl, body.detail || 'Registrierung fehlgeschlagen', 'err');
       }
     })
-    .catch(() => chastease_common.setStatus(infoEl, 'Register request failed', 'err'));
+    .catch(() => chastease_common.setStatus(infoEl, 'Registrierungsanfrage fehlgeschlagen', 'err'));
 }
 
 function authSuccess(infoEl, body, isRegister = false) {
   persistAuth(body);
   const displayName = (body.display_name || body.username || body.user_id || 'User').trim();
-  chastease_common.setStatus(infoEl, `${isRegister ? 'Registered' : 'Logged in'} as ${displayName}`);
+  chastease_common.setStatus(infoEl, `${isRegister ? 'Registriert' : 'Angemeldet'} als ${displayName}`);
   try {
     if (typeof chastease_common !== 'undefined' && typeof chastease_common.renderNavAuth === 'function') {
       chastease_common.renderNavAuth();
@@ -209,7 +209,7 @@ function handleChasterOAuthCallback(infoEl) {
   cleanUrl.searchParams.delete('display_name');
   cleanUrl.searchParams.delete('setup_session_id');
   window.history.replaceState({}, '', cleanUrl.toString());
-  chastease_common.setStatus(infoEl, `Logged in as ${display_name || user_id}`);
+  chastease_common.setStatus(infoEl, `Angemeldet als ${display_name || user_id}`);
   redirectAfterAuth(infoEl);
 }
 

@@ -8,24 +8,57 @@ function logoutUser() {
   window.location.href = "/app?mode=login";
 }
 
+function navLinkNodes(role) {
+  return Array.from(document.querySelectorAll(`[data-nav-link="${role}"]`));
+}
+
+function navAuthNodes() {
+  return Array.from(document.querySelectorAll('[data-nav-auth]'));
+}
+
+function isProtectedAppPage() {
+  const path = window.location.pathname || '/';
+  return ['/dashboard', '/chat', '/contract', '/setup'].some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
+function markActiveNav() {
+  const path = window.location.pathname || '/';
+  const routeByRole = {
+    primary: ['/app', '/dashboard', '/setup'],
+    chat: ['/chat'],
+    contract: ['/contract'],
+  };
+
+  Object.entries(routeByRole).forEach(([role, prefixes]) => {
+    navLinkNodes(role).forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      const isActive = prefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+      node.classList.toggle('nav-link-active', isActive);
+      node.setAttribute('aria-current', isActive ? 'page' : 'false');
+    });
+  });
+}
+
 function renderNavAuth() {
   try {
     syncProtectedNavVisibility();
     const raw = localStorage.getItem(authStorageKey());
-    const node = document.getElementById('navAuth');
-    if (!node) return;
-    node.innerHTML = '';
+    const nodes = navAuthNodes();
+    if (!nodes.length) return;
+    nodes.forEach((node) => { node.innerHTML = ''; });
     if (!raw) return;
     const parsed = JSON.parse(raw);
     const niceName = parsed.display_name || parsed.username || parsed.user_display_name || parsed.user_id || '';
     if (!niceName) return;
-    const btn = document.createElement('button');
-    btn.className = 'nav-link text-sm';
-    btn.textContent = `Logout (${niceName})`;
-    btn.addEventListener('click', () => {
-      logoutUser();
+    nodes.forEach((node) => {
+      const btn = document.createElement('button');
+      btn.className = 'nav-link text-sm';
+      btn.textContent = `Logout (${niceName})`;
+      btn.addEventListener('click', () => {
+        logoutUser();
+      });
+      node.appendChild(btn);
     });
-    node.appendChild(btn);
   } catch (e) {}
 }
 
@@ -104,14 +137,16 @@ function getStoredAuth() {
 }
 
 async function updatePrimaryNav() {
-  const link = document.getElementById('navPrimary');
-  if (!link) return;
+  const links = navLinkNodes('primary');
+  if (!links.length) return;
 
   const auth = getStoredAuth();
   if (!auth) {
     syncProtectedNavVisibility(false);
-    link.textContent = 'App';
-    link.setAttribute('href', '/app');
+    links.forEach((link) => {
+      link.textContent = 'App';
+      link.setAttribute('href', '/app');
+    });
     return;
   }
   syncProtectedNavVisibility(true);
@@ -121,34 +156,49 @@ async function updatePrimaryNav() {
     const response = await fetch(url);
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
-      link.textContent = 'App';
-      link.setAttribute('href', '/app');
+      links.forEach((link) => {
+        link.textContent = 'App';
+        link.setAttribute('href', '/app');
+      });
       return;
     }
 
     if (body?.has_active_session || body?.setup_status === 'configured') {
-      link.textContent = 'Dashboard';
-      link.setAttribute('href', '/dashboard');
+      links.forEach((link) => {
+        link.textContent = 'Dashboard';
+        link.setAttribute('href', '/dashboard');
+      });
       return;
     }
 
     const setupId = body?.setup_session_id;
-    link.textContent = 'Setup';
-    link.setAttribute('href', setupId ? `/setup?setup_session_id=${encodeURIComponent(setupId)}` : '/setup');
+    links.forEach((link) => {
+      link.textContent = 'Setup';
+      link.setAttribute('href', setupId ? `/setup?setup_session_id=${encodeURIComponent(setupId)}` : '/setup');
+    });
   } catch (e) {
-    link.textContent = 'App';
-    link.setAttribute('href', '/app');
+    links.forEach((link) => {
+      link.textContent = 'App';
+      link.setAttribute('href', '/app');
+    });
   }
 }
 
 function syncProtectedNavVisibility(forceAuth) {
   const hasAuth = typeof forceAuth === 'boolean' ? forceAuth : Boolean(getStoredAuth());
-  const protectedIds = ['navPrimary', 'navChat', 'navContract'];
-  protectedIds.forEach((id) => {
-    const node = document.getElementById(id);
-    if (!node) return;
-    node.classList.toggle('hidden', !hasAuth);
+  const shouldShow = hasAuth || isProtectedAppPage();
+  const nodes = document.querySelectorAll('[data-protected-nav]');
+  nodes.forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.classList.toggle('hidden', !shouldShow);
   });
+  ['primary', 'chat', 'contract'].forEach((role) => {
+    navLinkNodes(role).forEach((node) => {
+      if (!node) return;
+      node.classList.toggle('hidden', !shouldShow);
+    });
+  });
+  markActiveNav();
 }
 
 // expose globally
@@ -164,6 +214,10 @@ document.addEventListener('DOMContentLoaded', () => {
   try {
     updatePrimaryNav();
   } catch (e) {}
+  try {
+    markActiveNav();
+  } catch (e) {}
 });
 window.chastease_common.renderNavAuth = renderNavAuth;
 window.chastease_common.updatePrimaryNav = updatePrimaryNav;
+window.chastease_common.markActiveNav = markActiveNav;

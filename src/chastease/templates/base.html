@@ -13,9 +13,9 @@
     body.app-shell {
       min-height: 100dvh;
       background:
-        radial-gradient(circle at top, rgba(34, 211, 238, 0.14), transparent 28%),
-        radial-gradient(circle at 85% 12%, rgba(29, 78, 216, 0.12), transparent 24%),
-        linear-gradient(180deg, rgba(8, 12, 20, 0.98), rgba(6, 9, 14, 1));
+        radial-gradient(circle at top, rgba(249, 115, 22, 0.08), transparent 24%),
+        radial-gradient(circle at 85% 12%, rgba(190, 24, 93, 0.06), transparent 20%),
+        linear-gradient(180deg, rgba(2, 4, 10, 1), rgba(1, 3, 8, 1));
     }
 
     .app-shell::before {
@@ -36,7 +36,7 @@
       top: 0;
       z-index: 40;
       backdrop-filter: blur(18px);
-      background: rgba(8, 12, 20, 0.76);
+      background: rgba(4, 7, 14, 0.86);
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
 
@@ -51,10 +51,120 @@
       padding: 0.9rem 1rem;
     }
 
+    .app-header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
     .app-brand {
       font-size: 1.05rem;
       font-weight: 700;
       letter-spacing: 0.02em;
+    }
+
+    .app-brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      min-width: 0;
+    }
+
+    .app-brand-mark {
+      width: 2.45rem;
+      height: 2.45rem;
+      border-radius: 0.95rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.95), rgba(220, 38, 38, 0.92));
+      box-shadow: 0 10px 26px rgba(234, 88, 12, 0.24);
+    }
+
+    .app-brand-mark img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .app-brand-copy {
+      min-width: 0;
+    }
+
+    .app-brand-subtitle {
+      margin-top: 0.12rem;
+      font-size: 0.74rem;
+      color: rgba(var(--color-text-tertiary), 1);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .app-nav-desktop {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      min-width: 0;
+    }
+
+    .app-nav-cluster {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      min-width: 0;
+    }
+
+    .app-menu-toggle {
+      display: none;
+    }
+
+    .app-mobile-menu {
+      display: none;
+      margin-top: 0.75rem;
+      border-radius: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(8, 12, 20, 0.92);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+      overflow: hidden;
+    }
+
+    .app-mobile-menu[open] {
+      display: block;
+    }
+
+    .app-mobile-summary {
+      list-style: none;
+      display: inline-flex;
+      min-height: 44px;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      border-radius: 0.9rem;
+      padding: 0.5rem 0.8rem;
+      color: rgba(var(--color-text-secondary), 1);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+    }
+
+    .app-mobile-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .app-mobile-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding: 0.75rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .app-mobile-panel .nav-link {
+      width: 100%;
+      justify-content: flex-start;
     }
 
     .app-main {
@@ -71,9 +181,9 @@
     .card-elevated {
       border-color: rgba(255, 255, 255, 0.1);
       background:
-        linear-gradient(180deg, rgba(17, 24, 39, 0.9), rgba(8, 12, 20, 0.96));
+        linear-gradient(180deg, rgba(10, 15, 28, 0.94), rgba(3, 6, 13, 0.98));
       box-shadow:
-        0 24px 80px rgba(0, 0, 0, 0.24),
+        0 28px 90px rgba(0, 0, 0, 0.34),
         inset 0 1px 0 rgba(255, 255, 255, 0.04);
     }
 
@@ -105,11 +215,11 @@
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, rgb(8 145 178), rgb(29 78 216));
+      background: linear-gradient(135deg, rgb(234 88 12), rgb(220 38 38));
     }
 
     .btn-primary:hover {
-      background: linear-gradient(135deg, rgb(6 182 212), rgb(37 99 235));
+      background: linear-gradient(135deg, rgb(249 115 22), rgb(239 68 68));
     }
 
     .btn-secondary {
@@ -118,13 +228,13 @@
     }
 
     .btn-outline {
-      border-color: rgba(34, 211, 238, 0.45);
-      color: rgb(165 243 252);
-      background: rgba(8, 145, 178, 0.08);
+      border-color: rgba(249, 115, 22, 0.28);
+      color: rgb(253 186 116);
+      background: rgba(249, 115, 22, 0.05);
     }
 
     .btn-outline:hover {
-      background: rgba(8, 145, 178, 0.16);
+      background: rgba(249, 115, 22, 0.11);
     }
 
     .nav-link {
@@ -135,23 +245,113 @@
       background: rgba(255, 255, 255, 0.06);
     }
 
+    .app-nav-cluster .nav-link,
+    .app-mobile-panel .nav-link {
+      min-height: 42px;
+      padding: 0.55rem 0.85rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .app-nav-cluster .nav-link:hover,
+    .app-mobile-panel .nav-link:hover {
+      border-color: rgba(249, 115, 22, 0.18);
+      background: rgba(249, 115, 22, 0.06);
+      color: rgb(var(--color-text));
+    }
+
+    .nav-link-active {
+      border-color: rgba(249, 115, 22, 0.26) !important;
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.11), rgba(220, 38, 38, 0.08)) !important;
+      color: rgb(255 237 213) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .app-surface-hero {
+      position: relative;
+      overflow: hidden;
+      border-radius: 1.35rem;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background:
+        radial-gradient(circle at top left, rgba(249, 115, 22, 0.1), transparent 24%),
+        radial-gradient(circle at 85% 20%, rgba(190, 24, 93, 0.08), transparent 22%),
+        linear-gradient(180deg, rgba(8, 13, 25, 0.96), rgba(2, 4, 10, 0.99));
+      box-shadow:
+        0 34px 100px rgba(0, 0, 0, 0.38),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .app-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.38rem 0.72rem;
+      border-radius: 9999px;
+      background: rgba(249, 115, 22, 0.09);
+      color: rgb(253 186 116);
+      font-size: 0.73rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .app-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .app-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.45rem 0.75rem;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.012));
+      color: rgba(var(--color-text-secondary), 1);
+      font-size: 0.78rem;
+    }
+
     .input,
     .select {
       border-radius: 0.9rem;
       border-color: rgba(255, 255, 255, 0.12);
-      background: rgba(15, 23, 42, 0.84);
+      background: rgba(8, 13, 25, 0.92);
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     }
 
     .input:focus,
     .select:focus {
-      border-color: rgba(34, 211, 238, 0.62);
-      --tw-ring-color: rgba(34, 211, 238, 0.18);
+      border-color: rgba(249, 115, 22, 0.62);
+      --tw-ring-color: rgba(249, 115, 22, 0.18);
     }
 
     @media (max-width: 767px) {
       .app-header-inner {
         padding: 0.75rem 0.85rem;
+      }
+
+      .app-header-bar {
+        align-items: flex-start;
+      }
+
+      .app-brand-mark {
+        width: 2.2rem;
+        height: 2.2rem;
+        border-radius: 0.8rem;
+      }
+
+      .app-brand-subtitle {
+        max-width: 40vw;
+      }
+
+      .app-nav-desktop {
+        display: none;
+      }
+
+      .app-menu-toggle {
+        display: block;
       }
 
       .app-main {
@@ -166,6 +366,16 @@
         padding: 1rem;
         border-radius: 1rem;
       }
+
+      .app-surface-hero {
+        border-radius: 1rem;
+      }
+    }
+
+    @media (min-width: 768px) {
+      .app-mobile-shell {
+        display: none;
+      }
     }
   </style>
   {% block head %}{% endblock %}
@@ -173,26 +383,64 @@
 <body class="app-shell bg-surface text-text antialiased theme-transition">
   <header class="app-header">
     <div class="app-header-inner">
-    <nav class="flex items-center justify-between gap-3">
-      <a href="/" class="app-brand hover:text-sky-300 transition-colors">Chastease</a>
-      <div class="flex items-center gap-1">
-        <a id="navPrimary" class="nav-link hidden" href="/app">App</a>
-        <a id="navChat" class="nav-link hidden" href="/chat">Chat</a>
-        <a id="navContract" class="nav-link hidden" href="/contract">Vertrag</a>
-        <span id="navAuth" class="ml-2 inline-block"></span>
-        <button
-          x-data="{ dark: document.documentElement.classList.contains('dark') }"
-          @click="dark = !dark; document.documentElement.classList.toggle('dark', dark); localStorage.setItem('chastease_theme', dark ? 'dark' : 'light')"
-          class="nav-link" title="Design wechseln" aria-label="Farbschema umschalten">
-          <svg x-show="dark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-          </svg>
-          <svg x-show="!dark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-          </svg>
-        </button>
-      </div>
-    </nav>
+      <nav class="app-header-bar">
+        <a href="/" class="app-brand-wrap hover:text-orange-300 transition-colors">
+          <span class="app-brand-mark" aria-hidden="true">
+            <img src="/static/favicon.ico?v=20260307" alt="" />
+          </span>
+          <span class="app-brand-copy">
+            <span class="app-brand block">Chastease</span>
+            <span class="app-brand-subtitle">Guided control, setup and live session flow</span>
+          </span>
+        </a>
+        <div class="app-nav-desktop">
+          <div class="app-nav-cluster">
+            <a data-protected-nav data-nav-link="primary" class="nav-link hidden" href="/app">App</a>
+            <a data-protected-nav data-nav-link="chat" class="nav-link hidden" href="/chat">Chat</a>
+            <a data-protected-nav data-nav-link="contract" class="nav-link hidden" href="/contract">Vertrag</a>
+          </div>
+          <span data-nav-auth class="ml-2 inline-block"></span>
+          <button
+            x-data="{ dark: document.documentElement.classList.contains('dark') }"
+            @click="dark = !dark; document.documentElement.classList.toggle('dark', dark); localStorage.setItem('chastease_theme', dark ? 'dark' : 'light')"
+            class="nav-link" title="Design wechseln" aria-label="Farbschema umschalten">
+            <svg x-show="dark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+            </svg>
+            <svg x-show="!dark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+            </svg>
+          </button>
+        </div>
+        <details class="app-mobile-shell app-menu-toggle">
+          <summary class="app-mobile-summary">
+            <span>Menü</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+            </svg>
+          </summary>
+          <div class="app-mobile-menu">
+            <div class="app-mobile-panel">
+              <a data-protected-nav data-nav-link="primary" class="nav-link hidden" href="/app">App</a>
+              <a data-protected-nav data-nav-link="chat" class="nav-link hidden" href="/chat">Chat</a>
+              <a data-protected-nav data-nav-link="contract" class="nav-link hidden" href="/contract">Vertrag</a>
+              <span data-nav-auth></span>
+              <button
+                x-data="{ dark: document.documentElement.classList.contains('dark') }"
+                @click="dark = !dark; document.documentElement.classList.toggle('dark', dark); localStorage.setItem('chastease_theme', dark ? 'dark' : 'light')"
+                class="nav-link" title="Design wechseln" aria-label="Farbschema umschalten">
+                <svg x-show="dark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                </svg>
+                <svg x-show="!dark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+                <span x-text="dark ? 'Helles Design' : 'Dunkles Design'">Design wechseln</span>
+              </button>
+            </div>
+          </div>
+        </details>
+      </nav>
     </div>
   </header>
 
