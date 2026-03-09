@@ -144,6 +144,20 @@ function setOutput(data) {
 }
 
 function setStatus(text, isErr = false) {
+  // Mirror to the inline status element next to the confirm button (visible on mobile)
+  const inlineEl = document.getElementById('confirmCompleteSetupStatus');
+  if (inlineEl) {
+    if (text) {
+      inlineEl.textContent = text;
+      inlineEl.className = isErr
+        ? 'text-sm text-red-400'
+        : 'text-sm text-green-400';
+      inlineEl.classList.remove('hidden');
+    } else {
+      inlineEl.textContent = '';
+      inlineEl.classList.add('hidden');
+    }
+  }
   if (!statusEl) return;
   if (typeof chastease_common !== 'undefined') {
     chastease_common.setStatus(statusEl, text, isErr ? 'err' : 'ok');
@@ -624,7 +638,7 @@ function isChasterStepUnlocked() {
 }
 
 function isQuestionnaireUnlocked() {
-  return llmConnectivityVerified;
+  return Boolean(setupSessionId);
 }
 
 function openAccordion(targetKey) {
@@ -633,8 +647,8 @@ function openAccordion(targetKey) {
     targetKey = 'llm';
   }
   if (targetKey === 'questionnaire' && !isQuestionnaireUnlocked()) {
-    setStatus('Psychogramm ist gesperrt: zuerst LLM Live-Test erfolgreich durchführen und speichern.', true);
-    targetKey = 'llm';
+    setStatus('Bitte zuerst das Setup starten.', true);
+    targetKey = 'base';
   }
   accordionDefs.forEach((definition) => {
     const body = document.getElementById(definition.body);
@@ -1450,6 +1464,7 @@ async function startSetup() {
     const body = await apiCall('POST', '/api/v1/setup/sessions', payload);
     setupSessionId = body.setup_session_id;
     updateSetupIdInUrl(setupSessionId);
+    updateLlmDependentUi();
     applySetupToForm(body);
     if (intTtlockEl) intTtlockEl.value = selectedTtlockEnabled ? 'true' : 'false';
     if (intChasterEl) intChasterEl.value = selectedChasterEnabled ? 'true' : 'false';
@@ -1466,7 +1481,6 @@ async function startSetup() {
 }
 
 async function submitAnswers() {
-  if (!requireLlmReady('Psychogramm-Speichern')) return;
   if (!setupSessionId) {
     setStatus('Bitte zuerst Setup starten.', true);
     return;
