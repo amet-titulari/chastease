@@ -4,6 +4,7 @@ import json
 import hashlib
 import logging
 import os
+import random
 import re
 import time
 import unicodedata
@@ -1382,6 +1383,246 @@ def _sync_chaster_temporary_opening(*, policy: dict, request: Request) -> dict |
     }
 
 
+def _generate_nine_digit_code() -> str:
+    return str(random.randint(100_000_000, 999_999_999))
+
+
+def _sync_chaster_close_temporary_opening(*, policy: dict, request: Request, new_code: str) -> dict | None:
+    integrations = [str(x).strip().lower() for x in (policy.get("integrations") or []) if str(x).strip()]
+    chaster_cfg = _chaster_from_policy(policy)
+    if "chaster" not in integrations and not chaster_cfg:
+        return None
+
+    lock_id = str(chaster_cfg.get("lock_id") or "").strip()
+    if not lock_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Chaster integration is enabled, but no lock_id is configured for this session.",
+        )
+
+    # Step 1: Create combination via user token → get MongoDB combination_id
+    lock_token, _resolved = resolve_chaster_api_token(chaster_cfg, request)
+    if not lock_token:
+        raise HTTPException(
+            status_code=409,
+            detail="Chaster user API token is missing — cannot create combination for hygiene close.",
+        )
+    base_url = _get_chaster_developer_base(request)
+    timeout = httpx.Timeout(connect=6.0, read=25.0, write=20.0, pool=6.0)
+    user_headers = {
+        "Authorization": f"Bearer {lock_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    combinations_url = f"{base_url}/combinations/code"
+    with httpx.Client(timeout=timeout) as client:
+        combo_response = client.post(combinations_url, headers=user_headers, json={"code": new_code})
+    if combo_response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Chaster combinations/code failed with HTTP {combo_response.status_code}: {combo_response.text[:500]}",
+        )
+    try:
+        combo_json = combo_response.json()
+    except (ValueError, KeyError):
+        raise HTTPException(status_code=502, detail="Chaster combinations/code returned non-JSON response.")
+    combination_id = None
+    if isinstance(combo_json, dict):
+        for key in ("_id", "id", "combinationId", "combination_id", "codeId"):
+            val = combo_json.get(key)
+            if val and str(val).strip():
+                combination_id = str(val).strip()
+                break
+    if not combination_id:
+        raise HTTPException(status_code=502, detail="Unable to resolve combination_id from Chaster combinations/code response.")
+
+    # Step 2: Close temporary opening with developer token and combination_id
+    extension_session_id, _merged_cfg = _resolve_chaster_extension_session(policy=policy, request=request)
+    dev_headers = _get_chaster_developer_headers(request)
+    close_payload = {"combinationId": combination_id}
+    close_url = f"{base_url}/extensions/sessions/{extension_session_id}/temporary-opening/close"
+    with httpx.Client(timeout=timeout) as client:
+        close_response = client.post(close_url, headers=dev_headers, json=close_payload)
+    if close_response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Chaster temporary-opening close failed with HTTP {close_response.status_code}: {close_response.text[:500]}",
+        )
+    try:
+        close_response_json = close_response.json()
+    except (ValueError, KeyError):
+        close_response_json = {"raw_response": close_response.text[:500] or ""}
+    return {
+        "combinations_endpoint": combinations_url,
+        "close_endpoint": close_url,
+        "lock_id": lock_id,
+        "extension_session_id": extension_session_id,
+        "combination_id": combination_id,
+        "new_code": new_code,
+        "close_payload": close_payload,
+        "close_response": close_response_json,
+    }
+
+
+def _ttlock_list_keyboard_passwords(
+    *,
+    base_url: str,
+    client_id: str,
+    access_token: str,
+    lock_id: str,
+) -> list[dict]:
+    url = f"{base_url.rstrip('/')}/v3/lock/listKeyboardPassword"
+    timeout = httpx.Timeout(connect=5.0, read=20.0, write=15.0, pool=5.0)
+    params = {
+        "clientId": client_id,
+        "accessToken": access_token,
+        "lockId": lock_id,
+        "pageNo": 1,
+        "pageSize": 100,
+        "date": int(time.time() * 1000),
+    }
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.get(url, params=params)
+        if resp.status_code >= 400:
+            raise HTTPException(
+                status_code=400,
+                detail=f"TT-Lock list keyboard passwords HTTP {resp.status_code}: {resp.text[:220].strip()}",
+            )
+        body = resp.json()
+        if body.get("errcode", 0) not in (0, "0"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"TT-Lock list keyboard passwords failed: {body.get('errmsg', 'unknown error')}",
+            )
+        return body.get("list", []) or []
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=400, detail="TT-Lock list keyboard passwords timeout.")
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=400, detail=f"TT-Lock list keyboard passwords transport error: {exc.__class__.__name__}")
+
+
+def _ttlock_delete_keyboard_password(
+    *,
+    base_url: str,
+    client_id: str,
+    access_token: str,
+    lock_id: str,
+    keyboard_pwd_id: int,
+) -> dict:
+    url = f"{base_url.rstrip('/')}/v3/keyboardPwd/delete"
+    timeout = httpx.Timeout(connect=5.0, read=20.0, write=15.0, pool=5.0)
+    params = {
+        "clientId": client_id,
+        "accessToken": access_token,
+        "lockId": lock_id,
+        "keyboardPwdId": keyboard_pwd_id,
+        "deleteType": 2,
+        "date": int(time.time() * 1000),
+    }
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.get(url, params=params)
+        if resp.status_code >= 400:
+            raise HTTPException(
+                status_code=400,
+                detail=f"TT-Lock delete keyboard password HTTP {resp.status_code}: {resp.text[:220].strip()}",
+            )
+        body = resp.json()
+        if body.get("errcode", 0) not in (0, "0"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"TT-Lock delete keyboard password failed: {body.get('errmsg', 'unknown error')}",
+            )
+        return body
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=400, detail="TT-Lock delete keyboard password timeout.")
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=400, detail=f"TT-Lock delete keyboard password transport error: {exc.__class__.__name__}")
+
+
+def _ttlock_add_keyboard_password(
+    *,
+    base_url: str,
+    client_id: str,
+    access_token: str,
+    lock_id: str,
+    code: str,
+) -> dict:
+    url = f"{base_url.rstrip('/')}/v3/keyboardPwd/add"
+    timeout = httpx.Timeout(connect=5.0, read=20.0, write=15.0, pool=5.0)
+    params = {
+        "clientId": client_id,
+        "accessToken": access_token,
+        "lockId": lock_id,
+        "alias": "Hygiene-Code",
+        "keyboardPwd": code,
+        "startDate": 0,
+        "endDate": 0,
+        "addType": 1,
+        "date": int(time.time() * 1000),
+    }
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.get(url, params=params)
+        if resp.status_code >= 400:
+            raise HTTPException(
+                status_code=400,
+                detail=f"TT-Lock add keyboard password HTTP {resp.status_code}: {resp.text[:220].strip()}",
+            )
+        body = resp.json()
+        if body.get("errcode", 0) not in (0, "0"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"TT-Lock add keyboard password failed: {body.get('errmsg', 'unknown error')}",
+            )
+        return body
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=400, detail="TT-Lock add keyboard password timeout.")
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=400, detail=f"TT-Lock add keyboard password transport error: {exc.__class__.__name__}")
+
+
+def _ttlock_replace_sole_passcode(
+    *,
+    base_url: str,
+    client_id: str,
+    access_token: str,
+    lock_id: str,
+    code: str,
+) -> dict:
+    existing = _ttlock_list_keyboard_passwords(
+        base_url=base_url,
+        client_id=client_id,
+        access_token=access_token,
+        lock_id=lock_id,
+    )
+    deleted_ids: list[int] = []
+    for pwd in existing:
+        pwd_id = pwd.get("keyboardPwdId")
+        if pwd_id is not None:
+            _ttlock_delete_keyboard_password(
+                base_url=base_url,
+                client_id=client_id,
+                access_token=access_token,
+                lock_id=lock_id,
+                keyboard_pwd_id=int(pwd_id),
+            )
+            deleted_ids.append(int(pwd_id))
+    add_result = _ttlock_add_keyboard_password(
+        base_url=base_url,
+        client_id=client_id,
+        access_token=access_token,
+        lock_id=lock_id,
+        code=code,
+    )
+    return {
+        "deleted_count": len(deleted_ids),
+        "deleted_ids": deleted_ids,
+        "add_result": add_result,
+    }
+
+
 def _opening_window_start(now: datetime, period: str) -> datetime:
     normalized = str(period or "day").strip().lower()
     if normalized == "month":
@@ -1807,6 +2048,46 @@ def _execute_action_with_policy(
             result["chaster"] = _sync_chaster_temporary_opening(
                 policy=updated_policy,
                 request=request,
+            )
+        elif normalized_action == "hygiene_close":
+            new_code = _generate_nine_digit_code()
+            result["new_passcode"] = new_code
+            if result.get("ttlock", {}).get("executed"):
+                config = _ttlock_from_policy(updated_policy)
+                lock_id = str(
+                    normalized_payload.get("ttl_lock_id")
+                    or normalized_payload.get("lock_id")
+                    or config.get("ttl_lock_id")
+                    or ""
+                ).strip()
+                client_id = str(getattr(request.app.state.config, "TTL_CLIENT_ID", "") or "").strip()
+                client_secret = str(getattr(request.app.state.config, "TTL_CLIENT_SECRET", "") or "").strip()
+                base_url = str(getattr(request.app.state.config, "TTL_API_BASE", "https://euapi.ttlock.com") or "").strip()
+                ttl_user = str(config.get("ttl_user") or "").strip()
+                ttl_pass_md5 = str(config.get("ttl_pass_md5") or "").strip().lower()
+                access_token = _ttlock_access_token(
+                    base_url=base_url,
+                    client_id=client_id,
+                    client_secret=client_secret,
+                    ttl_user=ttl_user,
+                    ttl_pass_md5=ttl_pass_md5,
+                )
+                result["ttlock"]["passcode_update"] = _ttlock_replace_sole_passcode(
+                    base_url=base_url,
+                    client_id=client_id,
+                    access_token=access_token,
+                    lock_id=lock_id,
+                    code=new_code,
+                )
+                logger.info(
+                    "TT-Lock passcode rotated after hygiene_close lock_id=%s deleted=%d",
+                    lock_id,
+                    result["ttlock"]["passcode_update"]["deleted_count"],
+                )
+            result["chaster"] = _sync_chaster_close_temporary_opening(
+                policy=updated_policy,
+                request=request,
+                new_code=new_code,
             )
         return updated_policy, result
     if normalized_action == "image_verification":
