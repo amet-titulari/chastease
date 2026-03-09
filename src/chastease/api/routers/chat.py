@@ -1173,7 +1173,18 @@ def _collect_pending_actions_for_session(db, session_id: str) -> list[dict]:
         executed_actions = metadata.get("executed_actions") if isinstance(metadata.get("executed_actions"), list) else []
         failed_actions = metadata.get("failed_actions") if isinstance(metadata.get("failed_actions"), list) else []
 
-        for action in executed_actions + failed_actions:
+        for action in executed_actions:
+            action_type = str((action or {}).get("action_type") or "")
+            payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
+            resolved_action_keys.add(_pending_action_key(action_type, payload))
+            normalized_type = _normalize_action_type(action_type)
+            if normalized_type in _SINGLETON_ACTION_TYPES:
+                resolved_singleton_types.add(normalized_type)
+
+        for action in failed_actions:
+            severity = str((action or {}).get("severity") or "").strip().lower()
+            if severity == "info":
+                continue
             action_type = str((action or {}).get("action_type") or "")
             payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
             resolved_action_keys.add(_pending_action_key(action_type, payload))

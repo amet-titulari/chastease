@@ -858,6 +858,32 @@ def test_chat_turn_strict_mode_adds_image_verification_from_plain_ai_narration(c
     assert data["action_diagnostics"]["fallback_applied"] is True
 
 
+def test_chat_pending_contains_action_id_for_image_fallback_info_entry(client):
+    client.app.state.config.LLM_FAIL_CLOSED_REQUEST_TAG = True
+    auth = _register(client, username="chat-user-image-fallback-action-id")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        "Sende mir ein klares Foto deines Kaefigs und Schlosses zur Verifikation."
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Okay", "language": "de"},
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert any(action.get("action_type") == "image_verification" for action in data.get("pending_actions", []))
+
+    pending = client.get(
+        f"/api/v1/chat/pending/{session_id}",
+        params={"auth_token": auth["auth_token"]},
+    )
+    assert pending.status_code == 200
+    image_rows = [item for item in pending.json().get("pending_actions", []) if item.get("action_type") == "image_verification"]
+    assert len(image_rows) == 1
+    assert str(image_rows[0].get("action_id") or "").strip() != ""
+
+
 def test_chat_turn_non_strict_prefers_image_verification_from_ai_narration(client):
     client.app.state.config.LLM_FAIL_CLOSED_REQUEST_TAG = False
     auth = _register(client, username="chat-user-image-fallback")
