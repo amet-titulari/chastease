@@ -387,8 +387,19 @@ function keepComposerVisible() {
   updateViewportMetrics();
   if (!composerEl || !messagesContainerEl) return;
   const composerHeight = composerEl.offsetHeight || 0;
-  messagesContainerEl.style.scrollPaddingBottom = `${composerHeight + keyboardInsetPx + 24}px`;
-  messagesContainerEl.style.paddingBottom = `${Math.max(0, keyboardInsetPx)}px`;
+  const isMobile = window.innerWidth <= 767;
+  if (isMobile) {
+    // Fixed-positioned composer: move it above the virtual keyboard
+    composerEl.style.bottom = `${keyboardInsetPx}px`;
+    // Pad the log so last messages are not hidden behind the fixed composer
+    const logPad = composerHeight + 8;
+    messagesContainerEl.style.paddingBottom = `${logPad}px`;
+    messagesContainerEl.style.scrollPaddingBottom = `${logPad}px`;
+  } else {
+    composerEl.style.bottom = '';
+    messagesContainerEl.style.scrollPaddingBottom = `${composerHeight + keyboardInsetPx + 24}px`;
+    messagesContainerEl.style.paddingBottom = `${Math.max(0, keyboardInsetPx)}px`;
+  }
 }
 
 function ensureInputAndLatestVisible(options = {}) {
@@ -496,6 +507,45 @@ async function refreshPendingActions() {
     renderPendingActions(body?.pending_actions || []);
   } catch (_error) {
     // Ignore refresh failures; local UI state remains usable.
+  }
+}
+
+function normalizePendingPayload(payload) {
+  return payload && typeof payload === 'object' ? payload : {};
+}
+
+function stablePayloadFingerprint(payload) {
+  const source = normalizePendingPayload(payload);
+  const sorted = Object.keys(source)
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = source[key];
+      return acc;
+    }, {});
+  return JSON.stringify(sorted);
+}
+
+function isSamePendingAction(candidate, actionType, payload) {
+  const candidateType = String(candidate?.action_type || '').trim();
+  if (candidateType !== actionType) return false;
+  try {
+    return stablePayloadFingerprint(candidate?.payload) === stablePayloadFingerprint(payload);
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function resolvePendingActionId(action, actionType, payload) {
+  const directId = String(action?.action_id || '').trim();
+  if (directId) return directId;
+  if (!activeSessionId) return '';
+  try {
+    const body = await apiCall('GET', `/api/v1/chat/pending/${encodeURIComponent(activeSessionId)}`);
+    const pendingActions = Array.isArray(body?.pending_actions) ? body.pending_actions : [];
+    const matched = pendingActions.find((candidate) => isSamePendingAction(candidate, actionType, payload));
+    return String(matched?.action_id || '').trim();
+  } catch (_error) {
+    return '';
   }
 }
 
@@ -782,6 +832,41 @@ function renderPendingActions(pendingActions) {
       return;
     }
 
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-300';
+    cancelBtn.textContent = 'Abbrechen';
+    cancelBtn.title = 'Aktion abbrechen (als canceled markieren)';
+
+    const cancelAction = async () => {
+      if (!activeSessionId) return setStatus('Session fehlt.', true);
+      const actionId = await resolvePendingActionId(action, actionType, payload);
+      if (!actionId) {
+        setStatus('Keine Action-ID vorhanden – kann nicht abgebrochen werden.', true);
+        return;
+      }
+      const inlineRow = card.closest('[data-inline-action-card="true"]');
+      try {
+        cancelBtn.disabled = true;
+        btn.disabled = true;
+        await apiCall('POST', '/api/v1/chat/actions/resolve', {
+          session_id: activeSessionId,
+          action_id: actionId,
+          resolution_status: 'canceled',
+          note: `Aktion ${toPrettyActionName(actionType)} wurde abgebrochen.`,
+        });
+        appendMessage('assistant', `🚫 Aktion abgebrochen: ${toPrettyActionName(actionType)}`);
+        setStatus(`Aktion abgebrochen: ${toPrettyActionName(actionType)}`);
+        if (inlineRow) inlineRow.remove();
+        await refreshPendingActions();
+      } catch (error) {
+        const errorMessage = String(error?.message || error);
+        setStatus(errorMessage, true);
+        cancelBtn.disabled = false;
+        btn.disabled = false;
+      }
+    };
+    cancelBtn.addEventListener('click', cancelAction);
+
     if (actionType !== 'image_verification') {
       btn.addEventListener('click', async () => {
         if (!activeSessionId) return setStatus('Session fehlt.', true);
@@ -789,6 +874,7 @@ function renderPendingActions(pendingActions) {
         try {
           btn.disabled = true;
           btn.classList.add('opacity-70');
+          cancelBtn.disabled = true;
           const originalLabel = btn.textContent;
           btn.textContent = 'Wird ausgeführt...';
           setStatus(`Führe Action aus: ${actionType}...`);
@@ -824,6 +910,7 @@ function renderPendingActions(pendingActions) {
           appendMessage('assistant', `⚠️ Aktion fehlgeschlagen (${toPrettyActionName(actionType)}): ${errorMessage}`);
           btn.disabled = false;
           btn.classList.remove('opacity-70');
+          cancelBtn.disabled = false;
           if (actionType === 'hygiene_open') btn.textContent = 'Hygieneöffnung starten';
           else if (actionType === 'hygiene_close') btn.textContent = 'Hygieneöffnung beenden';
           else btn.textContent = 'Ausführen';
@@ -831,6 +918,7 @@ function renderPendingActions(pendingActions) {
       });
       header.appendChild(btn);
     }
+    header.appendChild(cancelBtn);
     card.appendChild(header);
     if (isHygieneAction) {
       card.appendChild(hygieneHint);

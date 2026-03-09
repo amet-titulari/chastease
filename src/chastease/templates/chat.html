@@ -122,7 +122,6 @@
     .chat-composer {
       position: sticky;
       bottom: 0;
-      bottom: var(--chat-keyboard-offset, 0px);
       z-index: 20;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
       background: rgba(3, 5, 11, 0.94);
@@ -157,6 +156,12 @@
     }
 
     @media (max-width: 767px) {
+      /* Prevent the page from scrolling when the virtual keyboard opens */
+      html, body {
+        overflow: hidden;
+        height: 100%;
+      }
+
       .chat-bleed {
         margin-left: calc(50% - 50vw);
         margin-right: calc(50% - 50vw);
@@ -195,6 +200,10 @@
       }
 
       .chat-composer {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0; /* JS overrides when keyboard is open */
         padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
       }
 

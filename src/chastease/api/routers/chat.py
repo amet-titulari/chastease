@@ -996,6 +996,30 @@ def _pending_action_key(action_type: str, payload: dict) -> tuple[str, str]:
     )
 
 
+def _with_action_ids_from_pending_rows(pending_actions: list[dict], pending_rows: list[dict]) -> list[dict]:
+    """Attach action_id to pending action payloads using authoritative pending rows."""
+    id_by_key: dict[tuple[str, str], str] = {}
+    for row in pending_rows:
+        action_type = str((row or {}).get("action_type") or "")
+        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        action_id = str((row or {}).get("action_id") or "").strip()
+        if not action_id:
+            continue
+        id_by_key[_pending_action_key(action_type, payload)] = action_id
+
+    with_ids: list[dict] = []
+    for action in pending_actions:
+        action_type = str((action or {}).get("action_type") or "")
+        payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
+        merged = dict(action or {})
+        if not str(merged.get("action_id") or "").strip():
+            resolved_id = id_by_key.get(_pending_action_key(action_type, payload), "")
+            if resolved_id:
+                merged["action_id"] = resolved_id
+        with_ids.append(merged)
+    return with_ids
+
+
 def _pending_action_id(event_id: str, turn_id: str | None, action_type: str, payload: dict) -> str:
     raw = (
         f"{event_id}:{turn_id or '-'}:{str(action_type or '').strip().lower()}:"
@@ -1038,7 +1062,7 @@ def _collect_pending_actions_for_session(db, session_id: str) -> list[dict]:
         metadata = _load_entry_metadata(entry)
         if entry.event_type in {"activity_manual_execute", "activity_manual_resolve"}:
             status = str(metadata.get("status") or "").strip().lower()
-            if status in {"success", "failed"}:
+            if status in {"success", "failed", "canceled"}:
                 action_id = str(metadata.get("action_id") or "").strip()
                 if action_id:
                     resolved_action_ids.add(action_id)
@@ -1923,6 +1947,24 @@ def _clear_resolved_image_verification_pending(
     return remaining
 
 
+def _keep_single_latest_image_verification_pending(pending_actions: list[dict]) -> list[dict]:
+    """Keep only one unresolved image_verification action (the most recent one)."""
+    latest_index = -1
+    for idx, action in enumerate(pending_actions):
+        action_type = _normalize_action_type(str((action or {}).get("action_type") or ""))
+        if action_type == "image_verification":
+            latest_index = idx
+    if latest_index < 0:
+        return pending_actions
+
+    filtered: list[dict] = []
+    for idx, action in enumerate(pending_actions):
+        action_type = _normalize_action_type(str((action or {}).get("action_type") or ""))
+        if action_type != "image_verification" or idx == latest_index:
+            filtered.append(action)
+    return filtered
+
+
 def _load_latest_pending_actions(db, session_id: str) -> list[dict]:
     """Load pending_actions from the most recent activity_snapshot audit entry."""
     latest_snapshot = (
@@ -2168,6 +2210,7 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
             pending_actions.extend(existing_pending_actions)
             pending_actions.extend(ai_pending_actions)
             pending_actions = _dedupe_pending_actions(pending_actions)
+            pending_actions = _keep_single_latest_image_verification_pending(pending_actions)
             if executed_actions:
                 policy_dirty = True
             if raw_has_machine_tag:
@@ -2247,6 +2290,8 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                     metadata=event.get("metadata"),
                 )
         db.commit()
+        pending_rows = _collect_pending_actions_for_session(db, session.id)
+        pending_actions = _with_action_ids_from_pending_rows(pending_actions, pending_rows)
     finally:
         db.close()
 
@@ -2464,6 +2509,8 @@ def chat_vision_review(payload: ChatVisionReviewRequest, request: Request) -> di
                 metadata=event.get("metadata"),
             )
         db.commit()
+        pending_rows = _collect_pending_actions_for_session(db, session.id)
+        pending_actions = _with_action_ids_from_pending_rows(pending_actions, pending_rows)
     finally:
         db.close()
 
@@ -2593,11 +2640,12 @@ def chat_action_resolve(payload: ChatActionResolveRequest, request: Request) -> 
 
         resolution_message = str(payload.note or "").strip()
         if not resolution_message:
-            resolution_message = (
-                "Pending action manually marked as successful."
-                if payload.resolution_status == "success"
-                else "Pending action manually marked as failed."
-            )
+            if payload.resolution_status == "success":
+                resolution_message = "Pending action manually marked as successful."
+            elif payload.resolution_status == "canceled":
+                resolution_message = "Pending action was canceled."
+            else:
+                resolution_message = "Pending action manually marked as failed."
 
         record_audit_event(
             db=db,

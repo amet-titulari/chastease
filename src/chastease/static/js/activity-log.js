@@ -54,11 +54,17 @@ function statusBadge(status) {
   if (normalized === 'failed') {
     return '<span class="px-2 py-1 rounded text-xs bg-red-900 text-red-300">failed</span>';
   }
+  if (normalized === 'info') {
+    return '<span class="px-2 py-1 rounded text-xs bg-sky-900 text-sky-200">info</span>';
+  }
+  if (normalized === 'canceled') {
+    return '<span class="px-2 py-1 rounded text-xs bg-zinc-800 text-zinc-300">canceled</span>';
+  }
   return '<span class="px-2 py-1 rounded text-xs bg-amber-900 text-amber-300">pending</span>';
 }
 
 async function resolvePendingAction(sessionId, actionId, resolutionStatus) {
-  const label = resolutionStatus === 'success' ? 'erfolgreich' : 'fehlgeschlagen';
+  const label = resolutionStatus === 'canceled' ? 'abgebrochen' : resolutionStatus;
   updateStatus(`Pending Action wird als ${label} markiert...`);
   const response = await fetch('/api/v1/chat/actions/resolve', {
     method: 'POST',
@@ -98,8 +104,7 @@ function renderActivities(activities) {
       const actionControls = canResolve
         ? `
           <div class="flex flex-wrap gap-2">
-            <button class="btn-success text-xs js-resolve-action" data-action-id="${escapeHtml(item.action_id)}" data-resolution="success">success</button>
-            <button class="btn-danger text-xs js-resolve-action" data-action-id="${escapeHtml(item.action_id)}" data-resolution="failed">failed</button>
+            <button class="btn-secondary text-xs js-resolve-action" data-action-id="${escapeHtml(item.action_id)}" data-resolution="canceled">canceled</button>
           </div>
         `
         : '<span class="text-xs text-text-tertiary">-</span>';

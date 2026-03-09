@@ -122,8 +122,8 @@ def list_activity_entries(session_id: str, auth_token: str, request: Request) ->
             if event.event_type in {"activity_manual_execute", "activity_manual_resolve"}:
                 action_type = str(metadata.get("action_type") or "")
                 payload = metadata.get("payload") if isinstance(metadata.get("payload"), dict) else {}
-                status = str(metadata.get("status") or "success")
-                if status in {"success", "failed"}:
+                status = str(metadata.get("status") or "success").strip().lower()
+                if status in {"success", "failed", "canceled"}:
                     action_id = str(metadata.get("action_id") or "").strip()
                     if action_id:
                         resolved_action_ids.add(action_id)
@@ -173,7 +173,10 @@ def list_activity_entries(session_id: str, auth_token: str, request: Request) ->
             for action in failed_actions:
                 payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
                 action_type = str(action.get("action_type") or "")
-                resolved_keys.add(_activity_key(action_type, payload))
+                severity = str(action.get("severity") or "").strip().lower()
+                is_info_only = severity == "info"
+                if not is_info_only:
+                    resolved_keys.add(_activity_key(action_type, payload))
                 activity_rows.append(
                     {
                         "event_id": event.id,
@@ -181,7 +184,7 @@ def list_activity_entries(session_id: str, auth_token: str, request: Request) ->
                         "turn_id": event.turn_id,
                         "turn_no": turn.turn_no if turn else None,
                         "source": "turn",
-                        "status": "failed",
+                        "status": "info" if is_info_only else "failed",
                         "action_type": action_type,
                         "payload": payload,
                         "detail": str(action.get("detail") or "Action failed."),

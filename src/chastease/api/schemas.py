@@ -34,7 +34,7 @@ class ChatActionExecuteRequest(BaseModel):
 class ChatActionResolveRequest(BaseModel):
     session_id: str = Field(min_length=1)
     action_id: str = Field(min_length=8)
-    resolution_status: Literal["success", "failed"]
+    resolution_status: Literal["success", "failed", "canceled"]
     expected_status: Literal["pending"] = "pending"
     note: str = Field(default="", max_length=500)
 
