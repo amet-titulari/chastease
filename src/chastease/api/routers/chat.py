@@ -970,12 +970,29 @@ def _normalize_pending_actions(pending_actions: list[dict]) -> list[dict]:
     return normalized
 
 
+_SINGLETON_ACTION_TYPES: frozenset[str] = frozenset({
+    "hygiene_open",
+    "hygiene_close",
+    "ttlock_open",
+    "ttlock_close",
+    "abort_decision",
+})
+
+
 def _dedupe_pending_actions(pending_actions: list[dict]) -> list[dict]:
     normalized = _normalize_pending_actions(pending_actions)
     deduplicated: list[dict] = []
     seen: set[tuple[str, str]] = set()
+    seen_singleton_types: set[str] = set()
     for action in normalized:
         action_type = str(action.get("action_type") or "").strip().lower()
+        # For singleton action types, only ever keep the first occurrence regardless of payload
+        if action_type in _SINGLETON_ACTION_TYPES:
+            if action_type in seen_singleton_types:
+                continue
+            seen_singleton_types.add(action_type)
+            deduplicated.append(action)
+            continue
         payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
         fingerprint = (
             action_type,
@@ -1438,14 +1455,20 @@ def _sync_chaster_close_temporary_opening(*, policy: dict, request: Request, new
             status_code=409,
             detail="Chaster user API token is missing — cannot create combination for hygiene close.",
         )
-    base_url = _get_chaster_developer_base(request)
+    # Use the user-facing API base (CHASTER_API_BASE, e.g. https://api.chaster.app),
+    # NOT the developer API base which has an /api prefix and only serves extension endpoints.
+    user_api_base = (
+        str(chaster_cfg.get("api_base") or "").strip().rstrip("/")
+        or str(getattr(request.app.state.config, "CHASTER_API_BASE", "https://api.chaster.app") or "").strip().rstrip("/")
+        or "https://api.chaster.app"
+    )
     timeout = httpx.Timeout(connect=6.0, read=25.0, write=20.0, pool=6.0)
     user_headers = {
         "Authorization": f"Bearer {lock_token}",
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
-    combinations_url = f"{base_url}/combinations/code"
+    combinations_url = f"{user_api_base}/combinations/code"
     with httpx.Client(timeout=timeout) as client:
         combo_response = client.post(combinations_url, headers=user_headers, json={"code": new_code})
     if combo_response.status_code >= 400:
