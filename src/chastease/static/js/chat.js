@@ -169,6 +169,7 @@ function showHygieneCountdownCard(resultBody) {
       setStatus(successMessage);
       clearPersistedHygieneCountdownState();
       clearHygieneCountdownCard();
+      await refreshPendingActions();
     } catch (error) {
       const errorMessage = String(error?.message || error);
       appendMessage('assistant', `⚠️ Aktion fehlgeschlagen (hygiene close): ${errorMessage}`);
@@ -341,23 +342,12 @@ function findImageVerificationOutcome(body) {
 function scrollToBottom(smooth = true) {
   const container = messagesContainerEl;
   if (!container) return;
-  const targetNode = document.getElementById('typingIndicator')?.classList.contains('hidden') === false
-    ? document.getElementById('typingIndicator')
-    : messagesEl?.lastElementChild;
-
   const scrollBehavior = smooth ? 'smooth' : 'auto';
   const applyScroll = () => {
     container.scrollTo({
       top: container.scrollHeight,
       behavior: scrollBehavior
     });
-    if (targetNode && typeof targetNode.scrollIntoView === 'function') {
-      try {
-        targetNode.scrollIntoView({ block: 'end', inline: 'nearest', behavior: scrollBehavior });
-      } catch (_error) {
-        // Ignore browsers that reject this combination.
-      }
-    }
     container.scrollTop = container.scrollHeight;
   };
 
@@ -398,6 +388,7 @@ function keepComposerVisible() {
   if (!composerEl || !messagesContainerEl) return;
   const composerHeight = composerEl.offsetHeight || 0;
   messagesContainerEl.style.scrollPaddingBottom = `${composerHeight + keyboardInsetPx + 24}px`;
+  messagesContainerEl.style.paddingBottom = `${Math.max(0, keyboardInsetPx)}px`;
 }
 
 function ensureInputAndLatestVisible(options = {}) {
@@ -496,6 +487,16 @@ function appendInlineActionCard(cardNode) {
   messagesEl.appendChild(messageWrapper);
   maintainBottomLock = true;
   scrollToBottom();
+}
+
+async function refreshPendingActions() {
+  if (!activeSessionId) return;
+  try {
+    const body = await apiCall('GET', `/api/v1/chat/pending/${encodeURIComponent(activeSessionId)}`);
+    renderPendingActions(body?.pending_actions || []);
+  } catch (_error) {
+    // Ignore refresh failures; local UI state remains usable.
+  }
 }
 
 async function apiCall(method, path, payload) {
@@ -800,6 +801,7 @@ function renderPendingActions(pendingActions) {
             session_id: activeSessionId,
             action_type: actionType,
             payload: effectivePayload,
+            action_id: String(action?.action_id || '').trim() || undefined,
           });
           const successMessage = body?.message || `Action ausgeführt: ${actionType}`;
           setStatus(successMessage);
@@ -815,6 +817,7 @@ function renderPendingActions(pendingActions) {
           else {
             btn.textContent = 'Ausgeführt';
           }
+          await refreshPendingActions();
         } catch (error) {
           const errorMessage = String(error?.message || error);
           setStatus(errorMessage, true);

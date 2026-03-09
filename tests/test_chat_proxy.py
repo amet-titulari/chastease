@@ -900,6 +900,53 @@ def test_chat_turn_fallback_does_not_offer_hygiene_close_when_not_open(client):
     assert data["executed_actions"] == []
 
 
+def test_chat_action_execute_resolves_pending_action_by_action_id(client):
+    auth = _register(client, username="chat-user-pending-resolve")
+    session_id = _create_active_session(client, auth, autonomy_mode="suggest")
+    now = datetime.now(UTC)
+    policy = {
+        "runtime_timer": {
+            "state": "running",
+            "effective_end_at": (now - timedelta(minutes=1)).isoformat(),
+        },
+        "limits": {"opening_window_minutes": 12},
+    }
+    _update_session_snapshots(client, session_id, policy=policy)
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Status?", "language": "de"},
+    )
+    assert turn.status_code == 200
+
+    pending_before = client.get(
+        f"/api/v1/chat/pending/{session_id}",
+        params={"auth_token": auth["auth_token"]},
+    )
+    assert pending_before.status_code == 200
+    pending_rows = pending_before.json()["pending_actions"]
+    hygiene_open = next((item for item in pending_rows if item["action_type"] == "hygiene_open"), None)
+    assert hygiene_open is not None
+
+    execute = client.post(
+        "/api/v1/chat/actions/execute",
+        json={
+            "session_id": session_id,
+            "action_type": "hygiene_open",
+            "payload": hygiene_open["payload"],
+            "action_id": hygiene_open["action_id"],
+        },
+    )
+    assert execute.status_code == 200
+
+    pending_after = client.get(
+        f"/api/v1/chat/pending/{session_id}",
+        params={"auth_token": auth["auth_token"]},
+    )
+    assert pending_after.status_code == 200
+    assert pending_after.json()["pending_actions"] == []
+
+
 def test_chat_action_execute_hygiene_fails_without_integration_config(client):
     auth = _register(client, username="chat-user-ttlock-missing")
     session_id = _create_active_session(client, auth)

@@ -12,12 +12,14 @@
     .chat-shell {
       min-height: calc(100dvh - 11rem);
       min-height: calc(var(--chat-viewport-height, 100dvh) - 11rem);
+      height: calc(var(--chat-viewport-height, 100dvh) - 11rem);
       background:
         radial-gradient(circle at top, rgba(249, 115, 22, 0.08), transparent 28%),
         radial-gradient(circle at 82% 12%, rgba(220, 38, 38, 0.05), transparent 20%),
         linear-gradient(180deg, rgba(6, 11, 22, 0.98), rgba(2, 4, 10, 1));
       display: flex;
       flex-direction: column;
+      overflow: hidden;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
@@ -100,6 +102,8 @@
     .chat-log {
       flex: 1 1 auto;
       overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
       padding: 1rem 1rem 0;
       scroll-padding-bottom: 9rem;
     }
@@ -153,10 +157,17 @@
     }
 
     @media (max-width: 767px) {
+      .chat-bleed {
+        margin-left: calc(50% - 50vw);
+        margin-right: calc(50% - 50vw);
+      }
+
       .chat-shell {
-        min-height: calc(100dvh - 8.5rem);
-        min-height: calc(var(--chat-viewport-height, 100dvh) - 8.5rem);
+        min-height: calc(var(--chat-viewport-height, 100dvh) - 4.65rem);
+        height: calc(var(--chat-viewport-height, 100dvh) - 4.65rem);
         border-top: 0;
+        border-bottom: 0;
+        border-radius: 0;
       }
 
       .chat-topbar {
@@ -179,8 +190,12 @@
         scroll-padding-bottom: 10.5rem;
       }
 
+      .chat-pending {
+        padding: 0.65rem 0.75rem;
+      }
+
       .chat-composer {
-        padding: 0.7rem 0.75rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+        padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
       }
 
       .chat-composer-card {

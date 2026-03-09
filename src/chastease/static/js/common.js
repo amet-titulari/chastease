@@ -201,10 +201,38 @@ function syncProtectedNavVisibility(forceAuth) {
   markActiveNav();
 }
 
+function wireMobileMenu() {
+  const menuRoots = Array.from(document.querySelectorAll('.app-mobile-shell'));
+  if (!menuRoots.length) return;
+
+  menuRoots.forEach((root) => {
+    if (!(root instanceof HTMLDetailsElement)) return;
+
+    const closeMenu = () => {
+      root.open = false;
+    };
+
+    root.querySelectorAll('a, button').forEach((node) => {
+      node.addEventListener('click', () => {
+        window.setTimeout(closeMenu, 0);
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!root.open) return;
+      if (root.contains(event.target)) return;
+      closeMenu();
+    });
+  });
+}
+
 // expose globally
 window.chastease_common = { authStorageKey, logoutUser, setStatus, renderNavAuth, markdownToHtml, updatePrimaryNav, showToast, escapeHtml };
 
 document.addEventListener('DOMContentLoaded', () => {
+  try {
+    wireMobileMenu();
+  } catch (e) {}
   try {
     syncProtectedNavVisibility();
   } catch (e) {}

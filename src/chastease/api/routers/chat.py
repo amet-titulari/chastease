@@ -1004,6 +1004,16 @@ def _pending_action_id(event_id: str, turn_id: str | None, action_type: str, pay
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
+def _load_entry_metadata(entry: AuditEntry) -> dict:
+    metadata = {}
+    if entry.metadata_json:
+        try:
+            metadata = json.loads(entry.metadata_json)
+        except Exception:
+            metadata = {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
 def _collect_pending_actions_for_session(db, session_id: str) -> list[dict]:
     entries = db.scalars(
         select(AuditEntry)
@@ -2506,8 +2516,10 @@ def chat_action_execute(payload: ChatActionExecuteRequest, request: Request) -> 
             metadata={
                 "source": "chat_action_execute",
                 "status": "success",
+                "action_id": payload.action_id,
                 "action_type": result.get("action_type"),
-                "payload": result.get("payload") or {},
+                "payload": payload.payload or {},
+                "result_payload": result.get("payload") or {},
                 "message": result.get("message") or "",
                 "chaster": result.get("chaster"),
             },

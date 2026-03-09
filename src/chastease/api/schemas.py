@@ -28,6 +28,7 @@ class ChatActionExecuteRequest(BaseModel):
     session_id: str = Field(min_length=1)
     action_type: str = Field(min_length=2)
     payload: dict = Field(default_factory=dict)
+    action_id: str | None = Field(default=None, min_length=8)
 
 
 class ChatActionResolveRequest(BaseModel):
