@@ -457,6 +457,42 @@ def _extract_proposed_end_date(raw_text: str, setup_session: dict) -> tuple[str,
     return cleaned, proposed
 
 
+def _strip_actionable_task_sections(text: str) -> str:
+    lines = [line for line in str(text or "").splitlines()]
+    if not lines:
+        return ""
+
+    blocked_prefixes = (
+        "nächste aufgabe",
+        "naechste aufgabe",
+        "next task",
+        "next steps",
+        "erste schritte",
+        "first steps",
+        "aufgabe:",
+    )
+
+    filtered: list[str] = []
+    skip_indented = False
+    for raw_line in lines:
+        line = raw_line.strip()
+        lower = line.lower().lstrip("-•* ")
+        if any(lower.startswith(prefix) for prefix in blocked_prefixes):
+            skip_indented = True
+            continue
+        if skip_indented:
+            if not line:
+                skip_indented = False
+                continue
+            if raw_line.startswith((" ", "\t", "-", "*", "•")):
+                continue
+            skip_indented = False
+        filtered.append(raw_line)
+
+    cleaned = "\n".join(filtered).strip()
+    return cleaned or "-"
+
+
 def generate_psychogram_analysis_with_end_date_for_setup(
     db, request: Request, setup_session: dict
 ) -> tuple[str, str | None]:
@@ -466,14 +502,16 @@ def generate_psychogram_analysis_with_end_date_for_setup(
     lang = _lang(setup_session.get("language", "de"))
     action = (
         (
-            "Analyze this psychogram for dashboard summary. Provide concise guidance: tone, boundaries, intensity and first steps. "
+            "Analyze this psychogram for a dashboard summary. Explain how the values should be interpreted and what effects they have on roleplay style. "
+            "Cover tone, boundaries, pacing/intensity and communication style. Do NOT include tasks, commands, assignments or 'next steps'. "
             f"Choose a provisional session end date within this contract window: start={contract.get('start_date')}, "
             f"min_end={contract.get('min_end_date')}, max_end={contract.get('max_end_date')}. "
             "First line MUST be exactly: PROPOSED_END_DATE: YYYY-MM-DD or PROPOSED_END_DATE: AI_DECIDES."
         )
         if lang == "en"
         else (
-            "Analysiere dieses Psychogramm fuer eine Dashboard-Zusammenfassung. Gib kurze Hinweise zu Ton, Grenzen, Intensitaet und ersten Schritten. "
+            "Analysiere dieses Psychogramm fuer eine Dashboard-Zusammenfassung. Erklaere, wie die Werte zu deuten sind und welche Auswirkungen sie auf den Rollenspiel-Stil haben. "
+            "Decke Ton, Grenzen, Tempo/Intensitaet und Kommunikationsstil ab. Gib KEINE Aufgaben, Befehle oder 'naechste Schritte' aus. "
             f"Waehle ein vorlaeufiges Session-Enddatum innerhalb dieses Vertragsfensters: start={contract.get('start_date')}, "
             f"min_end={contract.get('min_end_date')}, max_end={contract.get('max_end_date')}. "
             "Die erste Zeile MUSS exakt sein: VORGESCHLAGENES_ENDDATUM: YYYY-MM-DD oder VORGESCHLAGENES_ENDDATUM: KI_ENTSCHEIDET."
@@ -492,6 +530,7 @@ def generate_psychogram_analysis_with_end_date_for_setup(
         if _is_provider_error_text(raw):
             raise RuntimeError(str(raw))
         analysis, proposed_end_date = _extract_proposed_end_date(raw, setup_session)
+        analysis = _strip_actionable_task_sections(analysis)
         return analysis, proposed_end_date
     except Exception:
         interaction = psychogram.get("interaction_preferences", {})
@@ -499,7 +538,8 @@ def generate_psychogram_analysis_with_end_date_for_setup(
         fallback_text = (
             f"Profilanalyse: escalation={interaction.get('escalation_mode', 'moderate')}, "
             f"experience={interaction.get('experience_profile', 'intermediate')}, "
-            f"safety={safety.get('mode', 'safeword')}."
+            f"safety={safety.get('mode', 'safeword')}. "
+            "Deutung fuer das Rollenspiel: klare Struktur, konsistente Grenzen und eine Intensitaetssteuerung passend zur Erfahrungsstufe."
         )
         return fallback_text, _default_proposed_end_date(setup_session)
 

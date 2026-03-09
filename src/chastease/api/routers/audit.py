@@ -8,6 +8,14 @@ from chastease.models import AuditEntry, ChastitySession, Turn
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+_SINGLETON_ACTION_TYPES: frozenset[str] = frozenset({
+    "hygiene_open",
+    "hygiene_close",
+    "ttlock_open",
+    "ttlock_close",
+    "abort_decision",
+})
+
 
 def _load_entry_metadata(entry: AuditEntry) -> dict:
     metadata = {}
@@ -117,6 +125,7 @@ def list_activity_entries(session_id: str, auth_token: str, request: Request) ->
         activity_rows: list[dict] = []
         resolved_keys: set[tuple[str, str]] = set()
         resolved_action_ids: set[str] = set()
+        resolved_singleton_types: set[str] = set()
         for event in activity_events:
             metadata = _load_entry_metadata(event)
             if event.event_type in {"activity_manual_execute", "activity_manual_resolve"}:
@@ -128,6 +137,9 @@ def list_activity_entries(session_id: str, auth_token: str, request: Request) ->
                     if action_id:
                         resolved_action_ids.add(action_id)
                     resolved_keys.add(_activity_key(action_type, payload))
+                    normalized_type = str(action_type or "").strip().lower()
+                    if normalized_type in _SINGLETON_ACTION_TYPES:
+                        resolved_singleton_types.add(normalized_type)
                 activity_rows.append(
                     {
                         "event_id": event.id,
@@ -155,6 +167,9 @@ def list_activity_entries(session_id: str, auth_token: str, request: Request) ->
                 payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
                 action_type = str(action.get("action_type") or "")
                 resolved_keys.add(_activity_key(action_type, payload))
+                normalized_type = str(action_type or "").strip().lower()
+                if normalized_type in _SINGLETON_ACTION_TYPES:
+                    resolved_singleton_types.add(normalized_type)
                 activity_rows.append(
                     {
                         "event_id": event.id,
@@ -177,6 +192,9 @@ def list_activity_entries(session_id: str, auth_token: str, request: Request) ->
                 is_info_only = severity == "info"
                 if not is_info_only:
                     resolved_keys.add(_activity_key(action_type, payload))
+                    normalized_type = str(action_type or "").strip().lower()
+                    if normalized_type in _SINGLETON_ACTION_TYPES:
+                        resolved_singleton_types.add(normalized_type)
                 activity_rows.append(
                     {
                         "event_id": event.id,
@@ -196,7 +214,12 @@ def list_activity_entries(session_id: str, auth_token: str, request: Request) ->
                 payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
                 action_type = str(action.get("action_type") or "")
                 action_id = _activity_action_id(event.id, event.turn_id, action_type, payload)
-                if action_id in resolved_action_ids or _activity_key(action_type, payload) in resolved_keys:
+                normalized_type = str(action_type or "").strip().lower()
+                if (
+                    action_id in resolved_action_ids
+                    or _activity_key(action_type, payload) in resolved_keys
+                    or normalized_type in resolved_singleton_types
+                ):
                     continue
                 activity_rows.append(
                     {

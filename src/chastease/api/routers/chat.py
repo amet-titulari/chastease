@@ -749,6 +749,81 @@ def _fallback_pending_action_from_user_intent(message: str, policy: dict) -> dic
     return None
 
 
+def _fallback_timer_action_from_ai_narration(narration_text: str, policy: dict) -> dict | None:
+    """Infer only timer actions from plain AI narration as a strict-mode safety fallback."""
+    candidate = _fallback_pending_action_from_user_intent(narration_text, policy)
+    if not isinstance(candidate, dict):
+        return None
+    action_type = _normalize_action_type(str(candidate.get("action_type") or ""))
+    if action_type not in _TIMER_ACTIONS:
+        return None
+    payload = candidate.get("payload") if isinstance(candidate.get("payload"), dict) else {}
+    if action_type in {"add_time", "reduce_time"} and int(payload.get("seconds") or 0) <= 0:
+        return None
+    return {
+        "action_type": action_type,
+        "payload": payload,
+        "requires_execute_call": True,
+    }
+
+
+def _fallback_image_verification_from_ai_narration(narration_text: str, request_lang: str) -> dict | None:
+    normalized = _normalize_text(narration_text)
+    image_hints = {
+        "foto",
+        "bild",
+        "image",
+        "photo",
+        "screenshot",
+        "aufnahme",
+    }
+    request_hints = {
+        "sende",
+        "schicke",
+        "lade",
+        "upload",
+        "zeige",
+        "verifizieren",
+        "verify",
+        "pruefe",
+        "proof",
+        "nachweis",
+        "sichtbar",
+    }
+    has_image_hint = any(hint in normalized for hint in image_hints)
+    has_request_hint = any(hint in normalized for hint in request_hints)
+    if not (has_image_hint and has_request_hint):
+        return None
+
+    sentences = [chunk.strip() for chunk in re.split(r"[\n.!?]+", str(narration_text or "")) if chunk.strip()]
+    request_text = ""
+    for sentence in sentences:
+        sentence_norm = _normalize_text(sentence)
+        if any(hint in sentence_norm for hint in image_hints):
+            request_text = sentence
+            break
+    if not request_text:
+        request_text = (
+            "Bitte sende ein klares Verifikationsfoto von Kaefig, Schloss und Siegel."
+            if request_lang == "de"
+            else "Please send a clear verification photo of cage, lock, and seal."
+        )
+
+    verification_instruction = (
+        "Pruefe, ob Kaefig/Schloss sichtbar sind und der Zustand der Aufforderung entspricht."
+        if request_lang == "de"
+        else "Verify that cage/lock are clearly visible and the state matches the request."
+    )
+    return {
+        "action_type": "image_verification",
+        "payload": {
+            "request": request_text[:220],
+            "verification_instruction": verification_instruction,
+        },
+        "requires_execute_call": True,
+    }
+
+
 def _repair_missing_request_tag(
     *,
     db,
@@ -1074,6 +1149,7 @@ def _collect_pending_actions_for_session(db, session_id: str) -> list[dict]:
 
     resolved_action_ids: set[str] = set()
     resolved_action_keys: set[tuple[str, str]] = set()
+    resolved_singleton_types: set[str] = set()
     pending_rows: list[dict] = []
 
     for entry in entries:
@@ -1087,6 +1163,9 @@ def _collect_pending_actions_for_session(db, session_id: str) -> list[dict]:
                 action_type = str(metadata.get("action_type") or "")
                 payload = metadata.get("payload") if isinstance(metadata.get("payload"), dict) else {}
                 resolved_action_keys.add(_pending_action_key(action_type, payload))
+                normalized_type = _normalize_action_type(action_type)
+                if normalized_type in _SINGLETON_ACTION_TYPES:
+                    resolved_singleton_types.add(normalized_type)
             continue
 
         turn = turn_map.get(entry.turn_id) if entry.turn_id else None
@@ -1098,13 +1177,21 @@ def _collect_pending_actions_for_session(db, session_id: str) -> list[dict]:
             action_type = str((action or {}).get("action_type") or "")
             payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
             resolved_action_keys.add(_pending_action_key(action_type, payload))
+            normalized_type = _normalize_action_type(action_type)
+            if normalized_type in _SINGLETON_ACTION_TYPES:
+                resolved_singleton_types.add(normalized_type)
 
         for action in pending_actions:
             action_type = str((action or {}).get("action_type") or "")
             payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
             action_id = _pending_action_id(entry.id, entry.turn_id, action_type, payload)
             action_key = _pending_action_key(action_type, payload)
-            if action_id in resolved_action_ids or action_key in resolved_action_keys:
+            normalized_type = _normalize_action_type(action_type)
+            if (
+                action_id in resolved_action_ids
+                or action_key in resolved_action_keys
+                or normalized_type in resolved_singleton_types
+            ):
                 continue
             pending_rows.append(
                 {
@@ -2496,8 +2583,35 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                             "severity": "info",
                         }
                     )
+                    if not has_image_attachments:
+                        repaired_has_image_verification = any(
+                            _normalize_action_type(str((item or {}).get("action_type") or "")) == "image_verification"
+                            for item in ai_pending_actions
+                        )
+                        if not repaired_has_image_verification:
+                            image_after_repair = _fallback_image_verification_from_ai_narration(
+                                narration_raw,
+                                request_lang,
+                            )
+                            if image_after_repair is not None:
+                                ai_pending_actions.append(image_after_repair)
+                                precheck_failed_actions.append(
+                                    {
+                                        "action_type": "image_verification",
+                                        "payload": image_after_repair.get("payload") or {},
+                                        "detail": "Repair round produced no image request tag; added image-verification fallback from AI narration intent.",
+                                        "severity": "info",
+                                    }
+                                )
             if not ai_pending_actions:
                 fallback_action = explicit_intent_action or _fallback_pending_action_from_user_intent(action_text, policy)
+                narration_timer_fallback = _fallback_timer_action_from_ai_narration(narration_raw, policy)
+                narration_image_fallback = (
+                    None if has_image_attachments else _fallback_image_verification_from_ai_narration(narration_raw, request_lang)
+                )
+                # If the model clearly states a timer operation in narration, prefer it over
+                # heuristic user-intent fallback so executed action matches returned AI text.
+                selected_fallback = narration_timer_fallback or narration_image_fallback or fallback_action
                 if fallback_action is not None:
                     if strict_request_tag_mode:
                         if explicit_intent_action is not None and timer_pending:
@@ -2508,6 +2622,28 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                                     "action_type": str(fallback_action.get("action_type") or ""),
                                     "payload": fallback_action.get("payload") or {},
                                     "detail": "Applied explicit user-intent fallback while timer-expiry state was active.",
+                                    "severity": "info",
+                                }
+                            )
+                        elif narration_timer_fallback is not None:
+                            ai_pending_actions = [narration_timer_fallback]
+                            fallback_applied = True
+                            precheck_failed_actions.append(
+                                {
+                                    "action_type": str(narration_timer_fallback.get("action_type") or ""),
+                                    "payload": narration_timer_fallback.get("payload") or {},
+                                    "detail": "Strict request-tag mode: applied timer fallback from explicit AI narration intent.",
+                                    "severity": "info",
+                                }
+                            )
+                        elif narration_image_fallback is not None:
+                            ai_pending_actions = [narration_image_fallback]
+                            fallback_applied = True
+                            precheck_failed_actions.append(
+                                {
+                                    "action_type": str(narration_image_fallback.get("action_type") or ""),
+                                    "payload": narration_image_fallback.get("payload") or {},
+                                    "detail": "Strict request-tag mode: applied image-verification fallback from AI narration intent.",
                                     "severity": "info",
                                 }
                             )
@@ -2524,16 +2660,69 @@ def chat_turn(payload: ChatTurnRequest, request: Request) -> dict:
                                 }
                             )
                     else:
-                        ai_pending_actions = [fallback_action]
+                        ai_pending_actions = [selected_fallback]
                         fallback_applied = True
+                        fallback_detail = (
+                            "LLM returned no structured action tag; applied timer fallback from AI narration intent."
+                            if narration_timer_fallback is not None
+                            else (
+                                "LLM returned no structured action tag; applied image-verification fallback from AI narration intent."
+                                if narration_image_fallback is not None
+                                else "LLM returned no structured action tag; applied user-intent fallback."
+                            )
+                        )
                         precheck_failed_actions.append(
                             {
-                                "action_type": str(fallback_action.get("action_type") or ""),
-                                "payload": fallback_action.get("payload") or {},
-                                "detail": "LLM returned no structured action tag; applied user-intent fallback.",
+                                "action_type": str(selected_fallback.get("action_type") or ""),
+                                "payload": selected_fallback.get("payload") or {},
+                                "detail": fallback_detail,
                                 "severity": "info",
                             }
                         )
+                elif strict_request_tag_mode and narration_timer_fallback is not None:
+                    ai_pending_actions = [narration_timer_fallback]
+                    fallback_applied = True
+                    precheck_failed_actions.append(
+                        {
+                            "action_type": str(narration_timer_fallback.get("action_type") or ""),
+                            "payload": narration_timer_fallback.get("payload") or {},
+                            "detail": "Strict request-tag mode: applied timer fallback from explicit AI narration intent.",
+                            "severity": "info",
+                        }
+                    )
+                elif strict_request_tag_mode and narration_image_fallback is not None:
+                    ai_pending_actions = [narration_image_fallback]
+                    fallback_applied = True
+                    precheck_failed_actions.append(
+                        {
+                            "action_type": str(narration_image_fallback.get("action_type") or ""),
+                            "payload": narration_image_fallback.get("payload") or {},
+                            "detail": "Strict request-tag mode: applied image-verification fallback from AI narration intent.",
+                            "severity": "info",
+                        }
+                    )
+                elif narration_timer_fallback is not None:
+                    ai_pending_actions = [narration_timer_fallback]
+                    fallback_applied = True
+                    precheck_failed_actions.append(
+                        {
+                            "action_type": str(narration_timer_fallback.get("action_type") or ""),
+                            "payload": narration_timer_fallback.get("payload") or {},
+                            "detail": "LLM returned no structured action tag; applied timer fallback from AI narration intent.",
+                            "severity": "info",
+                        }
+                    )
+                elif narration_image_fallback is not None:
+                    ai_pending_actions = [narration_image_fallback]
+                    fallback_applied = True
+                    precheck_failed_actions.append(
+                        {
+                            "action_type": str(narration_image_fallback.get("action_type") or ""),
+                            "payload": narration_image_fallback.get("payload") or {},
+                            "detail": "LLM returned no structured action tag; applied image-verification fallback from AI narration intent.",
+                            "severity": "info",
+                        }
+                    )
             ai_pending_actions, executed_actions, auto_failed_actions, updated_policy = _auto_execute_pending_actions(
                 request=request,
                 policy=policy,

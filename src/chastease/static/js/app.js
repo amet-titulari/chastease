@@ -227,17 +227,13 @@ function setAuthMode(mode) {
     if (loginBtn) loginBtn.classList.remove('hidden');
     return;
   }
-  if (mode === 'register') {
-    if (emailWrap) emailWrap.classList.remove('hidden');
-    if (passwordRepeatInput && passwordRepeatInput.parentElement) passwordRepeatInput.parentElement.classList.remove('hidden');
-    if (loginBtn) loginBtn.classList.add('hidden');
-    if (registerBtn) registerBtn.classList.remove('hidden');
-  } else {
-    if (emailWrap) emailWrap.classList.add('hidden');
-    if (passwordRepeatInput && passwordRepeatInput.parentElement) passwordRepeatInput.parentElement.classList.add('hidden');
-    if (loginBtn) loginBtn.classList.remove('hidden');
-    if (registerBtn) registerBtn.classList.add('hidden');
-  }
+
+  // Alpine controls mode-dependent visibility (login/register) via x-show.
+  // Clear legacy hidden classes so toggling mode in-page cannot leave controls stuck.
+  if (emailWrap) emailWrap.classList.remove('hidden');
+  if (passwordRepeatInput && passwordRepeatInput.parentElement) passwordRepeatInput.parentElement.classList.remove('hidden');
+  if (loginBtn) loginBtn.classList.remove('hidden');
+  if (registerBtn) registerBtn.classList.remove('hidden');
 }
 
 function startSetup() {

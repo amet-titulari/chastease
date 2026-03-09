@@ -1,4 +1,4 @@
-from chastease.services.narration import extract_pending_actions
+from chastease.services.narration import _strip_actionable_task_sections, extract_pending_actions
 
 
 def test_extract_pending_actions_parses_suggest_add_time_duration() -> None:
@@ -104,3 +104,26 @@ def test_extract_pending_actions_maps_freeze_alias_to_pause_timer() -> None:
     assert actions[0]["action_type"] == "pause_timer"
     assert actions[0]["payload"] == {}
     assert "[[REQUEST:" not in cleaned
+
+
+def test_strip_actionable_task_sections_removes_naechste_aufgabe_block() -> None:
+    analysis = (
+        "Dashboard-Zusammenfassung: Struktur hoch, Intensitaet moderat.\n"
+        "Auswirkung aufs Rollenspiel: klarer Rahmen, langsame Eskalation.\n\n"
+        "Naechste Aufgabe: Schicke mir drei Fotos und ein Reporting.\n"
+        "- Schritt 1\n"
+        "- Schritt 2\n"
+    )
+    cleaned = _strip_actionable_task_sections(analysis)
+    assert "Naechste Aufgabe" not in cleaned
+    assert "Schritt 1" not in cleaned
+    assert "Auswirkung aufs Rollenspiel" in cleaned
+
+
+def test_strip_actionable_task_sections_keeps_normal_analysis_text() -> None:
+    analysis = (
+        "Wertedeutung: Strenge 67 bedeutet konsistente Grenzen und klare Rituale.\n"
+        "Auswirkungen: Hohe Kontrolle foerdert planbare, strukturierte Szenen."
+    )
+    cleaned = _strip_actionable_task_sections(analysis)
+    assert cleaned == analysis

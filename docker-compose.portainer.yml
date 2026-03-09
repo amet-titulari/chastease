@@ -35,8 +35,8 @@ services:
       CHASTER_OAUTH_TOKEN_URL: https://sso.chaster.app/auth/realms/app/protocol/openid-connect/token
       CHASTER_OAUTH_USERINFO_URL: https://sso.chaster.app/auth/realms/app/protocol/openid-connect/userinfo
       CHASTER_OAUTH_SCOPES: openid profile locks
-      AUTH_ENABLE_CHASTER_LOGIN: true
-      AUTH_ALLOW_LOCAL_LOGIN: false
+      AUTH_ENABLE_CHASTER_LOGIN: false
+      AUTH_ALLOW_LOCAL_LOGIN: true
     volumes:
       - chastease_data:/app/data
 

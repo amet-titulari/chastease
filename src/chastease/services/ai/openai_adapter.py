@@ -305,6 +305,8 @@ class OpenAIAdapter:
             "If your response asks for, approves, schedules, or executes an operational step, "
             "you MUST append exactly one machine line at the very end in this format: "
             "[[REQUEST:<action_type>|<json_payload>]]. "
+            "Never claim that an operation was accepted, started, or executed unless the matching REQUEST line is present in the same response. "
+            "If you decide to request a verification photo, you MUST include REQUEST:image_verification and do not rely on prose-only photo requests. "
             "Use compact valid JSON on one line only. "
             "Never output [Suggest: ...], [REQUEST: ...(...)] call-style, or free-text pseudo actions. "
             "If no operational action is intended, output no REQUEST line at all. "

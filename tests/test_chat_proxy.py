@@ -715,6 +715,42 @@ def test_chat_turn_reask_repairs_plain_text_into_structured_request(client):
     assert any("repair round generated" in str(item.get("detail", "")) for item in data["failed_actions"])
 
 
+def test_chat_turn_repair_keeps_image_verification_when_narration_requests_photo(client):
+    client.app.state.config.LLM_FAIL_CLOSED_REQUEST_TAG = True
+    auth = _register(client, username="chat-user-repair-photo")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+    calls = {"n": 0}
+
+    def _fake_generate(_context):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return (
+                "Kein Abzug; stattdessen verlaengere ich deinen Timer um 24 Stunden. "
+                "Sende ein klares Foto von Kaefig, Schloss und Siegel zur Verifikation."
+            )
+        return '[[REQUEST:add_time|{"seconds":86400}]]'
+
+    client.app.state.ai_service.generate_narration = _fake_generate
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={
+            "session_id": session_id,
+            "message": "Was soll ich machen?",
+            "language": "de",
+        },
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert len(data["executed_actions"]) == 1
+    assert data["executed_actions"][0]["action_type"] == "add_time"
+    assert any(action.get("action_type") == "image_verification" for action in data["pending_actions"])
+    assert any(
+        "added image-verification fallback" in str(item.get("detail", "")).lower()
+        for item in data["failed_actions"]
+    )
+
+
 def test_chat_turn_falls_back_to_pause_timer_on_plain_text_intent(client):
     client.app.state.config.LLM_FAIL_CLOSED_REQUEST_TAG = False
     auth = _register(client, username="chat-user-pause-fallback")
@@ -739,6 +775,111 @@ def test_chat_turn_falls_back_to_pause_timer_on_plain_text_intent(client):
     assert data["action_diagnostics"]["raw_machine_tag_present"] is False
     assert data["action_diagnostics"]["strict_request_tag_mode"] is False
     assert data["action_diagnostics"]["fallback_applied"] is True
+
+
+def test_chat_turn_strict_mode_allows_timer_fallback_from_ai_narration(client):
+    client.app.state.config.LLM_FAIL_CLOSED_REQUEST_TAG = True
+    auth = _register(client, username="chat-user-strict-timer-fallback")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        "Ich verlaengere die Zeit jetzt um 15 Minuten und halte den Rhythmus stabil."
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={
+            "session_id": session_id,
+            "message": "Okay",
+            "language": "de",
+        },
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["pending_actions"] == []
+    assert len(data["executed_actions"]) == 1
+    assert data["executed_actions"][0]["action_type"] == "add_time"
+    assert int(data["executed_actions"][0]["payload"]["seconds"]) == 900
+    assert data["action_diagnostics"]["strict_request_tag_mode"] is True
+    assert data["action_diagnostics"]["fallback_applied"] is True
+    assert any(
+        "applied timer fallback from explicit ai narration intent" in str(item.get("detail", "")).lower()
+        for item in data["failed_actions"]
+    )
+
+
+def test_chat_turn_prefers_ai_timer_intent_over_user_offer_in_fallback(client):
+    client.app.state.config.LLM_FAIL_CLOSED_REQUEST_TAG = False
+    auth = _register(client, username="chat-user-ai-timer-preferred")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        "Ich ziehe dir keine Zeit ab; stattdessen verlaengere ich deinen Timer um 1 Tag."
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={
+            "session_id": session_id,
+            "message": "Wenn du mir jetzt 1 Tag der Zeit abziehen darfst du danach verlaengern.",
+            "language": "de",
+        },
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["pending_actions"] == []
+    assert len(data["executed_actions"]) == 1
+    assert data["executed_actions"][0]["action_type"] == "add_time"
+    assert int(data["executed_actions"][0]["payload"]["seconds"]) == 86400
+    assert data["action_diagnostics"]["fallback_applied"] is True
+    assert any(
+        "applied timer fallback from ai narration intent" in str(item.get("detail", "")).lower()
+        for item in data["failed_actions"]
+    )
+
+
+def test_chat_turn_strict_mode_adds_image_verification_from_plain_ai_narration(client):
+    client.app.state.config.LLM_FAIL_CLOSED_REQUEST_TAG = True
+    auth = _register(client, username="chat-user-strict-image-fallback")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        "Sende mir ein klares Foto deines Kaefigs und Schlosses, damit ich den Sitz verifizieren kann."
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Okay", "language": "de"},
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["executed_actions"] == []
+    assert len(data["pending_actions"]) == 1
+    assert data["pending_actions"][0]["action_type"] == "image_verification"
+    assert "foto" in str(data["pending_actions"][0]["payload"].get("request", "")).lower()
+    assert data["action_diagnostics"]["strict_request_tag_mode"] is True
+    assert data["action_diagnostics"]["fallback_applied"] is True
+
+
+def test_chat_turn_non_strict_prefers_image_verification_from_ai_narration(client):
+    client.app.state.config.LLM_FAIL_CLOSED_REQUEST_TAG = False
+    auth = _register(client, username="chat-user-image-fallback")
+    session_id = _create_active_session(client, auth, autonomy_mode="execute")
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        "Sende ein klares Bild von Kaefig und Siegel zur Verifikation."
+    )
+
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Kannst du pruefen?", "language": "de"},
+    )
+    assert turn.status_code == 200
+    data = turn.json()
+    assert data["executed_actions"] == []
+    assert len(data["pending_actions"]) == 1
+    assert data["pending_actions"][0]["action_type"] == "image_verification"
+    assert data["action_diagnostics"]["fallback_applied"] is True
+    assert any(
+        "image-verification fallback from ai narration intent" in str(item.get("detail", "")).lower()
+        for item in data["failed_actions"]
+    )
 
 
 def test_chat_action_execute_hygiene_open_success(client, monkeypatch):
@@ -945,6 +1086,57 @@ def test_chat_action_execute_resolves_pending_action_by_action_id(client):
     )
     assert pending_after.status_code == 200
     assert pending_after.json()["pending_actions"] == []
+
+
+def test_pending_hygiene_open_clears_after_manual_execute_without_action_id(client, monkeypatch):
+    auth = _register(client, username="chat-user-pending-hygiene-clear")
+    session_id = _create_active_session(
+        client,
+        auth,
+        autonomy_mode="execute",
+        integrations=["ttlock"],
+        integration_config={
+            "ttlock": {
+                "ttl_user": "wearer@example.com",
+                "ttl_pass_md5": "0123456789abcdef0123456789abcdef",
+                "ttl_lock_id": "12345",
+            }
+        },
+    )
+    client.app.state.config.TTL_CLIENT_ID = "demo-client"
+    client.app.state.config.TTL_CLIENT_SECRET = "demo-secret"
+    monkeypatch.setattr(chat_router, "_ttlock_access_token", lambda **_kwargs: "access-token")
+    monkeypatch.setattr(
+        chat_router,
+        "_ttlock_command",
+        lambda **_kwargs: {"errcode": 0, "errmsg": "ok", "lockId": "12345"},
+    )
+
+    client.app.state.ai_service.generate_narration = lambda _context: (
+        'Bitte bestaetigen.\n[[REQUEST:hygiene_open|{"reason":"hygiene","opening_window_minutes":15}]]'
+    )
+    turn = client.post(
+        "/api/v1/chat/turn",
+        json={"session_id": session_id, "message": "Bitte hygiene.", "language": "de"},
+    )
+    assert turn.status_code == 200
+    body = turn.json()
+    assert len(body["pending_actions"]) == 1
+    assert body["pending_actions"][0]["action_type"] == "hygiene_open"
+
+    before = client.get(f"/api/v1/chat/pending/{session_id}?auth_token={auth['auth_token']}")
+    assert before.status_code == 200
+    assert any(item.get("action_type") == "hygiene_open" for item in before.json().get("pending_actions", []))
+
+    execute = client.post(
+        "/api/v1/chat/actions/execute",
+        json={"session_id": session_id, "action_type": "hygiene_open", "payload": {}},
+    )
+    assert execute.status_code == 200
+
+    after = client.get(f"/api/v1/chat/pending/{session_id}?auth_token={auth['auth_token']}")
+    assert after.status_code == 200
+    assert not any(item.get("action_type") == "hygiene_open" for item in after.json().get("pending_actions", []))
 
 
 def test_chat_action_execute_hygiene_fails_without_integration_config(client):
