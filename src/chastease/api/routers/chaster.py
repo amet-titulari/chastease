@@ -627,6 +627,7 @@ async def _resolve_extension_session_id(lock_id: str, request: Request) -> str |
         response_json = response.json()
     except (ValueError, KeyError):
         response_json = {}
+    session_id = _find_extension_session_id(response_json, normalized_lock_id)
     return session_id or None
 
 

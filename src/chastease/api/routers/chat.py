@@ -1219,11 +1219,42 @@ def _resolve_chaster_extension_session(*, policy: dict, request: Request) -> tup
     cached_session_id = str(chaster_cfg.get("extension_session_id") or "").strip()
     if cached_session_id:
         return cached_session_id, chaster_cfg
+
+    # Fallback: search live via developer token — no wearer action needed
+    extension_slug = str(getattr(request.app.state.config, "CHASTER_EXTENSION_SLUG", "") or "").strip()
+    dev_base = _get_chaster_developer_base(request)
+    dev_headers = _get_chaster_developer_headers(request)
+    timeout = httpx.Timeout(connect=6.0, read=25.0, write=20.0, pool=6.0)
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            search_resp = client.post(
+                f"{dev_base}/extensions/sessions/search",
+                headers=dev_headers,
+                json={"extensionSlug": extension_slug, "limit": 100},
+            )
+        if search_resp.status_code < 400:
+            try:
+                search_json = search_resp.json()
+            except (ValueError, KeyError):
+                search_json = {}
+            from chastease.api.routers.chaster import _find_extension_session_id as _chaster_find_session
+            live_session_id = _chaster_find_session(search_json, lock_id)
+            if live_session_id:
+                integration_config = policy.get("integration_config") if isinstance(policy.get("integration_config"), dict) else {}
+                merged_chaster = dict(chaster_cfg)
+                merged_chaster["extension_session_id"] = live_session_id
+                integration_config["chaster"] = merged_chaster
+                policy["integration_config"] = integration_config
+                logger.info("Chaster extension_session_id resolved via live search for lock_id=%s", lock_id)
+                return live_session_id, merged_chaster
+    except Exception as exc:
+        logger.warning("Chaster live extension session search failed: %s", exc)
+
     raise HTTPException(
         status_code=409,
         detail=(
-            f"Chaster extension_session_id is missing for lock_id={lock_id}. "
-            "Open the configured Chaster Extension Main Page once to bind the extension session."
+            f"Chaster extension_session_id could not be resolved for lock_id={lock_id}. "
+            "Ensure the Chaster extension is configured and CHASTER_DEVELOPER_TOKEN / CHASTER_EXTENSION_SLUG are set."
         ),
     )
 
