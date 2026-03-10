@@ -18,6 +18,51 @@ h1 {
   font-size: clamp(1.3rem, 3vw, 1.85rem);
 }
 
+.section-divider {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin: 1.25rem 0;
+}
+
+.llm-section summary {
+  cursor: pointer;
+  user-select: none;
+  padding: 0.4rem 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted, #8899aa);
+  list-style: none;
+}
+
+.llm-section summary::-webkit-details-marker { display: none; }
+
+.llm-section summary::after {
+  content: " ›";
+  font-size: 1rem;
+  transition: transform 0.2s;
+}
+.llm-section[open] summary::after {
+  content: " ‹";
+}
+
+.llm-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 560px) {
+  .llm-grid { grid-template-columns: 1fr; }
+}
+
+.llm-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
 .subline {
   margin-top: 0;
   color: var(--muted);

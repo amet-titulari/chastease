@@ -21,8 +21,15 @@
 
       <form id="setup-form" method="post" action="/setup/complete">
         <section class="wizard-step is-active" data-step="1">
-          <h2>Welcher Leitstil passt?</h2>
-          <p>Das hilft dem System, spaeter passende Aufgaben und Tonalitaet vorzuschlagen.</p>
+          <h2>Dein Wearer-Profil</h2>
+          <p>Das hilft dem System, passende Aufgaben, Tonalitaet und Intensitaet auf dich abzustimmen.</p>
+          <label>Erfahrungslevel
+            <select name="experience_level" id="setup-experience-level" required>
+              <option value="beginner" {% if not current_user.setup_experience_level or current_user.setup_experience_level == "beginner" %}selected{% endif %}>Beginner – ich starte gerade erst</option>
+              <option value="intermediate" {% if current_user.setup_experience_level == "intermediate" %}selected{% endif %}>Intermediate – ich habe bereits Erfahrung</option>
+              <option value="advanced" {% if current_user.setup_experience_level == "advanced" %}selected{% endif %}>Advanced – ich kenne mich gut aus</option>
+            </select>
+          </label>
           <label>Leitstil
             <select name="role_style" id="setup-role-style" required>
               <option value="strict">Strict</option>

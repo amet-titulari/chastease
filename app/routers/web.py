@@ -1,8 +1,9 @@
 import hashlib
 import secrets
 
+import httpx
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models.auth_user import AuthUser
+from app.models.llm_profile import LlmProfile
 
 router = APIRouter(tags=["web"])
 templates = Jinja2Templates(directory="app/templates")
@@ -191,6 +193,7 @@ def complete_setup(
     role_style: str = Form(...),
     primary_goal: str = Form(...),
     boundary_note: str = Form(...),
+    experience_level: str = Form(default="beginner"),
     db: Session = Depends(get_db),
 ):
     user = _get_current_user(request, db)
@@ -200,6 +203,7 @@ def complete_setup(
     user.setup_style = role_style.strip()[:80]
     user.setup_goal = primary_goal.strip()[:120]
     user.setup_boundary = boundary_note.strip()[:1500]
+    user.setup_experience_level = experience_level.strip()[:50] if experience_level.strip() in ("beginner", "intermediate", "advanced") else "beginner"
     user.setup_completed = True
     db.commit()
     return RedirectResponse(url="/experience", status_code=303)
@@ -211,6 +215,7 @@ def profile_page(request: Request, db: Session = Depends(get_db)):
     if user is None:
         return RedirectResponse(url="/", status_code=303)
 
+    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
     return templates.TemplateResponse(
         request=request,
         name="profile.html",
@@ -219,8 +224,101 @@ def profile_page(request: Request, db: Session = Depends(get_db)):
             "current_user": user,
             "profile_message": None,
             "profile_error": None,
+            "llm": llm,
+            "llm_message": None,
+            "llm_error": None,
         },
     )
+
+
+@router.get("/profile/llm/status")
+def llm_status(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+    if not llm:
+        return JSONResponse({"ready": False, "api_key_stored": False, "profile_active": False})
+    return JSONResponse({
+        "ready": bool(llm.profile_active and llm.api_url and llm.chat_model),
+        "api_key_stored": bool(llm.api_key),
+        "profile_active": llm.profile_active,
+        "provider": llm.provider,
+        "api_url": llm.api_url,
+        "chat_model": llm.chat_model,
+        "vision_model": llm.vision_model,
+    })
+
+
+@router.post("/profile/llm")
+def save_llm_profile(
+    request: Request,
+    provider: str = Form(default="stub"),
+    api_url: str = Form(default=""),
+    api_key: str = Form(default=""),
+    chat_model: str = Form(default=""),
+    vision_model: str = Form(default=""),
+    profile_active: str = Form(default="false"),
+    db: Session = Depends(get_db),
+):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+
+    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+    if not llm:
+        llm = LlmProfile(profile_key="default")
+        db.add(llm)
+
+    llm.provider = provider.strip()[:50] or "stub"
+    llm.api_url = api_url.strip()[:500] or None
+    if api_key.strip():
+        llm.api_key = api_key.strip()
+    llm.chat_model = chat_model.strip()[:120] or None
+    llm.vision_model = vision_model.strip()[:120] or None
+    llm.profile_active = profile_active.lower() in ("true", "on", "1", "enabled")
+    db.commit()
+
+    llm2 = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+    return templates.TemplateResponse(
+        request=request,
+        name="profile.html",
+        context={
+            "title": f"{settings.app_name} Profile",
+            "current_user": user,
+            "profile_message": None,
+            "profile_error": None,
+            "llm": llm2,
+            "llm_message": "LLM-Profil gespeichert.",
+            "llm_error": None,
+        },
+    )
+
+
+@router.post("/profile/llm/test")
+async def test_llm_profile(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+    if not llm or not llm.api_url or not llm.chat_model:
+        return JSONResponse({"ok": False, "error": "Kein LLM-Profil konfiguriert."})
+    try:
+        headers = {"Content-Type": "application/json"}
+        if llm.api_key:
+            headers["Authorization"] = f"Bearer {llm.api_key}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                llm.api_url,
+                headers=headers,
+                json={"model": llm.chat_model, "messages": [{"role": "user", "content": "Say OK"}], "max_tokens": 5},
+            )
+        resp.raise_for_status()
+        return JSONResponse({"ok": True, "status": resp.status_code})
+    except httpx.HTTPStatusError as exc:
+        return JSONResponse({"ok": False, "error": f"HTTP {exc.response.status_code}"})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)[:200]})
 
 
 @router.post("/profile/setup")
@@ -229,6 +327,7 @@ def update_profile_setup(
     role_style: str = Form(...),
     primary_goal: str = Form(...),
     boundary_note: str = Form(...),
+    experience_level: str = Form(default="beginner"),
     db: Session = Depends(get_db),
 ):
     user = _get_current_user(request, db)
@@ -239,6 +338,7 @@ def update_profile_setup(
     goal = primary_goal.strip()[:120]
     boundary = boundary_note.strip()[:1500]
     if not style or not goal:
+        llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
         return templates.TemplateResponse(
             request=request,
             name="profile.html",
@@ -247,6 +347,9 @@ def update_profile_setup(
                 "current_user": user,
                 "profile_message": None,
                 "profile_error": "Leitstil und Ziel duerfen nicht leer sein.",
+                "llm": llm,
+                "llm_message": None,
+                "llm_error": None,
             },
             status_code=400,
         )
@@ -254,8 +357,10 @@ def update_profile_setup(
     user.setup_style = style
     user.setup_goal = goal
     user.setup_boundary = boundary
+    user.setup_experience_level = experience_level.strip()[:50] if experience_level.strip() in ("beginner", "intermediate", "advanced") else "beginner"
     user.setup_completed = True
     db.commit()
+    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
     return templates.TemplateResponse(
         request=request,
         name="profile.html",
@@ -264,6 +369,9 @@ def update_profile_setup(
             "current_user": user,
             "profile_message": "Setup-Daten wurden aktualisiert.",
             "profile_error": None,
+            "llm": llm,
+            "llm_message": None,
+            "llm_error": None,
         },
     )
 
@@ -320,5 +428,5 @@ def experience_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request=request,
         name="experience.html",
-        context={"title": f"{settings.app_name} Experience"},
+        context={"title": f"{settings.app_name} Experience", "current_user": user},
     )

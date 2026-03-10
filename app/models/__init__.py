@@ -1,6 +1,7 @@
 from app.models.auth_user import AuthUser
 from app.models.contract import Contract, ContractAddendum
 from app.models.hygiene_opening import HygieneOpening
+from app.models.llm_profile import LlmProfile
 from app.models.message import Message
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile

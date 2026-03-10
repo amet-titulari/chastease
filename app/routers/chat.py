@@ -108,11 +108,32 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
         .all()
     )
     context_items, context_summary = build_context_window(context_rows, max_messages=12)
+
+    wearer_nickname = profile.nickname if profile else None
+    experience_level = profile.experience_level if profile else None
+    wearer_style: str | None = None
+    wearer_goal: str | None = None
+    wearer_boundary: str | None = None
+    if profile and profile.preferences_json:
+        try:
+            prefs = json.loads(profile.preferences_json)
+            if isinstance(prefs, dict):
+                wearer_style = prefs.get("wearer_style")
+                wearer_goal = prefs.get("wearer_goal")
+                wearer_boundary = prefs.get("wearer_boundary")
+        except Exception:
+            pass
+
     prompt_modules = build_prompt_modules(
         persona_name=persona_name,
         session_status=session_obj.status,
         safety_mode=safety_mode,
         scenario_title=scenario_title,
+        wearer_nickname=wearer_nickname,
+        experience_level=experience_level,
+        wearer_style=wearer_style,
+        wearer_goal=wearer_goal,
+        wearer_boundary=wearer_boundary,
     ).render()
 
     structured = ai.generate_chat_response(

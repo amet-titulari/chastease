@@ -306,7 +306,115 @@ class OllamaGateway(AIGateway):
         )
 
 
+class CustomOpenAIGateway(AIGateway):
+    """OpenAI-compatible gateway (works with xAI, OpenRouter, LM Studio, etc.)."""
+
+    def __init__(self, api_url: str, api_key: str, chat_model: str, timeout_seconds: float = 30.0) -> None:
+        self.api_url = api_url
+        self.api_key = api_key
+        self.chat_model = chat_model
+        self.timeout_seconds = timeout_seconds
+        self._fallback = StubAIGateway()
+
+    def _headers(self) -> dict:
+        h = {"Content-Type": "application/json"}
+        if self.api_key:
+            h["Authorization"] = f"Bearer {self.api_key}"
+        return h
+
+    def generate_contract(
+        self,
+        persona_name: str,
+        player_nickname: str,
+        min_duration_seconds: int,
+        max_duration_seconds: int | None,
+    ) -> str:
+        max_text = str(max_duration_seconds) if max_duration_seconds is not None else "kein Maximum"
+        user_msg = (
+            "Erstelle einen klar strukturierten Keuschheits-Vertrag auf Deutsch.\n"
+            "- Ueberschrift: KEUSCHHEITS-VERTRAG\n"
+            "- Nenne Persona, Wearer, Mindestdauer, Maximaldauer.\n"
+            "- Safety-Mechanismen (Safeword/Ampel/Emergency) sind unveraenderlich.\n\n"
+            f"Persona: {persona_name}\nWearer: {player_nickname}\n"
+            f"Mindestdauer (Sek.): {min_duration_seconds}\nMaximaldauer (Sek.): {max_text}"
+        )
+        try:
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                resp = client.post(
+                    self.api_url,
+                    headers=self._headers(),
+                    json={"model": self.chat_model, "messages": [{"role": "user", "content": user_msg}]},
+                )
+                resp.raise_for_status()
+                text = resp.json()["choices"][0]["message"]["content"].strip()
+                if text:
+                    return text
+        except Exception:
+            pass
+        return self._fallback.generate_contract(persona_name, player_nickname, min_duration_seconds, max_duration_seconds)
+
+    def generate_chat_response(
+        self,
+        persona_name: str,
+        user_text: str,
+        prompt_modules: str | None = None,
+        context_items: list[dict] | None = None,
+        context_summary: str | None = None,
+    ) -> AIResponse:
+        system_content = prompt_modules or f"Du bist {persona_name}. Antworte auf Deutsch."
+        messages: list[dict] = [{"role": "system", "content": system_content}]
+        if context_summary:
+            messages.append({"role": "system", "content": f"Kontext-Zusammenfassung: {context_summary}"})
+        for item in (context_items or []):
+            if isinstance(item, dict) and item.get("role") and item.get("content"):
+                messages.append({"role": item["role"], "content": item["content"]})
+        messages.append({"role": "user", "content": user_text})
+
+        try:
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                resp = client.post(
+                    self.api_url,
+                    headers=self._headers(),
+                    json={"model": self.chat_model, "messages": messages},
+                )
+                resp.raise_for_status()
+                text = resp.json()["choices"][0]["message"]["content"].strip()
+                if text:
+                    return AIResponse(message=text, actions=[], mood="neutral", intensity=3)
+        except Exception:
+            pass
+        return self._fallback.generate_chat_response(
+            persona_name, user_text, prompt_modules, context_items, context_summary
+        )
+
+
 def get_ai_gateway() -> AIGateway:
+    # Check DB for an active LLM profile first
+    try:
+        from app.database import SessionLocal
+        from app.models.llm_profile import LlmProfile as LlmProfileModel
+        db = SessionLocal()
+        try:
+            profile = db.query(LlmProfileModel).filter(LlmProfileModel.profile_key == "default").first()
+        finally:
+            db.close()
+        if profile and profile.profile_active:
+            if profile.provider in ("custom", "openai") and profile.api_url and profile.chat_model:
+                return CustomOpenAIGateway(
+                    api_url=profile.api_url,
+                    api_key=profile.api_key or "",
+                    chat_model=profile.chat_model,
+                )
+            if profile.provider == "ollama":
+                return OllamaGateway(
+                    base_url=profile.api_url or settings.ai_ollama_base_url,
+                    model=profile.chat_model or settings.ai_ollama_model,
+                    timeout_seconds=settings.ai_ollama_timeout_seconds,
+                )
+    except Exception:
+        pass
+
+    # Fall back to .env settings
     provider = settings.ai_provider.strip().lower()
     if provider == "ollama":
         return OllamaGateway(

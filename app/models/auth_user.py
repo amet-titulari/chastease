@@ -13,6 +13,7 @@ class AuthUser(Base):
     password_salt = Column(String(32), nullable=False)
     session_token = Column(String(128), nullable=True, unique=True, index=True)
     setup_completed = Column(Boolean, nullable=False, default=False)
+    setup_experience_level = Column(String(50), nullable=True)
     setup_style = Column(String(80), nullable=True)
     setup_goal = Column(String(120), nullable=True)
     setup_boundary = Column(Text, nullable=True)

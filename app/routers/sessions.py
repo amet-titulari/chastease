@@ -34,6 +34,11 @@ class CreateSessionRequest(BaseModel):
     hygiene_limit_daily: int | None = Field(default=None, ge=0)
     hygiene_limit_weekly: int | None = Field(default=None, ge=0)
     hygiene_limit_monthly: int | None = Field(default=None, ge=0)
+    experience_level: str | None = Field(default=None, max_length=50)
+    wearer_style: str | None = Field(default=None, max_length=80)
+    wearer_goal: str | None = Field(default=None, max_length=120)
+    wearer_boundary: str | None = Field(default=None, max_length=1500)
+    scenario_preset: str | None = Field(default=None, max_length=120)
 
 
 class ProposeAddendumRequest(BaseModel):
@@ -467,7 +472,20 @@ def export_contract(
 @router.post("")
 def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db)) -> dict:
     persona = Persona(name=payload.persona_name)
-    player = PlayerProfile(nickname=payload.player_nickname)
+    prefs: dict = {}
+    if payload.scenario_preset:
+        prefs["scenario_preset"] = payload.scenario_preset
+    if payload.wearer_style:
+        prefs["wearer_style"] = payload.wearer_style
+    if payload.wearer_goal:
+        prefs["wearer_goal"] = payload.wearer_goal
+    if payload.wearer_boundary:
+        prefs["wearer_boundary"] = payload.wearer_boundary
+    player = PlayerProfile(
+        nickname=payload.player_nickname,
+        experience_level=payload.experience_level or "beginner",
+        preferences_json=json.dumps(prefs),
+    )
     db.add_all([persona, player])
     db.flush()
 
