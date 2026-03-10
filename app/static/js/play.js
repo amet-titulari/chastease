@@ -265,10 +265,122 @@ document.getElementById("play-safety-yellow")?.addEventListener("click", () => p
 document.getElementById("play-safety-red")?.addEventListener("click", () => plSafety("red"));
 document.getElementById("play-safety-safeword")?.addEventListener("click", plSafeword);
 
+// -- Verification --
+let plPendingVerifyId = null;
+
+function plRenderVerifications(items) {
+  const el = document.getElementById("play-verify-history");
+  if (!el) return;
+  if (!Array.isArray(items) || !items.length) {
+    el.innerHTML = "<p class='verify-empty'>Noch keine Verifikationen.</p>";
+    return;
+  }
+  el.innerHTML = items
+    .slice(-5)
+    .reverse()
+    .map((v) => {
+      const pill = v.status === "confirmed"
+        ? "<span class='verify-pill confirmed'>&#10003; Best&auml;tigt</span>"
+        : v.status === "suspicious"
+        ? "<span class='verify-pill suspicious'>&#9888; Verdacht</span>"
+        : "<span class='verify-pill pending'>&#8987; Ausstehend</span>";
+      const analysis = v.analysis ? `<p class='verify-analysis'>${String(v.analysis).replace(/</g, "&lt;")}</p>` : "";
+      const seal = v.requested_seal_number ? `<span class='verify-seal-tag'>#${v.requested_seal_number}</span>` : "";
+      return `<div class="verify-card">${pill}${seal}${analysis}</div>`;
+    })
+    .join("");
+}
+
+async function plLoadVerifications() {
+  if (!SESSION_ID) return;
+  try {
+    const data = await plGet(`/api/sessions/${SESSION_ID}/verifications`);
+    plRenderVerifications(data.items || []);
+  } catch (err) {
+    plWrite("Fehler Verifikation", { error: String(err) });
+  }
+}
+
+document.getElementById("play-verify-file")?.addEventListener("change", (e) => {
+  const file = e.target?.files?.[0];
+  const label = e.target?.closest(".verify-file-label")?.querySelector("span");
+  if (label) label.textContent = file ? file.name : "Foto wählen";
+});
+
+document.getElementById("play-request-verify")?.addEventListener("click", async () => {
+  if (!SESSION_ID) return;
+  const btn = document.getElementById("play-request-verify");
+  btn.disabled = true;
+  try {
+    const sealEl = document.getElementById("play-verify-seal");
+    // Try to get the active seal from history
+    let sealNumber = null;
+    try {
+      const sealData = await plGet(`/api/sessions/${SESSION_ID}/seal-history`);
+      const active = (sealData.items || []).find((s) => s.status === "active");
+      if (active) sealNumber = active.seal_number;
+    } catch (_) {}
+
+    const data = await plPost(`/api/sessions/${SESSION_ID}/verifications/request`, {
+      requested_seal_number: sealNumber,
+    });
+    plPendingVerifyId = data.verification_id;
+
+    if (sealEl) sealEl.textContent = sealNumber || "—";
+    const uploadArea = document.getElementById("play-verify-upload-area");
+    if (uploadArea) uploadArea.classList.remove("is-hidden");
+    plWrite("Verifikation angefordert", data);
+  } catch (err) {
+    plWrite("Fehler Verifikation", { error: String(err) });
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("play-verify-submit")?.addEventListener("click", async () => {
+  if (!SESSION_ID || !plPendingVerifyId) return;
+  const fileInput = document.getElementById("play-verify-file");
+  const sealInput = document.getElementById("play-verify-seal-input");
+  const file = fileInput?.files?.[0];
+  if (!file) { plWrite("Hinweis", { error: "Kein Bild ausgewählt." }); return; }
+
+  const submitBtn = document.getElementById("play-verify-submit");
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Wird geprüft…";
+
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    if (sealInput?.value?.trim()) form.append("observed_seal_number", sealInput.value.trim());
+
+    const res = await fetch(
+      `/api/sessions/${SESSION_ID}/verifications/${plPendingVerifyId}/upload`,
+      { method: "POST", body: form }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(data));
+
+    plPendingVerifyId = null;
+    const uploadArea = document.getElementById("play-verify-upload-area");
+    if (uploadArea) uploadArea.classList.add("is-hidden");
+    if (fileInput) fileInput.value = "";
+    if (sealInput) sealInput.value = "";
+    await plLoadVerifications();
+    plWrite("Verifikation", data);
+  } catch (err) {
+    plWrite("Fehler Upload", { error: String(err) });
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Hochladen & Prüfen";
+  }
+});
+
 // -- Auto-load on page ready --
 document.addEventListener("DOMContentLoaded", async () => {
   if (!SESSION_ID) return;
   await plLoadChat();
   await plListTasks();
+  await plLoadVerifications();
   plConnectWs();
 });
+

@@ -42,9 +42,25 @@ def _set_auth_cookie(response: RedirectResponse, token: str) -> None:
     )
 
 
+def _redirect_if_active_session(user, db) -> str | None:
+    """Return redirect URL if user has an active session, else None."""
+    if user and user.active_session_id:
+        active = db.query(SessionModel).filter(
+            SessionModel.id == user.active_session_id,
+            SessionModel.status == "active",
+        ).first()
+        if active:
+            return f"/play/{active.id}"
+    return None
+
+
 @router.get("/", response_class=HTMLResponse)
 def landing_page(request: Request, db: Session = Depends(get_db)):
     current_user = _get_current_user(request, db)
+    if current_user:
+        target = _redirect_if_active_session(current_user, db)
+        if target:
+            return RedirectResponse(url=target, status_code=303)
     return templates.TemplateResponse(
         request=request,
         name="landing.html",
@@ -156,13 +172,9 @@ def login(
     db.commit()
 
     target = "/setup" if not user.setup_completed else "/experience"
-    if user.setup_completed and user.active_session_id:
-        active = db.query(SessionModel).filter(
-            SessionModel.id == user.active_session_id,
-            SessionModel.status == "active",
-        ).first()
-        if active:
-            target = f"/play/{active.id}"
+    play_target = _redirect_if_active_session(user, db)
+    if play_target:
+        target = play_target
     response = RedirectResponse(url=target, status_code=303)
     _set_auth_cookie(response, user.session_token)
     return response
@@ -518,6 +530,9 @@ def experience_page(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/", status_code=303)
     if not user.setup_completed:
         return RedirectResponse(url="/setup", status_code=303)
+    target = _redirect_if_active_session(user, db)
+    if target:
+        return RedirectResponse(url=target, status_code=303)
 
     return templates.TemplateResponse(
         request=request,
