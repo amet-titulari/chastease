@@ -59,6 +59,7 @@ Wichtige API-Endpunkte:
 - `GET /api/health`
 - `POST /api/sessions`
 - `GET /api/sessions/{id}`
+- `GET /api/sessions/{id}/events`
 - `POST /api/sessions/{id}/sign-contract`
 - `POST /api/sessions/{id}/contract/addenda`
 - `POST /api/sessions/{id}/contract/addenda/{addendum_id}/consent`

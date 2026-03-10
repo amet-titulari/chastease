@@ -415,4 +415,14 @@ async function updateTaskStatus(status) {
 document.getElementById("task-complete-btn").addEventListener("click", () => updateTaskStatus("completed"));
 document.getElementById("task-fail-btn").addEventListener("click", () => updateTaskStatus("failed"));
 
+document.getElementById("session-events-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const data = await getJson(`/api/sessions/${sessionId}/events`);
+    writeOutput("Session-Events", data);
+  } catch (err) {
+    writeOutput("Fehler Session-Events", { error: String(err) });
+  }
+});
+
 syncIds();

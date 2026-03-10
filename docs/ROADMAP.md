@@ -16,7 +16,8 @@
 - Implementiert: Session-Timer-APIs fuer Status/Add/Remove/Freeze/Unfreeze inkl. Dashboard-Testkonsole
 - Implementiert: Timer-Anzeige im Dashboard ueber WebSocket-`timer_tick`-Events
 - Implementiert: Background-Timer-Sweeper (APScheduler) fuer automatisches Session-Ende bei Ablauf
-- Teststatus: `30 passed` (lokale automatisierte Tests)
+- Implementiert: Aggregierter Session-Verlauf/Event-Log (`GET /api/sessions/{id}/events`) inkl. Dashboard-Abruf
+- Teststatus: `31 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---
@@ -72,7 +73,7 @@
 - [x] Timer-Operationen: add/remove/freeze/unfreeze
 - [x] Timer-Anzeige im Dashboard (WebSocket-Updates)
 - [x] Session-Status-Maschine (active / paused / emergency/safeword/pause)
-- [ ] Session-Verlauf / Event-Log
+- [x] Session-Verlauf / Event-Log
 - [x] Session regulär beenden (automatisch bei Timer-Ablauf)
 
 **Deliverable**: Vollständiger Session-Lifecycle funktioniert

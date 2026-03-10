@@ -8,10 +8,15 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.contract import Contract, ContractAddendum
+from app.models.hygiene_opening import HygieneOpening
+from app.models.message import Message
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
+from app.models.safety_log import SafetyLog
 from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
+from app.models.task import Task
+from app.models.verification import Verification
 from app.services.contract_service import build_contract_text
 from app.services.session_service import SessionService
 from app.security import verify_admin_secret
@@ -114,6 +119,100 @@ def get_seal_history(session_id: int, db: Session = Depends(get_db)) -> dict:
             }
             for entry in entries
         ],
+    }
+
+
+@router.get("/{session_id}/events")
+def get_session_events(session_id: int, db: Session = Depends(get_db)) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    events: list[dict] = []
+
+    message_rows = db.query(Message).filter(Message.session_id == session_id).all()
+    for row in message_rows:
+        events.append(
+            {
+                "source": "message",
+                "event_type": row.message_type,
+                "occurred_at": str(row.created_at),
+                "data": {
+                    "id": row.id,
+                    "role": row.role,
+                    "content": row.content,
+                },
+            }
+        )
+
+    safety_rows = db.query(SafetyLog).filter(SafetyLog.session_id == session_id).all()
+    for row in safety_rows:
+        events.append(
+            {
+                "source": "safety",
+                "event_type": row.event_type,
+                "occurred_at": str(row.created_at),
+                "data": {
+                    "id": row.id,
+                    "reason": row.reason,
+                },
+            }
+        )
+
+    hygiene_rows = db.query(HygieneOpening).filter(HygieneOpening.session_id == session_id).all()
+    for row in hygiene_rows:
+        occurred_at = row.opened_at or row.requested_at
+        events.append(
+            {
+                "source": "hygiene",
+                "event_type": row.status,
+                "occurred_at": str(occurred_at),
+                "data": {
+                    "id": row.id,
+                    "overrun_seconds": row.overrun_seconds,
+                    "penalty_seconds": row.penalty_seconds,
+                },
+            }
+        )
+
+    task_rows = db.query(Task).filter(Task.session_id == session_id).all()
+    for row in task_rows:
+        occurred_at = row.completed_at or row.consequence_applied_at or row.created_at
+        events.append(
+            {
+                "source": "task",
+                "event_type": row.status,
+                "occurred_at": str(occurred_at),
+                "data": {
+                    "id": row.id,
+                    "title": row.title,
+                    "consequence_applied_seconds": row.consequence_applied_seconds,
+                },
+            }
+        )
+
+    verification_rows = db.query(Verification).filter(Verification.session_id == session_id).all()
+    for row in verification_rows:
+        occurred_at = row.created_at or row.requested_at
+        events.append(
+            {
+                "source": "verification",
+                "event_type": row.status,
+                "occurred_at": str(occurred_at),
+                "data": {
+                    "id": row.id,
+                    "requested_seal_number": row.requested_seal_number,
+                    "observed_seal_number": row.observed_seal_number,
+                },
+            }
+        )
+
+    events.sort(key=lambda item: item["occurred_at"])
+
+    return {
+        "session_id": session_id,
+        "session_status": session_obj.status,
+        "items": events,
     }
 
 
