@@ -68,6 +68,17 @@ async function getJson(url) {
   return data;
 }
 
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 async function loadPersonaPresets() {
   const select = document.getElementById("persona-preset-select");
   if (!select) return;
@@ -419,6 +430,69 @@ document.getElementById("chat-ws-disconnect-btn").addEventListener("click", () =
   if (!chatSocket) return writeOutput("WebSocket", { status: "nicht verbunden" });
   chatSocket.close();
   chatSocket = null;
+});
+
+document.getElementById("push-subscribe-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return writeOutput("Push", { error: "Web Push wird in diesem Browser nicht unterstuetzt." });
+  }
+
+  try {
+    const config = await getJson("/api/push/config");
+    if (!config.enabled) {
+      return writeOutput("Push", { error: "Web Push ist serverseitig deaktiviert (CHASTEASE_WEB_PUSH_ENABLED=false)." });
+    }
+    if (!config.vapid_public_key) {
+      return writeOutput("Push", { error: "VAPID Public Key fehlt auf dem Server." });
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      return writeOutput("Push", { error: "Notification-Berechtigung nicht erteilt." });
+    }
+
+    const registration = await navigator.serviceWorker.register("/static/js/sw.js");
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(config.vapid_public_key),
+    });
+
+    const data = await postJson(`/api/sessions/${sessionId}/push/subscriptions`, {
+      endpoint: subscription.endpoint,
+      keys: {
+        p256dh: subscription.toJSON().keys.p256dh,
+        auth: subscription.toJSON().keys.auth,
+      },
+      user_agent: navigator.userAgent,
+    });
+    writeOutput("Push registriert", data);
+  } catch (err) {
+    writeOutput("Fehler Push Registrierung", { error: String(err) });
+  }
+});
+
+document.getElementById("push-list-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const data = await getJson(`/api/sessions/${sessionId}/push/subscriptions`);
+    writeOutput("Push-Subscriptions", data);
+  } catch (err) {
+    writeOutput("Fehler Push-Subscriptions", { error: String(err) });
+  }
+});
+
+document.getElementById("push-test-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const data = await postJson(`/api/sessions/${sessionId}/push/test`, {
+      title: "Chastease Test-Push",
+      body: "Dies ist eine Test-Benachrichtigung.",
+    });
+    writeOutput("Push-Test", data);
+  } catch (err) {
+    writeOutput("Fehler Push-Test", { error: String(err) });
+  }
 });
 
 document.getElementById("task-create-btn").addEventListener("click", async () => {

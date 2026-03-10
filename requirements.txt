@@ -8,3 +8,4 @@ python-multipart==0.0.20
 httpx==0.28.1
 pytest==8.4.2
 apscheduler==3.10.4
+pywebpush==2.0.3

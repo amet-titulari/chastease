@@ -23,6 +23,9 @@ def test_dashboard_renders():
         assert "task-fail-btn" in html
         assert "persona-preset-select" in html
         assert "apply-persona-preset-btn" in html
+        assert "push-subscribe-btn" in html
+        assert "push-list-btn" in html
+        assert "push-test-btn" in html
 
 
 def test_dashboard_script_is_served():

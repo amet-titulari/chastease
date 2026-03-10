@@ -15,6 +15,7 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Persona-Presets** – Vordefinierte Keyholder-Personas (u.a. `Ballet Sub Ella`)
 - **Sicherheitssystem** – Ampelsystem, Safeword, Emergency Release
 - **Benachrichtigungen** – Timer, Erinnerungen, Nachrichten der Keyholderin
+- **Web Push** – Browser-Subscriptions und Test-Dispatch ueber Web Push API
 - **Web Test Console** – Interaktive Browser-Oberfläche für Core-Flows
 - **Responsive UI** – Optimiert fuer Desktop und mobile Geraete
 
@@ -97,6 +98,11 @@ Wichtige API-Endpunkte:
 - `POST /api/sessions/{id}/tasks/evaluate-overdue`
 - `POST /api/sessions/{id}/tasks/{task_id}/status`
 - `POST /api/sessions/{id}/chat/ws-token/rotate`
+- `GET /api/push/config`
+- `GET /api/sessions/{id}/push/subscriptions`
+- `POST /api/sessions/{id}/push/subscriptions`
+- `DELETE /api/sessions/{id}/push/subscriptions/{subscription_id}`
+- `POST /api/sessions/{id}/push/test`
 
 Automatischer Task-Overdue-Sweep:
 
@@ -170,6 +176,14 @@ Ollama-Provider (optional):
 - `CHASTEASE_AI_OLLAMA_MODEL=llama3.1`
 - `CHASTEASE_AI_OLLAMA_TIMEOUT_SECONDS=15`
 - Falls Ollama nicht erreichbar ist, faellt die Vertragsgenerierung automatisch auf den Stub zurueck.
+
+Web Push (optional):
+
+- `CHASTEASE_WEB_PUSH_ENABLED=true`
+- `CHASTEASE_WEB_PUSH_VAPID_PUBLIC_KEY=<public_key>`
+- `CHASTEASE_WEB_PUSH_VAPID_PRIVATE_KEY=<private_key>`
+- `CHASTEASE_WEB_PUSH_VAPID_CLAIMS_SUB=mailto:admin@example.com`
+- Fuer Dispatch wird `pywebpush` verwendet. Ohne gueltige VAPID-Konfiguration bleibt Dispatch deaktiviert.
 
 ## Lizenz
 

@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     ai_ollama_base_url: str = "http://127.0.0.1:11434"
     ai_ollama_model: str = "llama3.1"
     ai_ollama_timeout_seconds: float = 15.0
+    web_push_enabled: bool = False
+    web_push_vapid_public_key: str | None = None
+    web_push_vapid_private_key: str | None = None
+    web_push_vapid_claims_sub: str = "mailto:admin@localhost"
 
     model_config = SettingsConfigDict(
         env_prefix="CHASTEASE_",

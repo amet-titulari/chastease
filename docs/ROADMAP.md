@@ -130,7 +130,7 @@
 - [x] Plomben-Historie: Zerstörung alter Plombe und Pflicht-Eintrag neuer Plombe nach Öffnung
 - [x] APScheduler-Basis: periodischer Task-Overdue-Sweep fuer aktive Sessions
 - [x] APScheduler: proaktive Keyholderin-Nachrichten
-- [ ] Browser Push Notifications (Web Push API)
+- [x] Browser Push Notifications (Web Push API)
 - [x] Konfigurierbare Benachrichtigungs-Haeufigkeit (Intervall/Cooldown per `.env`)
 
 **Deliverable**: Keyholderin agiert proaktiv, Verifikation funktioniert

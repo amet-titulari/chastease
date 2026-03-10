@@ -32,6 +32,11 @@ Offen (kein `X-Admin-Secret`):
 - `GET /api/sessions/{id}/tasks`
 - `POST /api/sessions/{id}/tasks/evaluate-overdue`
 - `POST /api/sessions/{id}/tasks/{task_id}/status`
+- `GET /api/push/config`
+- `GET /api/sessions/{id}/push/subscriptions`
+- `POST /api/sessions/{id}/push/subscriptions`
+- `DELETE /api/sessions/{id}/push/subscriptions/{subscription_id}`
+- `POST /api/sessions/{id}/push/test`
 
 Optional geschuetzt (bei gesetztem `CHASTEASE_ADMIN_SECRET`):
 
