@@ -131,7 +131,7 @@ class StubAIGateway(AIGateway):
         max_duration_text = str(max_duration_seconds) if max_duration_seconds is not None else "kein Maximum"
         return (
             "KEUSCHHEITS-VERTRAG\n"
-            f"Keyholder-Persona: {persona_name}\n"
+            f"Keyholderin: {persona_name}\n"
             f"Wearer: {player_nickname}\n"
             f"Mindestdauer (Sek.): {min_duration_seconds}\n"
             f"Maximaldauer (Sek.): {max_duration_text}\n"
@@ -209,10 +209,10 @@ class OllamaGateway(AIGateway):
             "Erstelle einen klar strukturierten Keuschheits-Vertrag auf Deutsch.\n"
             "Regeln:\n"
             "- Nutze die Ueberschrift KEUSCHHEITS-VERTRAG.\n"
-            "- Nenne Persona, Wearer, Mindestdauer und Maximaldauer.\n"
+            "- Nenne Keyholderin, Wearer, Mindestdauer und Maximaldauer.\n"
             "- Weisen auf bindende Signatur hin.\n"
             "- Safety-Mechanismen (Safeword/Ampel/Emergency) sind unveraenderlich.\n\n"
-            f"Persona: {persona_name}\n"
+            f"Keyholderin: {persona_name}\n"
             f"Wearer: {player_nickname}\n"
             f"Mindestdauer (Sek.): {min_duration_seconds}\n"
             f"Maximaldauer (Sek.): {max_duration_text}\n"
@@ -359,9 +359,9 @@ class CustomOpenAIGateway(AIGateway):
         user_msg = (
             "Erstelle einen klar strukturierten Keuschheits-Vertrag auf Deutsch.\n"
             "- Ueberschrift: KEUSCHHEITS-VERTRAG\n"
-            "- Nenne Persona, Wearer, Mindestdauer, Maximaldauer.\n"
+            "- Nenne Keyholderin, Wearer, Mindestdauer, Maximaldauer.\n"
             "- Safety-Mechanismen (Safeword/Ampel/Emergency) sind unveraenderlich.\n\n"
-            f"Persona: {persona_name}\nWearer: {player_nickname}\n"
+            f"Keyholderin: {persona_name}\nWearer: {player_nickname}\n"
             f"Mindestdauer (Sek.): {min_duration_seconds}\nMaximaldauer (Sek.): {max_text}"
         )
         try:
