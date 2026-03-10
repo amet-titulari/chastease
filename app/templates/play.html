@@ -60,12 +60,11 @@
           <button id="play-request-verify" type="button">Anfordern</button>
         </div>
         <div id="play-verify-upload-area" class="is-hidden">
-          <p class="verify-hint">Plombe: <code id="play-verify-seal">—</code></p>
+          <p id="play-verify-seal-row" class="verify-hint" style="display:none">Aktive Plombe: <code id="play-verify-seal"></code></p>
           <label class="verify-file-label">
             <input id="play-verify-file" type="file" accept="image/*" capture="environment" />
             <span>Foto w&auml;hlen</span>
           </label>
-          <input id="play-verify-seal-input" type="text" placeholder="Plombennummer (optional)" class="verify-seal-input" />
           <button id="play-verify-submit" type="button">Hochladen &amp; Pr&uuml;fen</button>
         </div>
         <div id="play-verify-history" class="verify-history"></div>

@@ -167,8 +167,7 @@ function plRenderTasks(items) {
             verification_criteria: criteria,
           });
           plPendingVerifyId = data.verification_id;
-          const sealEl = document.getElementById("play-verify-seal");
-          if (sealEl) sealEl.textContent = sealNumber || "—";
+          plSetVerifySeal(sealNumber);
           const uploadArea = document.getElementById("play-verify-upload-area");
           if (uploadArea) uploadArea.classList.remove("is-hidden");
           // Show criteria hint if present
@@ -382,6 +381,19 @@ document.getElementById("play-safety-safeword")?.addEventListener("click", plSaf
 
 // -- Verification --
 let plPendingVerifyId = null;
+let plVerifySealNumber = null;
+
+function plSetVerifySeal(sealNumber) {
+  plVerifySealNumber = sealNumber || null;
+  const row = document.getElementById("play-verify-seal-row");
+  const code = document.getElementById("play-verify-seal");
+  if (plVerifySealNumber) {
+    if (code) code.textContent = plVerifySealNumber;
+    if (row) row.style.display = "";
+  } else {
+    if (row) row.style.display = "none";
+  }
+}
 
 function plRenderVerifications(items) {
   const el = document.getElementById("play-verify-history");
@@ -426,7 +438,6 @@ document.getElementById("play-request-verify")?.addEventListener("click", async 
   const btn = document.getElementById("play-request-verify");
   btn.disabled = true;
   try {
-    const sealEl = document.getElementById("play-verify-seal");
     // Try to get the active seal from history
     let sealNumber = null;
     try {
@@ -440,7 +451,7 @@ document.getElementById("play-request-verify")?.addEventListener("click", async 
     });
     plPendingVerifyId = data.verification_id;
 
-    if (sealEl) sealEl.textContent = sealNumber || "—";
+    plSetVerifySeal(sealNumber);
     const uploadArea = document.getElementById("play-verify-upload-area");
     if (uploadArea) uploadArea.classList.remove("is-hidden");
     plWrite("Verifikation angefordert", data);
@@ -454,7 +465,6 @@ document.getElementById("play-request-verify")?.addEventListener("click", async 
 document.getElementById("play-verify-submit")?.addEventListener("click", async () => {
   if (!SESSION_ID || !plPendingVerifyId) return;
   const fileInput = document.getElementById("play-verify-file");
-  const sealInput = document.getElementById("play-verify-seal-input");
   const file = fileInput?.files?.[0];
   if (!file) { plWrite("Hinweis", { error: "Kein Bild ausgewählt." }); return; }
 
@@ -465,7 +475,7 @@ document.getElementById("play-verify-submit")?.addEventListener("click", async (
   try {
     const form = new FormData();
     form.append("file", file);
-    if (sealInput?.value?.trim()) form.append("observed_seal_number", sealInput.value.trim());
+    if (plVerifySealNumber) form.append("observed_seal_number", plVerifySealNumber);
 
     const res = await fetch(
       `/api/sessions/${SESSION_ID}/verifications/${plPendingVerifyId}/upload`,
@@ -475,10 +485,10 @@ document.getElementById("play-verify-submit")?.addEventListener("click", async (
     if (!res.ok) throw new Error(JSON.stringify(data));
 
     plPendingVerifyId = null;
+    plVerifySealNumber = null;
     const uploadArea = document.getElementById("play-verify-upload-area");
     if (uploadArea) uploadArea.classList.add("is-hidden");
     if (fileInput) fileInput.value = "";
-    if (sealInput) sealInput.value = "";
     const criteriaHint = document.getElementById("play-verify-criteria-hint");
     if (criteriaHint) { criteriaHint.textContent = ""; criteriaHint.style.display = "none"; }
     await plLoadVerifications();
