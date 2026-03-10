@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, func
 
 from app.database import Base
 
@@ -17,4 +17,5 @@ class AuthUser(Base):
     setup_style = Column(String(80), nullable=True)
     setup_goal = Column(String(120), nullable=True)
     setup_boundary = Column(Text, nullable=True)
+    active_session_id = Column(Integer, ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

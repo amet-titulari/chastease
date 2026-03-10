@@ -93,17 +93,33 @@
           </div>
         </div>
 
+        <div class="rules-section-divider">Hygiene-Limits (max. Oeffnungen)</div>
+
         <div class="split-3">
-          <label>Hygiene/Tag
+          <label>pro Tag
             <input id="xp-hygiene-day" type="number" min="0" value="1" />
           </label>
-          <label>Hygiene/Woche
+          <label>pro Woche
             <input id="xp-hygiene-week" type="number" min="0" value="2" />
           </label>
-          <label>Hygiene/Monat
+          <label>pro Monat
             <input id="xp-hygiene-month" type="number" min="0" value="7" />
           </label>
         </div>
+
+        <div class="rules-section-divider">Sicherung</div>
+
+        <label class="toggle-inline seal-toggle">
+          <input id="xp-seal-enabled" type="checkbox" />
+          <span>Sitzung mit Plombe / Siegel</span>
+        </label>
+        <div id="xp-seal-field" class="seal-field is-hidden">
+          <label>Plombennummer
+            <input id="xp-seal-number" type="text" placeholder="z.B. SL-20260310-001" maxlength="80" />
+          </label>
+          <p class="hint">Die Nummer wird bei der Bildverifikation zur Prüfung angezeigt.</p>
+        </div>
+
         <button id="xp-create-session" type="button">Session erstellen</button>
       </section>
 
