@@ -18,7 +18,8 @@
 - Implementiert: Background-Timer-Sweeper (APScheduler) fuer automatisches Session-Ende bei Ablauf
 - Implementiert: Aggregierter Session-Verlauf/Event-Log (`GET /api/sessions/{id}/events`) inkl. Dashboard-Abruf
 - Implementiert: Session-History-Seite (`/history`) mit Filtern und Export (`/events/export`)
-- Teststatus: `34 passed` (lokale automatisierte Tests)
+- Implementiert: Vertragsansicht inkl. Addenda und Export (`/contracts`, `/contract/export`)
+- Teststatus: `36 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---
@@ -141,7 +142,7 @@
 - [ ] Responsive Design (Mobile-Optimierung)
 - [ ] Error Handling & User Feedback
 - [x] Session-History-Seite
-- [ ] Vertragsansicht inkl. Addenda und Export
+- [x] Vertragsansicht inkl. Addenda und Export
 - [ ] Persona-Bibliothek (mehrere gespeicherte Personas)
 - [ ] Ollama-Provider implementieren
 - [x] Unit/Integration Tests kritischer Services und Flows (Timer, Safety, Contract, Hygiene, Verification)

@@ -24,3 +24,12 @@ def history_page(request: Request):
         name="history.html",
         context={"title": f"{settings.app_name} History"},
     )
+
+
+@router.get("/contracts", response_class=HTMLResponse)
+def contracts_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="contracts.html",
+        context={"title": f"{settings.app_name} Contracts"},
+    )

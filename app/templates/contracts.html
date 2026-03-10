@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card full">
+  <h2>Contract View</h2>
+  <div class="stack">
+    <label>Session-ID
+      <input id="contract-session-id" type="number" min="1" />
+    </label>
+    <div class="stack">
+      <button id="contract-load-btn" type="button">Contract laden</button>
+      <button id="contract-export-text-btn" type="button">Export Text</button>
+      <button id="contract-export-json-btn" type="button">Export JSON</button>
+    </div>
+  </div>
+</section>
+
+<section class="card full">
+  <h2>Output</h2>
+  <pre id="contract-output">Bereit.</pre>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/contracts.js"></script>
+{% endblock %}

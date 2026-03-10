@@ -58,6 +58,7 @@ Zusatzseiten:
 
 - Dashboard: `/`
 - Session History: `/history`
+- Contracts: `/contracts`
 
 Wichtige API-Endpunkte:
 
@@ -66,6 +67,8 @@ Wichtige API-Endpunkte:
 - `GET /api/sessions/{id}`
 - `GET /api/sessions/{id}/events`
 - `GET /api/sessions/{id}/events/export`
+- `GET /api/sessions/{id}/contract`
+- `GET /api/sessions/{id}/contract/export`
 - `POST /api/sessions/{id}/sign-contract`
 - `POST /api/sessions/{id}/contract/addenda`
 - `POST /api/sessions/{id}/contract/addenda/{addendum_id}/consent`

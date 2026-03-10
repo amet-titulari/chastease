@@ -57,3 +57,46 @@ def test_contract_addendum_consent_flow():
         )
         assert consent_resp.status_code == 200
         assert consent_resp.json()["decision"] == "approved"
+
+
+def test_contract_view_and_export_endpoints():
+    with TestClient(app) as client:
+        create_resp = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Persona",
+                "player_nickname": "Wearer",
+                "min_duration_seconds": 300,
+                "max_duration_seconds": 900,
+            },
+        )
+        session_id = create_resp.json()["session_id"]
+        client.post(f"/api/sessions/{session_id}/sign-contract")
+
+        propose_resp = client.post(
+            f"/api/sessions/{session_id}/contract/addenda",
+            json={
+                "change_description": "Reduce minimum duration",
+                "proposed_changes": {"min_duration_seconds": 240},
+            },
+        )
+        addendum_id = propose_resp.json()["addendum_id"]
+        client.post(
+            f"/api/sessions/{session_id}/contract/addenda/{addendum_id}/consent",
+            json={"decision": "approved"},
+        )
+
+        view_resp = client.get(f"/api/sessions/{session_id}/contract")
+        assert view_resp.status_code == 200
+        payload = view_resp.json()
+        assert payload["session_id"] == session_id
+        assert "KEUSCHHEITS-VERTRAG" in payload["contract"]["content_text"]
+        assert len(payload["addenda"]) >= 1
+
+        export_text = client.get(f"/api/sessions/{session_id}/contract/export?format=text")
+        assert export_text.status_code == 200
+        assert "ADDENDA" in export_text.text
+
+        export_json = client.get(f"/api/sessions/{session_id}/contract/export?format=json")
+        assert export_json.status_code == 200
+        assert export_json.json()["session_id"] == session_id

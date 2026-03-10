@@ -280,6 +280,76 @@ def export_session_events(
     return PlainTextResponse("\n".join(lines))
 
 
+@router.get("/{session_id}/contract")
+def get_contract(session_id: int, db: Session = Depends(get_db)) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    contract = db.query(Contract).filter(Contract.session_id == session_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    addenda = (
+        db.query(ContractAddendum)
+        .filter(ContractAddendum.contract_id == contract.id)
+        .order_by(ContractAddendum.id.asc())
+        .all()
+    )
+
+    return {
+        "session_id": session_id,
+        "contract": {
+            "id": contract.id,
+            "content_text": contract.content_text,
+            "signed_at": str(contract.signed_at) if contract.signed_at else None,
+            "parameters_snapshot": contract.parameters_snapshot,
+            "created_at": str(contract.created_at),
+        },
+        "addenda": [
+            {
+                "id": item.id,
+                "change_description": item.change_description,
+                "proposed_changes": json.loads(item.proposed_changes_json),
+                "proposed_by": item.proposed_by,
+                "player_consent": item.player_consent,
+                "player_consent_at": str(item.player_consent_at) if item.player_consent_at else None,
+                "created_at": str(item.created_at),
+            }
+            for item in addenda
+        ],
+    }
+
+
+@router.get("/{session_id}/contract/export")
+def export_contract(
+    session_id: int,
+    format: str = Query(default="text", pattern="^(text|json)$"),
+    db: Session = Depends(get_db),
+):
+    payload = get_contract(session_id=session_id, db=db)
+    if format == "json":
+        return payload
+
+    contract = payload["contract"]
+    lines = [
+        f"session_id={payload['session_id']}",
+        f"contract_id={contract['id']}",
+        f"signed_at={contract['signed_at']}",
+        "",
+        "CONTENT:",
+        contract["content_text"],
+        "",
+        "ADDENDA:",
+    ]
+    for item in payload["addenda"]:
+        lines.append(
+            f"- #{item['id']} consent={item['player_consent']} desc={item['change_description']} changes={json.dumps(item['proposed_changes'])}"
+        )
+
+    return PlainTextResponse("\n".join(lines))
+
+
 @router.post("")
 def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db)) -> dict:
     persona = Persona(name=payload.persona_name)
