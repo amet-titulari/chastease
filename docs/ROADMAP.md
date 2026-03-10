@@ -122,7 +122,7 @@
 **Ziel**: Verifikation und proaktive Keyholderin
 
 - [x] Bild-Upload-Endpoint (lokal, UUID-Dateiname)
-- [ ] KI-Bildanalyse-Integration (Verifikation, aktuell heuristische Stub-Logik)
+- [x] KI-Bildanalyse-Integration (Verifikation, heuristische Logik + optionaler Ollama-Provider mit Fallback)
 - [x] Optionale Seal-Nummer in Verifikationsanfrage
 - [x] Verifikations-UI (Testkonsole)
 - [ ] Hygiene-Öffnungen: Kontingente pro Tag/Woche/Monat implementieren

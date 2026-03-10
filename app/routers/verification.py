@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.session import Session as SessionModel
 from app.models.verification import Verification
 from app.security import verify_admin_secret
+from app.services.verification_analysis import analyze_verification
 
 router = APIRouter(prefix="/api/sessions", tags=["verification"])
 
@@ -68,12 +69,14 @@ async def upload_verification(
     record.image_path = str(target_path)
     record.observed_seal_number = observed_seal_number
 
-    if record.requested_seal_number and observed_seal_number and record.requested_seal_number != observed_seal_number:
-        record.status = "suspicious"
-        record.ai_response = "Plombennummer stimmt nicht ueberein."
-    else:
-        record.status = "confirmed"
-        record.ai_response = "Verifikation eingegangen und markiert."
+    status, analysis = analyze_verification(
+        image_bytes=data,
+        filename=file.filename or "upload.jpg",
+        requested_seal_number=record.requested_seal_number,
+        observed_seal_number=observed_seal_number,
+    )
+    record.status = status
+    record.ai_response = analysis
 
     db.add(record)
     db.commit()

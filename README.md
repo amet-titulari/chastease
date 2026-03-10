@@ -185,6 +185,15 @@ Web Push (optional):
 - `CHASTEASE_WEB_PUSH_VAPID_CLAIMS_SUB=mailto:admin@example.com`
 - Fuer Dispatch wird `pywebpush` verwendet. Ohne gueltige VAPID-Konfiguration bleibt Dispatch deaktiviert.
 
+KI-Bildanalyse fuer Verifikation:
+
+- Default: `CHASTEASE_VERIFICATION_AI_PROVIDER=heuristic`
+- Optional: `CHASTEASE_VERIFICATION_AI_PROVIDER=ollama`
+- Modell/Timeout:
+	- `CHASTEASE_VERIFICATION_OLLAMA_MODEL=llava`
+	- `CHASTEASE_VERIFICATION_OLLAMA_TIMEOUT_SECONDS=20`
+- Bei Fehlern/Nichterreichbarkeit des Ollama-Endpoints faellt die Analyse automatisch auf heuristische Auswertung zurueck.
+
 ## Lizenz
 
 Privates Projekt – alle Rechte vorbehalten.
