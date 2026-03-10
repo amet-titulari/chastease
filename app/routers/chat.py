@@ -24,6 +24,12 @@ def _load_session(db: Session, session_id: int) -> SessionModel:
     return session_obj
 
 
+def _fresh_ws_token(session_id: int) -> str | None:
+    with SessionLocal() as fresh_db:
+        row = fresh_db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        return row.ws_auth_token if row else None
+
+
 def _assistant_reply(persona_name: str, user_text: str) -> str:
     return f"{persona_name}: Ich habe dich gehoert. Du sagtest: '{user_text}'. Bleib diszipliniert."
 
@@ -126,11 +132,19 @@ async def chat_ws(websocket: WebSocket, session_id: int):
         if not supplied_token or supplied_token != session_obj.ws_auth_token:
             await websocket.close(code=1008, reason="Invalid websocket token")
             return
+        token_at_connect = supplied_token
 
         last_sent_assistant_id = _latest_assistant_message_id(db, session_id)
         while True:
+            if _fresh_ws_token(session_id) != token_at_connect:
+                await websocket.close(code=1008, reason="Websocket token rotated")
+                return
+
             try:
                 user_text = await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
+                if _fresh_ws_token(session_id) != token_at_connect:
+                    await websocket.close(code=1008, reason="Websocket token rotated")
+                    return
                 assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=user_text)
                 await websocket.send_json(
                     {

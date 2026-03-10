@@ -48,3 +48,35 @@ def test_websocket_rejects_missing_token():
         with client.websocket_connect(f"/api/sessions/{session_id}/chat/ws") as ws:
             data = ws.receive()
             assert data["type"] == "websocket.close"
+
+
+def test_rotate_ws_token_returns_new_token():
+    with TestClient(app) as client:
+        session_id, ws_auth_token = _create_and_sign(client)
+
+        rotate_resp = client.post(f"/api/sessions/{session_id}/chat/ws-token/rotate")
+        assert rotate_resp.status_code == 200
+        rotated = rotate_resp.json()
+        assert rotated["session_id"] == session_id
+        assert rotated["ws_auth_token"]
+        assert rotated["ws_auth_token"] != ws_auth_token
+
+
+def test_rotate_ws_token_invalidates_existing_connection():
+    with TestClient(app) as client:
+        session_id, ws_auth_token = _create_and_sign(client)
+
+        with client.websocket_connect(f"/api/sessions/{session_id}/chat/ws?token={ws_auth_token}") as ws:
+            rotate_resp = client.post(f"/api/sessions/{session_id}/chat/ws-token/rotate")
+            assert rotate_resp.status_code == 200
+
+            # Next interaction should be rejected because token was rotated server-side.
+            ws.send_text("Hallo")
+            closed = ws.receive()
+            assert closed["type"] == "websocket.close"
+
+        new_token = rotate_resp.json()["ws_auth_token"]
+        with client.websocket_connect(f"/api/sessions/{session_id}/chat/ws?token={new_token}") as ws_new:
+            ws_new.send_text("Neuer Token")
+            payload = ws_new.receive_json()
+            assert payload["message_type"] == "chat"

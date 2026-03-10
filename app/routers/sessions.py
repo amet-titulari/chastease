@@ -41,6 +41,11 @@ def _ensure_ws_auth_token(session_obj: SessionModel) -> None:
     session_obj.ws_auth_token_created_at = datetime.now(timezone.utc)
 
 
+def _rotate_ws_auth_token(session_obj: SessionModel) -> None:
+    session_obj.ws_auth_token = secrets.token_urlsafe(24)
+    session_obj.ws_auth_token_created_at = datetime.now(timezone.utc)
+
+
 @router.get("/{session_id}")
 def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
     session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -166,6 +171,23 @@ def sign_contract(session_id: int, db: Session = Depends(get_db)) -> dict:
         "status": updated.status,
         "lock_end": str(updated.lock_end),
         "ws_auth_token": updated.ws_auth_token,
+    }
+
+
+@router.post("/{session_id}/chat/ws-token/rotate")
+def rotate_chat_ws_token(session_id: int, db: Session = Depends(get_db)) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    _rotate_ws_auth_token(session_obj)
+    db.add(session_obj)
+    db.commit()
+    db.refresh(session_obj)
+    return {
+        "session_id": session_obj.id,
+        "ws_auth_token": session_obj.ws_auth_token,
+        "rotated_at": str(session_obj.ws_auth_token_created_at),
     }
 
 

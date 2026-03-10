@@ -9,7 +9,8 @@
 - Implementiert: WebSocket-Live-Streaming fuer neue Assistant-Nachrichten inkl. proaktiver Reminder
 - Implementiert: Interaktive Web Test Console im Dashboard fuer manuelle End-to-End-Tests
 - Implementiert: Basis-Absicherung fuer Chat-WebSocket per persistentem Session-Token
-- Teststatus: `21 passed` (lokale automatisierte Tests)
+- Implementiert: WS-Token-Rotation mit serverseitiger Invalidierung bestehender Verbindungen
+- Teststatus: `23 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---

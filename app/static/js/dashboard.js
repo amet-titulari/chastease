@@ -242,6 +242,21 @@ document.getElementById("chat-list-btn").addEventListener("click", async () => {
   }
 });
 
+document.getElementById("chat-ws-rotate-token-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const data = await postJson(`/api/sessions/${sessionId}/chat/ws-token/rotate`, {});
+    wsAuthToken = data.ws_auth_token;
+    if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+      chatSocket.close();
+      chatSocket = null;
+    }
+    writeOutput("WS-Token rotiert", data);
+  } catch (err) {
+    writeOutput("Fehler WS-Token Rotation", { error: String(err) });
+  }
+});
+
 document.getElementById("chat-ws-connect-btn").addEventListener("click", () => {
   if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
   if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {

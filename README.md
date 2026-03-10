@@ -77,6 +77,7 @@ Wichtige API-Endpunkte:
 - `GET /api/sessions/{id}/tasks`
 - `POST /api/sessions/{id}/tasks/evaluate-overdue`
 - `POST /api/sessions/{id}/tasks/{task_id}/status`
+- `POST /api/sessions/{id}/chat/ws-token/rotate`
 
 Automatischer Task-Overdue-Sweep:
 
@@ -100,6 +101,7 @@ WebSocket Live-Feed:
 - Enthalten sind normale Chat-Antworten und Scheduler-basierte `proactive_reminder`-Nachrichten.
 - Zugriff auf den Chat-WebSocket erfordert `?token=<ws_auth_token>`.
 - `ws_auth_token` wird aktuell in Session-Antworten (`POST /api/sessions`, `POST /api/sessions/{id}/sign-contract`, `GET /api/sessions/{id}`) mitgegeben.
+- `POST /api/sessions/{id}/chat/ws-token/rotate` erzeugt ein neues Token und invalidiert bestehende WS-Verbindungen serverseitig.
 
 Tests ausführen:
 
