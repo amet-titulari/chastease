@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.session import Session as SessionModel
 from app.models.verification import Verification
+from app.security import verify_admin_secret
 
 router = APIRouter(prefix="/api/sessions", tags=["verification"])
 
@@ -42,6 +43,7 @@ def request_verification(session_id: int, payload: VerificationRequest, db: Sess
 async def upload_verification(
     session_id: int,
     verification_id: int,
+    _: None = Depends(verify_admin_secret),
     file: UploadFile = File(...),
     observed_seal_number: str | None = Form(default=None),
     db: Session = Depends(get_db),

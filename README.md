@@ -26,6 +26,7 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 | [USER_STORIES.md](docs/USER_STORIES.md) | Nutzungsszenarien |
 | [AI_DESIGN.md](docs/AI_DESIGN.md) | Keyholder-Persona & Prompt-Engineering |
 | [ROADMAP.md](docs/ROADMAP.md) | Priorisierte Feature-Planung |
+| [SECURITY.md](docs/SECURITY.md) | Endpoint-Schutzmatrix & Sicherheitsregeln |
 
 ## Tech-Stack
 
@@ -106,6 +107,7 @@ WebSocket Live-Feed:
 - Der gleiche optionale Schutz gilt auch fuer sicherheitskritische Steuer-Endpunkte:
 	- `POST /api/sessions/{id}/safety/traffic-light`
 	- `POST /api/sessions/{id}/safety/emergency-release`
+	- `POST /api/sessions/{id}/verifications/{verification_id}/upload`
 
 Tests ausführen:
 

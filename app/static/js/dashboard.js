@@ -236,6 +236,7 @@ document.getElementById("upload-verification-btn").addEventListener("click", asy
     form.append("observed_seal_number", document.getElementById("verification-observed-seal").value || "");
     const res = await fetch(`/api/sessions/${sessionId}/verifications/${verificationId}/upload`, {
       method: "POST",
+      headers: getAdminHeaders(),
       body: form,
     });
     const data = await res.json();

@@ -12,7 +12,8 @@
 - Implementiert: WS-Token-Rotation mit serverseitiger Invalidierung bestehender Verbindungen
 - Implementiert: Optionales Admin-Secret (`X-Admin-Secret`) fuer geschuetzte WS-Token-Rotationsaktionen
 - Implementiert: Optionales Admin-Secret auch fuer sensible Safety-Steueraktionen (Traffic-Light, Emergency-Release)
-- Teststatus: `25 passed` (lokale automatisierte Tests)
+- Implementiert: Optionale Admin-Secret-Absicherung fuer Verification-Uploads und zentrale Security-Policy (`docs/SECURITY.md`)
+- Teststatus: `26 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---
