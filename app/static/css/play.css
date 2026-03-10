@@ -332,19 +332,35 @@ body:has(.play-shell) main.container {
 }
 
 .play-aside-header button {
-  padding: 0.25rem 0.65rem;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: var(--card);
-  color: var(--ink);
-  font-size: 0.78rem;
-  cursor: pointer;
+  display: none; /* default: hide old-style header buttons */
 }
 
-.play-aside-header button:hover {
+.aside-icon-btn {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card-soft);
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.aside-icon-btn:hover {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
+}
+
+.play-aside-header button:hover {
+  /* keep overrides for any remaining non-icon header buttons */
 }
 
 /* Task board */
@@ -446,18 +462,6 @@ body:has(.play-shell) main.container {
 
 .play-resume-btn:hover {
   background: rgba(76,175,130,0.22);
-}
-
-.play-new-session-link {
-  display: inline-block;
-  margin-top: 0.75rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-  text-decoration: none;
-}
-
-.play-new-session-link:hover {
-  color: var(--accent);
 }
 
 .play-contract-link {
@@ -656,6 +660,12 @@ body:has(.play-shell) main.container {
   min-height: 1.2em;
   margin-top: 0.35rem;
   color: var(--muted);
+}
+
+.required-star {
+  color: #f44;
+  margin-left: 2px;
+  font-size: 0.85em;
 }
 
 .psd-link {

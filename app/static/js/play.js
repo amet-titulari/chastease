@@ -355,7 +355,6 @@ document.getElementById("play-regenerate")?.addEventListener("click", async () =
 });
 
 document.getElementById("play-load-chat")?.addEventListener("click", plLoadChat);
-document.getElementById("play-load-tasks")?.addEventListener("click", plListTasks);
 document.getElementById("play-connect-ws")?.addEventListener("click", plConnectWs);
 
 document.getElementById("play-resume-session")?.addEventListener("click", async () => {
@@ -378,6 +377,84 @@ document.getElementById("play-safety-green")?.addEventListener("click", () => pl
 document.getElementById("play-safety-yellow")?.addEventListener("click", () => plSafety("yellow"));
 document.getElementById("play-safety-red")?.addEventListener("click", () => plSafety("red"));
 document.getElementById("play-safety-safeword")?.addEventListener("click", plSafeword);
+
+// -- Hygiene opening --
+let plHygieneOpeningId = null;
+let plHygieneUsesSeal = false;
+
+function plHygieneSetPhase(phase) {
+  const openArea = document.getElementById("psd-hygiene-open-area");
+  const relockArea = document.getElementById("psd-hygiene-relock-area");
+  if (phase === "relock") {
+    openArea?.classList.add("is-hidden");
+    relockArea?.classList.remove("is-hidden");
+  } else {
+    openArea?.classList.remove("is-hidden");
+    relockArea?.classList.add("is-hidden");
+  }
+  const sealRow = document.getElementById("psd-hygiene-seal-row");
+  if (sealRow) sealRow.style.display = (phase === "relock" && plHygieneUsesSeal) ? "" : "none";
+}
+
+document.getElementById("psd-hygiene-open")?.addEventListener("click", async () => {
+  const btn = document.getElementById("psd-hygiene-open");
+  const statusEl = document.getElementById("psd-hygiene-status");
+  btn.disabled = true;
+  try {
+    const durationMins = parseInt(document.getElementById("psd-hygiene-duration")?.value || "15", 10);
+    let oldSealNumber = null;
+    try {
+      const sealData = await plGet(`/api/sessions/${SESSION_ID}/seal-history`);
+      const active = (sealData.items || []).find((s) => s.status === "active");
+      if (active) oldSealNumber = active.seal_number;
+    } catch (_) {}
+    plHygieneUsesSeal = !!oldSealNumber;
+    const data = await plPost(`/api/sessions/${SESSION_ID}/hygiene/openings`, {
+      duration_seconds: durationMins * 60,
+      old_seal_number: oldSealNumber,
+    });
+    plHygieneOpeningId = data.opening_id;
+    if (statusEl) { statusEl.textContent = `⏱️ Rück bis: ${new Date(data.due_back_at).toLocaleTimeString("de-DE")}`; statusEl.style.color = "var(--color-warn,#ffb300)"; }
+    plHygieneSetPhase("relock");
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = `Fehler: ${err}`; statusEl.style.color = "var(--color-error,#f44)"; }
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("psd-hygiene-relock")?.addEventListener("click", async () => {
+  if (!plHygieneOpeningId) return;
+  const statusEl = document.getElementById("psd-hygiene-status");
+  let newSeal = null;
+  if (plHygieneUsesSeal) {
+    newSeal = document.getElementById("psd-hygiene-new-seal")?.value?.trim();
+    if (!newSeal) {
+      if (statusEl) { statusEl.textContent = "Neue Plombennummer ist erforderlich."; statusEl.style.color = "var(--color-error,#f44)"; }
+      return;
+    }
+  }
+  const btn = document.getElementById("psd-hygiene-relock");
+  btn.disabled = true;
+  try {
+    const data = await plPost(`/api/sessions/${SESSION_ID}/hygiene/openings/${plHygieneOpeningId}/relock`, {
+      new_seal_number: newSeal,
+    });
+    plHygieneOpeningId = null;
+    plHygieneUsesSeal = false;
+    plHygieneSetPhase("open");
+    const sealInput = document.getElementById("psd-hygiene-new-seal");
+    if (sealInput) sealInput.value = "";
+    if (statusEl) { statusEl.textContent = "Wiederverschlossen ✓"; statusEl.style.color = "var(--color-success,#81c784)"; }
+    // Update active seal display in verification area
+    if (data.new_seal_number) plSetVerifySeal(data.new_seal_number);
+    plWrite("Hygiene Wiederverschluss", data);
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = `Fehler: ${err}`; statusEl.style.color = "var(--color-error,#f44)"; }
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // -- Verification --
 let plPendingVerifyId = null;

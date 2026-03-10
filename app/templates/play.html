@@ -49,7 +49,6 @@
       <section class="play-tasks-section">
         <div class="play-aside-header">
           <h3>Tasks</h3>
-          <button id="play-load-tasks" type="button">Laden</button>
         </div>
         <div id="play-task-board" class="task-board"></div>
       </section>
@@ -57,7 +56,7 @@
       <section class="play-verify-section">
         <div class="play-aside-header">
           <h3>Verifikation</h3>
-          <button id="play-request-verify" type="button">Anfordern</button>
+          <button id="play-request-verify" type="button" class="aside-icon-btn" title="Verifikation anfordern">&#43;</button>
         </div>
         <div id="play-verify-upload-area" class="is-hidden">
           <p id="play-verify-seal-row" class="verify-hint" style="display:none">Aktive Plombe: <code id="play-verify-seal"></code></p>
@@ -86,7 +85,6 @@
         <button id="play-resume-session" type="button" class="play-resume-btn">&#8635; Session reaktivieren</button>
         {% endif %}
         <a href="/contract/{{ session_id }}" class="play-contract-link">&#128220; Vertrag ansehen</a>
-        <a href="/experience" class="play-new-session-link">Neue Session &rarr;</a>
       </section>
 
     </aside>
@@ -162,6 +160,34 @@
         <button id="psd-llm-test" type="button" class="ghost">Verbindung testen</button>
       </div>
       <p id="psd-llm-feedback" class="psd-feedback"></p>
+    </section>
+
+    <section class="psd-section">
+      <h4>Hygiene-&Ouml;ffnung</h4>
+      <p id="psd-hygiene-status" class="psd-feedback"></p>
+      <div id="psd-hygiene-open-area">
+        <div class="psd-field">
+          <label>Dauer (Minuten)
+            <input id="psd-hygiene-duration" type="number" value="15" min="1" max="120" />
+          </label>
+        </div>
+        <div class="psd-actions">
+          <button id="psd-hygiene-open" type="button">&Ouml;ffnung beantragen</button>
+        </div>
+      </div>
+      <div id="psd-hygiene-relock-area" class="is-hidden">
+        <p class="psd-feedback" style="color:var(--color-warn,#ffb300)">&#9200; &Ouml;ffnung aktiv &mdash; nach Hygiene sofort wiederverschlie&szlig;en.</p>
+        <div id="psd-hygiene-seal-row" style="display:none">
+          <div class="psd-field">
+            <label>Neue Plombennummer<span class="required-star">*</span>
+              <input id="psd-hygiene-new-seal" type="text" placeholder="z.B. A-456" />
+            </label>
+          </div>
+        </div>
+        <div class="psd-actions">
+          <button id="psd-hygiene-relock" type="button">&#128274; Wiederverschlie&szlig;en</button>
+        </div>
+      </div>
     </section>
 
     <section class="psd-section">

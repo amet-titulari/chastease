@@ -196,6 +196,13 @@ def relock_hygiene_opening(
     if opening.status not in {"active", "overdue"}:
         raise HTTPException(status_code=400, detail="Hygiene opening is not relockable")
 
+    # If the opening was started with a seal, a new seal number is mandatory
+    if opening.old_seal_number and not payload.new_seal_number:
+        raise HTTPException(
+            status_code=422,
+            detail="Neue Plombennummer ist erforderlich (Öffnung wurde mit Plombe gestartet).",
+        )
+
     now = datetime.now(timezone.utc)
     overrun_seconds = 0
     if opening.due_back_at is not None:
