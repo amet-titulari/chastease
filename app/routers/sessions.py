@@ -48,6 +48,15 @@ class TimerAdjustRequest(BaseModel):
     seconds: int = Field(ge=1)
 
 
+class UpdatePlayerProfileRequest(BaseModel):
+    experience_level: str | None = Field(default=None, min_length=1, max_length=50)
+    preferences: dict | None = None
+    soft_limits: list[str] | None = None
+    hard_limits: list[str] | None = None
+    reaction_patterns: dict | None = None
+    needs: dict | None = None
+
+
 def _ensure_ws_auth_token(session_obj: SessionModel) -> None:
     if session_obj.ws_auth_token:
         return
@@ -87,6 +96,8 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
         db.add(session_obj)
         db.commit()
         db.refresh(session_obj)
+    profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+
     return {
         "session_id": session_obj.id,
         "status": session_obj.status,
@@ -99,6 +110,61 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
         "lock_end": str(session_obj.lock_end) if session_obj.lock_end else None,
         "ws_auth_token": session_obj.ws_auth_token,
         "contract_signed": bool(contract and contract.signed_at),
+        "player_profile": {
+            "id": profile.id,
+            "experience_level": profile.experience_level,
+            "preferences": json.loads(profile.preferences_json),
+            "soft_limits": json.loads(profile.soft_limits_json),
+            "hard_limits": json.loads(profile.hard_limits_json),
+            "reaction_patterns": json.loads(profile.reaction_patterns_json),
+            "needs": json.loads(profile.needs_json),
+        }
+        if profile
+        else None,
+    }
+
+
+@router.put("/{session_id}/player-profile")
+def update_player_profile(
+    session_id: int,
+    payload: UpdatePlayerProfileRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Player profile not found")
+
+    if payload.experience_level is not None:
+        profile.experience_level = payload.experience_level
+    if payload.preferences is not None:
+        profile.preferences_json = json.dumps(payload.preferences)
+    if payload.soft_limits is not None:
+        profile.soft_limits_json = json.dumps(payload.soft_limits)
+    if payload.hard_limits is not None:
+        profile.hard_limits_json = json.dumps(payload.hard_limits)
+    if payload.reaction_patterns is not None:
+        profile.reaction_patterns_json = json.dumps(payload.reaction_patterns)
+    if payload.needs is not None:
+        profile.needs_json = json.dumps(payload.needs)
+
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+    return {
+        "session_id": session_id,
+        "player_profile": {
+            "id": profile.id,
+            "experience_level": profile.experience_level,
+            "preferences": json.loads(profile.preferences_json),
+            "soft_limits": json.loads(profile.soft_limits_json),
+            "hard_limits": json.loads(profile.hard_limits_json),
+            "reaction_patterns": json.loads(profile.reaction_patterns_json),
+            "needs": json.loads(profile.needs_json),
+        },
     }
 
 

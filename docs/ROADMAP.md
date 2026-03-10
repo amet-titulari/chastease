@@ -93,7 +93,7 @@
 - [x] Task-Anzeige im UI (Aufgabenliste)
 - [x] Task als erledigt markieren
 - [x] Automatische Konsequenzen bei Failure / Overdue (Lock-Verlaengerung)
-- [ ] Psychogramm-gesteuerte Aufgaben- und Straflogik anwenden
+- [x] Psychogramm-gesteuerte Aufgaben- und Straflogik anwenden
 - [ ] Belohnungs/Bestrafungs-Events im Verlauf dokumentieren
 - [ ] KI-Antworten inkl. Actions-Schema stabil
 

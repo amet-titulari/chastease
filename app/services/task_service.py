@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
+import json
 
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models.player_profile import PlayerProfile
 from app.models.session import Session as SessionModel
 from app.models.task import Task
 
@@ -15,19 +17,67 @@ class TaskService:
         return value.astimezone(timezone.utc)
 
     @staticmethod
-    def resolve_penalty_seconds(task: Task) -> int:
+    def _safe_json_object(raw: str | None) -> dict:
+        if not raw:
+            return {}
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+        return {}
+
+    @staticmethod
+    def _psychogram_multiplier(profile: PlayerProfile | None) -> float:
+        if profile is None:
+            return 1.0
+
+        level_multiplier = {
+            "beginner": 1.0,
+            "intermediate": 1.0,
+            "advanced": 1.2,
+        }.get((profile.experience_level or "").lower(), 1.0)
+
+        reaction = TaskService._safe_json_object(profile.reaction_patterns_json)
+        needs = TaskService._safe_json_object(profile.needs_json)
+
+        reaction_multiplier = reaction.get("penalty_multiplier", 1.0)
+        if not isinstance(reaction_multiplier, (int, float)):
+            reaction_multiplier = 1.0
+
+        needs_multiplier = 1.0
+        if bool(needs.get("gentle_mode")):
+            needs_multiplier = 0.7
+
+        return max(0.2, float(level_multiplier) * float(reaction_multiplier) * float(needs_multiplier))
+
+    @staticmethod
+    def resolve_penalty_seconds(db: Session, session_obj: SessionModel, task: Task) -> int:
         if task.consequence_type not in {None, "lock_extension_seconds"}:
             return 0
         if task.consequence_value is not None and task.consequence_value > 0:
             return task.consequence_value
-        return max(settings.task_overdue_default_penalty_seconds, 0)
+
+        base = max(settings.task_overdue_default_penalty_seconds, 0)
+
+        profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+        multiplier = TaskService._psychogram_multiplier(profile)
+        penalty = int(round(base * multiplier))
+
+        reaction = TaskService._safe_json_object(profile.reaction_patterns_json) if profile else {}
+        max_penalty = reaction.get("max_penalty_seconds")
+        if isinstance(max_penalty, int) and max_penalty > 0:
+            penalty = min(penalty, max_penalty)
+
+        return max(0, penalty)
 
     @staticmethod
     def apply_task_consequence(db: Session, session_obj: SessionModel, task: Task, now: datetime) -> bool:
         if task.consequence_applied_at is not None:
             return False
 
-        penalty_seconds = TaskService.resolve_penalty_seconds(task)
+        penalty_seconds = TaskService.resolve_penalty_seconds(db=db, session_obj=session_obj, task=task)
         if penalty_seconds <= 0:
             return False
 

@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal, get_db
 from app.models.message import Message
 from app.models.persona import Persona
+from app.models.player_profile import PlayerProfile
 from app.models.safety_log import SafetyLog
 from app.models.session import Session as SessionModel
 from app.models.task import Task
@@ -70,6 +72,16 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
     persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
     persona_name = persona.name if persona else "Keyholderin"
     safety_mode = _latest_safety_mode(db, session_id)
+    profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+
+    hard_limits: list[str] = []
+    if profile and profile.hard_limits_json:
+        try:
+            parsed = json.loads(profile.hard_limits_json)
+            if isinstance(parsed, list):
+                hard_limits = [str(item).strip().lower() for item in parsed if str(item).strip()]
+        except Exception:
+            hard_limits = []
 
     ai = get_ai_gateway()
     structured = ai.generate_chat_response(persona_name=persona_name, user_text=user_text)
@@ -98,6 +110,11 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
             if not title:
                 continue
 
+            description_value = str(action.get("description")) if action.get("description") else ""
+            searchable = f"{title} {description_value}".lower()
+            if any(limit in searchable for limit in hard_limits):
+                continue
+
             deadline_minutes = action.get("deadline_minutes")
             deadline_at = None
             if isinstance(deadline_minutes, int) and deadline_minutes > 0:
@@ -113,7 +130,7 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
             task = Task(
                 session_id=session_id,
                 title=title,
-                description=(str(action.get("description"))[:2000] if action.get("description") else None),
+                description=(description_value[:2000] if description_value else None),
                 deadline_at=deadline_at,
                 consequence_type=consequence_type,
                 consequence_value=consequence_value,
