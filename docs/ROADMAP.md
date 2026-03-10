@@ -2,19 +2,26 @@
 
 ## Entwicklungsphasen
 
+## Stand (Alpha)
+
+- Implementiert: FastAPI-Grundgeruest, SQLAlchemy-Modelle, Alembic-Migrationen `0001`-`0003`, Session/Contract/Hygiene/Safety/Verification APIs
+- Implementiert: Interaktive Web Test Console im Dashboard fuer manuelle End-to-End-Tests
+- Teststatus: `12 passed` (lokale automatisierte Tests)
+- Offen: echte KI-Provider-Anbindung, Chat/WebSocket, Aufgaben-System, Notifications, produktionsnahe UX
+
 ---
 
 ## Phase 0: Fundament (Woche 1–2)
 
 **Ziel**: Lauffähiges Grundgerüst, Entwicklungsumgebung steht
 
-- [ ] Python-Projekt aufsetzen (FastAPI, SQLAlchemy, Alembic)
-- [ ] SQLite-Datenbank & erstes Schema (Session, Persona, Message, PlayerProfile, Contract)
-- [ ] Alembic Migrationen einrichten
-- [ ] Basis-Jinja2-Template mit Tailwind CSS
+- [x] Python-Projekt aufsetzen (FastAPI, SQLAlchemy, Alembic)
+- [x] SQLite-Datenbank & erstes Schema (Session, Persona, Message, PlayerProfile, Contract)
+- [x] Alembic Migrationen einrichten
+- [x] Basis-Jinja2-Template mit einfacher CSS-Testoberflaeche
 - [ ] HTMX Integration
-- [ ] `.env`-Konfiguration & Pydantic Settings
-- [ ] `data/`-Verzeichnis in `.gitignore`
+- [x] `.env`-Konfiguration & Pydantic Settings
+- [x] `data/`-Verzeichnis in `.gitignore`
 - [ ] Client-Privacy-Baseline: kein LocalStorage, kein IndexedDB, kein Service-Worker-Cache
 - [ ] Upload-Pfad für Verifikationsbilder so definieren, dass keine bewusste Galerie-Speicherung durch die App erfolgt
 
@@ -46,15 +53,15 @@
 
 **Ziel**: Vollständige Session mit Timer-Logik
 
-- [ ] Session-Start mit Konfiguration (Min/Max-Dauer, zufällige Bestimmung)
-- [ ] Vertragsgenerator als letzter Setup-Schritt vor Sessionstart
-- [ ] Digitale Unterzeichnung und Start-Gating: Session beginnt erst nach Signatur
-- [ ] Vertrags-Snapshot und Unveränderlichkeit nach Signatur
-- [ ] Vertrags-Addenda für KI-initiierte Änderungen mit explizitem Consent
+- [x] Session-Start mit Konfiguration (Min/Max-Dauer, zufällige Bestimmung)
+- [x] Vertragsgenerator als letzter Setup-Schritt vor Sessionstart (aktuell AI-Stub)
+- [x] Digitale Unterzeichnung und Start-Gating: Session beginnt erst nach Signatur
+- [x] Vertrags-Snapshot und Unveränderlichkeit nach Signatur
+- [x] Vertrags-Addenda für KI-initiierte Änderungen mit explizitem Consent
 - [ ] Timer-Service: läuft im Background via APScheduler
 - [ ] Timer-Operationen: add/remove/freeze/unfreeze
 - [ ] Timer-Anzeige im Dashboard (WebSocket-Updates)
-- [ ] Session-Status-Maschine (active / paused / completed)
+- [x] Session-Status-Maschine (active / paused / emergency/safeword/pause)
 - [ ] Session-Verlauf / Event-Log
 - [ ] Session regulär beenden
 
@@ -83,12 +90,12 @@
 
 **Ziel**: Alle Safety-Features implementiert und zuverlässig
 
-- [ ] Ampelsystem (Grün/Gelb/Rot) persistent im UI
+- [x] Ampelsystem (Gelb/Rot API implementiert; UI-Testkonsole vorhanden)
 - [ ] Gelb: KI-Prompt-Override für Fürsorge-Modus
-- [ ] Rot: Session pausieren, KI verlässt Persona
-- [ ] Safeword: Konfigurierbar, sofortiger Session-Stop
-- [ ] Emergency Release: Pflichtbegründung, Bestätigungsdialog
-- [ ] Safety-Log: alle Ereignisse werden gespeichert
+- [x] Rot: Session pausieren (API)
+- [x] Safeword: sofortiger Session-Stop (API)
+- [x] Emergency Release: Pflichtbegründung (API)
+- [x] Safety-Log: alle Ereignisse werden gespeichert
 - [ ] Safety-Override im System-Prompt verankert
 
 **Deliverable**: Alle Safety-Features vollständig und geprüft
@@ -99,13 +106,13 @@
 
 **Ziel**: Verifikation und proaktive Keyholderin
 
-- [ ] Bild-Upload-Endpoint (lokal, UUID-Dateiname)
-- [ ] KI-Bildanalyse-Integration (Verifikation)
-- [ ] Optionale Seal-Nummer in Verifikationsanfrage
-- [ ] Verifikations-UI (Anfrage + Upload + Ergebnis)
+- [x] Bild-Upload-Endpoint (lokal, UUID-Dateiname)
+- [ ] KI-Bildanalyse-Integration (Verifikation, aktuell heuristische Stub-Logik)
+- [x] Optionale Seal-Nummer in Verifikationsanfrage
+- [x] Verifikations-UI (Testkonsole)
 - [ ] Hygiene-Öffnungen: Kontingente pro Tag/Woche/Monat implementieren
-- [ ] Hygiene-Öffnungen: Countdown, Wiederverschluss-Bestätigung und automatische Bestrafung bei Überziehung
-- [ ] Plomben-Historie: Zerstörung alter Plombe und Pflicht-Eintrag neuer Plombe nach Öffnung
+- [x] Hygiene-Öffnungen: Countdown, Wiederverschluss-Bestätigung und automatische Bestrafung bei Überziehung
+- [x] Plomben-Historie: Zerstörung alter Plombe und Pflicht-Eintrag neuer Plombe nach Öffnung
 - [ ] APScheduler: proaktive Keyholderin-Nachrichten
 - [ ] Browser Push Notifications (Web Push API)
 - [ ] Konfigurierbare Benachrichtigungs-Häufigkeit
@@ -124,7 +131,7 @@
 - [ ] Vertragsansicht inkl. Addenda und Export
 - [ ] Persona-Bibliothek (mehrere gespeicherte Personas)
 - [ ] Ollama-Provider implementieren
-- [ ] Unit Tests kritischer Services (Timer, Safety, Contract, Hygiene, Media)
+- [x] Unit/Integration Tests kritischer Services und Flows (Timer, Safety, Contract, Hygiene, Verification)
 - [ ] Dokumentation finalisieren
 
 **Deliverable**: MVP – vollständig funktionsfähig

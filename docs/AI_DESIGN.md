@@ -4,6 +4,12 @@
 
 Das KI-System in Chastease übernimmt die Rolle der **Keyholderin** – einer konsistenten Charakter-Persona, die die Session steuert, auf den Nutzer reagiert und Entscheidungen trifft. Die KI ist nicht ein generischer Chatbot, sondern eine Rollenspiel-Figur mit Persönlichkeit, Autorität und definierten Verhaltensregeln.
 
+## Implementierungsstatus
+
+- Aktuell implementiert: `generate_contract()` als lokaler AI-Stub (deterministische Vertragsgenerierung)
+- Aktuell implementiert: Verifikationsauswertung als heuristische Backend-Logik (Plombenvergleich)
+- Geplant in naechster Phase: Provider-Adapter fuer Grok/OpenAI/Ollama und echtes Chat-Roleplay
+
 ---
 
 ## Architektur-Prinzipien
@@ -157,51 +163,65 @@ Sprich jetzt als fürsorgliche, klare Person ohne Rollenspiel-Elemente.
 ## KI-Gateway Interface
 
 ```python
+# Aktuell im Code (synchroner Stub)
+class AIGateway:
+  def generate_contract(
+    self,
+    persona_name: str,
+    player_nickname: str,
+    min_duration_seconds: int,
+    max_duration_seconds: int | None,
+  ) -> str: ...
+
+
+# Zielbild (Provider-basiert, async)
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+
 @dataclass
 class AIResponse:
-    message: str
-    actions: list[dict]
-    mood: str
-    intensity: int  # 1-5
+  message: str
+  actions: list[dict]
+  mood: str
+  intensity: int  # 1-5
 
-class AIGateway(ABC):
-    @abstractmethod
-    async def chat(
-        self,
-        session_context: dict,
-        conversation_history: list[dict],
-        persona: dict,
-    player_profile: dict,
-        user_message: str | None = None
-    ) -> AIResponse: ...
 
-    @abstractmethod
-    async def analyze_image(
-        self,
-        image_path: str,
-        verification_context: dict,
+class AIGatewayAsync(ABC):
+  @abstractmethod
+  async def chat(
+    self,
+    session_context: dict,
+    conversation_history: list[dict],
     persona: dict,
-    player_profile: dict
-    ) -> dict: ...
+    player_profile: dict,
+    user_message: str | None = None,
+  ) -> AIResponse: ...
+
+  @abstractmethod
+  async def analyze_image(
+    self,
+    image_path: str,
+    verification_context: dict,
+    persona: dict,
+    player_profile: dict,
+  ) -> dict: ...
 
   @abstractmethod
   async def generate_contract(
     self,
     session_context: dict,
     persona: dict,
-    player_profile: dict
+    player_profile: dict,
   ) -> str: ...
 
-    @abstractmethod
-    async def generate_task(
-        self,
-        session_context: dict,
+  @abstractmethod
+  async def generate_task(
+    self,
+    session_context: dict,
     persona: dict,
-    player_profile: dict
-    ) -> dict: ...
+    player_profile: dict,
+  ) -> dict: ...
 ```
 
 ---

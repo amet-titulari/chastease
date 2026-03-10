@@ -13,7 +13,7 @@ Client-Geräte (Smartphone, Tablet, weiterer PC) sind **zustandsarme Browser-Cli
 │         Browser-Client (Phone / Tablet / PC)        │
 │         !! kein lokaler Datenspeicher !!            │
 │  ┌─────────────────────────────────────────────┐   │
-│  │  Jinja2 Templates + HTMX + Alpine.js        │   │
+│  │  Jinja2 Templates + Vanilla JS (Fetch)      │   │
 │  │  - Session Dashboard                        │   │
 │  │  - Chat Interface                           │   │
 │  │  - Safety Controls (persistent)             │   │
@@ -65,9 +65,8 @@ Client-Geräte (Smartphone, Tablet, weiterer PC) sind **zustandsarme Browser-Cli
 | Komponente | Technologie | Begründung |
 |---|---|---|
 | Templates | Jinja2 | Vertraut, server-side rendering |
-| Interaktivität | HTMX | Dynamische UI ohne komplettes JS-Framework |
-| Kleine Reaktivität | Alpine.js | Lokaler UI-State (z.B. Modal-Toggle) |
-| Styling | Tailwind CSS | Utility-first, schnell, kein Custom-CSS nötig |
+| Interaktivität | Vanilla JavaScript + Fetch API | Schneller Start fuer Testkonsole ohne Frontend-Buildschritt |
+| Styling | Handgeschriebenes CSS | Leichtgewichtig fuer Alpha-Prototyp |
 
 ### KI-Integration
 | Komponente | Technologie |
@@ -116,9 +115,10 @@ tasks
 
 verifications
 ├── id, session_id (FK)
-├── image_path (lokal), seal_number (optional)
+├── image_path (lokal)
+├── requested_seal_number, observed_seal_number
 ├── status (pending / confirmed / suspicious)
-├── ai_response, created_at
+├── ai_response
 └── requested_at
 
 hygiene_openings
@@ -127,7 +127,9 @@ hygiene_openings
 ├── due_back_at, relocked_at
 ├── status (requested / approved / active / overdue / closed / denied)
 ├── old_seal_number, new_seal_number
-└── overrun_seconds
+├── overrun_seconds
+├── penalty_seconds
+└── penalty_applied_at
 
 seal_history
 ├── id, session_id (FK), hygiene_opening_id (FK, optional)
@@ -136,21 +138,11 @@ seal_history
 ├── applied_at, invalidated_at
 └── note
 
-session_events
-├── id, session_id (FK)
-├── event_type (time_added / time_removed / freeze / unfreeze / reward / punishment)
-├── value, reason
-└── created_at
-
-ai_config
-├── id, provider (grok / openai / ollama / custom)
-├── api_endpoint, model_name
-└── api_key_encrypted
-
-safety_log
+safety_logs
 ├── id, session_id (FK)
 ├── event_type (safeword / yellow / red / emergency_release)
-├── reason (bei emergency_release), created_at
+├── reason (bei emergency_release)
+└── created_at
 
 contracts
 ├── id, session_id (FK, unique)
@@ -167,6 +159,13 @@ contract_addenda
 ├── player_consent          # approved / rejected
 ├── player_consent_at       # Zeitstempel der Zustimmung durch den Nutzer
 └── created_at
+
+seal_history
+├── id, session_id (FK), hygiene_opening_id (FK, optional)
+├── seal_number
+├── status (active / destroyed)
+├── applied_at, invalidated_at
+└── note
 ```
 
 ---
@@ -184,40 +183,37 @@ chastease/                       # läuft auf dem Heimserver
 │   ├── AI_DESIGN.md
 │   └── ROADMAP.md
 ├── app/
-│   ├── main.py                  # FastAPI App-Instanz
+│   ├── main.py                  # FastAPI App-Instanz + Startup Migration
 │   ├── config.py                # Settings (Pydantic BaseSettings)
 │   ├── database.py              # SQLAlchemy Engine & Session
 │   ├── models/                  # SQLAlchemy ORM-Modelle
 │   │   ├── session.py
 │   │   ├── persona.py
-│   │   ├── task.py
-│   │   ├── message.py
-│   │   └── ...
-│   ├── schemas/                 # Pydantic Schemas (Request/Response)
+│   │   ├── player_profile.py
+│   │   ├── contract.py
+│   │   ├── hygiene_opening.py
+│   │   ├── safety_log.py
+│   │   ├── verification.py
+│   │   └── seal_history.py
 │   ├── routers/                 # FastAPI Router
+│   │   ├── health.py
 │   │   ├── sessions.py
-│   │   ├── tasks.py
-│   │   ├── chat.py
+│   │   ├── hygiene.py
 │   │   ├── safety.py
 │   │   ├── verification.py
-│   │   └── config.py
+│   │   └── web.py
 │   ├── services/                # Business Logic
 │   │   ├── session_service.py
 │   │   ├── timer_service.py
-│   │   ├── task_service.py
-│   │   ├── safety_service.py
-│   │   ├── media_service.py
-│   │   └── ai_gateway.py        # KI-Abstraktion
+│   │   ├── contract_service.py
+│   │   ├── hygiene_service.py
+│   │   └── ai_gateway.py        # KI-Stub / Abstraktionsbasis
 │   ├── templates/               # Jinja2 HTML-Templates
 │   │   ├── base.html
-│   │   ├── dashboard.html
-│   │   ├── chat.html
-│   │   ├── tasks.html
-│   │   ├── config.html
-│   │   └── partials/
+│   │   └── dashboard.html
 │   └── static/
-│       ├── css/
-│       └── js/
+│       ├── css/style.css
+│       └── js/dashboard.js
 ├── data/                        # SQLite DB & lokale Mediendateien (gitignored)
 │   ├── chastease.db
 │   └── media/
@@ -248,57 +244,26 @@ chastease/                       # läuft auf dem Heimserver
 - Safety-Endpoints sind gesondert und haben höchste Priorität
 - Emergency Release schreibt immer ins Safety-Log, auch bei Fehlern
 
+### Migrationen
+- Schema wird über Alembic verwaltet (`0001`-`0003`)
+- Startup führt `alembic upgrade head` aus, um DB auf aktuellen Stand zu bringen
+- Für Alt-Datenbanken ohne Alembic-Versionstabelle wird baseline-Stamping durchgeführt
+
 ---
 
 ## KI-Gateway Abstraktion
 
 ```python
-# Source of truth: reichhaltiges, strukturiertes Interface aus AI_DESIGN.md
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-
-@dataclass
-class AIResponse:
-  message: str
-  actions: list[dict]
-  mood: str
-  intensity: int
-
-class AIGateway(ABC):
-  @abstractmethod
-  async def chat(
-    self,
-    session_context: dict,
-    conversation_history: list[dict],
-    persona: dict,
-    player_profile: dict,
-    user_message: str | None = None,
-  ) -> AIResponse: ...
-
-  @abstractmethod
-  async def analyze_image(
-    self,
-    image_path: str,
-    verification_context: dict,
-    persona: dict,
-    player_profile: dict,
-  ) -> dict: ...
-
-  @abstractmethod
-  async def generate_contract(
-    self,
-    session_context: dict,
-    persona: dict,
-    player_profile: dict,
-  ) -> str: ...
-
-  @abstractmethod
-  async def generate_task(
-    self,
-    session_context: dict,
-    persona: dict,
-    player_profile: dict,
-  ) -> dict: ...
+# Aktueller Stand: synchroner Stub fuer Vertragsgenerierung,
+# erweiterbar auf async Provider (Grok/OpenAI/Ollama) in naechster Phase.
+class AIGateway:
+    def generate_contract(
+        self,
+        persona_name: str,
+        player_nickname: str,
+        min_duration_seconds: int,
+        max_duration_seconds: int | None,
+    ) -> str: ...
 
 class GrokGateway(AIGateway): ...
 class OllamaGateway(AIGateway): ...
