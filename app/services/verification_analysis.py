@@ -1,4 +1,5 @@
 import base64
+import json
 
 import httpx
 
@@ -9,6 +10,61 @@ def _heuristic_analysis(requested_seal_number: str | None, observed_seal_number:
     if requested_seal_number and observed_seal_number and requested_seal_number != observed_seal_number:
         return "suspicious", "Plombennummer stimmt nicht ueberein."
     return "confirmed", "Verifikation eingegangen und markiert."
+
+
+def _openai_vision_analysis(
+    image_bytes: bytes,
+    filename: str,
+    requested_seal_number: str | None,
+    observed_seal_number: str | None,
+    api_url: str,
+    api_key: str,
+    model: str,
+    timeout: float = 30.0,
+) -> tuple[str, str] | None:
+    """OpenAI-compatible vision analysis (works with Grok/xAI, OpenAI, OpenRouter, etc.)."""
+    if not image_bytes:
+        return None
+
+    # Detect mime type from filename
+    ext = (filename.rsplit(".", 1)[-1] if "." in filename else "jpg").lower()
+    mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp", "gif": "image/gif"}.get(ext, "image/jpeg")
+    data_url = f"data:{mime};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+
+    prompt = (
+        "Du analysierst ein Verifikationsbild fuer eine Chastity-Session. "
+        "Antworte NUR als JSON mit zwei Schluesseln: 'status' (confirmed oder suspicious) und 'analysis' (kurze Begruendung auf Deutsch). "
+        f"Erwartete Plombennummer: '{requested_seal_number or 'nicht angegeben'}'. "
+        f"Beobachtete Plombennummer laut Wearer: '{observed_seal_number or 'nicht angegeben'}'. "
+        "Pruefe ob das Bild ein Keuschheitsgeraet zeigt und ob die Plombe erkennbar und unversehrt ist."
+    )
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    messages = [{"role": "user", "content": [
+        {"type": "image_url", "image_url": {"url": data_url}},
+        {"type": "text", "text": prompt},
+    ]}]
+
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(api_url, headers=headers, json={"model": model, "messages": messages})
+            resp.raise_for_status()
+            text = resp.json()["choices"][0]["message"]["content"].strip()
+
+        # Parse JSON from response (handle markdown code blocks)
+        if "```" in text:
+            text = text.split("```")[1].lstrip("json").strip()
+        parsed = json.loads(text)
+        status = str(parsed.get("status", "")).strip().lower()
+        analysis = str(parsed.get("analysis", "")).strip()
+        if status not in {"confirmed", "suspicious"}:
+            return None
+        return status, analysis or "KI-Analyse abgeschlossen."
+    except Exception:
+        return None
 
 
 def _ollama_analysis(
@@ -74,6 +130,46 @@ def analyze_verification(
     provider = settings.verification_ai_provider.strip().lower()
 
     if provider == "ollama":
+        try:
+            result = _ollama_analysis(
+                image_bytes=image_bytes,
+                filename=filename,
+                requested_seal_number=requested_seal_number,
+                observed_seal_number=observed_seal_number,
+            )
+            if result is not None:
+                return result
+        except Exception:
+            pass
+
+    if provider in ("custom", "openai", "auto"):
+        # Read active LLM profile from DB for API URL / key / model
+        try:
+            from app.database import SessionLocal
+            from app.models.llm_profile import LlmProfile as LlmProfileModel
+            db = SessionLocal()
+            try:
+                profile = db.query(LlmProfileModel).filter(LlmProfileModel.profile_key == "default").first()
+            finally:
+                db.close()
+            if profile and profile.api_url and profile.chat_model:
+                result = _openai_vision_analysis(
+                    image_bytes=image_bytes,
+                    filename=filename,
+                    requested_seal_number=requested_seal_number,
+                    observed_seal_number=observed_seal_number,
+                    api_url=profile.api_url,
+                    api_key=profile.api_key or "",
+                    model=profile.chat_model,
+                    timeout=30.0,
+                )
+                if result is not None:
+                    return result
+        except Exception:
+            pass
+
+    # "auto": also try ollama as fallback if not already tried
+    if provider == "auto":
         try:
             result = _ollama_analysis(
                 image_bytes=image_bytes,

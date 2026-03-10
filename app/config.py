@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     web_push_vapid_public_key: str | None = None
     web_push_vapid_private_key: str | None = None
     web_push_vapid_claims_sub: str = "mailto:admin@localhost"
-    verification_ai_provider: str = "heuristic"
+    verification_ai_provider: str = "auto"
     verification_ollama_model: str = "llava"
     verification_ollama_timeout_seconds: float = 20.0
 
