@@ -101,17 +101,18 @@ function plRenderChat(items) {
 // -- Render tasks --
 function plRenderTasks(items) {
   if (!taskBoard) return;
-  if (!Array.isArray(items) || !items.length) {
-    taskBoard.innerHTML = "<p>Noch keine Tasks.</p>";
+  const pending = Array.isArray(items) ? items.filter((i) => i.status === "pending") : [];
+  if (!pending.length) {
+    taskBoard.innerHTML = "<p>Keine offenen Tasks.</p>";
     return;
   }
-  taskBoard.innerHTML = items
+  taskBoard.innerHTML = pending
     .map((item) => {
-      const isDone = item.status === "completed";
-      const isFailed = item.status === "failed";
-      const disabled = item.status !== "pending" ? "disabled" : "";
+      const isDone = false;
+      const isFailed = false;
+      const disabled = "";
       const title = String(item.title || "").replace(/</g, "&lt;");
-      const extraClass = isDone ? "is-done" : isFailed ? "is-failed" : "";
+      const extraClass = "";
       return `
         <div class="task-card ${extraClass}" data-task-id="${item.id}">
           <div class="task-card-title">${title}</div>
@@ -291,9 +292,8 @@ function plRenderVerifications(items) {
     el.innerHTML = "<p class='verify-empty'>Noch keine Verifikationen.</p>";
     return;
   }
-  el.innerHTML = items
-    .slice(-5)
-    .reverse()
+  const latest = items.slice(-1);
+  el.innerHTML = latest
     .map((v) => {
       const pill = v.status === "confirmed"
         ? "<span class='verify-pill confirmed'>&#10003; Best&auml;tigt</span>"
