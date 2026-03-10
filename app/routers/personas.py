@@ -1,6 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+from app.services.persona_card_mapper import map_external_persona_card
 
 router = APIRouter(prefix="/api/personas", tags=["personas"])
+
+
+class CardMappingRequest(BaseModel):
+    card: dict = Field(default_factory=dict)
 
 
 PERSONA_PRESETS = [
@@ -82,3 +89,12 @@ def card_schema() -> dict:
             "tags",
         ],
     }
+
+
+@router.post("/map-card")
+def map_card(payload: CardMappingRequest) -> dict:
+    try:
+        mapped = map_external_persona_card(payload.card)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return mapped
