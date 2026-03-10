@@ -24,12 +24,36 @@
           <h2>Welcher Leitstil passt?</h2>
           <p>Das hilft dem System, spaeter passende Aufgaben und Tonalitaet vorzuschlagen.</p>
           <label>Leitstil
-            <select name="role_style" required>
+            <select name="role_style" id="setup-role-style" required>
               <option value="strict">Strict</option>
               <option value="structured">Structured</option>
               <option value="supportive">Supportive</option>
             </select>
           </label>
+
+          <div class="style-guide" aria-label="Leitstil Erklaerung">
+            <article class="style-card">
+              <h3>Strict</h3>
+              <p>Direkte Fuehrung, klare Ansagen, enger Takt bei Checks und Aufgaben.</p>
+            </article>
+            <article class="style-card">
+              <h3>Structured</h3>
+              <p>Planbarer Ablauf mit klaren Routinen, ausgewogenem Druck und Fokus auf Konstanz.</p>
+            </article>
+            <article class="style-card">
+              <h3>Supportive</h3>
+              <p>Ruhige, motivierende Begleitung mit sanfter Eskalation und Safety-Prioritaet.</p>
+            </article>
+          </div>
+
+          <div class="style-impact" id="style-impact-box">
+            <h3 id="style-impact-title">Auswirkungen: Structured</h3>
+            <ul id="style-impact-list">
+              <li>Aufgaben sind klar formuliert und zeitlich planbar.</li>
+              <li>Tonalitaet bleibt verbindlich, aber weniger hart als Strict.</li>
+              <li>Routinen und Verlaufskonsistenz stehen im Vordergrund.</li>
+            </ul>
+          </div>
         </section>
 
         <section class="wizard-step" data-step="2">
