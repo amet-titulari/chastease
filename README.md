@@ -62,6 +62,11 @@ Wichtige API-Endpunkte:
 - `POST /api/sessions/{id}/sign-contract`
 - `POST /api/sessions/{id}/contract/addenda`
 - `POST /api/sessions/{id}/contract/addenda/{addendum_id}/consent`
+- `GET /api/sessions/{id}/timer`
+- `POST /api/sessions/{id}/timer/add`
+- `POST /api/sessions/{id}/timer/remove`
+- `POST /api/sessions/{id}/timer/freeze`
+- `POST /api/sessions/{id}/timer/unfreeze`
 - `POST /api/sessions/{id}/hygiene/openings`
 - `GET /api/sessions/{id}/hygiene/openings/{opening_id}`
 - `POST /api/sessions/{id}/hygiene/openings/{opening_id}/relock`

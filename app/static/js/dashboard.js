@@ -119,6 +119,51 @@ async function consentAddendum(decision) {
 document.getElementById("approve-addendum-btn").addEventListener("click", () => consentAddendum("approved"));
 document.getElementById("reject-addendum-btn").addEventListener("click", () => consentAddendum("rejected"));
 
+document.getElementById("timer-status-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const data = await getJson(`/api/sessions/${sessionId}/timer`);
+    writeOutput("Timer-Status", data);
+  } catch (err) {
+    writeOutput("Fehler Timer-Status", { error: String(err) });
+  }
+});
+
+async function adjustTimer(mode) {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  const seconds = Number(document.getElementById("timer-seconds").value);
+  if (!seconds || seconds < 1) return writeOutput("Hinweis", { error: "Ungueltige Sekunden." });
+  try {
+    const data = await postJson(`/api/sessions/${sessionId}/timer/${mode}`, { seconds });
+    writeOutput(`Timer ${mode}`, data);
+  } catch (err) {
+    writeOutput(`Fehler Timer ${mode}`, { error: String(err) });
+  }
+}
+
+document.getElementById("timer-add-btn").addEventListener("click", () => adjustTimer("add"));
+document.getElementById("timer-remove-btn").addEventListener("click", () => adjustTimer("remove"));
+
+document.getElementById("timer-freeze-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const data = await postJson(`/api/sessions/${sessionId}/timer/freeze`, {});
+    writeOutput("Timer Freeze", data);
+  } catch (err) {
+    writeOutput("Fehler Timer Freeze", { error: String(err) });
+  }
+});
+
+document.getElementById("timer-unfreeze-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const data = await postJson(`/api/sessions/${sessionId}/timer/unfreeze`, {});
+    writeOutput("Timer Unfreeze", data);
+  } catch (err) {
+    writeOutput("Fehler Timer Unfreeze", { error: String(err) });
+  }
+});
+
 document.getElementById("open-hygiene-btn").addEventListener("click", async () => {
   if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
   try {

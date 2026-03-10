@@ -35,6 +35,10 @@ class AddendumConsentRequest(BaseModel):
     decision: str = Field(pattern="^(approved|rejected)$")
 
 
+class TimerAdjustRequest(BaseModel):
+    seconds: int = Field(ge=1)
+
+
 def _ensure_ws_auth_token(session_obj: SessionModel) -> None:
     if session_obj.ws_auth_token:
         return
@@ -45,6 +49,21 @@ def _ensure_ws_auth_token(session_obj: SessionModel) -> None:
 def _rotate_ws_auth_token(session_obj: SessionModel) -> None:
     session_obj.ws_auth_token = secrets.token_urlsafe(24)
     session_obj.ws_auth_token_created_at = datetime.now(timezone.utc)
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _remaining_seconds(session_obj: SessionModel, now: datetime) -> int:
+    if session_obj.lock_end is None:
+        return 0
+    anchor = now
+    if session_obj.timer_frozen and session_obj.freeze_start is not None:
+        anchor = _as_utc(session_obj.freeze_start)
+    return max(0, int((_as_utc(session_obj.lock_end) - anchor).total_seconds()))
 
 
 @router.get("/{session_id}")
@@ -193,6 +212,112 @@ def rotate_chat_ws_token(
         "session_id": session_obj.id,
         "ws_auth_token": session_obj.ws_auth_token,
         "rotated_at": str(session_obj.ws_auth_token_created_at),
+    }
+
+
+@router.get("/{session_id}/timer")
+def get_timer_state(session_id: int, db: Session = Depends(get_db)) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    now = datetime.now(timezone.utc)
+    return {
+        "session_id": session_id,
+        "status": session_obj.status,
+        "timer_frozen": session_obj.timer_frozen,
+        "remaining_seconds": _remaining_seconds(session_obj, now),
+        "lock_end": str(session_obj.lock_end) if session_obj.lock_end else None,
+    }
+
+
+@router.post("/{session_id}/timer/add")
+def add_timer_time(session_id: int, payload: TimerAdjustRequest, db: Session = Depends(get_db)) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session_obj.lock_end is None:
+        raise HTTPException(status_code=400, detail="Session timer not initialized")
+
+    session_obj.lock_end = _as_utc(session_obj.lock_end) + timedelta(seconds=payload.seconds)
+    db.add(session_obj)
+    db.commit()
+    db.refresh(session_obj)
+
+    return {
+        "session_id": session_id,
+        "lock_end": str(session_obj.lock_end),
+        "remaining_seconds": _remaining_seconds(session_obj, datetime.now(timezone.utc)),
+    }
+
+
+@router.post("/{session_id}/timer/remove")
+def remove_timer_time(session_id: int, payload: TimerAdjustRequest, db: Session = Depends(get_db)) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session_obj.lock_end is None:
+        raise HTTPException(status_code=400, detail="Session timer not initialized")
+
+    now = datetime.now(timezone.utc)
+    floor = _as_utc(session_obj.freeze_start) if session_obj.timer_frozen and session_obj.freeze_start else now
+    session_obj.lock_end = max(floor, _as_utc(session_obj.lock_end) - timedelta(seconds=payload.seconds))
+    db.add(session_obj)
+    db.commit()
+    db.refresh(session_obj)
+
+    return {
+        "session_id": session_id,
+        "lock_end": str(session_obj.lock_end),
+        "remaining_seconds": _remaining_seconds(session_obj, now),
+    }
+
+
+@router.post("/{session_id}/timer/freeze")
+def freeze_timer(session_id: int, db: Session = Depends(get_db)) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session_obj.lock_end is None:
+        raise HTTPException(status_code=400, detail="Session timer not initialized")
+
+    if not session_obj.timer_frozen:
+        session_obj.timer_frozen = True
+        session_obj.freeze_start = datetime.now(timezone.utc)
+        db.add(session_obj)
+        db.commit()
+        db.refresh(session_obj)
+
+    return {
+        "session_id": session_id,
+        "timer_frozen": session_obj.timer_frozen,
+        "freeze_start": str(session_obj.freeze_start) if session_obj.freeze_start else None,
+    }
+
+
+@router.post("/{session_id}/timer/unfreeze")
+def unfreeze_timer(session_id: int, db: Session = Depends(get_db)) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session_obj.lock_end is None:
+        raise HTTPException(status_code=400, detail="Session timer not initialized")
+
+    now = datetime.now(timezone.utc)
+    if session_obj.timer_frozen and session_obj.freeze_start is not None:
+        frozen_for = now - _as_utc(session_obj.freeze_start)
+        session_obj.lock_end = _as_utc(session_obj.lock_end) + frozen_for
+        session_obj.timer_frozen = False
+        session_obj.freeze_start = None
+        db.add(session_obj)
+        db.commit()
+        db.refresh(session_obj)
+
+    return {
+        "session_id": session_id,
+        "timer_frozen": session_obj.timer_frozen,
+        "lock_end": str(session_obj.lock_end) if session_obj.lock_end else None,
+        "remaining_seconds": _remaining_seconds(session_obj, now),
     }
 
 
