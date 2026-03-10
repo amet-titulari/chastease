@@ -168,12 +168,9 @@
           </label>
           <label>Vision-Modell (optional)
             <input name="llm_vision_model" id="setup-llm-vision-model" type="text"
-              value="{{ llm.vision_model or 'grok-2-vision-1212' if llm else 'grok-2-vision-1212' }}" />
+              value="{{ llm.vision_model or 'grok-4-1-fast-non-reasoning' if llm else 'grok-4-1-fast-non-reasoning' }}" />
           </label>
-          <label class="checkbox-row">
-            <input name="llm_active" type="checkbox" value="true" checked />
-            KI-Profil aktivieren
-          </label>
+          <input name="llm_active" type="hidden" value="true" />
           <div class="llm-test-row">
             <button type="button" id="setup-test-llm">Verbindung testen</button>
             <span id="setup-llm-test-result" class="hint"></span>
