@@ -236,10 +236,19 @@ function xpMarkdownToHtml(md) {
     .replace(/^[-–]\s+(.+)$/gm, "<li>$1</li>")
     .replace(/(<li>.*<\/li>\n?)+/g, (m) => "<ul>" + m + "</ul>")
     .replace(/^\|(.+)\|$/gm, (_, row) => {
+      // Skip separator rows like |---|---|---|
+      if (row.split("|").every((c) => /^[:\- ]+$/.test(c.trim()))) return "";
       const cells = row.split("|").map((c) => `<td>${c.trim()}</td>`).join("");
       return `<tr>${cells}</tr>`;
     })
-    .replace(/(<tr>.*<\/tr>\n?)+/g, (m) => `<table>${m}</table>`)
+    .replace(/(<tr>.*<\/tr>\n?)+/g, (m) => {
+      // Promote first <tr> to a header row with <th>
+      let first = true;
+      return "<table>" + m.replace(/<tr>(.*?)<\/tr>/g, (_, cells) => {
+        if (first) { first = false; return "<thead><tr>" + cells.replace(/<td>/g, "<th>").replace(/<\/td>/g, "</th>") + "</tr></thead><tbody>"; }
+        return `<tr>${cells}</tr>`;
+      }) + "</tbody></table>";
+    })
     .replace(/^-{3,}$/gm, "<hr>")
     .replace(/\n{2,}/g, "</p><p>")
     .replace(/^(?!<[a-z])(.*)/gm, (_, line) => line ? line : "")

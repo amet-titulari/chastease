@@ -361,7 +361,17 @@ class CustomOpenAIGateway(AIGateway):
         context_items: list[dict] | None = None,
         context_summary: str | None = None,
     ) -> AIResponse:
-        system_content = prompt_modules or f"Du bist {persona_name}. Antworte auf Deutsch."
+        json_instruction = (
+            "\n\nANTWORTE AUSSCHLIESSLICH ALS GÜLTIGES JSON-OBJEKT mit diesen Feldern:\n"
+            "{ \"message\": \"<deine Antwort als Persona auf Deutsch>\", "
+            "\"actions\": [], \"mood\": \"<neutral|strict|warm|playful>\", \"intensity\": <1-5> }\n"
+            "Falls du einen Task erstellen willst, füge ihn in 'actions' ein:\n"
+            "{ \"type\": \"create_task\", \"title\": \"...\", \"description\": \"...\", "
+            "\"deadline_minutes\": <int oder null>, "
+            "\"consequence_type\": \"lock_extension_seconds\", \"consequence_value\": <int> }\n"
+            "Kein Text ausserhalb des JSON-Objekts."
+        )
+        system_content = (prompt_modules or f"Du bist {persona_name}. Antworte auf Deutsch.") + json_instruction
         messages: list[dict] = [{"role": "system", "content": system_content}]
         if context_summary:
             messages.append({"role": "system", "content": f"Kontext-Zusammenfassung: {context_summary}"})
@@ -375,12 +385,27 @@ class CustomOpenAIGateway(AIGateway):
                 resp = client.post(
                     self.api_url,
                     headers=self._headers(),
-                    json={"model": self.chat_model, "messages": messages},
+                    json={
+                        "model": self.chat_model,
+                        "messages": messages,
+                        "response_format": {"type": "json_object"},
+                    },
                 )
                 resp.raise_for_status()
-                text = resp.json()["choices"][0]["message"]["content"].strip()
-                if text:
-                    return AIResponse(message=text, actions=[], mood="neutral", intensity=3)
+                raw = resp.json()["choices"][0]["message"]["content"].strip()
+                if raw:
+                    # Try to parse structured JSON
+                    try:
+                        parsed = json.loads(raw)
+                        message = str(parsed.get("message", "")).strip()
+                        actions = normalize_actions(parsed.get("actions", []))
+                        mood = str(parsed.get("mood", "neutral")).strip() or "neutral"
+                        intensity = _normalize_intensity(parsed.get("intensity", 3))
+                        if message:
+                            return AIResponse(message=message, actions=actions, mood=mood, intensity=intensity)
+                    except (json.JSONDecodeError, KeyError):
+                        # JSON parsing failed — return raw text without actions
+                        return AIResponse(message=raw, actions=[], mood="neutral", intensity=3)
         except Exception:
             pass
         return self._fallback.generate_chat_response(

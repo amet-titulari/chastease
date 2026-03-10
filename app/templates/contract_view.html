@@ -49,6 +49,7 @@
 .contract-view-body ul    { margin: 0.4em 0; padding-left: 1.4em; }
 .contract-view-body li    { margin: 0.2em 0; }
 .contract-view-body table { width: 100%; border-collapse: collapse; font-size: 0.84rem; margin: 0.6em 0; }
+.contract-view-body th    { padding: 0.35em 0.75em; border: 1px solid #33506d; background: #0d2035; color: #8fb3d5; font-weight: 600; text-align: left; }
 .contract-view-body td    { padding: 0.3em 0.6em; border: 1px solid #223548; vertical-align: top; }
 .contract-back-link {
   display: inline-flex;
@@ -121,10 +122,19 @@
       .replace(/^[-–]\s+(.+)$/gm, "<li>$1</li>")
       .replace(/(<li>.*<\/li>\n?)+/g, (m) => "<ul>" + m + "</ul>")
       .replace(/^\|(.+)\|$/gm, (_, row) => {
+        // Skip separator rows like |---|---|---|
+        if (row.split("|").every((c) => /^[:\- ]+$/.test(c.trim()))) return "";
         const cells = row.split("|").map((c) => `<td>${c.trim()}</td>`).join("");
         return `<tr>${cells}</tr>`;
       })
-      .replace(/(<tr>.*<\/tr>\n?)+/g, (m) => `<table>${m}</table>`)
+      .replace(/(<tr>.*<\/tr>\n?)+/g, (m) => {
+        // Promote first <tr> to a header row with <th>
+        let first = true;
+        return "<table>" + m.replace(/<tr>(.*?)<\/tr>/g, (_, cells) => {
+          if (first) { first = false; return "<thead><tr>" + cells.replace(/<td>/g, "<th>").replace(/<\/td>/g, "</th>") + "</tr></thead><tbody>"; }
+          return `<tr>${cells}</tr>`;
+        }) + "</tbody></table>";
+      })
       .replace(/^-{3,}$/gm, "<hr>")
       .replace(/\n{2,}/g, "</p><p>")
       .replace(/^(.+)$/gm, (m) => m.startsWith("<") ? m : m);
