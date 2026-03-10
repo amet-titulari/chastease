@@ -17,7 +17,8 @@
 - Implementiert: Timer-Anzeige im Dashboard ueber WebSocket-`timer_tick`-Events
 - Implementiert: Background-Timer-Sweeper (APScheduler) fuer automatisches Session-Ende bei Ablauf
 - Implementiert: Aggregierter Session-Verlauf/Event-Log (`GET /api/sessions/{id}/events`) inkl. Dashboard-Abruf
-- Teststatus: `31 passed` (lokale automatisierte Tests)
+- Implementiert: Session-History-Seite (`/history`) mit Filtern und Export (`/events/export`)
+- Teststatus: `34 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---
@@ -139,7 +140,7 @@
 
 - [ ] Responsive Design (Mobile-Optimierung)
 - [ ] Error Handling & User Feedback
-- [ ] Session-History-Seite
+- [x] Session-History-Seite
 - [ ] Vertragsansicht inkl. Addenda und Export
 - [ ] Persona-Bibliothek (mehrere gespeicherte Personas)
 - [ ] Ollama-Provider implementieren

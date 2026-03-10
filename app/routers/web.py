@@ -15,3 +15,12 @@ def dashboard(request: Request):
         name="dashboard.html",
         context={"title": settings.app_name},
     )
+
+
+@router.get("/history", response_class=HTMLResponse)
+def history_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="history.html",
+        context={"title": f"{settings.app_name} History"},
+    )

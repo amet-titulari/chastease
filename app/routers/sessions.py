@@ -2,7 +2,8 @@ import json
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -122,98 +123,161 @@ def get_seal_history(session_id: int, db: Session = Depends(get_db)) -> dict:
     }
 
 
-@router.get("/{session_id}/events")
-def get_session_events(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    events: list[dict] = []
+def _collect_session_events(db: Session, session_id: int) -> list[tuple[datetime, dict]]:
+    events: list[tuple[datetime, dict]] = []
 
     message_rows = db.query(Message).filter(Message.session_id == session_id).all()
     for row in message_rows:
+        occurred_at = _as_utc(row.created_at)
         events.append(
-            {
-                "source": "message",
-                "event_type": row.message_type,
-                "occurred_at": str(row.created_at),
-                "data": {
-                    "id": row.id,
-                    "role": row.role,
-                    "content": row.content,
+            (
+                occurred_at,
+                {
+                    "source": "message",
+                    "event_type": row.message_type,
+                    "occurred_at": str(row.created_at),
+                    "data": {
+                        "id": row.id,
+                        "role": row.role,
+                        "content": row.content,
+                    },
                 },
-            }
+            )
         )
 
     safety_rows = db.query(SafetyLog).filter(SafetyLog.session_id == session_id).all()
     for row in safety_rows:
+        occurred_at = _as_utc(row.created_at)
         events.append(
-            {
-                "source": "safety",
-                "event_type": row.event_type,
-                "occurred_at": str(row.created_at),
-                "data": {
-                    "id": row.id,
-                    "reason": row.reason,
+            (
+                occurred_at,
+                {
+                    "source": "safety",
+                    "event_type": row.event_type,
+                    "occurred_at": str(row.created_at),
+                    "data": {
+                        "id": row.id,
+                        "reason": row.reason,
+                    },
                 },
-            }
+            )
         )
 
     hygiene_rows = db.query(HygieneOpening).filter(HygieneOpening.session_id == session_id).all()
     for row in hygiene_rows:
-        occurred_at = row.opened_at or row.requested_at
+        ts = row.opened_at or row.requested_at or datetime.now(timezone.utc)
+        occurred_at = _as_utc(ts)
         events.append(
-            {
-                "source": "hygiene",
-                "event_type": row.status,
-                "occurred_at": str(occurred_at),
-                "data": {
-                    "id": row.id,
-                    "overrun_seconds": row.overrun_seconds,
-                    "penalty_seconds": row.penalty_seconds,
+            (
+                occurred_at,
+                {
+                    "source": "hygiene",
+                    "event_type": row.status,
+                    "occurred_at": str(ts),
+                    "data": {
+                        "id": row.id,
+                        "overrun_seconds": row.overrun_seconds,
+                        "penalty_seconds": row.penalty_seconds,
+                    },
                 },
-            }
+            )
         )
 
     task_rows = db.query(Task).filter(Task.session_id == session_id).all()
     for row in task_rows:
-        occurred_at = row.completed_at or row.consequence_applied_at or row.created_at
+        ts = row.completed_at or row.consequence_applied_at or row.created_at or datetime.now(timezone.utc)
+        occurred_at = _as_utc(ts)
         events.append(
-            {
-                "source": "task",
-                "event_type": row.status,
-                "occurred_at": str(occurred_at),
-                "data": {
-                    "id": row.id,
-                    "title": row.title,
-                    "consequence_applied_seconds": row.consequence_applied_seconds,
+            (
+                occurred_at,
+                {
+                    "source": "task",
+                    "event_type": row.status,
+                    "occurred_at": str(ts),
+                    "data": {
+                        "id": row.id,
+                        "title": row.title,
+                        "consequence_applied_seconds": row.consequence_applied_seconds,
+                    },
                 },
-            }
+            )
         )
 
     verification_rows = db.query(Verification).filter(Verification.session_id == session_id).all()
     for row in verification_rows:
-        occurred_at = row.created_at or row.requested_at
+        ts = row.created_at or row.requested_at or datetime.now(timezone.utc)
+        occurred_at = _as_utc(ts)
         events.append(
-            {
-                "source": "verification",
-                "event_type": row.status,
-                "occurred_at": str(occurred_at),
-                "data": {
-                    "id": row.id,
-                    "requested_seal_number": row.requested_seal_number,
-                    "observed_seal_number": row.observed_seal_number,
+            (
+                occurred_at,
+                {
+                    "source": "verification",
+                    "event_type": row.status,
+                    "occurred_at": str(ts),
+                    "data": {
+                        "id": row.id,
+                        "requested_seal_number": row.requested_seal_number,
+                        "observed_seal_number": row.observed_seal_number,
+                    },
                 },
-            }
+            )
         )
 
-    events.sort(key=lambda item: item["occurred_at"])
+    events.sort(key=lambda item: item[0])
+    return events
+
+
+@router.get("/{session_id}/events")
+def get_session_events(
+    session_id: int,
+    source: str | None = Query(default=None),
+    event_type: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=1000),
+    db: Session = Depends(get_db),
+) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    events = [item for _, item in _collect_session_events(db, session_id)]
+    if source:
+        events = [item for item in events if item["source"] == source]
+    if event_type:
+        events = [item for item in events if item["event_type"] == event_type]
+    events = events[:limit]
 
     return {
         "session_id": session_id,
         "session_status": session_obj.status,
         "items": events,
     }
+
+
+@router.get("/{session_id}/events/export")
+def export_session_events(
+    session_id: int,
+    format: str = Query(default="text", pattern="^(text|json)$"),
+    source: str | None = Query(default=None),
+    event_type: str | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=5000),
+    db: Session = Depends(get_db),
+):
+    payload = get_session_events(
+        session_id=session_id,
+        source=source,
+        event_type=event_type,
+        limit=limit,
+        db=db,
+    )
+    if format == "json":
+        return payload
+
+    lines = [f"session_id={payload['session_id']} status={payload['session_status']}"]
+    for item in payload["items"]:
+        lines.append(
+            f"{item['occurred_at']} | source={item['source']} | type={item['event_type']} | data={json.dumps(item['data'])}"
+        )
+    return PlainTextResponse("\n".join(lines))
 
 
 @router.post("")

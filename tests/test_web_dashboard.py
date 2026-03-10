@@ -28,3 +28,9 @@ def test_dashboard_script_is_served():
         resp = client.get("/static/js/dashboard.js")
         assert resp.status_code == 200
         assert "Session erstellt" in resp.text
+
+
+def test_history_route_exists():
+    with TestClient(app) as client:
+        resp = client.get("/history")
+        assert resp.status_code == 200

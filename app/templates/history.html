@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card full">
+  <h2>Session History</h2>
+  <div class="stack">
+    <label>Session-ID
+      <input id="history-session-id" type="number" min="1" />
+    </label>
+    <label>Source (optional)
+      <input id="history-source" placeholder="message|safety|hygiene|task|verification" />
+    </label>
+    <label>Event-Type (optional)
+      <input id="history-event-type" placeholder="z. B. completed, safeword, chat" />
+    </label>
+    <label>Limit
+      <input id="history-limit" type="number" min="1" max="1000" value="200" />
+    </label>
+    <div class="stack">
+      <button id="history-load-btn" type="button">Events laden</button>
+      <button id="history-export-text-btn" type="button">Export Text</button>
+      <button id="history-export-json-btn" type="button">Export JSON</button>
+    </div>
+  </div>
+</section>
+
+<section class="card full">
+  <h2>Output</h2>
+  <pre id="history-output">Bereit.</pre>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/history.js"></script>
+{% endblock %}

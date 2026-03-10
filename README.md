@@ -54,12 +54,18 @@ alembic stamp head
 
 App: `http://127.0.0.1:8000`
 
+Zusatzseiten:
+
+- Dashboard: `/`
+- Session History: `/history`
+
 Wichtige API-Endpunkte:
 
 - `GET /api/health`
 - `POST /api/sessions`
 - `GET /api/sessions/{id}`
 - `GET /api/sessions/{id}/events`
+- `GET /api/sessions/{id}/events/export`
 - `POST /api/sessions/{id}/sign-contract`
 - `POST /api/sessions/{id}/contract/addenda`
 - `POST /api/sessions/{id}/contract/addenda/{addendum_id}/consent`

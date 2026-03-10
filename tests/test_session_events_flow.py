@@ -58,3 +58,26 @@ def test_session_events_aggregates_multiple_sources():
         assert "hygiene" in sources
         assert "task" in sources
         assert "verification" in sources
+
+
+def test_session_events_filter_and_export():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        client.post(f"/api/sessions/{session_id}/messages", json={"content": "Filter me"})
+
+        filtered = client.get(f"/api/sessions/{session_id}/events?source=message&event_type=chat&limit=10")
+        assert filtered.status_code == 200
+        items = filtered.json()["items"]
+        assert len(items) >= 1
+        assert all(item["source"] == "message" for item in items)
+        assert all(item["event_type"] == "chat" for item in items)
+
+        export_text = client.get(f"/api/sessions/{session_id}/events/export?format=text&source=message")
+        assert export_text.status_code == 200
+        assert "source=message" in export_text.text
+
+        export_json = client.get(f"/api/sessions/{session_id}/events/export?format=json&source=message")
+        assert export_json.status_code == 200
+        payload = export_json.json()
+        assert payload["session_id"] == session_id
+        assert len(payload["items"]) >= 1
