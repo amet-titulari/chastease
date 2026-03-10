@@ -155,12 +155,12 @@ def register(
 @router.post("/auth/login")
 def login(
     request: Request,
-    email: str = Form(...),
+    username: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    normalized_email = email.strip().lower()
-    user = db.query(AuthUser).filter(AuthUser.email == normalized_email).first()
+    normalized_username = username.strip()
+    user = db.query(AuthUser).filter(AuthUser.username == normalized_username).first()
     if user is None or user.password_hash != _hash_password(password, user.password_salt):
         return templates.TemplateResponse(
             request=request,
@@ -168,7 +168,7 @@ def login(
             context={
                 "title": f"{settings.app_name} Landing",
                 "current_user": None,
-                "auth_error": "Login fehlgeschlagen. Bitte pruefe E-Mail und Passwort.",
+                "auth_error": "Login fehlgeschlagen. Bitte pruefe Nutzername und Passwort.",
             },
             status_code=401,
         )
