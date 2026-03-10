@@ -101,6 +101,14 @@ Proaktive Keyholderin-Reminder:
 	- `CHASTEASE_PROACTIVE_MESSAGES_INTERVAL_SECONDS=120`
 	- `CHASTEASE_PROACTIVE_MESSAGES_COOLDOWN_SECONDS=600`
 
+Automatisches Session-Ende bei Timer-Ablauf:
+
+- Hintergrundjob (APScheduler) beendet aktive Sessions automatisch, sobald `lock_end` erreicht ist.
+- Es wird ein `session_event` im Nachrichtenverlauf hinterlegt.
+- Konfiguration per `.env`:
+	- `CHASTEASE_SESSION_TIMER_SWEEPER_ENABLED=true|false`
+	- `CHASTEASE_SESSION_TIMER_SWEEPER_INTERVAL_SECONDS=30`
+
 WebSocket Live-Feed:
 
 - `GET/POST` Chat bleibt verfuegbar, zusaetzlich streamt `ws /api/sessions/{id}/chat/ws` neue Assistant-Nachrichten live.

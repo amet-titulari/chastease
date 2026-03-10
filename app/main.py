@@ -23,6 +23,7 @@ from app.models import (  # noqa: F401
 )
 from app.routers import chat, health, hygiene, safety, sessions, tasks, verification as verification_router, web
 from app.services.proactive_messaging import sweep_proactive_messages_for_active_sessions
+from app.services.session_timer_sweeper import sweep_expired_active_sessions
 from app.services.task_sweeper import sweep_overdue_tasks_for_active_sessions
 
 
@@ -33,15 +34,16 @@ scheduler: BackgroundScheduler | None = None
 async def lifespan(_: FastAPI):
     init_app_storage()
     global scheduler
-    if settings.task_overdue_sweeper_enabled and scheduler is None:
+    if scheduler is None:
         scheduler = BackgroundScheduler(timezone="UTC")
-        scheduler.add_job(
-            sweep_overdue_tasks_for_active_sessions,
-            "interval",
-            seconds=settings.task_overdue_sweeper_interval_seconds,
-            id="task_overdue_sweeper",
-            replace_existing=True,
-        )
+        if settings.task_overdue_sweeper_enabled:
+            scheduler.add_job(
+                sweep_overdue_tasks_for_active_sessions,
+                "interval",
+                seconds=settings.task_overdue_sweeper_interval_seconds,
+                id="task_overdue_sweeper",
+                replace_existing=True,
+            )
         if settings.proactive_messages_enabled:
             scheduler.add_job(
                 sweep_proactive_messages_for_active_sessions,
@@ -50,7 +52,19 @@ async def lifespan(_: FastAPI):
                 id="proactive_message_sweeper",
                 replace_existing=True,
             )
-        scheduler.start()
+        if settings.session_timer_sweeper_enabled:
+            scheduler.add_job(
+                sweep_expired_active_sessions,
+                "interval",
+                seconds=settings.session_timer_sweeper_interval_seconds,
+                id="session_timer_sweeper",
+                replace_existing=True,
+            )
+
+        if scheduler.get_jobs():
+            scheduler.start()
+        else:
+            scheduler = None
     yield
     if scheduler is not None:
         scheduler.shutdown(wait=False)

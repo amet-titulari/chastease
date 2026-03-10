@@ -15,7 +15,8 @@
 - Implementiert: Optionale Admin-Secret-Absicherung fuer Verification-Uploads und zentrale Security-Policy (`docs/SECURITY.md`)
 - Implementiert: Session-Timer-APIs fuer Status/Add/Remove/Freeze/Unfreeze inkl. Dashboard-Testkonsole
 - Implementiert: Timer-Anzeige im Dashboard ueber WebSocket-`timer_tick`-Events
-- Teststatus: `29 passed` (lokale automatisierte Tests)
+- Implementiert: Background-Timer-Sweeper (APScheduler) fuer automatisches Session-Ende bei Ablauf
+- Teststatus: `30 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---
@@ -67,12 +68,12 @@
 - [x] Digitale Unterzeichnung und Start-Gating: Session beginnt erst nach Signatur
 - [x] Vertrags-Snapshot und Unveränderlichkeit nach Signatur
 - [x] Vertrags-Addenda für KI-initiierte Änderungen mit explizitem Consent
-- [ ] Timer-Service: läuft im Background via APScheduler
+- [x] Timer-Service: läuft im Background via APScheduler
 - [x] Timer-Operationen: add/remove/freeze/unfreeze
 - [x] Timer-Anzeige im Dashboard (WebSocket-Updates)
 - [x] Session-Status-Maschine (active / paused / emergency/safeword/pause)
 - [ ] Session-Verlauf / Event-Log
-- [ ] Session regulär beenden
+- [x] Session regulär beenden (automatisch bei Timer-Ablauf)
 
 **Deliverable**: Vollständiger Session-Lifecycle funktioniert
 
