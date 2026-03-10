@@ -1,11 +1,11 @@
 :root {
-  --bg: radial-gradient(circle at 10% 0%, #1b2a3b 0%, #0b131d 50%, #070a10 100%);
-  --card: #101a26;
-  --card-soft: #162435;
-  --ink: #e5eef9;
-  --muted: #9cafc7;
-  --line: #2d4258;
-  --accent: #5f8db8;
+  --bg: radial-gradient(circle at 0% 0%, #1a2a39 0%, #0d141d 45%, #080c11 100%);
+  --card: #111b27;
+  --card-soft: #172433;
+  --ink: #e6eef8;
+  --muted: #9caec4;
+  --line: #2c3f53;
+  --accent: #5f8eb9;
   --warn: #9f4052;
 }
 
@@ -31,6 +31,7 @@ body {
   border-radius: 18px;
   background: linear-gradient(180deg, var(--card), var(--card-soft));
   padding: 1rem;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.35);
 }
 
 .eyebrow {
