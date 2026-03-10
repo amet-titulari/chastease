@@ -2,6 +2,7 @@ let sessionId = null;
 let addendumId = null;
 let openingId = null;
 let verificationId = null;
+let taskId = null;
 
 const outputEl = document.getElementById("output");
 const sessionIdEl = document.getElementById("session-id");
@@ -214,5 +215,68 @@ document.getElementById("upload-verification-btn").addEventListener("click", asy
     writeOutput("Fehler Verifikation Upload", { error: String(err) });
   }
 });
+
+document.getElementById("chat-send-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const content = document.getElementById("chat-input").value;
+    const data = await postJson(`/api/sessions/${sessionId}/messages`, { content });
+    writeOutput("Chat Antwort", data);
+  } catch (err) {
+    writeOutput("Fehler Chat", { error: String(err) });
+  }
+});
+
+document.getElementById("chat-list-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const data = await getJson(`/api/sessions/${sessionId}/messages`);
+    writeOutput("Chat Verlauf", data);
+  } catch (err) {
+    writeOutput("Fehler Chat Verlauf", { error: String(err) });
+  }
+});
+
+document.getElementById("task-create-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const payload = {
+      title: document.getElementById("task-title").value,
+      description: document.getElementById("task-description").value,
+      deadline_minutes: Number(document.getElementById("task-deadline").value),
+    };
+    const data = await postJson(`/api/sessions/${sessionId}/tasks`, payload);
+    taskId = data.task_id;
+    document.getElementById("task-id").value = taskId;
+    writeOutput("Task erstellt", data);
+  } catch (err) {
+    writeOutput("Fehler Task", { error: String(err) });
+  }
+});
+
+document.getElementById("task-list-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const data = await getJson(`/api/sessions/${sessionId}/tasks`);
+    writeOutput("Tasks", data);
+  } catch (err) {
+    writeOutput("Fehler Task Liste", { error: String(err) });
+  }
+});
+
+async function updateTaskStatus(status) {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  const selectedTaskId = Number(document.getElementById("task-id").value || taskId);
+  if (!selectedTaskId) return writeOutput("Hinweis", { error: "Task-ID fehlt." });
+  try {
+    const data = await postJson(`/api/sessions/${sessionId}/tasks/${selectedTaskId}/status`, { status });
+    writeOutput(`Task ${status}`, data);
+  } catch (err) {
+    writeOutput("Fehler Task Status", { error: String(err) });
+  }
+}
+
+document.getElementById("task-complete-btn").addEventListener("click", () => updateTaskStatus("completed"));
+document.getElementById("task-fail-btn").addEventListener("click", () => updateTaskStatus("failed"));
 
 syncIds();

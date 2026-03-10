@@ -17,9 +17,10 @@ from app.models import (  # noqa: F401
     safety_log,
     seal_history,
     session,
+    task,
     verification,
 )
-from app.routers import health, hygiene, safety, sessions, verification as verification_router, web
+from app.routers import chat, health, hygiene, safety, sessions, tasks, verification as verification_router, web
 
 
 @asynccontextmanager
@@ -56,6 +57,8 @@ init_app_storage()
 
 app.include_router(health.router)
 app.include_router(sessions.router)
+app.include_router(chat.router)
+app.include_router(tasks.router)
 app.include_router(hygiene.router)
 app.include_router(safety.router)
 app.include_router(verification_router.router)

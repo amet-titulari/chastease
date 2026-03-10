@@ -10,6 +10,8 @@ def test_dashboard_renders():
         html = resp.text
         assert "Chastease Test Console" in html
         assert "create-session-form" in html
+        assert "chat-send-btn" in html
+        assert "task-create-btn" in html
 
 
 def test_dashboard_script_is_served():

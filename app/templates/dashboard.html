@@ -82,6 +82,39 @@
   </div>
 </section>
 
+<section class="card">
+  <h2>Chat</h2>
+  <div class="stack">
+    <label>Nachricht an Keyholderin
+      <input id="chat-input" value="Darf ich einen Statusbericht geben?" />
+    </label>
+    <button id="chat-send-btn" type="button">Nachricht senden</button>
+    <button id="chat-list-btn" type="button">Chatverlauf laden</button>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Tasks</h2>
+  <div class="stack">
+    <label>Titel
+      <input id="task-title" value="Morgenroutine" />
+    </label>
+    <label>Beschreibung
+      <input id="task-description" value="Kurzer Disziplin-Check" />
+    </label>
+    <label>Deadline (Minuten)
+      <input id="task-deadline" type="number" min="1" value="15" />
+    </label>
+    <button id="task-create-btn" type="button">Task erstellen</button>
+    <button id="task-list-btn" type="button">Tasks laden</button>
+    <label>Task-ID
+      <input id="task-id" type="number" min="1" />
+    </label>
+    <button id="task-complete-btn" type="button">Task als completed markieren</button>
+    <button id="task-fail-btn" type="button">Task als failed markieren</button>
+  </div>
+</section>
+
 <section class="card full">
   <h2>Live Output</h2>
   <p>Aktuelle IDs: Session <code id="session-id">-</code>, Addendum <code id="addendum-id">-</code>, Opening <code id="opening-id">-</code></p>

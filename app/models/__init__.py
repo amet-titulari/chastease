@@ -6,6 +6,7 @@ from app.models.player_profile import PlayerProfile
 from app.models.safety_log import SafetyLog
 from app.models.seal_history import SealHistory
 from app.models.session import Session
+from app.models.task import Task
 from app.models.verification import Verification
 
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     "SafetyLog",
     "SealHistory",
     "Session",
+    "Task",
     "Verification",
 ]
