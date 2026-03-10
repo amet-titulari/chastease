@@ -30,6 +30,14 @@ def test_dashboard_script_is_served():
         assert "Session erstellt" in resp.text
 
 
+def test_stylesheet_contains_responsive_rules():
+    with TestClient(app) as client:
+        resp = client.get("/static/css/style.css")
+        assert resp.status_code == 200
+        assert "@media (max-width: 680px)" in resp.text
+        assert "grid-template-columns: 1fr" in resp.text
+
+
 def test_history_route_exists():
     with TestClient(app) as client:
         resp = client.get("/history")

@@ -11,6 +11,7 @@ body {
   background: radial-gradient(circle at 20% 20%, #fff8eb, #efe6d8);
   color: var(--fg);
   font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.4;
 }
 
 .topbar {
@@ -25,6 +26,10 @@ body {
   color: var(--accent);
 }
 
+.topbar .container {
+  margin: 0 auto;
+}
+
 .topnav {
   display: flex;
   gap: 0.8rem;
@@ -35,6 +40,8 @@ body {
   color: var(--accent);
   text-decoration: none;
   font-weight: 600;
+  padding: 0.2rem 0.35rem;
+  border-radius: 6px;
 }
 
 .topnav a:hover {
@@ -60,6 +67,10 @@ body {
   padding: 1.5rem;
 }
 
+.card h2 {
+  margin-top: 0;
+}
+
 .full {
   grid-column: 1 / -1;
 }
@@ -80,6 +91,8 @@ input {
   border-radius: 8px;
   padding: 0.45rem 0.55rem;
   font-size: 0.95rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 button {
@@ -90,6 +103,8 @@ button {
   color: #fff;
   font-weight: 600;
   cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 button:hover {
@@ -104,4 +119,53 @@ pre {
   border-radius: 10px;
   min-height: 180px;
   overflow-x: auto;
+}
+
+@media (min-width: 720px) {
+  button {
+    width: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .container {
+    margin: 1.2rem auto;
+    padding: 0.8rem;
+  }
+
+  .main-grid {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .brand {
+    font-size: 1.05rem;
+    padding: 0.6rem 0;
+  }
+
+  .topnav {
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.25rem;
+  }
+
+  .container {
+    margin: 0.6rem auto;
+    padding: 0.65rem;
+  }
+
+  .main-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  pre {
+    min-height: 140px;
+    font-size: 0.86rem;
+  }
 }

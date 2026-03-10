@@ -15,6 +15,7 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Sicherheitssystem** – Ampelsystem, Safeword, Emergency Release
 - **Benachrichtigungen** – Timer, Erinnerungen, Nachrichten der Keyholderin
 - **Web Test Console** – Interaktive Browser-Oberfläche für Core-Flows
+- **Responsive UI** – Optimiert fuer Desktop und mobile Geraete
 
 ## Dokumentation
 

@@ -20,7 +20,8 @@
 - Implementiert: Session-History-Seite (`/history`) mit Filtern und Export (`/events/export`)
 - Implementiert: Vertragsansicht inkl. Addenda und Export (`/contracts`, `/contract/export`)
 - Implementiert: Einheitliches API-Fehlerformat + verbessertes UI-Fehlerfeedback (Dashboard/History/Contracts)
-- Teststatus: `38 passed` (lokale automatisierte Tests)
+- Implementiert: Responsive Mobile-Optimierung fuer Dashboard/History/Contracts (Layout + Controls + Breakpoints)
+- Teststatus: `39 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---
@@ -140,7 +141,7 @@
 
 **Ziel**: MVP ist produktionsreif für den privaten Einsatz
 
-- [ ] Responsive Design (Mobile-Optimierung)
+- [x] Responsive Design (Mobile-Optimierung)
 - [x] Error Handling & User Feedback
 - [x] Session-History-Seite
 - [x] Vertragsansicht inkl. Addenda und Export
