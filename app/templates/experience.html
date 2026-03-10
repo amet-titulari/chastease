@@ -120,13 +120,16 @@
           <p class="hint">Die Nummer wird bei der Bildverifikation zur Prüfung angezeigt.</p>
         </div>
 
-        <button id="xp-create-session" type="button">Session erstellen</button>
+        <button id="xp-create-session" type="button">
+          <span class="btn-label">Session erstellen</span>
+          <span class="btn-spinner" aria-hidden="true"></span>
+        </button>
       </section>
 
       <section class="step-pane" data-step="4">
         <p class="step-title">Contract Check</p>
         <p>Session <code id="xp-session-id">-</code> <span id="xp-session-status" class="status-pill">draft</span></p>
-        <pre id="xp-contract-preview">Noch keine Session erstellt.</pre>
+        <div id="xp-contract-preview" class="xp-contract-body">Noch keine Session erstellt.</div>
         <button id="xp-sign-contract" type="button">Vertrag signieren und Play-Mode starten</button>
       </section>
 

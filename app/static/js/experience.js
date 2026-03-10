@@ -61,6 +61,10 @@ function xpSwitchStep(next) {
   document.querySelectorAll(".step-pane").forEach((el) => {
     el.classList.toggle("is-active", Number(el.dataset.step) === xpStep);
   });
+
+  // Hide "Weiter" on step 3 ("Session erstellen" is the action) and step 4
+  const nextBtn = document.getElementById("xp-next-step");
+  if (nextBtn) nextBtn.style.display = xpStep >= 3 ? "none" : "";
 }
 
 // --- Duration helpers ---
@@ -208,14 +212,51 @@ document.querySelectorAll(".step-tab").forEach((btn) => {
 });
 
 document.getElementById("xp-prev-step").addEventListener("click", () => xpSwitchStep(xpStep - 1));
-document.getElementById("xp-next-step").addEventListener("click", () => xpSwitchStep(xpStep + 1));
+document.getElementById("xp-next-step").addEventListener("click", () => {
+  if (xpStep === 3) {
+    document.getElementById("xp-create-session")?.click();
+  } else {
+    xpSwitchStep(xpStep + 1);
+  }
+});
+
+document.getElementById("xp-seal-enabled")?.addEventListener("change", (e) => {
+  const field = document.getElementById("xp-seal-field");
+  if (field) field.classList.toggle("is-hidden", !e.target.checked);
+});
+
+function xpMarkdownToHtml(md) {
+  return md
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/^#{3}\s+(.+)$/gm, "<h4>$1</h4>")
+    .replace(/^#{2}\s+(.+)$/gm, "<h3>$1</h3>")
+    .replace(/^#{1}\s+(.+)$/gm, "<h2>$1</h2>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/^[-–]\s+(.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>.*<\/li>\n?)+/g, (m) => "<ul>" + m + "</ul>")
+    .replace(/^\|(.+)\|$/gm, (_, row) => {
+      const cells = row.split("|").map((c) => `<td>${c.trim()}</td>`).join("");
+      return `<tr>${cells}</tr>`;
+    })
+    .replace(/(<tr>.*<\/tr>\n?)+/g, (m) => `<table>${m}</table>`)
+    .replace(/^-{3,}$/gm, "<hr>")
+    .replace(/\n{2,}/g, "</p><p>")
+    .replace(/^(?!<[a-z])(.*)/gm, (_, line) => line ? line : "")
+    .replace(/^(.+)$/gm, (m) => m.startsWith("<") ? m : m);
+}
 
 document.getElementById("xp-create-session").addEventListener("click", async () => {
+  const createBtn = document.getElementById("xp-create-session");
+  createBtn.disabled = true;
+  createBtn.classList.add("is-loading");
   try {
     const scenarioPreset = document.getElementById("xp-scenario-preset")?.value || null;
     const noLimit = document.getElementById("xp-max-no-limit")?.checked;
     const minSecs = xpDateToSeconds(document.getElementById("xp-min-date")?.value) || xpDaysToSeconds(document.getElementById("xp-min-days")?.value || "7");
     const maxSecs = noLimit ? 0 : (xpDateToSeconds(document.getElementById("xp-max-date")?.value) || xpDaysToSeconds(document.getElementById("xp-max-days")?.value || "30"));
+    const sealEnabled = document.getElementById("xp-seal-enabled")?.checked || false;
+    const sealNumber = sealEnabled ? (document.getElementById("xp-seal-number")?.value?.trim() || null) : null;
     const payload = {
       persona_name: document.getElementById("xp-persona-name").value,
       player_nickname: document.getElementById("xp-player-nickname").value,
@@ -226,13 +267,14 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
       hygiene_limit_monthly: xpParseOptionalInt(document.getElementById("xp-hygiene-month").value),
       experience_level: document.getElementById("xp-experience-level").value || "beginner",
       scenario_preset: scenarioPreset,
+      initial_seal_number: sealNumber,
     };
     const created = await xpPost("/api/sessions", payload);
     xpSessionId = created.session_id;
     xpWsToken = created.ws_auth_token;
     sessionIdEl.textContent = String(xpSessionId);
     sessionStatusEl.textContent = created.status;
-    contractEl.textContent = created.contract_preview || "(keine Vorschau)";
+    contractEl.innerHTML = `<div class="md-body">${xpMarkdownToHtml(created.contract_preview || "(keine Vorschau)")}</div>`;
 
     const profilePayload = {
       experience_level: document.getElementById("xp-experience-level").value,
@@ -256,16 +298,24 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
     xpWrite("Session erstellt", created);
   } catch (err) {
     xpWrite("Fehler Session", { error: String(err) });
+  } finally {
+    createBtn.disabled = false;
+    createBtn.classList.remove("is-loading");
   }
 });
 
 document.getElementById("xp-sign-contract").addEventListener("click", async () => {
   if (!xpSessionId) return xpWrite("Hinweis", { error: "Erst Session erstellen." });
+  const signBtn = document.getElementById("xp-sign-contract");
+  signBtn.disabled = true;
+  signBtn.textContent = "Wird gestartet\u2026";
   try {
     await xpPost(`/api/sessions/${xpSessionId}/sign-contract`, {});
     window.location.href = `/play/${xpSessionId}`;
   } catch (err) {
     xpWrite("Fehler Signatur", { error: String(err) });
+    signBtn.disabled = false;
+    signBtn.textContent = "Vertrag signieren und Play-Mode starten";
   }
 });
 

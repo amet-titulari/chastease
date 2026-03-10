@@ -46,7 +46,7 @@
 
 .xp-grid {
   display: grid;
-  grid-template-columns: 1.08fr 1fr;
+  grid-template-columns: 1fr;
   gap: 1rem;
   margin-top: 1rem;
 }
@@ -459,6 +459,75 @@ button {
   border-radius: 12px;
   padding: 0.7rem;
   border: 1px solid #223548;
+}
+
+/* Markdown-rendered contract body */
+.xp-contract-body {
+  max-height: 340px;
+  overflow-y: auto;
+  background: #071017;
+  color: #cde1f5;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  border: 1px solid #223548;
+  font-size: 0.83rem;
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: normal;
+}
+
+.xp-contract-body h2,
+.xp-contract-body h3,
+.xp-contract-body h4 {
+  margin: 0.8em 0 0.3em;
+  color: #8fb3d5;
+  font-size: 0.88rem;
+  letter-spacing: 0.04em;
+}
+
+.xp-contract-body strong { color: #b8d4ee; }
+.xp-contract-body em    { color: #8fb3d5; font-style: italic; }
+.xp-contract-body hr    { border: none; border-top: 1px solid #223548; margin: 0.6em 0; }
+.xp-contract-body p     { margin: 0.4em 0; }
+
+.xp-contract-body ul {
+  margin: 0.3em 0;
+  padding-left: 1.2em;
+}
+
+.xp-contract-body li { margin: 0.15em 0; }
+
+.xp-contract-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.79rem;
+  margin: 0.5em 0;
+}
+
+.xp-contract-body td {
+  padding: 0.25em 0.5em;
+  border: 1px solid #223548;
+  vertical-align: top;
+}
+
+/* Loading spinner on buttons */
+.btn-spinner {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: xp-spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-left: 0.45em;
+}
+
+button.is-loading .btn-label { opacity: 0.6; }
+button.is-loading .btn-spinner { display: inline-block; }
+
+@keyframes xp-spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 980px) {

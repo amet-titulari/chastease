@@ -218,6 +218,11 @@ document.getElementById("play-send")?.addEventListener("click", async () => {
   if (!SESSION_ID) return;
   const content = chatInput?.value?.trim() || "";
   if (!content) return;
+  const sendBtn = document.getElementById("play-send");
+  sendBtn.disabled = true;
+  const savedText = sendBtn.textContent;
+  sendBtn.textContent = "…";
+  if (chatInput) chatInput.value = "";
   try {
     const data = await plPost(`/api/sessions/${SESSION_ID}/messages`, { content });
     plWrite("Chat Reply", data);
@@ -225,6 +230,10 @@ document.getElementById("play-send")?.addEventListener("click", async () => {
     await plListTasks();
   } catch (err) {
     plWrite("Fehler Chat", { error: String(err) });
+    if (chatInput) chatInput.value = content;
+  } finally {
+    sendBtn.disabled = false;
+    sendBtn.textContent = savedText;
   }
 });
 
@@ -251,6 +260,7 @@ document.getElementById("play-load-chat")?.addEventListener("click", plLoadChat)
 document.getElementById("play-load-tasks")?.addEventListener("click", plListTasks);
 document.getElementById("play-connect-ws")?.addEventListener("click", plConnectWs);
 
+document.getElementById("play-safety-green")?.addEventListener("click", () => plSafety("green"));
 document.getElementById("play-safety-yellow")?.addEventListener("click", () => plSafety("yellow"));
 document.getElementById("play-safety-red")?.addEventListener("click", () => plSafety("red"));
 document.getElementById("play-safety-safeword")?.addEventListener("click", plSafeword);

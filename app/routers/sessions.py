@@ -39,6 +39,7 @@ class CreateSessionRequest(BaseModel):
     wearer_goal: str | None = Field(default=None, max_length=120)
     wearer_boundary: str | None = Field(default=None, max_length=1500)
     scenario_preset: str | None = Field(default=None, max_length=120)
+    initial_seal_number: str | None = Field(default=None, max_length=120)
 
 
 class ProposeAddendumRequest(BaseModel):
@@ -514,6 +515,15 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
         parameters_snapshot="{}",
     )
     db.add(contract)
+
+    if payload.initial_seal_number:
+        seal = SealHistory(
+            session_id=session_obj.id,
+            seal_number=payload.initial_seal_number,
+            status="active",
+        )
+        db.add(seal)
+
     db.commit()
     db.refresh(session_obj)
 
