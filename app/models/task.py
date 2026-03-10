@@ -14,5 +14,7 @@ class Task(Base):
     status = Column(String(20), default="pending", nullable=False)
     consequence_type = Column(String(50), nullable=True)
     consequence_value = Column(Integer, nullable=True)
+    consequence_applied_seconds = Column(Integer, nullable=True)
+    consequence_applied_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)

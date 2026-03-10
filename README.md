@@ -71,11 +71,17 @@ Wichtige API-Endpunkte:
 - `POST /api/sessions/{id}/verifications/request`
 - `POST /api/sessions/{id}/verifications/{verification_id}/upload`
 - `GET /api/sessions/{id}/verifications`
+- `POST /api/sessions/{id}/messages`
+- `GET /api/sessions/{id}/messages`
+- `POST /api/sessions/{id}/tasks`
+- `GET /api/sessions/{id}/tasks`
+- `POST /api/sessions/{id}/tasks/evaluate-overdue`
+- `POST /api/sessions/{id}/tasks/{task_id}/status`
 
 Tests ausführen:
 
 ```bash
-pytest -q
+python -m pytest -q
 ```
 
 ## Lizenz

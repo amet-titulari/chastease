@@ -264,6 +264,16 @@ document.getElementById("task-list-btn").addEventListener("click", async () => {
   }
 });
 
+document.getElementById("task-evaluate-overdue-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const data = await postJson(`/api/sessions/${sessionId}/tasks/evaluate-overdue`, {});
+    writeOutput("Task Overdue-Auswertung", data);
+  } catch (err) {
+    writeOutput("Fehler Task Overdue", { error: String(err) });
+  }
+});
+
 async function updateTaskStatus(status) {
   if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
   const selectedTaskId = Number(document.getElementById("task-id").value || taskId);

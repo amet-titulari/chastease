@@ -4,10 +4,10 @@
 
 ## Stand (Alpha)
 
-- Implementiert: FastAPI-Grundgeruest, SQLAlchemy-Modelle, Alembic-Migrationen `0001`-`0003`, Session/Contract/Hygiene/Safety/Verification APIs
+- Implementiert: FastAPI-Grundgeruest, SQLAlchemy-Modelle, Alembic-Migrationen `0001`-`0005`, Session/Contract/Hygiene/Safety/Verification/Chat/Tasks APIs
 - Implementiert: Interaktive Web Test Console im Dashboard fuer manuelle End-to-End-Tests
-- Teststatus: `12 passed` (lokale automatisierte Tests)
-- Offen: echte KI-Provider-Anbindung, Chat/WebSocket, Aufgaben-System, Notifications, produktionsnahe UX
+- Teststatus: `16 passed` (lokale automatisierte Tests)
+- Offen: echte KI-Provider-Anbindung, produktive Chat-WebSocket-Absicherung, Notifications, produktionsnahe UX
 
 ---
 
@@ -73,11 +73,11 @@
 
 **Ziel**: KI kann Aufgaben vergeben und Konsequenzen ziehen
 
-- [ ] Task-Datenmodell & CRUD
+- [x] Task-Datenmodell & CRUD
 - [ ] KI kann Tasks via Structured Output vergeben
-- [ ] Task-Anzeige im UI (Aufgabenliste)
-- [ ] Task als erledigt markieren (mit optionalem Kommentar)
-- [ ] Automatische Konsequenzen bei Completion / Failure
+- [x] Task-Anzeige im UI (Aufgabenliste)
+- [x] Task als erledigt markieren
+- [x] Automatische Konsequenzen bei Failure / Overdue (Lock-Verlaengerung)
 - [ ] Psychogramm-gesteuerte Aufgaben- und Straflogik anwenden
 - [ ] Belohnungs/Bestrafungs-Events im Verlauf dokumentieren
 - [ ] KI-Antworten inkl. Actions-Schema stabil

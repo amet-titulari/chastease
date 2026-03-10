@@ -12,6 +12,8 @@ def test_dashboard_renders():
         assert "create-session-form" in html
         assert "chat-send-btn" in html
         assert "task-create-btn" in html
+        assert "task-evaluate-overdue-btn" in html
+        assert "task-fail-btn" in html
 
 
 def test_dashboard_script_is_served():
