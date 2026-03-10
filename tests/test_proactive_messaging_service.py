@@ -1,0 +1,58 @@
+from fastapi.testclient import TestClient
+
+from app.database import SessionLocal
+from app.main import app
+from app.models.message import Message
+from app.services.proactive_messaging import sweep_proactive_messages_for_active_sessions
+
+
+def _create_and_sign(client: TestClient) -> int:
+    create_resp = client.post(
+        "/api/sessions",
+        json={
+            "persona_name": "Reminder Persona",
+            "player_nickname": "Wearer",
+            "min_duration_seconds": 300,
+            "max_duration_seconds": 900,
+        },
+    )
+    session_id = create_resp.json()["session_id"]
+    client.post(f"/api/sessions/{session_id}/sign-contract")
+    return session_id
+
+
+def test_proactive_sweep_creates_assistant_reminder():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        result = sweep_proactive_messages_for_active_sessions()
+        assert result["scanned_sessions"] >= 1
+        assert result["sent_messages"] >= 1
+
+        with SessionLocal() as db:
+            rows = (
+                db.query(Message)
+                .filter(Message.session_id == session_id, Message.message_type == "proactive_reminder")
+                .all()
+            )
+            assert len(rows) == 1
+            assert rows[0].role == "assistant"
+
+
+def test_proactive_sweep_respects_cooldown():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        first = sweep_proactive_messages_for_active_sessions()
+        assert first["sent_messages"] >= 1
+
+        second = sweep_proactive_messages_for_active_sessions()
+        assert second["sent_messages"] == 0
+
+        with SessionLocal() as db:
+            rows = (
+                db.query(Message)
+                .filter(Message.session_id == session_id, Message.message_type == "proactive_reminder")
+                .all()
+            )
+            assert len(rows) == 1

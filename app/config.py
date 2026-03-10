@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     task_overdue_default_penalty_seconds: int = 300
     task_overdue_sweeper_enabled: bool = True
     task_overdue_sweeper_interval_seconds: int = 60
+    proactive_messages_enabled: bool = True
+    proactive_messages_interval_seconds: int = 120
+    proactive_messages_cooldown_seconds: int = 600
 
     model_config = SettingsConfigDict(
         env_prefix="CHASTEASE_",

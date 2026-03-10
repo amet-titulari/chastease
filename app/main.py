@@ -22,6 +22,7 @@ from app.models import (  # noqa: F401
     verification,
 )
 from app.routers import chat, health, hygiene, safety, sessions, tasks, verification as verification_router, web
+from app.services.proactive_messaging import sweep_proactive_messages_for_active_sessions
 from app.services.task_sweeper import sweep_overdue_tasks_for_active_sessions
 
 
@@ -41,6 +42,14 @@ async def lifespan(_: FastAPI):
             id="task_overdue_sweeper",
             replace_existing=True,
         )
+        if settings.proactive_messages_enabled:
+            scheduler.add_job(
+                sweep_proactive_messages_for_active_sessions,
+                "interval",
+                seconds=settings.proactive_messages_interval_seconds,
+                id="proactive_message_sweeper",
+                replace_existing=True,
+            )
         scheduler.start()
     yield
     if scheduler is not None:

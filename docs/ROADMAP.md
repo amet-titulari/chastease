@@ -5,9 +5,10 @@
 ## Stand (Alpha)
 
 - Implementiert: FastAPI-Grundgeruest, SQLAlchemy-Modelle, Alembic-Migrationen `0001`-`0005`, Session/Contract/Hygiene/Safety/Verification/Chat/Tasks APIs
+- Implementiert: APScheduler-Jobs fuer Task-Overdue-Sweep und proaktive Keyholderin-Reminder
 - Implementiert: Interaktive Web Test Console im Dashboard fuer manuelle End-to-End-Tests
-- Teststatus: `17 passed` (lokale automatisierte Tests)
-- Offen: echte KI-Provider-Anbindung, produktive Chat-WebSocket-Absicherung, Notifications, produktionsnahe UX
+- Teststatus: `19 passed` (lokale automatisierte Tests)
+- Offen: echte KI-Provider-Anbindung, produktive Chat-WebSocket-Absicherung, Browser Push, produktionsnahe UX
 
 ---
 
@@ -38,7 +39,7 @@
 - [ ] Persona-Builder: System-Prompt aus Konfiguration generieren
 - [ ] Spieler-Psychogramm modellieren und Onboarding-Fragebogen definieren
 - [ ] Player-Profile in den Prompt-Kontext integrieren
-- [ ] Chat-Router & WebSocket-Verbindung
+- [x] Chat-Router & WebSocket-Verbindung
 - [ ] Chat-Interface (Jinja2 + HTMX)
 - [ ] Persona-Konfigurationsseite
 - [ ] Spielerprofil-Konfigurationsseite
@@ -114,9 +115,9 @@
 - [x] Hygiene-Öffnungen: Countdown, Wiederverschluss-Bestätigung und automatische Bestrafung bei Überziehung
 - [x] Plomben-Historie: Zerstörung alter Plombe und Pflicht-Eintrag neuer Plombe nach Öffnung
 - [x] APScheduler-Basis: periodischer Task-Overdue-Sweep fuer aktive Sessions
-- [ ] APScheduler: proaktive Keyholderin-Nachrichten
+- [x] APScheduler: proaktive Keyholderin-Nachrichten
 - [ ] Browser Push Notifications (Web Push API)
-- [ ] Konfigurierbare Benachrichtigungs-Häufigkeit
+- [x] Konfigurierbare Benachrichtigungs-Haeufigkeit (Intervall/Cooldown per `.env`)
 
 **Deliverable**: Keyholderin agiert proaktiv, Verifikation funktioniert
 

@@ -85,6 +85,15 @@ Automatischer Task-Overdue-Sweep:
 	- `CHASTEASE_TASK_OVERDUE_SWEEPER_ENABLED=true|false`
 	- `CHASTEASE_TASK_OVERDUE_SWEEPER_INTERVAL_SECONDS=60`
 
+Proaktive Keyholderin-Reminder:
+
+- Hintergrundjob (APScheduler) erzeugt fuer aktive Sessions periodische Assistant-Reminder.
+- Cooldown verhindert Spam (nur wenn keine frische Assistant-Nachricht vorliegt).
+- Konfiguration per `.env`:
+	- `CHASTEASE_PROACTIVE_MESSAGES_ENABLED=true|false`
+	- `CHASTEASE_PROACTIVE_MESSAGES_INTERVAL_SECONDS=120`
+	- `CHASTEASE_PROACTIVE_MESSAGES_COOLDOWN_SECONDS=600`
+
 Tests ausführen:
 
 ```bash
