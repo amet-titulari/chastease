@@ -103,6 +103,9 @@ WebSocket Live-Feed:
 - `ws_auth_token` wird aktuell in Session-Antworten (`POST /api/sessions`, `POST /api/sessions/{id}/sign-contract`, `GET /api/sessions/{id}`) mitgegeben.
 - `POST /api/sessions/{id}/chat/ws-token/rotate` erzeugt ein neues Token und invalidiert bestehende WS-Verbindungen serverseitig.
 - Optionaler Schutz: Wenn `CHASTEASE_ADMIN_SECRET` gesetzt ist, muss der Header `X-Admin-Secret` fuer Rotations-Endpunkte mitgesendet werden.
+- Der gleiche optionale Schutz gilt auch fuer sicherheitskritische Steuer-Endpunkte:
+	- `POST /api/sessions/{id}/safety/traffic-light`
+	- `POST /api/sessions/{id}/safety/emergency-release`
 
 Tests ausführen:
 

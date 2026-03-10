@@ -15,6 +15,12 @@ function writeOutput(title, data) {
   outputEl.textContent = `${title}\n${JSON.stringify(data, null, 2)}`;
 }
 
+function getAdminHeaders() {
+  const field = document.getElementById("admin-secret");
+  const value = field ? field.value : "";
+  return value ? { "X-Admin-Secret": value } : {};
+}
+
 function syncIds() {
   sessionIdEl.textContent = sessionId ?? "-";
   addendumIdEl.textContent = addendumId ?? "-";
@@ -156,7 +162,11 @@ document.getElementById("relock-btn").addEventListener("click", async () => {
 async function traffic(color) {
   if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
   try {
-    const data = await postJson(`/api/sessions/${sessionId}/safety/traffic-light`, { color });
+    const data = await postJsonWithHeaders(
+      `/api/sessions/${sessionId}/safety/traffic-light`,
+      { color },
+      getAdminHeaders()
+    );
     writeOutput(`Ampel ${color}`, data);
   } catch (err) {
     writeOutput("Fehler Ampel", { error: String(err) });
@@ -180,7 +190,11 @@ document.getElementById("emergency-btn").addEventListener("click", async () => {
   if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
   try {
     const reason = document.getElementById("emergency-reason").value;
-    const data = await postJson(`/api/sessions/${sessionId}/safety/emergency-release`, { reason });
+    const data = await postJsonWithHeaders(
+      `/api/sessions/${sessionId}/safety/emergency-release`,
+      { reason },
+      getAdminHeaders()
+    );
     writeOutput("Emergency Release", data);
   } catch (err) {
     writeOutput("Fehler Emergency", { error: String(err) });
@@ -256,8 +270,7 @@ document.getElementById("chat-list-btn").addEventListener("click", async () => {
 document.getElementById("chat-ws-rotate-token-btn").addEventListener("click", async () => {
   if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
   try {
-    const adminSecret = document.getElementById("admin-secret").value;
-    const headers = adminSecret ? { "X-Admin-Secret": adminSecret } : {};
+    const headers = getAdminHeaders();
     const data = await postJsonWithHeaders(`/api/sessions/${sessionId}/chat/ws-token/rotate`, {}, headers);
     wsAuthToken = data.ws_auth_token;
     if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {

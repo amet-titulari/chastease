@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.safety_log import SafetyLog
 from app.models.session import Session as SessionModel
+from app.security import verify_admin_secret
 
 router = APIRouter(prefix="/api/sessions", tags=["safety"])
 
@@ -25,7 +26,12 @@ def _load_session(db: Session, session_id: int) -> SessionModel:
 
 
 @router.post("/{session_id}/safety/traffic-light")
-def traffic_light(session_id: int, payload: TrafficLightRequest, db: Session = Depends(get_db)) -> dict:
+def traffic_light(
+    session_id: int,
+    payload: TrafficLightRequest,
+    _: None = Depends(verify_admin_secret),
+    db: Session = Depends(get_db),
+) -> dict:
     session_obj = _load_session(db, session_id)
 
     if payload.color == "red" and session_obj.status == "active":
@@ -53,6 +59,7 @@ def safeword(session_id: int, db: Session = Depends(get_db)) -> dict:
 def emergency_release(
     session_id: int,
     payload: EmergencyReleaseRequest,
+    _: None = Depends(verify_admin_secret),
     db: Session = Depends(get_db),
 ) -> dict:
     session_obj = _load_session(db, session_id)

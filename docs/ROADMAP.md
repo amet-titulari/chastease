@@ -11,7 +11,8 @@
 - Implementiert: Basis-Absicherung fuer Chat-WebSocket per persistentem Session-Token
 - Implementiert: WS-Token-Rotation mit serverseitiger Invalidierung bestehender Verbindungen
 - Implementiert: Optionales Admin-Secret (`X-Admin-Secret`) fuer geschuetzte WS-Token-Rotationsaktionen
-- Teststatus: `24 passed` (lokale automatisierte Tests)
+- Implementiert: Optionales Admin-Secret auch fuer sensible Safety-Steueraktionen (Traffic-Light, Emergency-Release)
+- Teststatus: `25 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---

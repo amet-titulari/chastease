@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
 
 
@@ -43,3 +44,42 @@ def test_traffic_light_and_emergency_logging():
         assert "yellow" in events
         assert "red" in events
         assert "emergency_release" in events
+
+
+def test_admin_secret_protects_control_actions_when_configured():
+    previous = settings.admin_secret
+    settings.admin_secret = "safety-secret"
+    try:
+        with TestClient(app) as client:
+            session_id = _create_and_sign_session(client)
+
+            blocked_traffic = client.post(
+                f"/api/sessions/{session_id}/safety/traffic-light",
+                json={"color": "yellow"},
+            )
+            assert blocked_traffic.status_code == 403
+
+            blocked_emergency = client.post(
+                f"/api/sessions/{session_id}/safety/emergency-release",
+                json={"reason": "Physical discomfort detected"},
+            )
+            assert blocked_emergency.status_code == 403
+
+            allowed_traffic = client.post(
+                f"/api/sessions/{session_id}/safety/traffic-light",
+                json={"color": "yellow"},
+                headers={"X-Admin-Secret": "safety-secret"},
+            )
+            assert allowed_traffic.status_code == 200
+
+            allowed_emergency = client.post(
+                f"/api/sessions/{session_id}/safety/emergency-release",
+                json={"reason": "Physical discomfort detected"},
+                headers={"X-Admin-Secret": "safety-secret"},
+            )
+            assert allowed_emergency.status_code == 200
+
+            safeword = client.post(f"/api/sessions/{session_id}/safety/safeword")
+            assert safeword.status_code == 200
+    finally:
+        settings.admin_secret = previous
