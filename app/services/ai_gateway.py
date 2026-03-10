@@ -15,6 +15,79 @@ class AIResponse:
     intensity: int
 
 
+def _normalize_create_task_action(raw: dict) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+
+    title = str(raw.get("title", "")).strip()
+    if not title:
+        return None
+
+    normalized: dict = {
+        "type": "create_task",
+        "title": title[:200],
+    }
+
+    description = raw.get("description")
+    if description is not None:
+        description_text = str(description).strip()
+        if description_text:
+            normalized["description"] = description_text[:2000]
+
+    deadline_minutes = raw.get("deadline_minutes")
+    if isinstance(deadline_minutes, int):
+        if deadline_minutes > 0:
+            normalized["deadline_minutes"] = deadline_minutes
+    else:
+        try:
+            coerced = int(deadline_minutes)
+            if coerced > 0:
+                normalized["deadline_minutes"] = coerced
+        except Exception:
+            pass
+
+    consequence_type = raw.get("consequence_type")
+    if isinstance(consequence_type, str) and consequence_type.strip() in {"lock_extension_seconds"}:
+        normalized["consequence_type"] = consequence_type.strip()
+
+    consequence_value = raw.get("consequence_value")
+    if isinstance(consequence_value, int):
+        if consequence_value > 0:
+            normalized["consequence_value"] = consequence_value
+    else:
+        try:
+            coerced = int(consequence_value)
+            if coerced > 0:
+                normalized["consequence_value"] = coerced
+        except Exception:
+            pass
+
+    return normalized
+
+
+def normalize_actions(raw_actions) -> list[dict]:
+    if not isinstance(raw_actions, list):
+        return []
+
+    normalized: list[dict] = []
+    for item in raw_actions:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "create_task":
+            parsed = _normalize_create_task_action(item)
+            if parsed is not None:
+                normalized.append(parsed)
+    return normalized
+
+
+def _normalize_intensity(value) -> int:
+    try:
+        parsed = int(value)
+    except Exception:
+        parsed = 3
+    return max(1, min(5, parsed))
+
+
 class AIGateway:
     def generate_contract(
         self,
@@ -81,7 +154,7 @@ class StubAIGateway(AIGateway):
 
         return AIResponse(
             message=message,
-            actions=actions,
+            actions=normalize_actions(actions),
             mood="strict",
             intensity=3,
         )
@@ -178,15 +251,15 @@ class OllamaGateway(AIGateway):
                 if isinstance(raw, str) and raw.strip():
                     parsed = json.loads(raw)
                     message = str(parsed.get("message", "")).strip()
-                    actions = parsed.get("actions", [])
+                    actions = normalize_actions(parsed.get("actions", []))
                     mood = str(parsed.get("mood", "neutral")).strip() or "neutral"
-                    intensity = int(parsed.get("intensity", 3))
+                    intensity = _normalize_intensity(parsed.get("intensity", 3))
                     if message:
                         return AIResponse(
                             message=message,
-                            actions=actions if isinstance(actions, list) else [],
+                            actions=actions,
                             mood=mood,
-                            intensity=max(1, min(5, intensity)),
+                            intensity=intensity,
                         )
         except Exception:
             pass
