@@ -134,6 +134,9 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
         wearer_style=wearer_style,
         wearer_goal=wearer_goal,
         wearer_boundary=wearer_boundary,
+        persona_system_prompt=persona.system_prompt if persona else None,
+        communication_style=persona.communication_style if persona else None,
+        strictness_level=persona.strictness_level if persona else 3,
     ).render()
 
     structured = ai.generate_chat_response(
