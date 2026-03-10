@@ -94,7 +94,7 @@
 - [x] Task als erledigt markieren
 - [x] Automatische Konsequenzen bei Failure / Overdue (Lock-Verlaengerung)
 - [x] Psychogramm-gesteuerte Aufgaben- und Straflogik anwenden
-- [ ] Belohnungs/Bestrafungs-Events im Verlauf dokumentieren
+- [x] Belohnungs/Bestrafungs-Events im Verlauf dokumentieren
 - [ ] KI-Antworten inkl. Actions-Schema stabil
 
 **Deliverable**: Vollständiges Task & Consequence System

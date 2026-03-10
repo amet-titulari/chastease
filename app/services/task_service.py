@@ -4,6 +4,7 @@ import json
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models.message import Message
 from app.models.player_profile import PlayerProfile
 from app.models.session import Session as SessionModel
 from app.models.task import Task
@@ -88,6 +89,17 @@ class TaskService:
         task.consequence_applied_seconds = penalty_seconds
         task.consequence_applied_at = now
         db.add(task)
+        db.add(
+            Message(
+                session_id=session_obj.id,
+                role="system",
+                message_type="task_penalty",
+                content=(
+                    f"Task-Penalty angewendet: task_id={task.id}, title='{task.title}', "
+                    f"lock_extension_seconds={penalty_seconds}"
+                ),
+            )
+        )
         return True
 
     @staticmethod

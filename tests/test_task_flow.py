@@ -134,3 +134,36 @@ def test_chat_structured_output_can_create_task():
         tasks = tasks_resp.json()["items"]
         assert len(tasks) >= 1
         assert any("Kniebeugen" in item["title"] for item in tasks)
+
+
+def test_task_reward_and_penalty_events_are_logged():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        reward_task = client.post(
+            f"/api/sessions/{session_id}/tasks",
+            json={"title": "Reward Event Task", "description": "done"},
+        )
+        reward_id = reward_task.json()["task_id"]
+        completed = client.post(
+            f"/api/sessions/{session_id}/tasks/{reward_id}/status",
+            json={"status": "completed"},
+        )
+        assert completed.status_code == 200
+
+        penalty_task = client.post(
+            f"/api/sessions/{session_id}/tasks",
+            json={"title": "Penalty Event Task", "consequence_value": 180},
+        )
+        penalty_id = penalty_task.json()["task_id"]
+        failed = client.post(
+            f"/api/sessions/{session_id}/tasks/{penalty_id}/status",
+            json={"status": "failed"},
+        )
+        assert failed.status_code == 200
+
+        events = client.get(f"/api/sessions/{session_id}/events?source=message&limit=200")
+        assert events.status_code == 200
+        types = [item["event_type"] for item in events.json()["items"]]
+        assert "task_reward" in types
+        assert "task_penalty" in types

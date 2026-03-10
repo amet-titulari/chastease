@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.message import Message
 from app.models.session import Session as SessionModel
 from app.models.task import Task
 from app.services.task_service import TaskService
@@ -107,6 +108,14 @@ def update_task_status(
     task.status = payload.status
     if payload.status == "completed":
         task.completed_at = datetime.now(timezone.utc)
+        db.add(
+            Message(
+                session_id=session_id,
+                role="system",
+                message_type="task_reward",
+                content=f"Task-Reward dokumentiert: task_id={task.id}, title='{task.title}', status=completed",
+            )
+        )
     if payload.status == "failed":
         TaskService.apply_task_consequence(
             db=db,

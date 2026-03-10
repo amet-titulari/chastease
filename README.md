@@ -13,6 +13,7 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Bildverifikation** – Optionale Verifikation mit nummerierten Plomben
 - **Aufgaben-System** – Challenges mit Belohnungen und Bestrafungen
 - **KI-Taskvergabe** – Chat kann via Structured Output automatisch `create_task`-Aktionen ausloesen
+- **Task-Eventlogging** – `task_reward`/`task_penalty` werden als Session-Events dokumentiert
 - **Persona-Presets** – Vordefinierte Keyholder-Personas (u.a. `Ballet Sub Ella`)
 - **Sicherheitssystem** – Ampelsystem, Safeword, Emergency Release
 - **Safety-Override im Chat** – Gelb aktiviert Fuersorge-Modus, Rot pausiert mit deeskalierenden Antworten
