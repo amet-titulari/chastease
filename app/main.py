@@ -24,7 +24,7 @@ from app.models import (  # noqa: F401
     task,
     verification,
 )
-from app.routers import chat, health, hygiene, safety, sessions, tasks, verification as verification_router, web
+from app.routers import chat, health, hygiene, personas, safety, sessions, tasks, verification as verification_router, web
 from app.services.proactive_messaging import sweep_proactive_messages_for_active_sessions
 from app.services.session_timer_sweeper import sweep_expired_active_sessions
 from app.services.task_sweeper import sweep_overdue_tasks_for_active_sessions
@@ -156,6 +156,7 @@ init_app_storage()
 
 app.include_router(health.router)
 app.include_router(sessions.router)
+app.include_router(personas.router)
 app.include_router(chat.router)
 app.include_router(tasks.router)
 app.include_router(hygiene.router)

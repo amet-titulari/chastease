@@ -145,7 +145,7 @@
 - [x] Error Handling & User Feedback
 - [x] Session-History-Seite
 - [x] Vertragsansicht inkl. Addenda und Export
-- [ ] Persona-Bibliothek (mehrere gespeicherte Personas)
+- [x] Persona-Bibliothek (mehrere gespeicherte Personas)
 - [ ] Ollama-Provider implementieren
 - [x] Unit/Integration Tests kritischer Services und Flows (Timer, Safety, Contract, Hygiene, Verification)
 - [x] Dokumentation finalisieren

@@ -5,6 +5,7 @@ let verificationId = null;
 let taskId = null;
 let wsAuthToken = null;
 let chatSocket = null;
+let personaPresets = [];
 
 const outputEl = document.getElementById("output");
 const sessionIdEl = document.getElementById("session-id");
@@ -67,6 +68,32 @@ async function getJson(url) {
   return data;
 }
 
+async function loadPersonaPresets() {
+  const select = document.getElementById("persona-preset-select");
+  if (!select) return;
+
+  try {
+    const data = await getJson("/api/personas/presets");
+    personaPresets = Array.isArray(data.items) ? data.items : [];
+    select.innerHTML = "";
+
+    if (!personaPresets.length) {
+      select.innerHTML = '<option value="">Keine Presets verfuegbar</option>';
+      return;
+    }
+
+    for (const preset of personaPresets) {
+      const option = document.createElement("option");
+      option.value = preset.key;
+      option.textContent = preset.name;
+      select.appendChild(option);
+    }
+  } catch (err) {
+    select.innerHTML = '<option value="">Preset-Fehler</option>';
+    writeOutput("Fehler Persona Presets", { error: String(err) });
+  }
+}
+
 document.getElementById("create-session-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
@@ -87,6 +114,27 @@ document.getElementById("create-session-form").addEventListener("submit", async 
   } catch (err) {
     writeOutput("Fehler Session", { error: String(err) });
   }
+});
+
+document.getElementById("apply-persona-preset-btn").addEventListener("click", () => {
+  const select = document.getElementById("persona-preset-select");
+  const key = select ? select.value : "";
+  const preset = personaPresets.find((item) => item.key === key);
+  if (!preset) {
+    return writeOutput("Hinweis", { error: "Bitte ein gueltiges Persona-Preset auswaehlen." });
+  }
+
+  const form = document.getElementById("create-session-form");
+  const personaField = form.querySelector('input[name="persona_name"]');
+  if (personaField) {
+    personaField.value = preset.name;
+  }
+  writeOutput("Persona-Preset uebernommen", {
+    key: preset.key,
+    name: preset.name,
+    communication_style: preset.communication_style,
+    strictness_level: preset.strictness_level,
+  });
 });
 
 document.getElementById("sign-contract-btn").addEventListener("click", async () => {
@@ -436,3 +484,4 @@ document.getElementById("session-events-btn").addEventListener("click", async ()
 });
 
 syncIds();
+loadPersonaPresets();

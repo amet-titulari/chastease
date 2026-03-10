@@ -12,6 +12,7 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Session-Mechanik** – Zufällige Sperrdauern, Timer-Management
 - **Bildverifikation** – Optionale Verifikation mit nummerierten Plomben
 - **Aufgaben-System** – Challenges mit Belohnungen und Bestrafungen
+- **Persona-Presets** – Vordefinierte Keyholder-Personas (u.a. `Ballet Sub Ella`)
 - **Sicherheitssystem** – Ampelsystem, Safeword, Emergency Release
 - **Benachrichtigungen** – Timer, Erinnerungen, Nachrichten der Keyholderin
 - **Web Test Console** – Interaktive Browser-Oberfläche für Core-Flows

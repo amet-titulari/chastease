@@ -21,6 +21,8 @@ def test_dashboard_renders():
         assert "task-create-btn" in html
         assert "task-evaluate-overdue-btn" in html
         assert "task-fail-btn" in html
+        assert "persona-preset-select" in html
+        assert "apply-persona-preset-btn" in html
 
 
 def test_dashboard_script_is_served():
