@@ -3,6 +3,7 @@ let addendumId = null;
 let openingId = null;
 let verificationId = null;
 let taskId = null;
+let chatSocket = null;
 
 const outputEl = document.getElementById("output");
 const sessionIdEl = document.getElementById("session-id");
@@ -235,6 +236,34 @@ document.getElementById("chat-list-btn").addEventListener("click", async () => {
   } catch (err) {
     writeOutput("Fehler Chat Verlauf", { error: String(err) });
   }
+});
+
+document.getElementById("chat-ws-connect-btn").addEventListener("click", () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+    return writeOutput("WebSocket", { status: "bereits verbunden" });
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+  chatSocket = new WebSocket(`${protocol}://${window.location.host}/api/sessions/${sessionId}/chat/ws`);
+
+  chatSocket.onopen = () => writeOutput("WebSocket", { status: "verbunden" });
+  chatSocket.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      writeOutput("Live Chat Event", payload);
+    } catch (err) {
+      writeOutput("WebSocket Parse Fehler", { error: String(err) });
+    }
+  };
+  chatSocket.onerror = () => writeOutput("WebSocket", { status: "fehler" });
+  chatSocket.onclose = () => writeOutput("WebSocket", { status: "getrennt" });
+});
+
+document.getElementById("chat-ws-disconnect-btn").addEventListener("click", () => {
+  if (!chatSocket) return writeOutput("WebSocket", { status: "nicht verbunden" });
+  chatSocket.close();
+  chatSocket = null;
 });
 
 document.getElementById("task-create-btn").addEventListener("click", async () => {

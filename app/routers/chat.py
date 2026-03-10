@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -46,6 +47,46 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
     return assistant_msg
 
 
+def _latest_assistant_message_id(db: Session, session_id: int) -> int:
+    row = (
+        db.query(Message)
+        .filter(Message.session_id == session_id, Message.role == "assistant")
+        .order_by(Message.id.desc())
+        .first()
+    )
+    return row.id if row else 0
+
+
+async def _push_new_assistant_messages(
+    websocket: WebSocket,
+    db: Session,
+    session_id: int,
+    last_sent_assistant_id: int,
+) -> int:
+    rows = (
+        db.query(Message)
+        .filter(
+            Message.session_id == session_id,
+            Message.role == "assistant",
+            Message.id > last_sent_assistant_id,
+        )
+        .order_by(Message.id.asc())
+        .all()
+    )
+    for row in rows:
+        await websocket.send_json(
+            {
+                "session_id": session_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "assistant": row.content,
+                "message_id": row.id,
+                "message_type": row.message_type,
+            }
+        )
+        last_sent_assistant_id = row.id
+    return last_sent_assistant_id
+
+
 @router.get("/{session_id}/messages")
 def list_messages(session_id: int, db: Session = Depends(get_db)) -> dict:
     _load_session(db, session_id)
@@ -81,16 +122,29 @@ async def chat_ws(websocket: WebSocket, session_id: int):
     db = SessionLocal()
     try:
         _load_session(db, session_id)
+        last_sent_assistant_id = _latest_assistant_message_id(db, session_id)
         while True:
-            user_text = await websocket.receive_text()
-            assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=user_text)
-            await websocket.send_json(
-                {
-                    "session_id": session_id,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "assistant": assistant_msg.content,
-                    "message_id": assistant_msg.id,
-                }
+            try:
+                user_text = await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
+                assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=user_text)
+                await websocket.send_json(
+                    {
+                        "session_id": session_id,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "assistant": assistant_msg.content,
+                        "message_id": assistant_msg.id,
+                        "message_type": assistant_msg.message_type,
+                    }
+                )
+                last_sent_assistant_id = assistant_msg.id
+            except TimeoutError:
+                pass
+
+            last_sent_assistant_id = await _push_new_assistant_messages(
+                websocket=websocket,
+                db=db,
+                session_id=session_id,
+                last_sent_assistant_id=last_sent_assistant_id,
             )
     except WebSocketDisconnect:
         pass

@@ -94,6 +94,11 @@ Proaktive Keyholderin-Reminder:
 	- `CHASTEASE_PROACTIVE_MESSAGES_INTERVAL_SECONDS=120`
 	- `CHASTEASE_PROACTIVE_MESSAGES_COOLDOWN_SECONDS=600`
 
+WebSocket Live-Feed:
+
+- `GET/POST` Chat bleibt verfuegbar, zusaetzlich streamt `ws /api/sessions/{id}/chat/ws` neue Assistant-Nachrichten live.
+- Enthalten sind normale Chat-Antworten und Scheduler-basierte `proactive_reminder`-Nachrichten.
+
 Tests ausführen:
 
 ```bash
