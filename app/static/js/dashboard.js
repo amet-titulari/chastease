@@ -39,6 +39,14 @@ function syncIds() {
   openingIdEl.textContent = openingId ?? "-";
 }
 
+function parseOptionalNumber(value) {
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 async function postJson(url, payload) {
   const res = await fetch(url, {
     method: "POST",
@@ -114,6 +122,9 @@ document.getElementById("create-session-form").addEventListener("submit", async 
       player_nickname: formData.get("player_nickname"),
       min_duration_seconds: Number(formData.get("min_duration_seconds")),
       max_duration_seconds: Number(formData.get("max_duration_seconds")),
+      hygiene_limit_daily: parseOptionalNumber(formData.get("hygiene_limit_daily")),
+      hygiene_limit_weekly: parseOptionalNumber(formData.get("hygiene_limit_weekly")),
+      hygiene_limit_monthly: parseOptionalNumber(formData.get("hygiene_limit_monthly")),
     };
     const data = await postJson("/api/sessions", payload);
     sessionId = data.session_id;
@@ -258,6 +269,16 @@ document.getElementById("hygiene-status-btn").addEventListener("click", async ()
     writeOutput("Hygiene-Status", data);
   } catch (err) {
     writeOutput("Fehler Hygiene Status", { error: String(err) });
+  }
+});
+
+document.getElementById("hygiene-quota-btn").addEventListener("click", async () => {
+  if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  try {
+    const data = await getJson(`/api/sessions/${sessionId}/hygiene/quota`);
+    writeOutput("Hygiene-Kontingent", data);
+  } catch (err) {
+    writeOutput("Fehler Hygiene-Kontingent", { error: String(err) });
   }
 });
 

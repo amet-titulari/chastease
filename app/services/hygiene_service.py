@@ -29,3 +29,15 @@ class HygieneService:
         if delta > 0:
             return HygieneStatus(due_back_at=normalized_due, is_overdue=True, overrun_seconds=delta)
         return HygieneStatus(due_back_at=normalized_due, is_overdue=False, overrun_seconds=0)
+
+    @staticmethod
+    def period_start(period: str, now: datetime | None = None) -> datetime:
+        current = HygieneService._as_utc(now or datetime.now(timezone.utc))
+        if period == "day":
+            return current.replace(hour=0, minute=0, second=0, microsecond=0)
+        if period == "week":
+            day_start = current.replace(hour=0, minute=0, second=0, microsecond=0)
+            return day_start - timedelta(days=day_start.weekday())
+        if period == "month":
+            return current.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        raise ValueError(f"Unsupported period: {period}")

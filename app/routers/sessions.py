@@ -30,6 +30,9 @@ class CreateSessionRequest(BaseModel):
     player_nickname: str = Field(min_length=1, max_length=120)
     min_duration_seconds: int = Field(ge=60)
     max_duration_seconds: int | None = Field(default=None, ge=60)
+    hygiene_limit_daily: int | None = Field(default=None, ge=0)
+    hygiene_limit_weekly: int | None = Field(default=None, ge=0)
+    hygiene_limit_monthly: int | None = Field(default=None, ge=0)
 
 
 class ProposeAddendumRequest(BaseModel):
@@ -89,6 +92,9 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
         "status": session_obj.status,
         "min_duration_seconds": session_obj.min_duration_seconds,
         "max_duration_seconds": session_obj.max_duration_seconds,
+        "hygiene_limit_daily": session_obj.hygiene_limit_daily,
+        "hygiene_limit_weekly": session_obj.hygiene_limit_weekly,
+        "hygiene_limit_monthly": session_obj.hygiene_limit_monthly,
         "lock_start": str(session_obj.lock_start) if session_obj.lock_start else None,
         "lock_end": str(session_obj.lock_end) if session_obj.lock_end else None,
         "ws_auth_token": session_obj.ws_auth_token,
@@ -362,6 +368,9 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
         player_profile_id=player.id,
         min_duration_seconds=payload.min_duration_seconds,
         max_duration_seconds=payload.max_duration_seconds,
+        hygiene_limit_daily=payload.hygiene_limit_daily,
+        hygiene_limit_weekly=payload.hygiene_limit_weekly,
+        hygiene_limit_monthly=payload.hygiene_limit_monthly,
         status="draft",
     )
     _ensure_ws_auth_token(session_obj)

@@ -26,6 +26,8 @@ def test_dashboard_renders():
         assert "push-subscribe-btn" in html
         assert "push-list-btn" in html
         assert "push-test-btn" in html
+        assert "hygiene-quota-btn" in html
+        assert "hygiene_limit_daily" in html
 
 
 def test_dashboard_script_is_served():

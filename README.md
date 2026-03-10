@@ -82,6 +82,7 @@ Wichtige API-Endpunkte:
 - `POST /api/sessions/{id}/timer/freeze`
 - `POST /api/sessions/{id}/timer/unfreeze`
 - `POST /api/sessions/{id}/hygiene/openings`
+- `GET /api/sessions/{id}/hygiene/quota`
 - `GET /api/sessions/{id}/hygiene/openings/{opening_id}`
 - `POST /api/sessions/{id}/hygiene/openings/{opening_id}/relock`
 - `POST /api/sessions/{id}/safety/traffic-light`
@@ -184,6 +185,15 @@ Web Push (optional):
 - `CHASTEASE_WEB_PUSH_VAPID_PRIVATE_KEY=<private_key>`
 - `CHASTEASE_WEB_PUSH_VAPID_CLAIMS_SUB=mailto:admin@example.com`
 - Fuer Dispatch wird `pywebpush` verwendet. Ohne gueltige VAPID-Konfiguration bleibt Dispatch deaktiviert.
+
+Hygiene-Kontingente pro Session:
+
+- Beim Session-Create optional setzbar:
+	- `hygiene_limit_daily`
+	- `hygiene_limit_weekly`
+	- `hygiene_limit_monthly`
+- Quota-Status abrufbar via `GET /api/sessions/{id}/hygiene/quota`.
+- Bei erreichtem Limit blockiert `POST /api/sessions/{id}/hygiene/openings` neue Oeffnungen mit `400`.
 
 KI-Bildanalyse fuer Verifikation:
 

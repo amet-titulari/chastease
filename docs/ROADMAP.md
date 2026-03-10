@@ -125,7 +125,7 @@
 - [x] KI-Bildanalyse-Integration (Verifikation, heuristische Logik + optionaler Ollama-Provider mit Fallback)
 - [x] Optionale Seal-Nummer in Verifikationsanfrage
 - [x] Verifikations-UI (Testkonsole)
-- [ ] Hygiene-Öffnungen: Kontingente pro Tag/Woche/Monat implementieren
+- [x] Hygiene-Öffnungen: Kontingente pro Tag/Woche/Monat implementieren
 - [x] Hygiene-Öffnungen: Countdown, Wiederverschluss-Bestätigung und automatische Bestrafung bei Überziehung
 - [x] Plomben-Historie: Zerstörung alter Plombe und Pflicht-Eintrag neuer Plombe nach Öffnung
 - [x] APScheduler-Basis: periodischer Task-Overdue-Sweep fuer aktive Sessions

@@ -24,6 +24,15 @@
     <label>Max Dauer (Sekunden)
       <input name="max_duration_seconds" type="number" min="60" value="900" required />
     </label>
+    <label>Hygiene-Limit Tag (optional)
+      <input name="hygiene_limit_daily" type="number" min="0" placeholder="z.B. 2" />
+    </label>
+    <label>Hygiene-Limit Woche (optional)
+      <input name="hygiene_limit_weekly" type="number" min="0" placeholder="z.B. 5" />
+    </label>
+    <label>Hygiene-Limit Monat (optional)
+      <input name="hygiene_limit_monthly" type="number" min="0" placeholder="z.B. 12" />
+    </label>
     <button type="submit">Session erstellen</button>
   </form>
 </section>
@@ -69,6 +78,7 @@
     </label>
     <button id="open-hygiene-btn" type="button">Hygiene-Oeffnung starten</button>
     <button id="hygiene-status-btn" type="button">Hygiene-Status abrufen</button>
+    <button id="hygiene-quota-btn" type="button">Hygiene-Kontingent abrufen</button>
     <button id="relock-btn" type="button">Wiederverschliessen</button>
   </div>
 </section>

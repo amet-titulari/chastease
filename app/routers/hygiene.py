@@ -23,6 +23,68 @@ class RelockRequest(BaseModel):
     new_seal_number: str | None = None
 
 
+def _count_openings_since(db: Session, session_id: int, start_ts: datetime) -> int:
+    return (
+        db.query(HygieneOpening)
+        .filter(
+            HygieneOpening.session_id == session_id,
+            HygieneOpening.opened_at.is_not(None),
+            HygieneOpening.opened_at >= start_ts,
+        )
+        .count()
+    )
+
+
+def _quota_payload(db: Session, session_obj: SessionModel, now: datetime) -> dict:
+    limits = {
+        "daily": session_obj.hygiene_limit_daily,
+        "weekly": session_obj.hygiene_limit_weekly,
+        "monthly": session_obj.hygiene_limit_monthly,
+    }
+    used = {
+        "daily": _count_openings_since(db, session_obj.id, HygieneService.period_start("day", now)),
+        "weekly": _count_openings_since(db, session_obj.id, HygieneService.period_start("week", now)),
+        "monthly": _count_openings_since(db, session_obj.id, HygieneService.period_start("month", now)),
+    }
+
+    def _remaining(key: str) -> int | None:
+        limit = limits[key]
+        if limit is None:
+            return None
+        return max(0, limit - used[key])
+
+    return {
+        "limits": limits,
+        "used": used,
+        "remaining": {
+            "daily": _remaining("daily"),
+            "weekly": _remaining("weekly"),
+            "monthly": _remaining("monthly"),
+        },
+    }
+
+
+def _quota_exceeded(quota: dict) -> bool:
+    for key in ("daily", "weekly", "monthly"):
+        remaining = quota["remaining"][key]
+        if remaining is not None and remaining <= 0:
+            return True
+    return False
+
+
+@router.get("/{session_id}/hygiene/quota")
+def get_hygiene_quota(session_id: int, db: Session = Depends(get_db)) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    now = datetime.now(timezone.utc)
+    return {
+        "session_id": session_id,
+        **_quota_payload(db=db, session_obj=session_obj, now=now),
+    }
+
+
 @router.post("/{session_id}/hygiene/openings")
 def request_hygiene_opening(
     session_id: int,
@@ -36,6 +98,10 @@ def request_hygiene_opening(
         raise HTTPException(status_code=400, detail="Session must be active")
 
     now = datetime.now(timezone.utc)
+    quota = _quota_payload(db=db, session_obj=session_obj, now=now)
+    if _quota_exceeded(quota):
+        raise HTTPException(status_code=400, detail="Hygiene opening quota reached")
+
     due_back_at = HygieneService.calculate_due_back(now, payload.duration_seconds)
     opening = HygieneOpening(
         session_id=session_id,
@@ -66,6 +132,7 @@ def request_hygiene_opening(
         "opening_id": opening.id,
         "status": opening.status,
         "due_back_at": str(opening.due_back_at),
+        "quota": _quota_payload(db=db, session_obj=session_obj, now=datetime.now(timezone.utc)),
     }
 
 
