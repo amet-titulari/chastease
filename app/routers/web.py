@@ -33,3 +33,12 @@ def contracts_page(request: Request):
         name="contracts.html",
         context={"title": f"{settings.app_name} Contracts"},
     )
+
+
+@router.get("/experience", response_class=HTMLResponse)
+def experience_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="experience.html",
+        context={"title": f"{settings.app_name} Experience"},
+    )
