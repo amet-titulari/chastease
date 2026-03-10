@@ -17,5 +17,7 @@ class Session(Base):
     freeze_start = Column(DateTime(timezone=True), nullable=True)
     min_duration_seconds = Column(Integer, nullable=False)
     max_duration_seconds = Column(Integer, nullable=True)
+    ws_auth_token = Column(String(80), nullable=True, unique=True)
+    ws_auth_token_created_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

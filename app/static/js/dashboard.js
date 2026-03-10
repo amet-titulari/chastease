@@ -3,6 +3,7 @@ let addendumId = null;
 let openingId = null;
 let verificationId = null;
 let taskId = null;
+let wsAuthToken = null;
 let chatSocket = null;
 
 const outputEl = document.getElementById("output");
@@ -50,6 +51,7 @@ document.getElementById("create-session-form").addEventListener("submit", async 
     };
     const data = await postJson("/api/sessions", payload);
     sessionId = data.session_id;
+    wsAuthToken = data.ws_auth_token ?? null;
     addendumId = null;
     openingId = null;
     syncIds();
@@ -63,6 +65,7 @@ document.getElementById("sign-contract-btn").addEventListener("click", async () 
   if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
   try {
     const data = await postJson(`/api/sessions/${sessionId}/sign-contract`, {});
+    wsAuthToken = data.ws_auth_token ?? wsAuthToken;
     writeOutput("Vertrag signiert", data);
   } catch (err) {
     writeOutput("Fehler Vertrag", { error: String(err) });
@@ -71,6 +74,7 @@ document.getElementById("sign-contract-btn").addEventListener("click", async () 
 
 document.getElementById("propose-addendum-btn").addEventListener("click", async () => {
   if (!sessionId) return writeOutput("Hinweis", { error: "Erst Session erstellen." });
+  if (!wsAuthToken) return writeOutput("Hinweis", { error: "WS-Token fehlt. Session neu laden/signieren." });
   try {
     const minSeconds = Number(document.getElementById("addendum-min-seconds").value);
     const data = await postJson(`/api/sessions/${sessionId}/contract/addenda`, {
@@ -245,7 +249,9 @@ document.getElementById("chat-ws-connect-btn").addEventListener("click", () => {
   }
 
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  chatSocket = new WebSocket(`${protocol}://${window.location.host}/api/sessions/${sessionId}/chat/ws`);
+  chatSocket = new WebSocket(
+    `${protocol}://${window.location.host}/api/sessions/${sessionId}/chat/ws?token=${encodeURIComponent(wsAuthToken)}`
+  );
 
   chatSocket.onopen = () => writeOutput("WebSocket", { status: "verbunden" });
   chatSocket.onmessage = (event) => {

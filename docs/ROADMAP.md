@@ -4,12 +4,13 @@
 
 ## Stand (Alpha)
 
-- Implementiert: FastAPI-Grundgeruest, SQLAlchemy-Modelle, Alembic-Migrationen `0001`-`0005`, Session/Contract/Hygiene/Safety/Verification/Chat/Tasks APIs
+- Implementiert: FastAPI-Grundgeruest, SQLAlchemy-Modelle, Alembic-Migrationen `0001`-`0006`, Session/Contract/Hygiene/Safety/Verification/Chat/Tasks APIs
 - Implementiert: APScheduler-Jobs fuer Task-Overdue-Sweep und proaktive Keyholderin-Reminder
 - Implementiert: WebSocket-Live-Streaming fuer neue Assistant-Nachrichten inkl. proaktiver Reminder
 - Implementiert: Interaktive Web Test Console im Dashboard fuer manuelle End-to-End-Tests
-- Teststatus: `20 passed` (lokale automatisierte Tests)
-- Offen: echte KI-Provider-Anbindung, produktive Chat-WebSocket-Absicherung, Browser Push, produktionsnahe UX
+- Implementiert: Basis-Absicherung fuer Chat-WebSocket per persistentem Session-Token
+- Teststatus: `21 passed` (lokale automatisierte Tests)
+- Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---
 

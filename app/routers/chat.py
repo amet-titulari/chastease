@@ -121,7 +121,12 @@ async def chat_ws(websocket: WebSocket, session_id: int):
     await websocket.accept()
     db = SessionLocal()
     try:
-        _load_session(db, session_id)
+        session_obj = _load_session(db, session_id)
+        supplied_token = websocket.query_params.get("token")
+        if not supplied_token or supplied_token != session_obj.ws_auth_token:
+            await websocket.close(code=1008, reason="Invalid websocket token")
+            return
+
         last_sent_assistant_id = _latest_assistant_message_id(db, session_id)
         while True:
             try:

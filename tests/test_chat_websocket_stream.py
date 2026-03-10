@@ -5,7 +5,7 @@ from app.main import app
 from app.models.message import Message
 
 
-def _create_and_sign(client: TestClient) -> int:
+def _create_and_sign(client: TestClient) -> tuple[int, str]:
     create_resp = client.post(
         "/api/sessions",
         json={
@@ -16,15 +16,16 @@ def _create_and_sign(client: TestClient) -> int:
         },
     )
     session_id = create_resp.json()["session_id"]
-    client.post(f"/api/sessions/{session_id}/sign-contract")
-    return session_id
+    sign_resp = client.post(f"/api/sessions/{session_id}/sign-contract")
+    ws_auth_token = sign_resp.json()["ws_auth_token"]
+    return session_id, ws_auth_token
 
 
 def test_websocket_streams_proactive_messages():
     with TestClient(app) as client:
-        session_id = _create_and_sign(client)
+        session_id, ws_auth_token = _create_and_sign(client)
 
-        with client.websocket_connect(f"/api/sessions/{session_id}/chat/ws") as ws:
+        with client.websocket_connect(f"/api/sessions/{session_id}/chat/ws?token={ws_auth_token}") as ws:
             with SessionLocal() as db:
                 db.add(
                     Message(
@@ -39,3 +40,11 @@ def test_websocket_streams_proactive_messages():
             payload = ws.receive_json()
             assert payload["message_type"] == "proactive_reminder"
             assert "Proaktiver Hinweis" in payload["assistant"]
+
+
+def test_websocket_rejects_missing_token():
+    with TestClient(app) as client:
+        session_id, _ = _create_and_sign(client)
+        with client.websocket_connect(f"/api/sessions/{session_id}/chat/ws") as ws:
+            data = ws.receive()
+            assert data["type"] == "websocket.close"

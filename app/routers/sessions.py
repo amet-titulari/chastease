@@ -1,4 +1,5 @@
 import json
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -33,6 +34,13 @@ class AddendumConsentRequest(BaseModel):
     decision: str = Field(pattern="^(approved|rejected)$")
 
 
+def _ensure_ws_auth_token(session_obj: SessionModel) -> None:
+    if session_obj.ws_auth_token:
+        return
+    session_obj.ws_auth_token = secrets.token_urlsafe(24)
+    session_obj.ws_auth_token_created_at = datetime.now(timezone.utc)
+
+
 @router.get("/{session_id}")
 def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
     session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -40,6 +48,11 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(status_code=404, detail="Session not found")
 
     contract = db.query(Contract).filter(Contract.session_id == session_id).first()
+    if not session_obj.ws_auth_token:
+        _ensure_ws_auth_token(session_obj)
+        db.add(session_obj)
+        db.commit()
+        db.refresh(session_obj)
     return {
         "session_id": session_obj.id,
         "status": session_obj.status,
@@ -47,6 +60,7 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
         "max_duration_seconds": session_obj.max_duration_seconds,
         "lock_start": str(session_obj.lock_start) if session_obj.lock_start else None,
         "lock_end": str(session_obj.lock_end) if session_obj.lock_end else None,
+        "ws_auth_token": session_obj.ws_auth_token,
         "contract_signed": bool(contract and contract.signed_at),
     }
 
@@ -92,6 +106,7 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
         max_duration_seconds=payload.max_duration_seconds,
         status="draft",
     )
+    _ensure_ws_auth_token(session_obj)
     db.add(session_obj)
     db.flush()
 
@@ -112,6 +127,7 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
     return {
         "session_id": session_obj.id,
         "status": session_obj.status,
+        "ws_auth_token": session_obj.ws_auth_token,
         "contract_required": True,
         "contract_preview": contract.content_text,
     }
@@ -128,10 +144,29 @@ def sign_contract(session_id: int, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(status_code=404, detail="Contract not found")
 
     if contract.signed_at:
-        return {"session_id": session_id, "status": session_obj.status, "already_signed": True}
+        if not session_obj.ws_auth_token:
+            _ensure_ws_auth_token(session_obj)
+            db.add(session_obj)
+            db.commit()
+            db.refresh(session_obj)
+        return {
+            "session_id": session_id,
+            "status": session_obj.status,
+            "ws_auth_token": session_obj.ws_auth_token,
+            "already_signed": True,
+        }
 
     updated = SessionService.sign_contract_and_start(db=db, session_obj=session_obj, contract_obj=contract)
-    return {"session_id": updated.id, "status": updated.status, "lock_end": str(updated.lock_end)}
+    _ensure_ws_auth_token(updated)
+    db.add(updated)
+    db.commit()
+    db.refresh(updated)
+    return {
+        "session_id": updated.id,
+        "status": updated.status,
+        "lock_end": str(updated.lock_end),
+        "ws_auth_token": updated.ws_auth_token,
+    }
 
 
 @router.post("/{session_id}/contract/addenda")
