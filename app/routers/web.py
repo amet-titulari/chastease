@@ -177,12 +177,14 @@ def setup_page(request: Request, db: Session = Depends(get_db)):
     if user.setup_completed:
         return RedirectResponse(url="/experience", status_code=303)
 
+    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
     return templates.TemplateResponse(
         request=request,
         name="setup.html",
         context={
             "title": f"{settings.app_name} Setup",
             "current_user": user,
+            "llm": llm,
         },
     )
 
@@ -194,6 +196,12 @@ def complete_setup(
     primary_goal: str = Form(...),
     boundary_note: str = Form(...),
     experience_level: str = Form(default="beginner"),
+    llm_provider: str = Form(default="stub"),
+    llm_api_url: str = Form(default=""),
+    llm_api_key: str = Form(default=""),
+    llm_chat_model: str = Form(default=""),
+    llm_vision_model: str = Form(default=""),
+    llm_active: str = Form(default="false"),
     db: Session = Depends(get_db),
 ):
     user = _get_current_user(request, db)
@@ -206,6 +214,21 @@ def complete_setup(
     user.setup_experience_level = experience_level.strip()[:50] if experience_level.strip() in ("beginner", "intermediate", "advanced") else "beginner"
     user.setup_completed = True
     db.commit()
+
+    if llm_provider.strip() not in ("", "stub") or llm_api_url.strip() or llm_chat_model.strip():
+        llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+        if not llm:
+            llm = LlmProfile(profile_key="default")
+            db.add(llm)
+        llm.provider = llm_provider.strip()[:50] or "stub"
+        llm.api_url = llm_api_url.strip()[:500] or None
+        if llm_api_key.strip():
+            llm.api_key = llm_api_key.strip()
+        llm.chat_model = llm_chat_model.strip()[:120] or None
+        llm.vision_model = llm_vision_model.strip()[:120] or None
+        llm.profile_active = llm_active.lower() in ("true", "on", "1", "enabled")
+        db.commit()
+
     return RedirectResponse(url="/experience", status_code=303)
 
 
