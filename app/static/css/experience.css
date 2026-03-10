@@ -1,13 +1,13 @@
 :root {
-  --xp-bg: radial-gradient(circle at 0% 0%, #1a2a39 0%, #0d141d 45%, #080c11 100%);
-  --xp-card: #111b27;
-  --xp-card-soft: #172433;
-  --xp-ink: #e6eef8;
-  --xp-muted: #9caec4;
-  --xp-accent: #5f8eb9;
+  --xp-bg: var(--bg);
+  --xp-card: var(--card);
+  --xp-card-soft: var(--card-soft);
+  --xp-ink: var(--ink);
+  --xp-muted: var(--muted);
+  --xp-accent: var(--accent);
   --xp-accent-2: #3f738f;
   --xp-danger: #9b3f4f;
-  --xp-border: #2c3f53;
+  --xp-border: var(--line);
   --xp-glow: rgba(124, 180, 224, 0.17);
 }
 

@@ -1,13 +1,11 @@
-<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ title }}</title>
-  <link rel="stylesheet" href="/static/css/profile.css" />
-</head>
-<body>
-  <main class="profile-shell">
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/profile.css" />
+{% endblock %}
+
+{% block content %}
+<section class="profile-shell full">
     <section class="profile-card">
       <p class="eyebrow">Profil</p>
       <h1>Setup-Verwaltung fuer {{ current_user.username }}</h1>
@@ -49,6 +47,5 @@
         <button type="submit" class="ghost-btn">Abmelden</button>
       </form>
     </section>
-  </main>
-</body>
-</html>
+</section>
+{% endblock %}

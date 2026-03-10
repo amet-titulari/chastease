@@ -1,28 +1,6 @@
-:root {
-  --bg: radial-gradient(circle at 0% 0%, #1a2a39 0%, #0d141d 45%, #080c11 100%);
-  --card: #111b27;
-  --card-soft: #172433;
-  --ink: #e6eef8;
-  --muted: #9caec4;
-  --line: #2c3f53;
-  --accent: #5f8eb9;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: "Space Grotesk", "Segoe UI", sans-serif;
-}
-
 .landing-shell {
-  width: min(1080px, 96vw);
-  margin: 2.5rem auto;
+  width: 100%;
+  margin: 0;
   display: grid;
   grid-template-columns: 1.2fr 1fr;
   gap: 1rem;
@@ -30,28 +8,18 @@ body {
 
 .hero-card,
 .auth-card {
-  border: 1px solid var(--line);
   border-radius: 18px;
-  background: linear-gradient(180deg, var(--card), var(--card-soft));
   padding: 1.2rem;
-  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.35);
 }
 
-.eyebrow {
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 0.74rem;
-  color: #8cb9e0;
+.hero-card,
+.auth-card {
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.35);
 }
 
 h1 {
   margin: 0.35rem 0 0.7rem;
   font-size: clamp(1.45rem, 3.2vw, 2.1rem);
-}
-
-p {
-  color: var(--muted);
 }
 
 .auth-tabs {
@@ -86,48 +54,6 @@ p {
   display: grid;
 }
 
-label {
-  display: grid;
-  gap: 0.3rem;
-  color: #b8c7d8;
-  font-size: 0.95rem;
-}
-
-input {
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0.55rem 0.65rem;
-  background: #0a1119;
-  color: var(--ink);
-}
-
-button,
-.primary-link,
-.secondary-link,
-.ghost-link {
-  text-decoration: none;
-  border-radius: 10px;
-  display: inline-block;
-  padding: 0.58rem 0.75rem;
-  font-weight: 700;
-}
-
-button,
-.primary-link {
-  border: 1px solid #5c83a8;
-  background: linear-gradient(120deg, #375775, var(--accent));
-  color: #fff;
-  cursor: pointer;
-}
-
-.secondary-link,
-.ghost-link {
-  border: 1px solid var(--line);
-  background: #0c1520;
-  color: #b4c8dc;
-}
-
 .logged-in-box {
   display: grid;
   gap: 0.5rem;
@@ -149,7 +75,6 @@ button,
 
 @media (max-width: 820px) {
   .landing-shell {
-    margin: 0.9rem auto;
     grid-template-columns: 1fr;
   }
 

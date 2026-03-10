@@ -1,47 +1,15 @@
-:root {
-  --bg: radial-gradient(circle at 0% 0%, #1a2a39 0%, #0d141d 45%, #080c11 100%);
-  --card: #111b27;
-  --card-soft: #172433;
-  --ink: #e6eef8;
-  --muted: #9caec4;
-  --line: #2c3f53;
-  --accent: #5f8eb9;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: "Space Grotesk", "Segoe UI", sans-serif;
-}
-
 .setup-shell {
-  width: min(860px, 96vw);
-  margin: 1.2rem auto;
+  width: min(860px, 100%);
+  margin: 0;
   display: grid;
   gap: 0.9rem;
 }
 
 .setup-hero,
 .setup-card {
-  border: 1px solid var(--line);
   border-radius: 18px;
-  background: linear-gradient(180deg, var(--card), var(--card-soft));
   padding: 1rem;
   box-shadow: 0 22px 48px rgba(0, 0, 0, 0.35);
-}
-
-.eyebrow {
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-size: 0.73rem;
-  color: #93badb;
 }
 
 h1 {
@@ -80,47 +48,14 @@ h1 {
   display: block;
 }
 
-h2 {
-  margin: 0 0 0.4rem;
-}
-
-p {
+.wizard-step p {
   margin: 0.2rem 0 0.7rem;
-  color: var(--muted);
-}
-
-label {
-  display: grid;
-  gap: 0.3rem;
-  color: #b7c8da;
-}
-
-input,
-select,
-textarea {
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0.58rem 0.65rem;
-  background: #0a1119;
-  color: var(--ink);
-  font: inherit;
 }
 
 .wizard-actions {
   display: flex;
   gap: 0.55rem;
   margin-top: 0.95rem;
-}
-
-button {
-  border-radius: 10px;
-  border: 1px solid #5f83a7;
-  background: linear-gradient(120deg, #375775, var(--accent));
-  color: #fff;
-  padding: 0.58rem 0.7rem;
-  font-weight: 700;
-  cursor: pointer;
 }
 
 button[disabled] {

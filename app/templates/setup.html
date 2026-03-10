@@ -1,13 +1,11 @@
-<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ title }}</title>
-  <link rel="stylesheet" href="/static/css/setup.css" />
-</head>
-<body>
-  <main class="setup-shell">
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/setup.css" />
+{% endblock %}
+
+{% block content %}
+<section class="setup-shell full">
     <section class="setup-hero">
       <p class="eyebrow">Setup Wizard</p>
       <h1>Hi {{ current_user.username }}, wir richten jetzt alles gemeinsam ein.</h1>
@@ -61,8 +59,9 @@
         <button type="submit" class="ghost">Abmelden</button>
       </form>
     </section>
-  </main>
+</section>
+{% endblock %}
 
-  <script src="/static/js/setup.js"></script>
-</body>
-</html>
+{% block scripts %}
+<script src="/static/js/setup.js"></script>
+{% endblock %}
