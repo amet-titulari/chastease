@@ -176,12 +176,12 @@ function xpWireDuration(dateId, daysId, summaryId) {
   dateEl.addEventListener("change", () => {
     const secs = xpDateToSeconds(dateEl.value);
     if (secs) {
-      daysEl.value = (secs / 86400).toFixed(1);
+      daysEl.value = Math.round(secs / 86400);
       if (summaryEl) summaryEl.textContent = xpFormatDuration(secs);
     }
   });
   daysEl.addEventListener("input", () => {
-    const val = parseFloat(daysEl.value);
+    const val = parseInt(daysEl.value, 10);
     if (!isNaN(val) && val > 0) {
       const secs = xpDaysToSeconds(val);
       dateEl.value = xpSecondsToDateLocal(secs);
@@ -196,18 +196,14 @@ function xpInitDurationDefaults() {
   const minDateEl = document.getElementById("xp-min-date");
   const minDaysEl = document.getElementById("xp-min-days");
   if (minDateEl) minDateEl.value = xpSecondsToDateLocal(minSecs);
-  if (minDaysEl) minDaysEl.value = "7.0";
-  const minSummary = document.getElementById("xp-min-summary");
-  if (minSummary) minSummary.textContent = xpFormatDuration(minSecs);
+  if (minDaysEl) minDaysEl.value = "7";
 
   // Max default: 30 days
   const maxSecs = 30 * 86400;
   const maxDateEl = document.getElementById("xp-max-date");
   const maxDaysEl = document.getElementById("xp-max-days");
   if (maxDateEl) maxDateEl.value = xpSecondsToDateLocal(maxSecs);
-  if (maxDaysEl) maxDaysEl.value = "30.0";
-  const maxSummary = document.getElementById("xp-max-summary");
-  if (maxSummary) maxSummary.textContent = xpFormatDuration(maxSecs);
+  if (maxDaysEl) maxDaysEl.value = "30";
 }
 
 function xpWireNoLimit() {
