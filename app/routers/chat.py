@@ -14,12 +14,18 @@ from app.models.safety_log import SafetyLog
 from app.models.session import Session as SessionModel
 from app.models.task import Task
 from app.services.ai_gateway import get_ai_gateway
+from app.services.context_window import build_context_window
+from app.services.prompt_builder import build_prompt_modules
 
 router = APIRouter(prefix="/api/sessions", tags=["chat"])
 
 
 class SendMessageRequest(BaseModel):
     content: str = Field(min_length=1)
+
+
+class RegenerateMessageRequest(BaseModel):
+    user_text: str | None = None
 
 
 def _load_session(db: Session, session_id: int) -> SessionModel:
@@ -84,7 +90,38 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
             hard_limits = []
 
     ai = get_ai_gateway()
-    structured = ai.generate_chat_response(persona_name=persona_name, user_text=user_text)
+    scenario_title = None
+    if profile and profile.preferences_json:
+        try:
+            prefs = json.loads(profile.preferences_json)
+            if isinstance(prefs, dict) and prefs.get("scenario_preset"):
+                scenario_title = str(prefs.get("scenario_preset"))[:120]
+        except Exception:
+            scenario_title = None
+    if scenario_title is None and persona and persona.description:
+        scenario_title = persona.description[:120]
+
+    context_rows = (
+        db.query(Message)
+        .filter(Message.session_id == session_id)
+        .order_by(Message.id.asc())
+        .all()
+    )
+    context_items, context_summary = build_context_window(context_rows, max_messages=12)
+    prompt_modules = build_prompt_modules(
+        persona_name=persona_name,
+        session_status=session_obj.status,
+        safety_mode=safety_mode,
+        scenario_title=scenario_title,
+    ).render()
+
+    structured = ai.generate_chat_response(
+        persona_name=persona_name,
+        user_text=user_text,
+        prompt_modules=prompt_modules,
+        context_items=context_items,
+        context_summary=context_summary,
+    )
 
     reply_text = structured.message
     if safety_mode == "yellow" or safety_mode == "red" or session_obj.status in {
@@ -247,6 +284,37 @@ def send_message(session_id: int, payload: SendMessageRequest, db: Session = Dep
         "session_id": session_id,
         "reply": assistant_msg.content,
         "reply_message_id": assistant_msg.id,
+    }
+
+
+@router.post("/{session_id}/messages/regenerate")
+def regenerate_last_message(
+    session_id: int,
+    payload: RegenerateMessageRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    _load_session(db, session_id)
+    user_text = payload.user_text
+    if not user_text:
+        row = (
+            db.query(Message)
+            .filter(Message.session_id == session_id, Message.role == "user")
+            .order_by(Message.id.desc())
+            .first()
+        )
+        if row is None:
+            raise HTTPException(status_code=400, detail="No user message available for regeneration")
+        user_text = row.content
+
+    assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=user_text)
+    assistant_msg.message_type = "chat_regenerated"
+    db.commit()
+    db.refresh(assistant_msg)
+    return {
+        "session_id": session_id,
+        "reply": assistant_msg.content,
+        "reply_message_id": assistant_msg.id,
+        "message_type": assistant_msg.message_type,
     }
 
 

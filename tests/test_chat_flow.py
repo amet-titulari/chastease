@@ -72,3 +72,23 @@ def test_chat_reply_respects_pause_on_red():
         )
         assert send_resp.status_code == 200
         assert "Session bleibt pausiert" in send_resp.json()["reply"]
+
+
+def test_chat_can_regenerate_last_response():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        first = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Status update"},
+        )
+        assert first.status_code == 200
+
+        regen = client.post(
+            f"/api/sessions/{session_id}/messages/regenerate",
+            json={},
+        )
+        assert regen.status_code == 200
+        body = regen.json()
+        assert body["message_type"] == "chat_regenerated"
+        assert "reply" in body

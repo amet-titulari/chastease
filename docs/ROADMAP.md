@@ -23,7 +23,8 @@
 - Implementiert: Responsive Mobile-Optimierung fuer Dashboard/History/Contracts (Layout + Controls + Breakpoints)
 - Implementiert: Landingpage mit Registrierung/Anmeldung und gefuehrtem Setup-Wizard
 - Implementiert: Profilseite fuer Setup-Verwaltung inkl. "Setup neu starten"
-- Teststatus: `69 passed` (lokale automatisierte Tests)
+- Implementiert (v0.1.2): Persona/Scenario-Card-Schema-Endpoints, Prompt-Module, Context-Budgeting, Scenario-Preset im Experience-Setup und Chat-Regenerate
+- Teststatus: `71 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---

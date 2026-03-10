@@ -3,6 +3,7 @@ let xpWsToken = null;
 let xpSocket = null;
 let xpStep = 1;
 let xpPersonaPresets = [];
+let xpScenarioPresets = [];
 
 const xpChatTimeline = document.getElementById("xp-chat-timeline");
 const xpTaskBoard = document.getElementById("xp-task-board");
@@ -161,6 +162,29 @@ async function xpLoadPersonaPresets() {
   }
 }
 
+async function xpLoadScenarioPresets() {
+  const select = document.getElementById("xp-scenario-preset");
+  if (!select) return;
+  select.innerHTML = "";
+  try {
+    const data = await xpGet("/api/personas/scenario-presets");
+    xpScenarioPresets = data.items || [];
+    if (!xpScenarioPresets.length) {
+      select.innerHTML = '<option value="">Keine Scenarios</option>';
+      return;
+    }
+    xpScenarioPresets.forEach((preset) => {
+      const opt = document.createElement("option");
+      opt.value = preset.key;
+      opt.textContent = preset.title;
+      select.appendChild(opt);
+    });
+  } catch (err) {
+    select.innerHTML = '<option value="">Scenario-Fehler</option>';
+    xpWrite("Fehler Scenario Presets", { error: String(err) });
+  }
+}
+
 async function xpLoadChat() {
   if (!xpSessionId) return;
   try {
@@ -217,6 +241,9 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
 
     const profilePayload = {
       experience_level: document.getElementById("xp-experience-level").value,
+      preferences: {
+        scenario_preset: document.getElementById("xp-scenario-preset")?.value || null,
+      },
       hard_limits: String(document.getElementById("xp-hard-limits").value)
         .split(",")
         .map((x) => x.trim())
@@ -299,6 +326,18 @@ document.getElementById("xp-send-chat").addEventListener("click", async () => {
   }
 });
 
+document.getElementById("xp-regenerate-chat").addEventListener("click", async () => {
+  if (!xpSessionId) return;
+  try {
+    const data = await xpPost(`/api/sessions/${xpSessionId}/messages/regenerate`, {});
+    xpWrite("Chat Regenerate", data);
+    await xpLoadChat();
+    await xpListTasks();
+  } catch (err) {
+    xpWrite("Fehler Regenerate", { error: String(err) });
+  }
+});
+
 document.getElementById("xp-load-chat").addEventListener("click", async () => {
   await xpLoadChat();
 });
@@ -359,6 +398,7 @@ document.getElementById("xp-dock-safeword").addEventListener("click", async () =
 });
 
 xpLoadPersonaPresets();
+xpLoadScenarioPresets();
 xpSwitchStep(1);
 xpRenderChat([]);
 xpRenderTasks([]);

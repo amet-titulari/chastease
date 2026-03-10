@@ -30,7 +30,55 @@ PERSONA_PRESETS = [
     },
 ]
 
+SCENARIO_PRESETS = [
+    {
+        "key": "devotion_protocol",
+        "title": "Devotion Protocol",
+        "summary": "Taegliche Rituale, kurze Checks und klare Konsequenzstufen.",
+        "focus": ["ritual", "checkin", "consistency"],
+    },
+    {
+        "key": "cold_structure",
+        "title": "Cold Structure",
+        "summary": "Nuechterne, klare Anleitung mit Fokus auf Regeltreue und Reporting.",
+        "focus": ["discipline", "reporting", "tasks"],
+    },
+    {
+        "key": "careful_progression",
+        "title": "Careful Progression",
+        "summary": "Sanfte, schrittweise Intensitaetssteuerung mit Safety-Prioritaet.",
+        "focus": ["safety", "progression", "feedback"],
+    },
+]
+
 
 @router.get("/presets")
 def list_persona_presets() -> dict:
     return {"items": PERSONA_PRESETS}
+
+
+@router.get("/scenario-presets")
+def list_scenario_presets() -> dict:
+    return {"items": SCENARIO_PRESETS}
+
+
+@router.get("/card-schema")
+def card_schema() -> dict:
+    return {
+        "schema_version": "0.1.2",
+        "character_fields": [
+            "name",
+            "archetype",
+            "description",
+            "goals",
+            "speech_style",
+            "tags",
+        ],
+        "scenario_fields": [
+            "title",
+            "summary",
+            "phases",
+            "lorebook",
+            "tags",
+        ],
+    }

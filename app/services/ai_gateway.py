@@ -98,7 +98,14 @@ class AIGateway:
     ) -> str:
         raise NotImplementedError
 
-    def generate_chat_response(self, persona_name: str, user_text: str) -> AIResponse:
+    def generate_chat_response(
+        self,
+        persona_name: str,
+        user_text: str,
+        prompt_modules: str | None = None,
+        context_items: list[dict] | None = None,
+        context_summary: str | None = None,
+    ) -> AIResponse:
         raise NotImplementedError
 
 
@@ -122,7 +129,14 @@ class StubAIGateway(AIGateway):
             "Sicherheitsmechanismen (Safeword/Ampel/Emergency) bleiben unveraenderlich."
         )
 
-    def generate_chat_response(self, persona_name: str, user_text: str) -> AIResponse:
+    def generate_chat_response(
+        self,
+        persona_name: str,
+        user_text: str,
+        prompt_modules: str | None = None,
+        context_items: list[dict] | None = None,
+        context_summary: str | None = None,
+    ) -> AIResponse:
         lowered = user_text.lower()
         actions: list[dict] = []
 
@@ -148,7 +162,10 @@ class StubAIGateway(AIGateway):
                 }
             )
 
-        message = f"{persona_name}: Ich habe dich gehoert. Du sagtest: '{user_text}'. Bleib diszipliniert."
+        context_hint = ""
+        if context_summary:
+            context_hint = f" Kontext: {context_summary}"
+        message = f"{persona_name}: Ich habe dich gehoert. Du sagtest: '{user_text}'.{context_hint} Bleib diszipliniert."
         if actions:
             message += " Ich habe dir eine passende Aufgabe gesetzt."
 
@@ -214,7 +231,22 @@ class OllamaGateway(AIGateway):
             max_duration_seconds=max_duration_seconds,
         )
 
-    def generate_chat_response(self, persona_name: str, user_text: str) -> AIResponse:
+    def generate_chat_response(
+        self,
+        persona_name: str,
+        user_text: str,
+        prompt_modules: str | None = None,
+        context_items: list[dict] | None = None,
+        context_summary: str | None = None,
+    ) -> AIResponse:
+        context_payload = ""
+        if context_summary:
+            context_payload += f"context_summary={context_summary}\n"
+        if context_items:
+            context_payload += f"context_items={json.dumps(context_items, ensure_ascii=True)}\n"
+        if prompt_modules:
+            context_payload += f"prompt_modules={prompt_modules}\n"
+
         prompt = (
             "Antworte als Keyholderin auf Deutsch und nutze strukturiertes JSON mit den Feldern "
             "message, actions, mood, intensity. "
@@ -223,6 +255,7 @@ class OllamaGateway(AIGateway):
             "consequence_type(optional),consequence_value(optional).\n"
             f"persona_name={persona_name}\n"
             f"user_text={user_text}\n"
+            f"{context_payload}"
         )
 
         try:
@@ -264,7 +297,13 @@ class OllamaGateway(AIGateway):
         except Exception:
             pass
 
-        return self._fallback.generate_chat_response(persona_name=persona_name, user_text=user_text)
+        return self._fallback.generate_chat_response(
+            persona_name=persona_name,
+            user_text=user_text,
+            prompt_modules=prompt_modules,
+            context_items=context_items,
+            context_summary=context_summary,
+        )
 
 
 def get_ai_gateway() -> AIGateway:

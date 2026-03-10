@@ -39,8 +39,10 @@ def test_experience_page_renders():
         html = resp.text
         assert "Onboarding" in html
         assert "xp-create-session" in html
+        assert "xp-scenario-preset" in html
         assert "xp-sign-contract" in html
         assert "xp-send-chat" in html
+        assert "xp-regenerate-chat" in html
         assert "xp-chat-timeline" in html
         assert "xp-task-board" in html
         assert "xp-safety-dock" in html
@@ -51,7 +53,9 @@ def test_experience_assets_are_served():
         js = client.get("/static/js/experience.js")
         assert js.status_code == 200
         assert "xp-create-session" in js.text
+        assert "xpLoadScenarioPresets" in js.text
         assert "xpRenderTasks" in js.text
+        assert "messages/regenerate" in js.text
         assert "xp-dock-yellow" in js.text
 
         css = client.get("/static/css/experience.css")
