@@ -10,6 +10,7 @@ const outputEl = document.getElementById("output");
 const sessionIdEl = document.getElementById("session-id");
 const addendumIdEl = document.getElementById("addendum-id");
 const openingIdEl = document.getElementById("opening-id");
+const timerRemainingEl = document.getElementById("timer-remaining");
 
 function writeOutput(title, data) {
   outputEl.textContent = `${title}\n${JSON.stringify(data, null, 2)}`;
@@ -337,13 +338,16 @@ document.getElementById("chat-ws-connect-btn").addEventListener("click", () => {
 
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   chatSocket = new WebSocket(
-    `${protocol}://${window.location.host}/api/sessions/${sessionId}/chat/ws?token=${encodeURIComponent(wsAuthToken)}`
+    `${protocol}://${window.location.host}/api/sessions/${sessionId}/chat/ws?token=${encodeURIComponent(wsAuthToken)}&stream_timer=1`
   );
 
   chatSocket.onopen = () => writeOutput("WebSocket", { status: "verbunden" });
   chatSocket.onmessage = (event) => {
     try {
       const payload = JSON.parse(event.data);
+      if (payload.message_type === "timer_tick" && typeof payload.remaining_seconds === "number") {
+        timerRemainingEl.textContent = String(payload.remaining_seconds);
+      }
       writeOutput("Live Chat Event", payload);
     } catch (err) {
       writeOutput("WebSocket Parse Fehler", { error: String(err) });

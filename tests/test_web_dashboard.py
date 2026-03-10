@@ -10,6 +10,7 @@ def test_dashboard_renders():
         html = resp.text
         assert "Chastease Test Console" in html
         assert "create-session-form" in html
+        assert "timer-remaining" in html
         assert "timer-status-btn" in html
         assert "timer-freeze-btn" in html
         assert "chat-send-btn" in html

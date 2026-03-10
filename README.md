@@ -105,6 +105,7 @@ WebSocket Live-Feed:
 
 - `GET/POST` Chat bleibt verfuegbar, zusaetzlich streamt `ws /api/sessions/{id}/chat/ws` neue Assistant-Nachrichten live.
 - Enthalten sind normale Chat-Antworten und Scheduler-basierte `proactive_reminder`-Nachrichten.
+- Optional: mit `&stream_timer=1` werden zusaetzlich `timer_tick`-Events (`remaining_seconds`, `timer_frozen`) gestreamt.
 - Zugriff auf den Chat-WebSocket erfordert `?token=<ws_auth_token>`.
 - `ws_auth_token` wird aktuell in Session-Antworten (`POST /api/sessions`, `POST /api/sessions/{id}/sign-contract`, `GET /api/sessions/{id}`) mitgegeben.
 - `POST /api/sessions/{id}/chat/ws-token/rotate` erzeugt ein neues Token und invalidiert bestehende WS-Verbindungen serverseitig.

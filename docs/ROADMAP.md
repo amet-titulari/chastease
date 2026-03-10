@@ -14,7 +14,8 @@
 - Implementiert: Optionales Admin-Secret auch fuer sensible Safety-Steueraktionen (Traffic-Light, Emergency-Release)
 - Implementiert: Optionale Admin-Secret-Absicherung fuer Verification-Uploads und zentrale Security-Policy (`docs/SECURITY.md`)
 - Implementiert: Session-Timer-APIs fuer Status/Add/Remove/Freeze/Unfreeze inkl. Dashboard-Testkonsole
-- Teststatus: `28 passed` (lokale automatisierte Tests)
+- Implementiert: Timer-Anzeige im Dashboard ueber WebSocket-`timer_tick`-Events
+- Teststatus: `29 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---
@@ -68,7 +69,7 @@
 - [x] Vertrags-Addenda für KI-initiierte Änderungen mit explizitem Consent
 - [ ] Timer-Service: läuft im Background via APScheduler
 - [x] Timer-Operationen: add/remove/freeze/unfreeze
-- [ ] Timer-Anzeige im Dashboard (WebSocket-Updates)
+- [x] Timer-Anzeige im Dashboard (WebSocket-Updates)
 - [x] Session-Status-Maschine (active / paused / emergency/safeword/pause)
 - [ ] Session-Verlauf / Event-Log
 - [ ] Session regulär beenden

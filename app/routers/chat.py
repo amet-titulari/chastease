@@ -93,6 +93,22 @@ async def _push_new_assistant_messages(
     return last_sent_assistant_id
 
 
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _timer_snapshot(session_obj: SessionModel, now: datetime) -> tuple[int, bool]:
+    if session_obj.lock_end is None:
+        return 0, bool(session_obj.timer_frozen)
+    anchor = now
+    if session_obj.timer_frozen and session_obj.freeze_start is not None:
+        anchor = _as_utc(session_obj.freeze_start)
+    remaining = max(0, int((_as_utc(session_obj.lock_end) - anchor).total_seconds()))
+    return remaining, bool(session_obj.timer_frozen)
+
+
 @router.get("/{session_id}/messages")
 def list_messages(session_id: int, db: Session = Depends(get_db)) -> dict:
     _load_session(db, session_id)
@@ -133,6 +149,9 @@ async def chat_ws(websocket: WebSocket, session_id: int):
             await websocket.close(code=1008, reason="Invalid websocket token")
             return
         token_at_connect = supplied_token
+        stream_timer = websocket.query_params.get("stream_timer") in {"1", "true", "yes"}
+        last_timer_remaining: int | None = None
+        last_timer_frozen: bool | None = None
 
         last_sent_assistant_id = _latest_assistant_message_id(db, session_id)
         while True:
@@ -165,6 +184,22 @@ async def chat_ws(websocket: WebSocket, session_id: int):
                 session_id=session_id,
                 last_sent_assistant_id=last_sent_assistant_id,
             )
+
+            if stream_timer:
+                current = _load_session(db, session_id)
+                remaining, frozen = _timer_snapshot(current, datetime.now(timezone.utc))
+                if remaining != last_timer_remaining or frozen != last_timer_frozen:
+                    await websocket.send_json(
+                        {
+                            "session_id": session_id,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "message_type": "timer_tick",
+                            "remaining_seconds": remaining,
+                            "timer_frozen": frozen,
+                        }
+                    )
+                    last_timer_remaining = remaining
+                    last_timer_frozen = frozen
     except WebSocketDisconnect:
         pass
     finally:
