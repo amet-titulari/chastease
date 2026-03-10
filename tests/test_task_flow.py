@@ -117,3 +117,20 @@ def test_overdue_evaluation_marks_task_and_applies_default_penalty():
             assert task_row.status == "overdue"
             assert task_row.consequence_applied_seconds == 300
             assert session_after.lock_end == lock_end_before + timedelta(seconds=300)
+
+
+def test_chat_structured_output_can_create_task():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        chat_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Bitte Aufgabe: 30 Kniebeugen in 15 Minuten"},
+        )
+        assert chat_resp.status_code == 200
+
+        tasks_resp = client.get(f"/api/sessions/{session_id}/tasks")
+        assert tasks_resp.status_code == 200
+        tasks = tasks_resp.json()["items"]
+        assert len(tasks) >= 1
+        assert any("Kniebeugen" in item["title"] for item in tasks)

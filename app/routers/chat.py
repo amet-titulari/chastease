@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
@@ -10,6 +10,8 @@ from app.models.message import Message
 from app.models.persona import Persona
 from app.models.safety_log import SafetyLog
 from app.models.session import Session as SessionModel
+from app.models.task import Task
+from app.services.ai_gateway import get_ai_gateway
 
 router = APIRouter(prefix="/api/sessions", tags=["chat"])
 
@@ -69,13 +71,76 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
     persona_name = persona.name if persona else "Keyholderin"
     safety_mode = _latest_safety_mode(db, session_id)
 
+    ai = get_ai_gateway()
+    structured = ai.generate_chat_response(persona_name=persona_name, user_text=user_text)
+
+    reply_text = structured.message
+    if safety_mode == "yellow" or safety_mode == "red" or session_obj.status in {
+        "paused",
+        "safeword_stopped",
+        "emergency_stopped",
+    }:
+        reply_text = _assistant_reply(
+            persona_name,
+            user_text,
+            safety_mode=safety_mode,
+            session_status=session_obj.status,
+        )
+
+    created_task_ids: list[int] = []
+    if reply_text == structured.message:
+        for action in structured.actions:
+            if not isinstance(action, dict):
+                continue
+            if action.get("type") != "create_task":
+                continue
+            title = str(action.get("title", "")).strip()[:200]
+            if not title:
+                continue
+
+            deadline_minutes = action.get("deadline_minutes")
+            deadline_at = None
+            if isinstance(deadline_minutes, int) and deadline_minutes > 0:
+                deadline_at = datetime.now(timezone.utc) + timedelta(minutes=deadline_minutes)
+
+            consequence_type = action.get("consequence_type")
+            if consequence_type is not None:
+                consequence_type = str(consequence_type)
+            consequence_value = action.get("consequence_value")
+            if not isinstance(consequence_value, int):
+                consequence_value = None
+
+            task = Task(
+                session_id=session_id,
+                title=title,
+                description=(str(action.get("description"))[:2000] if action.get("description") else None),
+                deadline_at=deadline_at,
+                consequence_type=consequence_type,
+                consequence_value=consequence_value,
+            )
+            db.add(task)
+            db.flush()
+            created_task_ids.append(task.id)
+
     user_msg = Message(session_id=session_id, role="user", content=user_text, message_type="chat")
     assistant_msg = Message(
         session_id=session_id,
         role="assistant",
-        content=_assistant_reply(persona_name, user_text, safety_mode=safety_mode, session_status=session_obj.status),
+        content=reply_text,
         message_type="chat",
     )
+
+    if created_task_ids:
+        summary = ", ".join(str(item) for item in created_task_ids)
+        db.add(
+            Message(
+                session_id=session_id,
+                role="system",
+                content=f"Tasks erstellt: {summary}",
+                message_type="task_assigned",
+            )
+        )
+
     db.add(user_msg)
     db.add(assistant_msg)
     db.commit()

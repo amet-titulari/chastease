@@ -89,7 +89,7 @@
 **Ziel**: KI kann Aufgaben vergeben und Konsequenzen ziehen
 
 - [x] Task-Datenmodell & CRUD
-- [ ] KI kann Tasks via Structured Output vergeben
+- [x] KI kann Tasks via Structured Output vergeben
 - [x] Task-Anzeige im UI (Aufgabenliste)
 - [x] Task als erledigt markieren
 - [x] Automatische Konsequenzen bei Failure / Overdue (Lock-Verlaengerung)

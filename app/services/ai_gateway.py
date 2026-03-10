@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+import json
+import re
 
 import httpx
 
@@ -23,6 +25,9 @@ class AIGateway:
     ) -> str:
         raise NotImplementedError
 
+    def generate_chat_response(self, persona_name: str, user_text: str) -> AIResponse:
+        raise NotImplementedError
+
 
 class StubAIGateway(AIGateway):
     def generate_contract(
@@ -42,6 +47,43 @@ class StubAIGateway(AIGateway):
             "\n"
             "Dieser Entwurf wird mit der digitalen Signatur bindend.\n"
             "Sicherheitsmechanismen (Safeword/Ampel/Emergency) bleiben unveraenderlich."
+        )
+
+    def generate_chat_response(self, persona_name: str, user_text: str) -> AIResponse:
+        lowered = user_text.lower()
+        actions: list[dict] = []
+
+        if "aufgabe" in lowered or "task" in lowered:
+            title = "Disziplin-Check"
+            match = re.search(r"(?:aufgabe|task)\s*[:\-]\s*(.+)", user_text, flags=re.IGNORECASE)
+            if match:
+                title = match.group(1).strip()[:200] or title
+
+            deadline_minutes = None
+            deadline_match = re.search(r"(\d+)\s*(?:min|minute|minutes)", lowered)
+            if deadline_match:
+                deadline_minutes = max(1, int(deadline_match.group(1)))
+
+            actions.append(
+                {
+                    "type": "create_task",
+                    "title": title,
+                    "description": "Automatisch aus Chat-Anfrage erzeugt.",
+                    "deadline_minutes": deadline_minutes,
+                    "consequence_type": "lock_extension_seconds",
+                    "consequence_value": 300,
+                }
+            )
+
+        message = f"{persona_name}: Ich habe dich gehoert. Du sagtest: '{user_text}'. Bleib diszipliniert."
+        if actions:
+            message += " Ich habe dir eine passende Aufgabe gesetzt."
+
+        return AIResponse(
+            message=message,
+            actions=actions,
+            mood="strict",
+            intensity=3,
         )
 
 
@@ -98,6 +140,58 @@ class OllamaGateway(AIGateway):
             min_duration_seconds=min_duration_seconds,
             max_duration_seconds=max_duration_seconds,
         )
+
+    def generate_chat_response(self, persona_name: str, user_text: str) -> AIResponse:
+        prompt = (
+            "Antworte als Keyholderin auf Deutsch und nutze strukturiertes JSON mit den Feldern "
+            "message, actions, mood, intensity. "
+            "actions ist eine Liste und darf Action-Objekte vom Typ create_task enthalten. "
+            "Schema create_task: type,title,description(optional),deadline_minutes(optional),"
+            "consequence_type(optional),consequence_value(optional).\n"
+            f"persona_name={persona_name}\n"
+            f"user_text={user_text}\n"
+        )
+
+        try:
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                response = client.post(
+                    f"{self.base_url}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "format": {
+                            "type": "object",
+                            "properties": {
+                                "message": {"type": "string"},
+                                "actions": {"type": "array"},
+                                "mood": {"type": "string"},
+                                "intensity": {"type": "integer"},
+                            },
+                            "required": ["message", "actions", "mood", "intensity"],
+                        },
+                    },
+                )
+                response.raise_for_status()
+                payload = response.json()
+                raw = payload.get("response", "")
+                if isinstance(raw, str) and raw.strip():
+                    parsed = json.loads(raw)
+                    message = str(parsed.get("message", "")).strip()
+                    actions = parsed.get("actions", [])
+                    mood = str(parsed.get("mood", "neutral")).strip() or "neutral"
+                    intensity = int(parsed.get("intensity", 3))
+                    if message:
+                        return AIResponse(
+                            message=message,
+                            actions=actions if isinstance(actions, list) else [],
+                            mood=mood,
+                            intensity=max(1, min(5, intensity)),
+                        )
+        except Exception:
+            pass
+
+        return self._fallback.generate_chat_response(persona_name=persona_name, user_text=user_text)
 
 
 def get_ai_gateway() -> AIGateway:
