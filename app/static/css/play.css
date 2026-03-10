@@ -191,6 +191,44 @@ body:has(.play-shell) main.container {
   border-color: var(--accent);
 }
 
+.chat-attach-btn {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.chat-attach-btn:hover {
+  background: rgba(124, 180, 224, 0.12);
+  color: var(--ink);
+  border-color: rgba(124, 180, 224, 0.4);
+}
+
+.chat-attach-btn.has-attachment {
+  background: rgba(124, 180, 224, 0.18);
+  color: #7cb4e0;
+  border-color: rgba(124, 180, 224, 0.5);
+}
+
+.chat-attach-preview {
+  padding: 0.25rem 0.75rem 0.4rem;
+  font-size: 0.78rem;
+  color: #7cb4e0;
+  background: rgba(124, 180, 224, 0.07);
+  border-top: 1px solid rgba(124, 180, 224, 0.15);
+  border-radius: 0 0 6px 6px;
+}
+
 .play-chat-secondary button {
   padding: 0.45rem 0.85rem;
   border-radius: 8px;

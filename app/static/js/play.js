@@ -1,4 +1,4 @@
-/* play.js – Play Mode (v0.1.4) */
+/* play.js – Play Mode (v0.1.5) */
 "use strict";
 
 // -- State from server-rendered dataset --
@@ -18,6 +18,24 @@ const chatInput = document.getElementById("play-chat-input");
 const taskBoard = document.getElementById("play-task-board");
 const debugOut = document.getElementById("play-output");
 const wsBtn = document.getElementById("play-connect-ws");
+
+// -- Attach-image state --
+let plAttachedFile = null; // File | null
+
+function plSetAttachedFile(file) {
+  plAttachedFile = file;
+  const preview = document.getElementById("play-attach-preview");
+  const attachBtn = document.getElementById("play-attach");
+  if (file) {
+    preview.textContent = `📎 ${file.name}`;
+    preview.style.display = "block";
+    if (attachBtn) attachBtn.classList.add("has-attachment");
+  } else {
+    preview.textContent = "";
+    preview.style.display = "none";
+    if (attachBtn) attachBtn.classList.remove("has-attachment");
+  }
+}
 
 // -- Countdown timer --
 function plFormatRemaining(isoStr) {
@@ -259,23 +277,59 @@ async function plSafeword() {
 }
 
 // -- Event wiring --
+document.getElementById("play-attach")?.addEventListener("click", () => {
+  if (plAttachedFile) {
+    plSetAttachedFile(null);
+    const fi = document.getElementById("play-file-input");
+    if (fi) fi.value = "";
+  } else {
+    document.getElementById("play-file-input")?.click();
+  }
+});
+
+document.getElementById("play-file-input")?.addEventListener("change", (e) => {
+  const file = e.target.files?.[0] || null;
+  plSetAttachedFile(file);
+});
+
 document.getElementById("play-send")?.addEventListener("click", async () => {
   if (!SESSION_ID) return;
   const content = chatInput?.value?.trim() || "";
-  if (!content) return;
+  if (!content && !plAttachedFile) return;
   const sendBtn = document.getElementById("play-send");
   sendBtn.disabled = true;
   const savedText = sendBtn.textContent;
   sendBtn.textContent = "…";
   if (chatInput) chatInput.value = "";
+  const fileToSend = plAttachedFile;
+  plSetAttachedFile(null);
+  const fi = document.getElementById("play-file-input");
+  if (fi) fi.value = "";
   try {
-    const data = await plPost(`/api/sessions/${SESSION_ID}/messages`, { content });
+    let data;
+    if (fileToSend) {
+      const fd = new FormData();
+      fd.append("content", content);
+      fd.append("file", fileToSend, fileToSend.name);
+      const resp = await fetch(`/api/sessions/${SESSION_ID}/messages/image`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        throw new Error(err.detail || resp.statusText);
+      }
+      data = await resp.json();
+    } else {
+      data = await plPost(`/api/sessions/${SESSION_ID}/messages`, { content });
+    }
     plWrite("Chat Reply", data);
     await plLoadChat();
     await plListTasks();
   } catch (err) {
     plWrite("Fehler Chat", { error: String(err) });
-    if (chatInput) chatInput.value = content;
+    if (chatInput && content) chatInput.value = content;
+    if (fileToSend) plSetAttachedFile(fileToSend);
   } finally {
     sendBtn.disabled = false;
     sendBtn.textContent = savedText;

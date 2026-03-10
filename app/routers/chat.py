@@ -2,7 +2,7 @@ import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -74,7 +74,7 @@ def _assistant_reply(persona_name: str, user_text: str, safety_mode: str | None,
     return f"{persona_name}: Ich habe dich gehoert. Du sagtest: '{user_text}'. Bleib diszipliniert."
 
 
-def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
+def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes: bytes | None = None, image_filename: str | None = None) -> Message:
     session_obj = _load_session(db, session_id)
     persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
     persona_name = persona.name if persona else "Keyholderin"
@@ -146,6 +146,8 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
         prompt_modules=prompt_modules,
         context_items=context_items,
         context_summary=context_summary,
+        image_bytes=image_bytes,
+        image_filename=image_filename,
     )
 
     reply_text = structured.message
@@ -313,6 +315,44 @@ def list_messages(session_id: int, db: Session = Depends(get_db)) -> dict:
 @router.post("/{session_id}/messages")
 def send_message(session_id: int, payload: SendMessageRequest, db: Session = Depends(get_db)) -> dict:
     assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=payload.content)
+    return {
+        "session_id": session_id,
+        "reply": assistant_msg.content,
+        "reply_message_id": assistant_msg.id,
+    }
+
+
+_ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+@router.post("/{session_id}/messages/image")
+async def send_message_with_image(
+    session_id: int,
+    content: str = Form(default=""),
+    file: UploadFile | None = File(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    image_bytes: bytes | None = None
+    image_filename: str | None = None
+    if file is not None:
+        content_type = (file.content_type or "").split(";")[0].strip().lower()
+        if content_type not in _ALLOWED_IMAGE_MIMES:
+            raise HTTPException(status_code=415, detail="Nur Bilddateien sind erlaubt (JPEG, PNG, GIF, WEBP).")
+        raw = await file.read()
+        if len(raw) > _MAX_IMAGE_BYTES:
+            raise HTTPException(status_code=413, detail="Bild ist zu groß (max. 10 MB).")
+        image_bytes = raw
+        image_filename = file.filename
+
+    user_text = content.strip() or "(Bild ohne Text)"
+    assistant_msg = _persist_chat_turn(
+        db=db,
+        session_id=session_id,
+        user_text=user_text,
+        image_bytes=image_bytes,
+        image_filename=image_filename,
+    )
     return {
         "session_id": session_id,
         "reply": assistant_msg.content,

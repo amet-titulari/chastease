@@ -31,9 +31,12 @@
     <section class="play-chat-section">
       <div id="play-chat-timeline" class="play-chat-timeline"></div>
       <div class="play-chat-footer">
+        <input id="play-file-input" type="file" accept="image/*" style="display:none" />
+        <button id="play-attach" type="button" class="chat-attach-btn" title="Bild anhängen">📎</button>
         <input id="play-chat-input" type="text" placeholder="Deine Nachricht..." />
         <button id="play-send" type="button" class="play-send-btn" title="Senden">&#10148;</button>
       </div>
+      <div id="play-attach-preview" class="chat-attach-preview" style="display:none"></div>
       <div class="play-chat-secondary">
         <button id="play-regenerate" type="button">Regenerate</button>
         <button id="play-load-chat" type="button">Verlauf</button>

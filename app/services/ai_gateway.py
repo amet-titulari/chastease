@@ -1,5 +1,7 @@
+import base64
 from dataclasses import dataclass
 import json
+import mimetypes
 import re
 
 import httpx
@@ -112,6 +114,8 @@ class AIGateway:
         prompt_modules: str | None = None,
         context_items: list[dict] | None = None,
         context_summary: str | None = None,
+        image_bytes: bytes | None = None,
+        image_filename: str | None = None,
     ) -> AIResponse:
         raise NotImplementedError
 
@@ -143,6 +147,8 @@ class StubAIGateway(AIGateway):
         prompt_modules: str | None = None,
         context_items: list[dict] | None = None,
         context_summary: str | None = None,
+        image_bytes: bytes | None = None,
+        image_filename: str | None = None,
     ) -> AIResponse:
         lowered = user_text.lower()
         actions: list[dict] = []
@@ -245,6 +251,8 @@ class OllamaGateway(AIGateway):
         prompt_modules: str | None = None,
         context_items: list[dict] | None = None,
         context_summary: str | None = None,
+        image_bytes: bytes | None = None,
+        image_filename: str | None = None,
     ) -> AIResponse:
         context_payload = ""
         if context_summary:
@@ -254,6 +262,10 @@ class OllamaGateway(AIGateway):
         if prompt_modules:
             context_payload += f"prompt_modules={prompt_modules}\n"
 
+        image_note = ""
+        if image_bytes:
+            image_note = "[Der Wearer hat ein Bild mitgesendet — berücksichtige es in deiner Antwort.]\n"
+
         prompt = (
             "Antworte als Keyholderin auf Deutsch und nutze strukturiertes JSON mit den Feldern "
             "message, actions, mood, intensity. "
@@ -262,30 +274,35 @@ class OllamaGateway(AIGateway):
             "Schema create_task: type,title,description(optional),deadline_minutes(optional),"
             "consequence_type(optional),consequence_value(optional),"
             "requires_verification(true wenn Foto-Nachweis noetig),verification_criteria(was auf dem Foto sichtbar sein muss).\n"
+            f"{image_note}"
             f"persona_name={persona_name}\n"
             f"user_text={user_text}\n"
             f"{context_payload}"
         )
 
+        ollama_payload: dict = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "format": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string"},
+                    "actions": {"type": "array"},
+                    "mood": {"type": "string"},
+                    "intensity": {"type": "integer"},
+                },
+                "required": ["message", "actions", "mood", "intensity"],
+            },
+        }
+        if image_bytes:
+            ollama_payload["images"] = [base64.b64encode(image_bytes).decode("ascii")]
+
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 response = client.post(
                     f"{self.base_url}/api/generate",
-                    json={
-                        "model": self.model,
-                        "prompt": prompt,
-                        "stream": False,
-                        "format": {
-                            "type": "object",
-                            "properties": {
-                                "message": {"type": "string"},
-                                "actions": {"type": "array"},
-                                "mood": {"type": "string"},
-                                "intensity": {"type": "integer"},
-                            },
-                            "required": ["message", "actions", "mood", "intensity"],
-                        },
-                    },
+                    json=ollama_payload,
                 )
                 response.raise_for_status()
                 payload = response.json()
@@ -369,6 +386,8 @@ class CustomOpenAIGateway(AIGateway):
         prompt_modules: str | None = None,
         context_items: list[dict] | None = None,
         context_summary: str | None = None,
+        image_bytes: bytes | None = None,
+        image_filename: str | None = None,
     ) -> AIResponse:
         json_instruction = (
             "\n\nANTWORTE AUSSCHLIESSLICH ALS GÜLTIGES JSON-OBJEKT mit diesen Feldern:\n"
@@ -392,7 +411,22 @@ class CustomOpenAIGateway(AIGateway):
         for item in (context_items or []):
             if isinstance(item, dict) and item.get("role") and item.get("content"):
                 messages.append({"role": item["role"], "content": item["content"]})
-        messages.append({"role": "user", "content": user_text})
+
+        if image_bytes:
+            mime = "image/jpeg"
+            if image_filename:
+                guessed, _ = mimetypes.guess_type(image_filename)
+                if guessed and guessed.startswith("image/"):
+                    mime = guessed
+            data_url = f"data:{mime};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+            user_content: str | list = [
+                {"type": "image_url", "image_url": {"url": data_url}},
+                {"type": "text", "text": user_text},
+            ]
+        else:
+            user_content = user_text
+
+        messages.append({"role": "user", "content": user_content})
 
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
