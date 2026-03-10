@@ -2,6 +2,8 @@
   --bg: #f4f0e8;
   --fg: #1f2a2e;
   --card: #fffaf1;
+  --accent: #7d3f00;
+  --line: #d8cbb3;
 }
 
 body {
@@ -11,15 +13,79 @@ body {
   font-family: Georgia, "Times New Roman", serif;
 }
 
+.topbar {
+  border-bottom: 1px solid var(--line);
+  background: #f9f2e6;
+}
+
+.brand {
+  margin: 0;
+  font-size: 1.2rem;
+  padding: 0.8rem 0;
+  color: var(--accent);
+}
+
 .container {
-  max-width: 900px;
+  max-width: 1100px;
   margin: 2rem auto;
   padding: 1rem;
 }
 
-section {
+.main-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.card {
   background: var(--card);
-  border: 1px solid #d8cbb3;
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 1.5rem;
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+.stack {
+  display: grid;
+  gap: 0.7rem;
+}
+
+label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+}
+
+input {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.95rem;
+}
+
+button {
+  border: 1px solid #915114;
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  background: linear-gradient(180deg, #9f5d1a, #7d3f00);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+pre {
+  margin: 0;
+  background: #2b2118;
+  color: #f7e9d2;
+  padding: 0.9rem;
+  border-radius: 10px;
+  min-height: 180px;
+  overflow-x: auto;
 }

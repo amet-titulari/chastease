@@ -8,8 +8,18 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, text
 
 from app.config import settings
-from app.models import contract, hygiene_opening, message, persona, player_profile, session  # noqa: F401
-from app.routers import health, hygiene, sessions, web
+from app.models import (  # noqa: F401
+    contract,
+    hygiene_opening,
+    message,
+    persona,
+    player_profile,
+    safety_log,
+    seal_history,
+    session,
+    verification,
+)
+from app.routers import health, hygiene, safety, sessions, verification as verification_router, web
 
 
 @asynccontextmanager
@@ -47,5 +57,7 @@ init_app_storage()
 app.include_router(health.router)
 app.include_router(sessions.router)
 app.include_router(hygiene.router)
+app.include_router(safety.router)
+app.include_router(verification_router.router)
 app.include_router(web.router)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

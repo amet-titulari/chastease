@@ -7,8 +7,14 @@
   <link rel="stylesheet" href="/static/css/style.css" />
 </head>
 <body>
-  <main class="container">
+  <header class="topbar">
+    <div class="container">
+      <h1 class="brand">Chastease Test Console</h1>
+    </div>
+  </header>
+  <main class="container main-grid">
     {% block content %}{% endblock %}
   </main>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

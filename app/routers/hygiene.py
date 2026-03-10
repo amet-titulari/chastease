@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.hygiene_opening import HygieneOpening
+from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
 from app.config import settings
 from app.services.hygiene_service import HygieneService
@@ -45,6 +46,19 @@ def request_hygiene_opening(
         old_seal_number=payload.old_seal_number,
     )
     db.add(opening)
+    db.flush()
+
+    if payload.old_seal_number:
+        db.add(
+            SealHistory(
+                session_id=session_id,
+                hygiene_opening_id=opening.id,
+                seal_number=payload.old_seal_number,
+                status="destroyed",
+                note="Seal opened for hygiene",
+            )
+        )
+
     db.commit()
     db.refresh(opening)
 
@@ -134,6 +148,18 @@ def relock_hygiene_opening(
     opening.status = "closed"
     opening.overrun_seconds = overrun_seconds
     opening.new_seal_number = payload.new_seal_number
+
+    if payload.new_seal_number:
+        db.add(
+            SealHistory(
+                session_id=session_id,
+                hygiene_opening_id=opening.id,
+                seal_number=payload.new_seal_number,
+                status="active",
+                note="Seal re-applied after hygiene",
+            )
+        )
+
     db.add(opening)
     db.commit()
     db.refresh(opening)

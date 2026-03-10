@@ -1,13 +1,94 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section>
-  <h1>Chastease</h1>
-  <p>Server läuft. Basis-Setup für erste Tests ist aktiv.</p>
-  <ul>
-    <li>Health: <code>/api/health</code></li>
-    <li>Session erstellen: <code>POST /api/sessions</code></li>
-    <li>Vertrag signieren: <code>POST /api/sessions/{id}/sign-contract</code></li>
-  </ul>
+<section class="card">
+  <h2>Session Setup</h2>
+  <form id="create-session-form" class="stack">
+    <label>Persona Name
+      <input name="persona_name" value="Mistress Test" required />
+    </label>
+    <label>Wearer Nickname
+      <input name="player_nickname" value="Tester" required />
+    </label>
+    <label>Min Dauer (Sekunden)
+      <input name="min_duration_seconds" type="number" min="60" value="300" required />
+    </label>
+    <label>Max Dauer (Sekunden)
+      <input name="max_duration_seconds" type="number" min="60" value="900" required />
+    </label>
+    <button type="submit">Session erstellen</button>
+  </form>
 </section>
+
+<section class="card">
+  <h2>Contract</h2>
+  <div class="stack">
+    <button id="sign-contract-btn" type="button">Vertrag signieren</button>
+    <label>Addendum: neue Mindestdauer (Sek.)
+      <input id="addendum-min-seconds" type="number" min="60" value="240" />
+    </label>
+    <button id="propose-addendum-btn" type="button">Addendum vorschlagen</button>
+    <button id="approve-addendum-btn" type="button">Letztes Addendum genehmigen</button>
+    <button id="reject-addendum-btn" type="button">Letztes Addendum ablehnen</button>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Hygiene</h2>
+  <div class="stack">
+    <label>Oeffnungsdauer (Sek.)
+      <input id="opening-duration-seconds" type="number" min="60" value="120" />
+    </label>
+    <label>Alte Plombe
+      <input id="old-seal" value="A-1" />
+    </label>
+    <label>Neue Plombe
+      <input id="new-seal" value="A-2" />
+    </label>
+    <button id="open-hygiene-btn" type="button">Hygiene-Oeffnung starten</button>
+    <button id="hygiene-status-btn" type="button">Hygiene-Status abrufen</button>
+    <button id="relock-btn" type="button">Wiederverschliessen</button>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Safety</h2>
+  <div class="stack">
+    <button id="traffic-yellow-btn" type="button">Ampel Gelb</button>
+    <button id="traffic-red-btn" type="button">Ampel Rot</button>
+    <button id="safeword-btn" type="button">Safeword ausloesen</button>
+    <label>Emergency Grund
+      <input id="emergency-reason" value="Akute koerperliche Belastung" />
+    </label>
+    <button id="emergency-btn" type="button">Emergency Release</button>
+    <button id="safety-logs-btn" type="button">Safety Logs anzeigen</button>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Verification</h2>
+  <div class="stack">
+    <label>Gewuenschte Plombe
+      <input id="verification-requested-seal" value="A-2" />
+    </label>
+    <button id="request-verification-btn" type="button">Verifikation anfordern</button>
+    <label>Beobachtete Plombe
+      <input id="verification-observed-seal" value="A-2" />
+    </label>
+    <label>Bilddatei
+      <input id="verification-file" type="file" accept="image/*" />
+    </label>
+    <button id="upload-verification-btn" type="button">Verifikation hochladen</button>
+  </div>
+</section>
+
+<section class="card full">
+  <h2>Live Output</h2>
+  <p>Aktuelle IDs: Session <code id="session-id">-</code>, Addendum <code id="addendum-id">-</code>, Opening <code id="opening-id">-</code></p>
+  <pre id="output">Bereit.</pre>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/dashboard.js"></script>
 {% endblock %}

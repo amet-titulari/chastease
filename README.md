@@ -14,6 +14,7 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Aufgaben-System** – Challenges mit Belohnungen und Bestrafungen
 - **Sicherheitssystem** – Ampelsystem, Safeword, Emergency Release
 - **Benachrichtigungen** – Timer, Erinnerungen, Nachrichten der Keyholderin
+- **Web Test Console** – Interaktive Browser-Oberfläche für Core-Flows
 
 ## Dokumentation
 
@@ -51,6 +52,25 @@ alembic stamp head
 ```
 
 App: `http://127.0.0.1:8000`
+
+Wichtige API-Endpunkte:
+
+- `GET /api/health`
+- `POST /api/sessions`
+- `GET /api/sessions/{id}`
+- `POST /api/sessions/{id}/sign-contract`
+- `POST /api/sessions/{id}/contract/addenda`
+- `POST /api/sessions/{id}/contract/addenda/{addendum_id}/consent`
+- `POST /api/sessions/{id}/hygiene/openings`
+- `GET /api/sessions/{id}/hygiene/openings/{opening_id}`
+- `POST /api/sessions/{id}/hygiene/openings/{opening_id}/relock`
+- `POST /api/sessions/{id}/safety/traffic-light`
+- `POST /api/sessions/{id}/safety/safeword`
+- `POST /api/sessions/{id}/safety/emergency-release`
+- `GET /api/sessions/{id}/safety/logs`
+- `POST /api/sessions/{id}/verifications/request`
+- `POST /api/sessions/{id}/verifications/{verification_id}/upload`
+- `GET /api/sessions/{id}/verifications`
 
 Tests ausführen:
 

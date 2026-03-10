@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.contract import Contract, ContractAddendum
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
+from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
 from app.services.contract_service import build_contract_text
 from app.services.session_service import SessionService
@@ -30,6 +31,51 @@ class ProposeAddendumRequest(BaseModel):
 
 class AddendumConsentRequest(BaseModel):
     decision: str = Field(pattern="^(approved|rejected)$")
+
+
+@router.get("/{session_id}")
+def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    contract = db.query(Contract).filter(Contract.session_id == session_id).first()
+    return {
+        "session_id": session_obj.id,
+        "status": session_obj.status,
+        "min_duration_seconds": session_obj.min_duration_seconds,
+        "max_duration_seconds": session_obj.max_duration_seconds,
+        "lock_start": str(session_obj.lock_start) if session_obj.lock_start else None,
+        "lock_end": str(session_obj.lock_end) if session_obj.lock_end else None,
+        "contract_signed": bool(contract and contract.signed_at),
+    }
+
+
+@router.get("/{session_id}/seal-history")
+def get_seal_history(session_id: int, db: Session = Depends(get_db)) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    entries = (
+        db.query(SealHistory)
+        .filter(SealHistory.session_id == session_id)
+        .order_by(SealHistory.id.asc())
+        .all()
+    )
+    return {
+        "session_id": session_id,
+        "entries": [
+            {
+                "id": entry.id,
+                "seal_number": entry.seal_number,
+                "status": entry.status,
+                "note": entry.note,
+                "applied_at": str(entry.applied_at),
+            }
+            for entry in entries
+        ],
+    }
 
 
 @router.post("")
