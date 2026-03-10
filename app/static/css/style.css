@@ -1,0 +1,25 @@
+:root {
+  --bg: #f4f0e8;
+  --fg: #1f2a2e;
+  --card: #fffaf1;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at 20% 20%, #fff8eb, #efe6d8);
+  color: var(--fg);
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.container {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 1rem;
+}
+
+section {
+  background: var(--card);
+  border: 1px solid #d8cbb3;
+  border-radius: 12px;
+  padding: 1.5rem;
+}

@@ -35,7 +35,28 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 
 ## Schnellstart
 
-> Wird nach erstem Development-Sprint ergänzt.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+alembic upgrade head
+python -m uvicorn app.main:app --reload
+```
+
+Falls bereits eine lokale `data/chastease.db` aus einer frueheren Version existiert:
+
+```bash
+alembic stamp head
+```
+
+App: `http://127.0.0.1:8000`
+
+Tests ausführen:
+
+```bash
+pytest -q
+```
 
 ## Lizenz
 

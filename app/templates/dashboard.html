@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h1>Chastease</h1>
+  <p>Server läuft. Basis-Setup für erste Tests ist aktiv.</p>
+  <ul>
+    <li>Health: <code>/api/health</code></li>
+    <li>Session erstellen: <code>POST /api/sessions</code></li>
+    <li>Vertrag signieren: <code>POST /api/sessions/{id}/sign-contract</code></li>
+  </ul>
+</section>
+{% endblock %}
