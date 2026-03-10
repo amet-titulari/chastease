@@ -6,7 +6,7 @@
 
 - Implementiert: FastAPI-Grundgeruest, SQLAlchemy-Modelle, Alembic-Migrationen `0001`-`0005`, Session/Contract/Hygiene/Safety/Verification/Chat/Tasks APIs
 - Implementiert: Interaktive Web Test Console im Dashboard fuer manuelle End-to-End-Tests
-- Teststatus: `16 passed` (lokale automatisierte Tests)
+- Teststatus: `17 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, produktive Chat-WebSocket-Absicherung, Notifications, produktionsnahe UX
 
 ---
@@ -113,6 +113,7 @@
 - [ ] Hygiene-Öffnungen: Kontingente pro Tag/Woche/Monat implementieren
 - [x] Hygiene-Öffnungen: Countdown, Wiederverschluss-Bestätigung und automatische Bestrafung bei Überziehung
 - [x] Plomben-Historie: Zerstörung alter Plombe und Pflicht-Eintrag neuer Plombe nach Öffnung
+- [x] APScheduler-Basis: periodischer Task-Overdue-Sweep fuer aktive Sessions
 - [ ] APScheduler: proaktive Keyholderin-Nachrichten
 - [ ] Browser Push Notifications (Web Push API)
 - [ ] Konfigurierbare Benachrichtigungs-Häufigkeit

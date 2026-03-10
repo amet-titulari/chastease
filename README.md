@@ -78,6 +78,13 @@ Wichtige API-Endpunkte:
 - `POST /api/sessions/{id}/tasks/evaluate-overdue`
 - `POST /api/sessions/{id}/tasks/{task_id}/status`
 
+Automatischer Task-Overdue-Sweep:
+
+- Hintergrundjob (APScheduler) prueft periodisch alle aktiven Sessions auf ueberfaellige Tasks.
+- Konfiguration per `.env`:
+	- `CHASTEASE_TASK_OVERDUE_SWEEPER_ENABLED=true|false`
+	- `CHASTEASE_TASK_OVERDUE_SWEEPER_INTERVAL_SECONDS=60`
+
 Tests ausführen:
 
 ```bash

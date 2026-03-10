@@ -1,6 +1,7 @@
 from pathlib import Path
 from contextlib import asynccontextmanager
 
+from apscheduler.schedulers.background import BackgroundScheduler
 from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
@@ -21,12 +22,30 @@ from app.models import (  # noqa: F401
     verification,
 )
 from app.routers import chat, health, hygiene, safety, sessions, tasks, verification as verification_router, web
+from app.services.task_sweeper import sweep_overdue_tasks_for_active_sessions
+
+
+scheduler: BackgroundScheduler | None = None
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_app_storage()
+    global scheduler
+    if settings.task_overdue_sweeper_enabled and scheduler is None:
+        scheduler = BackgroundScheduler(timezone="UTC")
+        scheduler.add_job(
+            sweep_overdue_tasks_for_active_sessions,
+            "interval",
+            seconds=settings.task_overdue_sweeper_interval_seconds,
+            id="task_overdue_sweeper",
+            replace_existing=True,
+        )
+        scheduler.start()
     yield
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
+        scheduler = None
 
 
 app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)

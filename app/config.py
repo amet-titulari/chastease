@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     media_dir: str = "./data/media"
     hygiene_overdue_penalty_seconds: int = 600
     task_overdue_default_penalty_seconds: int = 300
+    task_overdue_sweeper_enabled: bool = True
+    task_overdue_sweeper_interval_seconds: int = 60
 
     model_config = SettingsConfigDict(
         env_prefix="CHASTEASE_",
