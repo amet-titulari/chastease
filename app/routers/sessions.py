@@ -21,6 +21,7 @@ from app.models.verification import Verification
 from app.services.contract_service import build_contract_text
 from app.services.pdf_export import build_simple_text_pdf
 from app.services.session_service import SessionService
+from app.services.audit_logger import audit_log
 from app.security import verify_admin_secret
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
@@ -564,6 +565,7 @@ def sign_contract(session_id: int, db: Session = Depends(get_db)) -> dict:
     db.add(updated)
     db.commit()
     db.refresh(updated)
+    audit_log("contract_signed", session_id=session_id, status=updated.status)
     return {
         "session_id": updated.id,
         "status": updated.status,

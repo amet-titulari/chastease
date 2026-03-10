@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     verification_ai_provider: str = "auto"
     verification_ollama_model: str = "llava"
     verification_ollama_timeout_seconds: float = 20.0
+    # Audit log – set CHASTEASE_AUDIT_LOG_ENABLED=true to activate
+    audit_log_enabled: bool = False
+    audit_log_path: str = "./data/audit.log"
 
     model_config = SettingsConfigDict(
         env_prefix="CHASTEASE_",

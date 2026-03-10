@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/experience.css" />
+<style>
+.contract-view-shell {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+.contract-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.contract-view-meta {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.contract-view-meta span {
+  margin-right: 1rem;
+}
+.contract-view-body {
+  background: #071017;
+  color: #cde1f5;
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem;
+  border: 1px solid #223548;
+  font-size: 0.88rem;
+  line-height: 1.75;
+  word-break: break-word;
+  white-space: normal;
+  min-height: 60vh;
+}
+.contract-view-body h2,
+.contract-view-body h3,
+.contract-view-body h4 {
+  margin: 1em 0 0.4em;
+  color: #8fb3d5;
+  letter-spacing: 0.04em;
+}
+.contract-view-body strong { color: #b8d4ee; }
+.contract-view-body em    { color: #8fb3d5; font-style: italic; }
+.contract-view-body hr    { border: none; border-top: 1px solid #223548; margin: 1em 0; }
+.contract-view-body p     { margin: 0.5em 0; }
+.contract-view-body ul    { margin: 0.4em 0; padding-left: 1.4em; }
+.contract-view-body li    { margin: 0.2em 0; }
+.contract-view-body table { width: 100%; border-collapse: collapse; font-size: 0.84rem; margin: 0.6em 0; }
+.contract-view-body td    { padding: 0.3em 0.6em; border: 1px solid #223548; vertical-align: top; }
+.contract-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-decoration: none;
+  transition: border-color 0.2s, color 0.2s;
+}
+.contract-back-link:hover { color: var(--accent); border-color: var(--accent); }
+.contract-signed-badge {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  background: rgba(76, 175, 80, 0.15);
+  color: #81c784;
+  border: 1px solid #4caf5055;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.contract-unsigned-badge {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  background: rgba(255, 193, 7, 0.12);
+  color: #ffd54f;
+  border: 1px solid #ffc10744;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="contract-view-shell">
+  <div class="contract-view-header">
+    <div>
+      <a href="/play/{{ session_id }}" class="contract-back-link">&#8592; Zurück zur Session</a>
+    </div>
+    <div class="contract-view-meta">
+      <span>Session #{{ session_id }}</span>
+      {% if signed_at %}
+      <span class="contract-signed-badge">&#10003; Signiert {{ signed_at }}</span>
+      {% else %}
+      <span class="contract-unsigned-badge">&#9711; Nicht signiert</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div id="contract-body" class="contract-view-body">{{ content_text }}</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  function mdToHtml(md) {
+    return md
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/^#{3}\s+(.+)$/gm, "<h4>$1</h4>")
+      .replace(/^#{2}\s+(.+)$/gm, "<h3>$1</h3>")
+      .replace(/^#{1}\s+(.+)$/gm, "<h2>$1</h2>")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/^[-–]\s+(.+)$/gm, "<li>$1</li>")
+      .replace(/(<li>.*<\/li>\n?)+/g, (m) => "<ul>" + m + "</ul>")
+      .replace(/^\|(.+)\|$/gm, (_, row) => {
+        const cells = row.split("|").map((c) => `<td>${c.trim()}</td>`).join("");
+        return `<tr>${cells}</tr>`;
+      })
+      .replace(/(<tr>.*<\/tr>\n?)+/g, (m) => `<table>${m}</table>`)
+      .replace(/^-{3,}$/gm, "<hr>")
+      .replace(/\n{2,}/g, "</p><p>")
+      .replace(/^(.+)$/gm, (m) => m.startsWith("<") ? m : m);
+  }
+
+  const el = document.getElementById("contract-body");
+  if (el && el.dataset.raw) {
+    el.innerHTML = `<div class="md-body">${mdToHtml(el.dataset.raw)}</div>`;
+  } else if (el) {
+    const raw = el.textContent;
+    el.innerHTML = `<div class="md-body">${mdToHtml(raw)}</div>`;
+  }
+})();
+</script>
+{% endblock %}

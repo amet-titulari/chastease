@@ -400,3 +400,102 @@ document.addEventListener("DOMContentLoaded", async () => {
   plConnectWs();
 });
 
+// ============================================================
+// Settings Drawer
+// ============================================================
+const settingsDrawer = document.getElementById("play-settings-drawer");
+const settingsOverlay = document.getElementById("play-settings-overlay");
+
+function plOpenSettings() {
+  settingsDrawer?.classList.add("is-open");
+  settingsOverlay?.classList.add("is-open");
+  settingsDrawer?.setAttribute("aria-hidden", "false");
+  plLoadSettingsSummary();
+}
+
+function plCloseSettings() {
+  settingsDrawer?.classList.remove("is-open");
+  settingsOverlay?.classList.remove("is-open");
+  settingsDrawer?.setAttribute("aria-hidden", "true");
+}
+
+document.getElementById("play-settings-open")?.addEventListener("click", plOpenSettings);
+document.getElementById("play-settings-close")?.addEventListener("click", plCloseSettings);
+settingsOverlay?.addEventListener("click", plCloseSettings);
+
+async function plLoadSettingsSummary() {
+  try {
+    const data = await plGet("/api/settings/summary");
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || "—"; };
+    set("psd-exp", data.experience_level);
+    set("psd-style", data.style);
+    set("psd-goal", data.goal);
+    set("psd-boundary", data.boundary);
+    if (data.llm) {
+      const llm = data.llm;
+      const providerEl = document.getElementById("psd-llm-provider");
+      if (providerEl) providerEl.value = llm.provider || "stub";
+      const urlEl = document.getElementById("psd-llm-url");
+      if (urlEl) urlEl.value = llm.api_url || "";
+      const chatEl = document.getElementById("psd-llm-chat");
+      if (chatEl) chatEl.value = llm.chat_model || "";
+      const visionEl = document.getElementById("psd-llm-vision");
+      if (visionEl) visionEl.value = llm.vision_model || "";
+      const activeEl = document.getElementById("psd-llm-active");
+      if (activeEl) activeEl.checked = !!llm.profile_active;
+      const feedback = document.getElementById("psd-llm-feedback");
+      if (feedback) {
+        feedback.textContent = llm.api_key_stored ? "API-Key hinterlegt ✓" : "Kein API-Key gespeichert";
+        feedback.style.color = llm.api_key_stored ? "var(--color-success, #81c784)" : "var(--muted)";
+      }
+    }
+  } catch (err) {
+    plWrite("Settings load error", { error: String(err) });
+  }
+}
+
+document.getElementById("psd-llm-save")?.addEventListener("click", async () => {
+  const btn = document.getElementById("psd-llm-save");
+  const feedback = document.getElementById("psd-llm-feedback");
+  btn.disabled = true;
+  if (feedback) feedback.textContent = "Speichere…";
+  try {
+    const payload = {
+      provider: document.getElementById("psd-llm-provider")?.value || "stub",
+      api_url: document.getElementById("psd-llm-url")?.value?.trim() || "",
+      api_key: document.getElementById("psd-llm-key")?.value?.trim() || "",
+      chat_model: document.getElementById("psd-llm-chat")?.value?.trim() || "",
+      vision_model: document.getElementById("psd-llm-vision")?.value?.trim() || "",
+      profile_active: document.getElementById("psd-llm-active")?.checked || false,
+    };
+    await plPost("/api/settings/llm", payload);
+    if (feedback) { feedback.textContent = "Gespeichert ✓"; feedback.style.color = "var(--color-success, #81c784)"; }
+    // Clear API key field after save for security
+    const keyEl = document.getElementById("psd-llm-key");
+    if (keyEl) keyEl.value = "";
+  } catch (err) {
+    if (feedback) { feedback.textContent = `Fehler: ${err}`; feedback.style.color = "var(--color-error, #f44)"; }
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("psd-llm-test")?.addEventListener("click", async () => {
+  const btn = document.getElementById("psd-llm-test");
+  const feedback = document.getElementById("psd-llm-feedback");
+  btn.disabled = true;
+  if (feedback) feedback.textContent = "Teste…";
+  try {
+    const resp = await fetch("/profile/llm/test", { method: "POST" });
+    const data = await resp.json();
+    if (feedback) {
+      feedback.textContent = data.ok ? `✓ OK (HTTP ${data.status})` : `✗ ${data.error}`;
+      feedback.style.color = data.ok ? "var(--color-success, #81c784)" : "var(--color-error, #f44)";
+    }
+  } catch (err) {
+    if (feedback) { feedback.textContent = `✗ ${err}`; feedback.style.color = "var(--color-error, #f44)"; }
+  } finally {
+    btn.disabled = false;
+  }
+});
+

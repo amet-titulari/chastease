@@ -21,6 +21,7 @@
       <span class="play-timer-label">Verbleibend</span>
       <code id="play-countdown" class="play-countdown">—</code>
       <button id="play-connect-ws" class="play-ws-btn" type="button" title="Live verbinden">&#9679;</button>
+      <button id="play-settings-open" class="play-settings-btn" type="button" title="Einstellungen">&#9881;</button>
     </div>
   </header>
 
@@ -82,6 +83,7 @@
         {% if session_status in ('safeword_stopped', 'yellow', 'red') %}
         <button id="play-resume-session" type="button" class="play-resume-btn">&#8635; Session reaktivieren</button>
         {% endif %}
+        <a href="/contract/{{ session_id }}" class="play-contract-link">&#128220; Vertrag ansehen</a>
         <a href="/experience" class="play-new-session-link">Neue Session &rarr;</a>
       </section>
 
@@ -95,6 +97,77 @@
   <button id="play-safety-yellow" class="dock-yellow" type="button">Gelb</button>
   <button id="play-safety-red" class="dock-red" type="button">Rot</button>
   <button id="play-safety-safeword" class="dock-safeword" type="button">Safeword</button>
+</div>
+
+<!-- Settings Drawer -->
+<div class="play-settings-overlay" id="play-settings-overlay"></div>
+<div class="play-settings-drawer" id="play-settings-drawer" aria-hidden="true">
+  <div class="psd-header">
+    <span>Einstellungen</span>
+    <button id="play-settings-close" type="button" class="psd-close" aria-label="Schlie&szlig;en">&times;</button>
+  </div>
+  <div class="psd-body">
+
+    <section class="psd-section">
+      <h4>Dein Setup</h4>
+      <dl class="psd-info-grid" id="psd-setup-grid">
+        <dt>Erfahrung</dt><dd id="psd-exp">—</dd>
+        <dt>Stil</dt><dd id="psd-style">—</dd>
+        <dt>Ziel</dt><dd id="psd-goal">—</dd>
+        <dt>Limits</dt><dd id="psd-boundary">—</dd>
+      </dl>
+      <a href="/profile" class="psd-link">Vollst&auml;ndiges Profil &rarr;</a>
+    </section>
+
+    <section class="psd-section">
+      <h4>LLM Einstellungen</h4>
+      <div class="psd-field">
+        <label>Provider
+          <select id="psd-llm-provider">
+            <option value="stub">stub (Testmodus)</option>
+            <option value="custom">custom (OpenAI-kompatibel)</option>
+            <option value="ollama">ollama (lokal)</option>
+          </select>
+        </label>
+      </div>
+      <div class="psd-field">
+        <label>API URL
+          <input id="psd-llm-url" type="url" placeholder="https://api.x.ai/v1/chat/completions" />
+        </label>
+      </div>
+      <div class="psd-field">
+        <label>API Key
+          <input id="psd-llm-key" type="password" placeholder="leer lassen um bestehenden zu behalten" autocomplete="new-password" />
+        </label>
+      </div>
+      <div class="psd-field">
+        <label>Chat-Modell
+          <input id="psd-llm-chat" placeholder="z.B. grok-3-fast" />
+        </label>
+      </div>
+      <div class="psd-field">
+        <label>Vision-Modell
+          <input id="psd-llm-vision" placeholder="z.B. grok-2-vision-1212" />
+        </label>
+      </div>
+      <div class="psd-field psd-field--row">
+        <label>Aktiv
+          <input id="psd-llm-active" type="checkbox" />
+        </label>
+      </div>
+      <div class="psd-actions">
+        <button id="psd-llm-save" type="button">Speichern</button>
+        <button id="psd-llm-test" type="button" class="ghost">Verbindung testen</button>
+      </div>
+      <p id="psd-llm-feedback" class="psd-feedback"></p>
+    </section>
+
+    <section class="psd-section">
+      <h4>Vertrag</h4>
+      <a href="/contract/{{ session_id }}" class="psd-link">&#128220; Vertrag dieser Session ansehen &rarr;</a>
+    </section>
+
+  </div>
 </div>
 
 <pre id="play-output" class="play-debug-output">Bereit.</pre>

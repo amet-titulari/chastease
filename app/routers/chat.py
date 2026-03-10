@@ -14,6 +14,7 @@ from app.models.safety_log import SafetyLog
 from app.models.session import Session as SessionModel
 from app.models.task import Task
 from app.services.ai_gateway import get_ai_gateway
+from app.services.audit_logger import audit_log
 from app.services.context_window import build_context_window
 from app.services.prompt_builder import build_prompt_modules
 
@@ -223,6 +224,7 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
     db.add(assistant_msg)
     db.commit()
     db.refresh(assistant_msg)
+    audit_log("chat_turn", session_id=session_id, user_text=user_text[:200], reply_preview=reply_text[:120])
     return assistant_msg
 
 

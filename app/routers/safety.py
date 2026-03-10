@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.safety_log import SafetyLog
 from app.models.session import Session as SessionModel
 from app.security import verify_admin_secret
+from app.services.audit_logger import audit_log
 
 router = APIRouter(prefix="/api/sessions", tags=["safety"])
 
@@ -41,7 +42,7 @@ def traffic_light(
     db.add(session_obj)
     db.commit()
     db.refresh(session_obj)
-
+    audit_log("safety_traffic_light", session_id=session_id, color=payload.color, status=session_obj.status)
     return {"session_id": session_id, "status": session_obj.status, "color": payload.color}
 
 
@@ -55,6 +56,7 @@ def resume_session(session_id: int, db: Session = Depends(get_db)) -> dict:
     db.add(SafetyLog(session_id=session_id, event_type="resumed", reason="manual_resume"))
     db.add(session_obj)
     db.commit()
+    audit_log("safety_resumed", session_id=session_id)
     return {"session_id": session_id, "status": session_obj.status}
 
 
@@ -65,6 +67,7 @@ def safeword(session_id: int, db: Session = Depends(get_db)) -> dict:
     db.add(SafetyLog(session_id=session_id, event_type="safeword", reason="immediate_stop"))
     db.add(session_obj)
     db.commit()
+    audit_log("safety_safeword", session_id=session_id)
     return {"session_id": session_id, "status": session_obj.status}
 
 
@@ -80,6 +83,7 @@ def emergency_release(
     db.add(SafetyLog(session_id=session_id, event_type="emergency_release", reason=payload.reason))
     db.add(session_obj)
     db.commit()
+    audit_log("safety_emergency_release", session_id=session_id, reason=payload.reason)
     return {"session_id": session_id, "status": session_obj.status, "reason": payload.reason}
 
 

@@ -416,6 +416,212 @@ body:has(.play-shell) main.container {
   color: var(--accent);
 }
 
+.play-contract-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.play-contract-link:hover {
+  color: var(--accent);
+}
+
+/* --- Settings button in header --- */
+.play-settings-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.play-settings-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* --- Settings drawer overlay --- */
+.play-settings-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 900;
+}
+
+.play-settings-overlay.is-open {
+  display: block;
+}
+
+/* --- Settings drawer panel --- */
+.play-settings-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(380px, 100vw);
+  height: 100dvh;
+  background: var(--bg, #0a1520);
+  border-left: 1px solid var(--line);
+  z-index: 901;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.play-settings-drawer.is-open {
+  transform: translateX(0);
+}
+
+.psd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.psd-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.psd-close:hover { color: var(--ink); border-color: var(--ink); }
+
+.psd-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.25rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.psd-section {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.psd-section h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
+.psd-info-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.75rem;
+  font-size: 0.82rem;
+  margin: 0 0 0.75rem;
+}
+
+.psd-info-grid dt { color: var(--muted); white-space: nowrap; }
+.psd-info-grid dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+
+.psd-field {
+  margin-bottom: 0.65rem;
+}
+
+.psd-field label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.psd-field input,
+.psd-field select {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--input-bg, #0d1f2d);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  width: 100%;
+}
+
+.psd-field--row label {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.psd-field--row input[type="checkbox"] {
+  width: auto;
+}
+
+.psd-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.psd-actions button {
+  flex: 1;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.82rem;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--line);
+}
+
+.psd-actions button:not(.ghost) {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.psd-actions button.ghost {
+  background: transparent;
+  color: var(--muted);
+}
+
+.psd-actions button.ghost:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.psd-feedback {
+  font-size: 0.78rem;
+  min-height: 1.2em;
+  margin-top: 0.35rem;
+  color: var(--muted);
+}
+
+.psd-link {
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.psd-link:hover { color: var(--accent); }
+
 /* --- Verification section --- */
 .play-verify-section {
   background: linear-gradient(180deg, var(--card), var(--card-soft));

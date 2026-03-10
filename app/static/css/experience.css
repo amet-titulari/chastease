@@ -463,7 +463,7 @@ button {
 
 /* Markdown-rendered contract body */
 .xp-contract-body {
-  max-height: 340px;
+  max-height: 58vh;
   overflow-y: auto;
   background: #071017;
   color: #cde1f5;

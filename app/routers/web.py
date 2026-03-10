@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models.auth_user import AuthUser
+from app.models.contract import Contract
 from app.models.llm_profile import LlmProfile
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
@@ -497,6 +498,83 @@ def contracts_page(request: Request):
         name="contracts.html",
         context={"title": f"{settings.app_name} Contracts"},
     )
+
+
+@router.get("/contract/{session_id}", response_class=HTMLResponse)
+def contract_view(session_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if session_obj is None:
+        return RedirectResponse(url="/experience", status_code=303)
+    contract = db.query(Contract).filter(Contract.session_id == session_id).first()
+    content_text = contract.content_text if contract else "(Kein Vertrag vorhanden)"
+    signed_at = None
+    if contract and contract.signed_at:
+        try:
+            signed_at = contract.signed_at.strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            signed_at = str(contract.signed_at)
+    return templates.TemplateResponse(
+        request=request,
+        name="contract_view.html",
+        context={
+            "title": f"Vertrag – Session #{session_id}",
+            "session_id": session_id,
+            "content_text": content_text,
+            "signed_at": signed_at,
+        },
+    )
+
+
+@router.get("/api/settings/summary")
+def settings_summary(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+    return JSONResponse({
+        "username": user.username,
+        "experience_level": user.setup_experience_level,
+        "style": user.setup_style,
+        "goal": user.setup_goal,
+        "boundary": user.setup_boundary,
+        "llm": {
+            "provider": llm.provider,
+            "api_url": llm.api_url or "",
+            "chat_model": llm.chat_model or "",
+            "vision_model": llm.vision_model or "",
+            "profile_active": llm.profile_active,
+            "api_key_stored": bool(llm.api_key),
+        } if llm else None,
+    })
+
+
+@router.post("/api/settings/llm")
+async def update_llm_settings(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = await request.json()
+    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+    if not llm:
+        llm = LlmProfile(profile_key="default")
+        db.add(llm)
+    if "provider" in body:
+        llm.provider = str(body["provider"])[:50] or "stub"
+    if "api_url" in body:
+        llm.api_url = str(body["api_url"])[:500] or None
+    if body.get("api_key"):
+        llm.api_key = str(body["api_key"])
+    if "chat_model" in body:
+        llm.chat_model = str(body["chat_model"])[:120] or None
+    if "vision_model" in body:
+        llm.vision_model = str(body["vision_model"])[:120] or None
+    if "profile_active" in body:
+        llm.profile_active = bool(body["profile_active"])
+    db.commit()
+    return JSONResponse({"ok": True})
 
 
 @router.get("/play/{session_id}", response_class=HTMLResponse)
