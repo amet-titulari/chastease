@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.database import SessionLocal
+from app.config import settings
 from app.main import app
 from app.models.message import Message
 
@@ -80,3 +81,28 @@ def test_rotate_ws_token_invalidates_existing_connection():
             ws_new.send_text("Neuer Token")
             payload = ws_new.receive_json()
             assert payload["message_type"] == "chat"
+
+
+def test_rotate_ws_token_requires_admin_secret_when_configured():
+    previous = settings.admin_secret
+    settings.admin_secret = "top-secret"
+    try:
+        with TestClient(app) as client:
+            session_id, _ = _create_and_sign(client)
+
+            no_secret = client.post(f"/api/sessions/{session_id}/chat/ws-token/rotate")
+            assert no_secret.status_code == 403
+
+            wrong_secret = client.post(
+                f"/api/sessions/{session_id}/chat/ws-token/rotate",
+                headers={"X-Admin-Secret": "wrong"},
+            )
+            assert wrong_secret.status_code == 403
+
+            ok_secret = client.post(
+                f"/api/sessions/{session_id}/chat/ws-token/rotate",
+                headers={"X-Admin-Secret": "top-secret"},
+            )
+            assert ok_secret.status_code == 200
+    finally:
+        settings.admin_secret = previous

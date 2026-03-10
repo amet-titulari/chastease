@@ -14,6 +14,7 @@ from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
 from app.services.contract_service import build_contract_text
 from app.services.session_service import SessionService
+from app.security import verify_admin_secret
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -175,7 +176,11 @@ def sign_contract(session_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/{session_id}/chat/ws-token/rotate")
-def rotate_chat_ws_token(session_id: int, db: Session = Depends(get_db)) -> dict:
+def rotate_chat_ws_token(
+    session_id: int,
+    _: None = Depends(verify_admin_secret),
+    db: Session = Depends(get_db),
+) -> dict:
     session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session_obj:
         raise HTTPException(status_code=404, detail="Session not found")

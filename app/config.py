@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     proactive_messages_enabled: bool = True
     proactive_messages_interval_seconds: int = 120
     proactive_messages_cooldown_seconds: int = 600
+    admin_secret: str | None = None
 
     model_config = SettingsConfigDict(
         env_prefix="CHASTEASE_",
