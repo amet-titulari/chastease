@@ -42,15 +42,19 @@ def _set_auth_cookie(response: RedirectResponse, token: str) -> None:
     )
 
 
+# Statuses where the user should be redirected back to the play page
+_PLAY_REDIRECT_STATUSES = {"active", "safeword_stopped", "yellow", "red"}
+
+
 def _redirect_if_active_session(user, db) -> str | None:
-    """Return redirect URL if user has an active session, else None."""
+    """Return redirect URL if user has a recent session worth showing, else None."""
     if user and user.active_session_id:
-        active = db.query(SessionModel).filter(
+        session = db.query(SessionModel).filter(
             SessionModel.id == user.active_session_id,
-            SessionModel.status == "active",
+            SessionModel.status.in_(_PLAY_REDIRECT_STATUSES),
         ).first()
-        if active:
-            return f"/play/{active.id}"
+        if session:
+            return f"/play/{session.id}"
     return None
 
 

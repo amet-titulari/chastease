@@ -260,6 +260,22 @@ document.getElementById("play-load-chat")?.addEventListener("click", plLoadChat)
 document.getElementById("play-load-tasks")?.addEventListener("click", plListTasks);
 document.getElementById("play-connect-ws")?.addEventListener("click", plConnectWs);
 
+document.getElementById("play-resume-session")?.addEventListener("click", async () => {
+  if (!SESSION_ID) return;
+  const btn = document.getElementById("play-resume-session");
+  btn.disabled = true;
+  try {
+    const data = await plPost(`/api/sessions/${SESSION_ID}/safety/resume`, {});
+    if (statusPillEl) statusPillEl.textContent = data.status;
+    if (statusTextEl) statusTextEl.textContent = data.status;
+    btn.remove(); // hide button once active again
+    plWrite("Session reaktiviert", data);
+  } catch (err) {
+    plWrite("Fehler Reaktivierung", { error: String(err) });
+    btn.disabled = false;
+  }
+});
+
 document.getElementById("play-safety-green")?.addEventListener("click", () => plSafety("green"));
 document.getElementById("play-safety-yellow")?.addEventListener("click", () => plSafety("yellow"));
 document.getElementById("play-safety-red")?.addEventListener("click", () => plSafety("red"));

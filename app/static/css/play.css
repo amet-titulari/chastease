@@ -386,6 +386,24 @@ body:has(.play-shell) main.container {
   text-overflow: ellipsis;
 }
 
+.play-resume-btn {
+  display: block;
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.4rem 0;
+  border-radius: 8px;
+  border: 1px solid rgba(76,175,130,0.4);
+  background: rgba(76,175,130,0.1);
+  color: #4caf82;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.play-resume-btn:hover {
+  background: rgba(76,175,130,0.22);
+}
+
 .play-new-session-link {
   display: inline-block;
   margin-top: 0.75rem;

@@ -45,6 +45,19 @@ def traffic_light(
     return {"session_id": session_id, "status": session_obj.status, "color": payload.color}
 
 
+@router.post("/{session_id}/safety/resume")
+def resume_session(session_id: int, db: Session = Depends(get_db)) -> dict:
+    """Reactivate a safeword-stopped session (e.g. accidental trigger)."""
+    session_obj = _load_session(db, session_id)
+    if session_obj.status not in ("safeword_stopped", "yellow", "red"):
+        raise HTTPException(status_code=400, detail="Session kann nicht reaktiviert werden.")
+    session_obj.status = "active"
+    db.add(SafetyLog(session_id=session_id, event_type="resumed", reason="manual_resume"))
+    db.add(session_obj)
+    db.commit()
+    return {"session_id": session_id, "status": session_obj.status}
+
+
 @router.post("/{session_id}/safety/safeword")
 def safeword(session_id: int, db: Session = Depends(get_db)) -> dict:
     session_obj = _load_session(db, session_id)

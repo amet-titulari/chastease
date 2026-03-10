@@ -79,6 +79,9 @@
           <dt>Status</dt>
           <dd id="play-status-text">{{ session_status }}</dd>
         </dl>
+        {% if session_status in ('safeword_stopped', 'yellow', 'red') %}
+        <button id="play-resume-session" type="button" class="play-resume-btn">&#8635; Session reaktivieren</button>
+        {% endif %}
         <a href="/experience" class="play-new-session-link">Neue Session &rarr;</a>
       </section>
 
