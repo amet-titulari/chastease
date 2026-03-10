@@ -4,6 +4,9 @@ let xpSocket = null;
 let xpStep = 1;
 let xpPersonaPresets = [];
 
+const xpChatTimeline = document.getElementById("xp-chat-timeline");
+const xpTaskBoard = document.getElementById("xp-task-board");
+
 const statusEl = document.getElementById("onboarding-status");
 const outputEl = document.getElementById("xp-output");
 const contractEl = document.getElementById("xp-contract-preview");
@@ -14,6 +17,75 @@ const timerRemainingEl = document.getElementById("xp-timer-remaining");
 
 function xpWrite(title, data) {
   outputEl.textContent = `${title}\n${JSON.stringify(data, null, 2)}`;
+}
+
+function xpRenderChat(items) {
+  if (!Array.isArray(items) || !items.length) {
+    xpChatTimeline.innerHTML = "<p>Noch keine Nachrichten.</p>";
+    return;
+  }
+
+  const html = items
+    .slice(-60)
+    .map((item) => {
+      const role = item.role || "system";
+      const content = String(item.content || "").replace(/</g, "&lt;");
+      return `<div class="chat-bubble ${role}"><strong>${role}</strong><br>${content}</div>`;
+    })
+    .join("");
+  xpChatTimeline.innerHTML = html;
+  xpChatTimeline.scrollTop = xpChatTimeline.scrollHeight;
+}
+
+function xpChipClass(status) {
+  if (status === "completed") return "completed";
+  if (status === "failed") return "failed";
+  if (status === "overdue") return "overdue";
+  return "pending";
+}
+
+function xpRenderTasks(items) {
+  if (!Array.isArray(items) || !items.length) {
+    xpTaskBoard.innerHTML = "<p>Noch keine Tasks.</p>";
+    return;
+  }
+
+  xpTaskBoard.innerHTML = items
+    .map((item) => {
+      const chip = xpChipClass(item.status);
+      const disabled = item.status !== "pending" ? "disabled" : "";
+      const title = String(item.title || "").replace(/</g, "&lt;");
+      return `
+        <article class="task-card" data-task-id="${item.id}">
+          <div class="task-head">
+            <span class="task-title">${title}</span>
+            <span class="chip ${chip}">${item.status}</span>
+          </div>
+          <div class="task-actions">
+            <button class="ok" data-action="complete" ${disabled}>Complete</button>
+            <button class="fail" data-action="fail" ${disabled}>Fail</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  xpTaskBoard.querySelectorAll("button[data-action]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const card = btn.closest(".task-card");
+      const taskId = card ? Number(card.dataset.taskId) : 0;
+      if (!taskId || !xpSessionId) return;
+      const action = btn.dataset.action;
+      const status = action === "complete" ? "completed" : "failed";
+      try {
+        const updated = await xpPost(`/api/sessions/${xpSessionId}/tasks/${taskId}/status`, { status });
+        xpWrite(`Task ${status}`, updated);
+        await xpListTasks();
+      } catch (err) {
+        xpWrite("Fehler Task-Update", { error: String(err) });
+      }
+    });
+  });
 }
 
 function xpParseOptionalInt(v) {
@@ -89,6 +161,28 @@ async function xpLoadPersonaPresets() {
   }
 }
 
+async function xpLoadChat() {
+  if (!xpSessionId) return;
+  try {
+    const data = await xpGet(`/api/sessions/${xpSessionId}/messages`);
+    xpRenderChat(data.items || []);
+    xpWrite("Chat Verlauf", { count: (data.items || []).length });
+  } catch (err) {
+    xpWrite("Fehler Verlauf", { error: String(err) });
+  }
+}
+
+async function xpListTasks() {
+  if (!xpSessionId) return;
+  try {
+    const data = await xpGet(`/api/sessions/${xpSessionId}/tasks`);
+    xpRenderTasks(data.items || []);
+    xpWrite("Tasks", { count: (data.items || []).length });
+  } catch (err) {
+    xpWrite("Fehler Tasks", { error: String(err) });
+  }
+}
+
 document.getElementById("xp-persona-preset").addEventListener("change", (e) => {
   const preset = xpPersonaPresets.find((item) => item.key === e.target.value);
   if (preset) {
@@ -151,6 +245,8 @@ document.getElementById("xp-sign-contract").addEventListener("click", async () =
     sessionStatusEl.textContent = signed.status;
     playCardEl.classList.add("is-live");
     xpWrite("Session aktiv", signed);
+    await xpLoadChat();
+    await xpListTasks();
   } catch (err) {
     xpWrite("Fehler Signatur", { error: String(err) });
   }
@@ -181,6 +277,10 @@ document.getElementById("xp-connect-ws").addEventListener("click", () => {
     if (payload.message_type === "timer_tick") {
       timerRemainingEl.textContent = String(payload.remaining_seconds);
     }
+    if (payload.message_type && payload.message_type !== "timer_tick") {
+      xpLoadChat();
+      xpListTasks();
+    }
     xpWrite("Live Event", payload);
   };
   xpSocket.onclose = () => xpWrite("WebSocket", { status: "getrennt" });
@@ -192,19 +292,15 @@ document.getElementById("xp-send-chat").addEventListener("click", async () => {
     const content = document.getElementById("xp-chat-input").value;
     const data = await xpPost(`/api/sessions/${xpSessionId}/messages`, { content });
     xpWrite("Chat Reply", data);
+    await xpLoadChat();
+    await xpListTasks();
   } catch (err) {
     xpWrite("Fehler Chat", { error: String(err) });
   }
 });
 
 document.getElementById("xp-load-chat").addEventListener("click", async () => {
-  if (!xpSessionId) return;
-  try {
-    const data = await xpGet(`/api/sessions/${xpSessionId}/messages`);
-    xpWrite("Chat Verlauf", data);
-  } catch (err) {
-    xpWrite("Fehler Verlauf", { error: String(err) });
-  }
+  await xpLoadChat();
 });
 
 document.getElementById("xp-create-task").addEventListener("click", async () => {
@@ -215,19 +311,14 @@ document.getElementById("xp-create-task").addEventListener("click", async () => 
       deadline_minutes: 15,
     });
     xpWrite("Task erstellt", data);
+    await xpListTasks();
   } catch (err) {
     xpWrite("Fehler Task", { error: String(err) });
   }
 });
 
 document.getElementById("xp-list-tasks").addEventListener("click", async () => {
-  if (!xpSessionId) return;
-  try {
-    const data = await xpGet(`/api/sessions/${xpSessionId}/tasks`);
-    xpWrite("Tasks", data);
-  } catch (err) {
-    xpWrite("Fehler Tasks", { error: String(err) });
-  }
+  await xpListTasks();
 });
 
 async function xpSafety(color) {
@@ -254,5 +345,20 @@ document.getElementById("xp-safety-safeword").addEventListener("click", async ()
   }
 });
 
+document.getElementById("xp-dock-yellow").addEventListener("click", () => xpSafety("yellow"));
+document.getElementById("xp-dock-red").addEventListener("click", () => xpSafety("red"));
+document.getElementById("xp-dock-safeword").addEventListener("click", async () => {
+  if (!xpSessionId) return;
+  try {
+    const data = await xpPost(`/api/sessions/${xpSessionId}/safety/safeword`, {});
+    sessionStatusEl.textContent = data.status;
+    xpWrite("Safeword", data);
+  } catch (err) {
+    xpWrite("Fehler Safeword", { error: String(err) });
+  }
+});
+
 xpLoadPersonaPresets();
 xpSwitchStep(1);
+xpRenderChat([]);
+xpRenderTasks([]);

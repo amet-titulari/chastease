@@ -107,6 +107,7 @@
 
         <section>
           <h4>Chat</h4>
+          <div id="xp-chat-timeline" class="chat-timeline"></div>
           <label>Nachricht
             <input id="xp-chat-input" value="Statusreport." />
           </label>
@@ -125,6 +126,7 @@
             <button id="xp-create-task" type="button">Task erstellen</button>
             <button id="xp-list-tasks" type="button">Tasks laden</button>
           </div>
+          <div id="xp-task-board" class="task-board"></div>
         </section>
 
         <section>
@@ -139,6 +141,12 @@
 
       <pre id="xp-output">Willkommen im Experience Mode.</pre>
     </article>
+  </div>
+
+  <div class="xp-safety-dock" id="xp-safety-dock">
+    <button id="xp-dock-yellow" type="button">Gelb</button>
+    <button id="xp-dock-red" type="button">Rot</button>
+    <button id="xp-dock-safeword" type="button">Safeword</button>
   </div>
 </section>
 {% endblock %}
