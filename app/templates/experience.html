@@ -4,8 +4,8 @@
 <section class="xp-shell full">
   <div class="xp-hero">
     <p class="eyebrow">Chastease Experience</p>
-    <h2>Onboarding bis Play-Mode in einem Flow</h2>
-    <p>Konfiguriere Persona, Profil und Regeln und starte danach direkt in eine mobile-first Session mit Chat, Timer, Tasks und Safety Controls.</p>
+    <h2>Cold Protocol</h2>
+    <p class="xp-subline">Klares Setup, kalte Aesthetik, null Ablenkung. Onboarding fuehrt dich in vier Schritten in den Play-Mode.</p>
   </div>
 
   <div class="xp-grid">
@@ -13,6 +13,7 @@
       <header>
         <h3>Onboarding</h3>
         <p id="onboarding-status">Schritt 1 von 4</p>
+        <p class="panel-hint">Schritt 1 richtet die Keyholderin ein. Schritt 2 definiert dein Spielerprofil.</p>
       </header>
 
       <div class="step-tabs" role="tablist" aria-label="Onboarding Steps">
@@ -23,18 +24,20 @@
       </div>
 
       <section class="step-pane is-active" data-step="1">
-        <label>Persona Preset
+        <p class="step-title">Keyholderin</p>
+        <label>Preset
           <select id="xp-persona-preset"></select>
         </label>
-        <label>Persona Name
+        <label>Keyholderin Name
           <input id="xp-persona-name" value="Ballet Sub Ella" />
         </label>
-        <label>Nickname
+        <label>Dein Nickname
           <input id="xp-player-nickname" value="Player" />
         </label>
       </section>
 
       <section class="step-pane" data-step="2">
+        <p class="step-title">Spielerprofil</p>
         <label>Erfahrungslevel
           <select id="xp-experience-level">
             <option value="beginner">Beginner</option>
@@ -57,6 +60,7 @@
       </section>
 
       <section class="step-pane" data-step="3">
+        <p class="step-title">Session Regeln</p>
         <label>Min Dauer (Sek.)
           <input id="xp-min-seconds" type="number" min="60" value="900" />
         </label>
@@ -78,7 +82,7 @@
       </section>
 
       <section class="step-pane" data-step="4">
-        <p>Contract Preview</p>
+        <p class="step-title">Contract Check</p>
         <pre id="xp-contract-preview">Noch keine Session erstellt.</pre>
         <button id="xp-sign-contract" type="button">Vertrag signieren und Play-Mode starten</button>
       </section>
@@ -92,7 +96,8 @@
     <article class="xp-card play" id="play-card">
       <header>
         <h3>Play Mode</h3>
-        <p>Session <code id="xp-session-id">-</code> <span id="xp-session-status">draft</span></p>
+        <p>Session <code id="xp-session-id">-</code> <span id="xp-session-status" class="status-pill">draft</span></p>
+        <p class="panel-hint">Live-Modus wird nach Vertrags-Signatur aktiv.</p>
       </header>
 
       <div class="play-layout">
