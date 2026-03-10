@@ -7,6 +7,10 @@
   const styleSelect = document.getElementById("setup-role-style");
   const goalInput = document.getElementById("setup-primary-goal");
   const goalPresets = Array.from(document.querySelectorAll('input[name="goal_preset"]'));
+  const boundaryChecks = Array.from(document.querySelectorAll(".boundary-presets input[type='checkbox']"));
+  const boundaryCustom = document.getElementById("setup-boundary-custom");
+  const boundaryApplyBtn = document.getElementById("setup-boundary-apply");
+  const boundaryNote = document.getElementById("setup-boundary-note");
   const styleImpactTitle = document.getElementById("style-impact-title");
   const styleImpactList = document.getElementById("style-impact-list");
   let index = 0;
@@ -103,6 +107,31 @@
       }
     });
   });
+
+  if (boundaryApplyBtn && boundaryNote) {
+    boundaryApplyBtn.addEventListener("click", () => {
+      const selected = boundaryChecks
+        .filter((el) => el.checked)
+        .map((el) => String(el.value).trim())
+        .filter(Boolean);
+
+      const custom = String(boundaryCustom?.value || "").trim();
+      if (custom) {
+        selected.push(custom);
+      }
+
+      if (!selected.length) {
+        return;
+      }
+
+      const block = selected.map((item) => `- ${item}`).join("\n");
+      if (boundaryNote.value.trim()) {
+        boundaryNote.value = `${boundaryNote.value.trim()}\n${block}`;
+      } else {
+        boundaryNote.value = block;
+      }
+    });
+  }
 
   refresh();
 })();

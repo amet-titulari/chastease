@@ -95,9 +95,45 @@
         <section class="wizard-step" data-step="3">
           <h2>Wichtige Grenze notieren</h2>
           <p>Ein kurzer Hinweis zu Limits oder Tabus fuer sichere Vorschlaege.</p>
-          <label>Boundary Note
-            <textarea name="boundary_note" rows="4" maxlength="1500" placeholder="z.B. Keine Aufgaben waehrend Arbeitszeit" required></textarea>
+          <fieldset class="boundary-presets" aria-label="Grenzen Vorschlaege">
+            <legend>Typische Grenzen (Mehrfachauswahl)</legend>
+            <label class="boundary-option">
+              <input type="checkbox" value="Keine Aufgaben waehrend Arbeit oder Meetings" />
+              Keine Aufgaben waehrend Arbeit oder Meetings
+            </label>
+            <label class="boundary-option">
+              <input type="checkbox" value="Keine Schlaf-Entzugsaufgaben" />
+              Keine Schlaf-Entzugsaufgaben
+            </label>
+            <label class="boundary-option">
+              <input type="checkbox" value="Keine oeffentlichen Aufgaben" />
+              Keine oeffentlichen Aufgaben
+            </label>
+            <label class="boundary-option">
+              <input type="checkbox" value="Keine finanziellen Konsequenzen" />
+              Keine finanziellen Konsequenzen
+            </label>
+            <label class="boundary-option">
+              <input type="checkbox" value="Keine Humiliation/Erniedrigung" />
+              Keine Humiliation/Erniedrigung
+            </label>
+            <label class="boundary-option">
+              <input type="checkbox" value="Keine koerperlichen Schmerzaufgaben" />
+              Keine koerperlichen Schmerzaufgaben
+            </label>
+            <label class="boundary-option">
+              <input type="checkbox" value="Keine Eskalation ohne vorheriges Einverstaendnis" />
+              Keine Eskalation ohne vorheriges Einverstaendnis
+            </label>
+          </fieldset>
+          <label>Eigene Ergaenzung (optional)
+            <input id="setup-boundary-custom" placeholder="z.B. Kein Kontakt nach 23:00" />
           </label>
+          <button id="setup-boundary-apply" type="button">Auswahl in Boundary Note uebernehmen</button>
+          <label>Boundary Note
+            <textarea id="setup-boundary-note" name="boundary_note" rows="4" maxlength="1500" placeholder="z.B. Keine Aufgaben waehrend Arbeitszeit" required></textarea>
+          </label>
+          <p class="hint">Nutze die Mehrfachauswahl als Vorlage und ergaenze bei Bedarf individuell.</p>
         </section>
 
         <div class="wizard-actions">
