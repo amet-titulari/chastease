@@ -52,6 +52,43 @@ h1 {
   margin: 0.2rem 0 0.7rem;
 }
 
+.goal-presets {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #0f1823;
+  padding: 0.65rem;
+  margin: 0 0 0.65rem;
+}
+
+.goal-presets legend {
+  color: #c5d6e9;
+  padding: 0 0.3rem;
+  font-size: 0.9rem;
+}
+
+.goal-option {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #bcd0e4;
+  font-size: 0.92rem;
+}
+
+.goal-option + .goal-option {
+  margin-top: 0.4rem;
+}
+
+.goal-option input[type="radio"] {
+  width: auto;
+  margin: 0;
+}
+
+.hint {
+  margin: 0.45rem 0 0;
+  color: #9fb4cb;
+  font-size: 0.86rem;
+}
+
 .style-guide {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

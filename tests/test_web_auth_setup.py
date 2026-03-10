@@ -31,6 +31,8 @@ def test_register_redirects_to_setup_and_setup_page_renders():
         assert "setup-form" in setup_resp.text
         assert "Leitstil Erklaerung" in setup_resp.text
         assert "Auswirkungen: Structured" in setup_resp.text
+        assert "Ziel Vorschlaege" in setup_resp.text
+        assert "Eigenes Ziel frei eingeben" in setup_resp.text
 
 
 def test_setup_completion_redirects_to_experience():

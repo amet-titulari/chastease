@@ -5,6 +5,8 @@
   const nextBtn = document.getElementById("setup-next");
   const finishBtn = document.getElementById("setup-finish");
   const styleSelect = document.getElementById("setup-role-style");
+  const goalInput = document.getElementById("setup-primary-goal");
+  const goalPresets = Array.from(document.querySelectorAll('input[name="goal_preset"]'));
   const styleImpactTitle = document.getElementById("style-impact-title");
   const styleImpactList = document.getElementById("style-impact-list");
   let index = 0;
@@ -46,6 +48,20 @@
     }
   };
 
+  const syncGoalPreset = (value) => {
+    if (!goalInput) {
+      return;
+    }
+    if (value === "__custom__") {
+      goalInput.value = "";
+      goalInput.placeholder = "Dein eigenes Hauptziel";
+      goalInput.focus();
+      return;
+    }
+    goalInput.value = value;
+    goalInput.placeholder = "z.B. Routine und bessere Compliance";
+  };
+
   const refresh = () => {
     steps.forEach((step, i) => {
       step.classList.toggle("is-active", i === index);
@@ -79,6 +95,14 @@
     });
     renderStyleImpact(styleSelect.value);
   }
+
+  goalPresets.forEach((preset) => {
+    preset.addEventListener("change", () => {
+      if (preset.checked) {
+        syncGoalPreset(preset.value);
+      }
+    });
+  });
 
   refresh();
 })();

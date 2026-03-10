@@ -59,9 +59,37 @@
         <section class="wizard-step" data-step="2">
           <h2>Was ist dein Hauptziel?</h2>
           <p>Wofuer nutzt du Chastease in den naechsten Wochen?</p>
+          <fieldset class="goal-presets" aria-label="Ziel Vorschlaege">
+            <legend>Vorschlaege</legend>
+            <label class="goal-option">
+              <input type="radio" name="goal_preset" value="Routine und taegliche Compliance stabilisieren" checked />
+              Routine und taegliche Compliance stabilisieren
+            </label>
+            <label class="goal-option">
+              <input type="radio" name="goal_preset" value="Mehr Disziplin bei Aufgaben und Check-ins" />
+              Mehr Disziplin bei Aufgaben und Check-ins
+            </label>
+            <label class="goal-option">
+              <input type="radio" name="goal_preset" value="Sichere Intensitaetssteigerung mit klaren Grenzen" />
+              Sichere Intensitaetssteigerung mit klaren Grenzen
+            </label>
+            <label class="goal-option">
+              <input type="radio" name="goal_preset" value="Konsequente Morning- und Evening-Rituale" />
+              Konsequente Morning- und Evening-Rituale
+            </label>
+            <label class="goal-option">
+              <input type="radio" name="goal_preset" value="Kommunikation und Reporting verbessern" />
+              Kommunikation und Reporting verbessern
+            </label>
+            <label class="goal-option">
+              <input type="radio" name="goal_preset" value="__custom__" />
+              Eigenes Ziel frei eingeben
+            </label>
+          </fieldset>
           <label>Primarziel
-            <input name="primary_goal" maxlength="120" placeholder="z.B. Routine und bessere Compliance" required />
+            <input id="setup-primary-goal" name="primary_goal" maxlength="120" placeholder="z.B. Routine und bessere Compliance" required value="Routine und taegliche Compliance stabilisieren" />
           </label>
+          <p class="hint">Du kannst einen Vorschlag nutzen oder mit "Eigenes Ziel" einen freien Text eintragen.</p>
         </section>
 
         <section class="wizard-step" data-step="3">
