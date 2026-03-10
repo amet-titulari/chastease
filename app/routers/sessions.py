@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,7 @@ from app.models.session import Session as SessionModel
 from app.models.task import Task
 from app.models.verification import Verification
 from app.services.contract_service import build_contract_text
+from app.services.pdf_export import build_simple_text_pdf
 from app.services.session_service import SessionService
 from app.security import verify_admin_secret
 
@@ -350,6 +351,47 @@ def export_session_events(
             f"{item['occurred_at']} | source={item['source']} | type={item['event_type']} | data={json.dumps(item['data'])}"
         )
     return PlainTextResponse("\n".join(lines))
+
+
+def _session_export_lines(payload: dict) -> list[str]:
+    lines = [
+        f"session_id={payload['session_id']}",
+        f"status={payload['session_status']}",
+        f"event_count={len(payload['items'])}",
+        "",
+        "EVENTS:",
+    ]
+    for item in payload["items"]:
+        lines.append(
+            f"{item['occurred_at']} | source={item['source']} | type={item['event_type']} | data={json.dumps(item['data'])}"
+        )
+    return lines
+
+
+@router.get("/{session_id}/export")
+def export_session_snapshot(
+    session_id: int,
+    format: str = Query(default="text", pattern="^(text|json|pdf)$"),
+    limit: int = Query(default=1000, ge=1, le=5000),
+    db: Session = Depends(get_db),
+):
+    payload = get_session_events(session_id=session_id, source=None, event_type=None, limit=limit, db=db)
+
+    if format == "json":
+        return payload
+
+    lines = _session_export_lines(payload)
+    if format == "text":
+        return PlainTextResponse("\n".join(lines))
+
+    pdf_bytes = build_simple_text_pdf(lines)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="session-{session_id}.pdf"',
+        },
+    )
 
 
 @router.get("/{session_id}/contract")

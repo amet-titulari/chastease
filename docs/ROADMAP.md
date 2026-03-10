@@ -160,7 +160,7 @@
 - [ ] Kontext-Window-Management (Session-Zusammenfassungen)
 - [ ] Aufgaben-Bibliothek (vordefinierte Tasks pro Persona)
 - [ ] Dark Mode
-- [ ] Session-Export (als Text/PDF)
+- [x] Session-Export (als Text/PDF)
 
 ### v2.0 – Gamification
 - [ ] Achievements / Abzeichen

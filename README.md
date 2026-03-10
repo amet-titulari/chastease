@@ -76,6 +76,7 @@ Wichtige API-Endpunkte:
 - `PUT /api/sessions/{id}/player-profile`
 - `GET /api/sessions/{id}/events`
 - `GET /api/sessions/{id}/events/export`
+- `GET /api/sessions/{id}/export`
 - `GET /api/sessions/{id}/contract`
 - `GET /api/sessions/{id}/contract/export`
 - `POST /api/sessions/{id}/sign-contract`
@@ -205,6 +206,11 @@ Psychogramm-gesteuerte Task-/Straflogik:
 - Profil-Updates pro Session via `PUT /api/sessions/{id}/player-profile` (`experience_level`, `hard_limits`, `reaction_patterns`, `needs`, ...).
 - Task-Penalties beruecksichtigen Profilfaktoren (z.B. `experience_level`, `reaction_patterns.penalty_multiplier`, optional `max_penalty_seconds`, `needs.gentle_mode`).
 - KI-Taskaktionen aus dem Chat (`create_task`) werden gegen `hard_limits` geprueft und ggf. unterdrueckt.
+
+Session-Export:
+
+- `GET /api/sessions/{id}/export?format=text|json|pdf`
+- Text/PDF enthalten einen aggregierten Snapshot inkl. Eventliste.
 
 KI-Bildanalyse fuer Verifikation:
 
