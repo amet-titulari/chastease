@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal, get_db
 from app.models.message import Message
 from app.models.persona import Persona
+from app.models.safety_log import SafetyLog
 from app.models.session import Session as SessionModel
 
 router = APIRouter(prefix="/api/sessions", tags=["chat"])
@@ -30,7 +31,35 @@ def _fresh_ws_token(session_id: int) -> str | None:
         return row.ws_auth_token if row else None
 
 
-def _assistant_reply(persona_name: str, user_text: str) -> str:
+def _latest_safety_mode(db: Session, session_id: int) -> str | None:
+    row = (
+        db.query(SafetyLog)
+        .filter(SafetyLog.session_id == session_id)
+        .order_by(SafetyLog.id.desc())
+        .first()
+    )
+    return row.event_type if row else None
+
+
+def _assistant_reply(persona_name: str, user_text: str, safety_mode: str | None, session_status: str) -> str:
+    if session_status in {"safeword_stopped", "emergency_stopped"}:
+        return (
+            f"{persona_name}: Safety-Stop ist aktiv. Wir bleiben bei Stabilisierung und Sicherheitspruefung. "
+            "Es folgen keine spielbezogenen Anweisungen."
+        )
+
+    if safety_mode == "red" or session_status == "paused":
+        return (
+            f"{persona_name}: Rot ist aktiv. Session bleibt pausiert. "
+            "Atme ruhig, trink Wasser und bestaetige mir kurz, wenn du stabil bist."
+        )
+
+    if safety_mode == "yellow":
+        return (
+            f"{persona_name}: Gelb ist registriert. Ich schalte in Fuersorge-Modus. "
+            f"Danke fuer dein Update: '{user_text}'. Wir reduzieren Intensitaet und bleiben bei klaren, ruhigen Schritten."
+        )
+
     return f"{persona_name}: Ich habe dich gehoert. Du sagtest: '{user_text}'. Bleib diszipliniert."
 
 
@@ -38,12 +67,13 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
     session_obj = _load_session(db, session_id)
     persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
     persona_name = persona.name if persona else "Keyholderin"
+    safety_mode = _latest_safety_mode(db, session_id)
 
     user_msg = Message(session_id=session_id, role="user", content=user_text, message_type="chat")
     assistant_msg = Message(
         session_id=session_id,
         role="assistant",
-        content=_assistant_reply(persona_name, user_text),
+        content=_assistant_reply(persona_name, user_text, safety_mode=safety_mode, session_status=session_obj.status),
         message_type="chat",
     )
     db.add(user_msg)

@@ -35,3 +35,40 @@ def test_chat_message_roundtrip():
         assert len(items) >= 2
         assert items[-2]["role"] == "user"
         assert items[-1]["role"] == "assistant"
+
+
+def test_chat_reply_switches_to_care_mode_on_yellow():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        yellow = client.post(
+            f"/api/sessions/{session_id}/safety/traffic-light",
+            json={"color": "yellow"},
+        )
+        assert yellow.status_code == 200
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Ich brauche kurz weniger Druck."},
+        )
+        assert send_resp.status_code == 200
+        assert "Fuersorge-Modus" in send_resp.json()["reply"]
+
+
+def test_chat_reply_respects_pause_on_red():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        red = client.post(
+            f"/api/sessions/{session_id}/safety/traffic-light",
+            json={"color": "red"},
+        )
+        assert red.status_code == 200
+        assert red.json()["status"] == "paused"
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Status?"},
+        )
+        assert send_resp.status_code == 200
+        assert "Session bleibt pausiert" in send_resp.json()["reply"]

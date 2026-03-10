@@ -14,6 +14,7 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Aufgaben-System** – Challenges mit Belohnungen und Bestrafungen
 - **Persona-Presets** – Vordefinierte Keyholder-Personas (u.a. `Ballet Sub Ella`)
 - **Sicherheitssystem** – Ampelsystem, Safeword, Emergency Release
+- **Safety-Override im Chat** – Gelb aktiviert Fuersorge-Modus, Rot pausiert mit deeskalierenden Antworten
 - **Benachrichtigungen** – Timer, Erinnerungen, Nachrichten der Keyholderin
 - **Web Push** – Browser-Subscriptions und Test-Dispatch ueber Web Push API
 - **Web Test Console** – Interaktive Browser-Oberfläche für Core-Flows

@@ -106,12 +106,12 @@
 **Ziel**: Alle Safety-Features implementiert und zuverlässig
 
 - [x] Ampelsystem (Gelb/Rot API implementiert; UI-Testkonsole vorhanden)
-- [ ] Gelb: KI-Prompt-Override für Fürsorge-Modus
+- [x] Gelb: KI-Prompt-Override für Fürsorge-Modus
 - [x] Rot: Session pausieren (API)
 - [x] Safeword: sofortiger Session-Stop (API)
 - [x] Emergency Release: Pflichtbegründung (API)
 - [x] Safety-Log: alle Ereignisse werden gespeichert
-- [ ] Safety-Override im System-Prompt verankert
+- [x] Safety-Override im System-Prompt verankert
 
 **Deliverable**: Alle Safety-Features vollständig und geprüft
 
