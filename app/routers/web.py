@@ -12,6 +12,9 @@ from app.config import settings
 from app.database import get_db
 from app.models.auth_user import AuthUser
 from app.models.llm_profile import LlmProfile
+from app.models.persona import Persona
+from app.models.player_profile import PlayerProfile
+from app.models.session import Session as SessionModel
 
 router = APIRouter(tags=["web"])
 templates = Jinja2Templates(directory="app/templates")
@@ -153,6 +156,13 @@ def login(
     db.commit()
 
     target = "/setup" if not user.setup_completed else "/experience"
+    if user.setup_completed and user.active_session_id:
+        active = db.query(SessionModel).filter(
+            SessionModel.id == user.active_session_id,
+            SessionModel.status == "active",
+        ).first()
+        if active:
+            target = f"/play/{active.id}"
     response = RedirectResponse(url=target, status_code=303)
     _set_auth_cookie(response, user.session_token)
     return response
@@ -470,6 +480,34 @@ def contracts_page(request: Request):
         request=request,
         name="contracts.html",
         context={"title": f"{settings.app_name} Contracts"},
+    )
+
+
+@router.get("/play/{session_id}", response_class=HTMLResponse)
+def play_page(session_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if session_obj is None:
+        return RedirectResponse(url="/experience", status_code=303)
+    user.active_session_id = session_id
+    db.commit()
+    persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
+    player = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+    return templates.TemplateResponse(
+        request=request,
+        name="play.html",
+        context={
+            "title": f"Play Mode \u2013 {settings.app_name}",
+            "current_user": user,
+            "session_id": session_id,
+            "session_status": session_obj.status,
+            "ws_token": session_obj.ws_auth_token or "",
+            "persona_name": persona.name if persona else "Keyholderin",
+            "player_nickname": player.nickname if player else user.username,
+            "lock_end": session_obj.lock_end.isoformat() if session_obj.lock_end else None,
+        },
     )
 
 

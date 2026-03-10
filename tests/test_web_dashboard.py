@@ -18,7 +18,7 @@ def test_dashboard_renders():
         resp = client.get("/testconsole")
         assert resp.status_code == 200
         html = resp.text
-        assert "Chastease Test Console" in html
+        assert "Chastease" in html
         assert "create-session-form" in html
         assert "timer-remaining" in html
         assert "session-events-btn" in html

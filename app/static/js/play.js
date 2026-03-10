@@ -1,0 +1,264 @@
+/* play.js – Play Mode (v0.1.3) */
+"use strict";
+
+// -- State from server-rendered dataset --
+const _shell = document.querySelector(".play-shell");
+const SESSION_ID = Number(_shell?.dataset.sessionId || 0);
+const WS_TOKEN = _shell?.dataset.wsToken || "";
+const LOCK_END = _shell?.dataset.lockEnd || "";
+
+let plSocket = null;
+
+// -- DOM refs --
+const countdownEl = document.getElementById("play-countdown");
+const statusPillEl = document.getElementById("play-status-pill");
+const statusTextEl = document.getElementById("play-status-text");
+const chatTimeline = document.getElementById("play-chat-timeline");
+const chatInput = document.getElementById("play-chat-input");
+const taskBoard = document.getElementById("play-task-board");
+const debugOut = document.getElementById("play-output");
+const wsBtn = document.getElementById("play-connect-ws");
+
+// -- Countdown timer --
+function plFormatRemaining(isoStr) {
+  if (!isoStr) return "—";
+  const diff = new Date(isoStr).getTime() - Date.now();
+  if (diff <= 0) return "Frei";
+  const d = Math.floor(diff / 86400000);
+  const h = Math.floor((diff % 86400000) / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  return `${m}m ${s}s`;
+}
+
+if (LOCK_END && countdownEl) {
+  const lockEndDisplay = document.getElementById("play-lock-end-display");
+  if (lockEndDisplay) {
+    try {
+      lockEndDisplay.textContent = new Date(LOCK_END).toLocaleString("de-DE");
+    } catch (_) {}
+  }
+  setInterval(() => {
+    countdownEl.textContent = plFormatRemaining(LOCK_END);
+  }, 1000);
+  countdownEl.textContent = plFormatRemaining(LOCK_END);
+}
+
+// -- Debug output --
+function plWrite(title, data) {
+  if (!debugOut) return;
+  debugOut.classList.add("is-visible");
+  debugOut.textContent = `${title}\n${JSON.stringify(data, null, 2)}`;
+  clearTimeout(plWrite._timer);
+  plWrite._timer = setTimeout(() => debugOut.classList.remove("is-visible"), 6000);
+}
+
+// -- HTTP helpers --
+async function plGet(url) {
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+async function plPost(url, payload) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+// -- Render chat --
+function plRenderChat(items) {
+  if (!chatTimeline) return;
+  if (!Array.isArray(items) || !items.length) {
+    chatTimeline.innerHTML = "<p>Noch keine Nachrichten.</p>";
+    return;
+  }
+  chatTimeline.innerHTML = items
+    .slice(-80)
+    .map((item) => {
+      const role = item.role || "system";
+      const cssRole = role === "assistant" ? "from-ai" : "from-user";
+      const content = String(item.content || "").replace(/</g, "&lt;");
+      const ts = item.created_at ? new Date(item.created_at).toLocaleTimeString("de-DE") : "";
+      return `
+        <div class="chat-bubble ${cssRole}">
+          <div class="bubble-body">${content}</div>
+          <div class="bubble-meta">${role}${ts ? " &middot; " + ts : ""}</div>
+        </div>`;
+    })
+    .join("");
+  chatTimeline.scrollTop = chatTimeline.scrollHeight;
+}
+
+// -- Render tasks --
+function plRenderTasks(items) {
+  if (!taskBoard) return;
+  if (!Array.isArray(items) || !items.length) {
+    taskBoard.innerHTML = "<p>Noch keine Tasks.</p>";
+    return;
+  }
+  taskBoard.innerHTML = items
+    .map((item) => {
+      const isDone = item.status === "completed";
+      const isFailed = item.status === "failed";
+      const disabled = item.status !== "pending" ? "disabled" : "";
+      const title = String(item.title || "").replace(/</g, "&lt;");
+      const extraClass = isDone ? "is-done" : isFailed ? "is-failed" : "";
+      return `
+        <div class="task-card ${extraClass}" data-task-id="${item.id}">
+          <div class="task-card-title">${title}</div>
+          <div class="task-card-actions">
+            <button class="btn-done" data-action="complete" ${disabled}>&#10003; Done</button>
+            <button class="btn-fail" data-action="fail" ${disabled}>&#10007; Fail</button>
+          </div>
+        </div>`;
+    })
+    .join("");
+
+  taskBoard.querySelectorAll("button[data-action]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const card = btn.closest(".task-card");
+      const taskId = card ? Number(card.dataset.taskId) : 0;
+      if (!taskId || !SESSION_ID) return;
+      const status = btn.dataset.action === "complete" ? "completed" : "failed";
+      try {
+        await plPost(`/api/sessions/${SESSION_ID}/tasks/${taskId}/status`, { status });
+        await plListTasks();
+      } catch (err) {
+        plWrite("Fehler Task-Update", { error: String(err) });
+      }
+    });
+  });
+}
+
+// -- Load functions --
+async function plLoadChat() {
+  if (!SESSION_ID) return;
+  try {
+    const data = await plGet(`/api/sessions/${SESSION_ID}/messages`);
+    plRenderChat(data.items || []);
+  } catch (err) {
+    plWrite("Fehler Verlauf", { error: String(err) });
+  }
+}
+
+async function plListTasks() {
+  if (!SESSION_ID) return;
+  try {
+    const data = await plGet(`/api/sessions/${SESSION_ID}/tasks`);
+    plRenderTasks(data.items || []);
+  } catch (err) {
+    plWrite("Fehler Tasks", { error: String(err) });
+  }
+}
+
+// -- WebSocket --
+function plConnectWs() {
+  if (!SESSION_ID || !WS_TOKEN) return plWrite("WS", { error: "Session/Token fehlt." });
+  if (plSocket && plSocket.readyState === WebSocket.OPEN) return;
+  const proto = window.location.protocol === "https:" ? "wss" : "ws";
+  plSocket = new WebSocket(
+    `${proto}://${window.location.host}/api/sessions/${SESSION_ID}/chat/ws?token=${encodeURIComponent(WS_TOKEN)}&stream_timer=1`
+  );
+  plSocket.onopen = () => {
+    plWrite("WebSocket", { status: "verbunden" });
+    if (wsBtn) wsBtn.classList.add("is-connected");
+  };
+  plSocket.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload.message_type && payload.message_type !== "timer_tick") {
+        plLoadChat();
+        plListTasks();
+      }
+    } catch (_) {}
+  };
+  plSocket.onclose = () => {
+    plWrite("WebSocket", { status: "getrennt" });
+    if (wsBtn) wsBtn.classList.remove("is-connected");
+    plSocket = null;
+  };
+}
+
+// -- Safety --
+async function plSafety(color) {
+  if (!SESSION_ID) return;
+  try {
+    const data = await plPost(`/api/sessions/${SESSION_ID}/safety/traffic-light`, { color });
+    if (statusPillEl) statusPillEl.textContent = data.status;
+    if (statusTextEl) statusTextEl.textContent = data.status;
+    plWrite(`Safety ${color}`, data);
+  } catch (err) {
+    plWrite("Fehler Safety", { error: String(err) });
+  }
+}
+
+async function plSafeword() {
+  if (!SESSION_ID) return;
+  try {
+    const data = await plPost(`/api/sessions/${SESSION_ID}/safety/safeword`, {});
+    if (statusPillEl) statusPillEl.textContent = data.status;
+    if (statusTextEl) statusTextEl.textContent = data.status;
+    plWrite("Safeword", data);
+  } catch (err) {
+    plWrite("Fehler Safeword", { error: String(err) });
+  }
+}
+
+// -- Event wiring --
+document.getElementById("play-send")?.addEventListener("click", async () => {
+  if (!SESSION_ID) return;
+  const content = chatInput?.value?.trim() || "";
+  if (!content) return;
+  try {
+    const data = await plPost(`/api/sessions/${SESSION_ID}/messages`, { content });
+    plWrite("Chat Reply", data);
+    await plLoadChat();
+    await plListTasks();
+  } catch (err) {
+    plWrite("Fehler Chat", { error: String(err) });
+  }
+});
+
+chatInput?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById("play-send")?.click();
+  }
+});
+
+document.getElementById("play-regenerate")?.addEventListener("click", async () => {
+  if (!SESSION_ID) return;
+  try {
+    const data = await plPost(`/api/sessions/${SESSION_ID}/messages/regenerate`, {});
+    plWrite("Regenerate", data);
+    await plLoadChat();
+    await plListTasks();
+  } catch (err) {
+    plWrite("Fehler Regenerate", { error: String(err) });
+  }
+});
+
+document.getElementById("play-load-chat")?.addEventListener("click", plLoadChat);
+document.getElementById("play-load-tasks")?.addEventListener("click", plListTasks);
+document.getElementById("play-connect-ws")?.addEventListener("click", plConnectWs);
+
+document.getElementById("play-safety-yellow")?.addEventListener("click", () => plSafety("yellow"));
+document.getElementById("play-safety-red")?.addEventListener("click", () => plSafety("red"));
+document.getElementById("play-safety-safeword")?.addEventListener("click", plSafeword);
+
+// -- Auto-load on page ready --
+document.addEventListener("DOMContentLoaded", async () => {
+  if (!SESSION_ID) return;
+  await plLoadChat();
+  await plListTasks();
+  plConnectWs();
+});

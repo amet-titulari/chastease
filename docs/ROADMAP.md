@@ -24,6 +24,7 @@
 - Implementiert: Landingpage mit Registrierung/Anmeldung und gefuehrtem Setup-Wizard
 - Implementiert: Profilseite fuer Setup-Verwaltung inkl. "Setup neu starten"
 - Implementiert (v0.1.2): Persona/Scenario-Card-Schema-Endpoints, Prompt-Module, Context-Budgeting, Scenario-Preset im Experience-Setup und Chat-Regenerate
+- Implementiert (v0.1.3): Play Mode als eigenstaendige `/play/{session_id}`-Seite – nach Vertrags-Signatur Weiterleitung, Login mit aktiver Session leitet direkt in Play Mode; experience.html auf reine Onboarding-Flow vereinfacht
 - Teststatus: `71 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 

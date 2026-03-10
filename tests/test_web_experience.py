@@ -41,11 +41,7 @@ def test_experience_page_renders():
         assert "xp-create-session" in html
         assert "xp-scenario-preset" in html
         assert "xp-sign-contract" in html
-        assert "xp-send-chat" in html
-        assert "xp-regenerate-chat" in html
-        assert "xp-chat-timeline" in html
-        assert "xp-task-board" in html
-        assert "xp-safety-dock" in html
+        assert "xp-contract-preview" in html
 
 
 def test_experience_assets_are_served():
@@ -54,12 +50,15 @@ def test_experience_assets_are_served():
         assert js.status_code == 200
         assert "xp-create-session" in js.text
         assert "xpLoadScenarioPresets" in js.text
-        assert "xpRenderTasks" in js.text
-        assert "messages/regenerate" in js.text
-        assert "xp-dock-yellow" in js.text
+        assert "sign-contract" in js.text
+
+        # play.js handles the live chat/task/regenerate functionality
+        play_js = client.get("/static/js/play.js")
+        assert play_js.status_code == 200
+        assert "messages/regenerate" in play_js.text
+        assert "play-safety-yellow" in play_js.text
 
         css = client.get("/static/css/experience.css")
         assert css.status_code == 200
         assert "xp-grid" in css.text
         assert "chat-timeline" in css.text
-        assert "xp-safety-dock" in css.text

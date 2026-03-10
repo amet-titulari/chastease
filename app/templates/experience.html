@@ -125,6 +125,7 @@
 
       <section class="step-pane" data-step="4">
         <p class="step-title">Contract Check</p>
+        <p>Session <code id="xp-session-id">-</code> <span id="xp-session-status" class="status-pill">draft</span></p>
         <pre id="xp-contract-preview">Noch keine Session erstellt.</pre>
         <button id="xp-sign-contract" type="button">Vertrag signieren und Play-Mode starten</button>
       </section>
@@ -134,68 +135,9 @@
         <button id="xp-next-step" type="button">Weiter</button>
       </footer>
     </article>
-
-    <article class="xp-card play" id="play-card">
-      <header>
-        <h3>Play Mode</h3>
-        <p>Session <code id="xp-session-id">-</code> <span id="xp-session-status" class="status-pill">draft</span></p>
-        <p class="panel-hint">Live-Modus wird nach Vertrags-Signatur aktiv.</p>
-      </header>
-
-      <div class="play-layout">
-        <section>
-          <h4>Live</h4>
-          <p>Timer: <code id="xp-timer-remaining">-</code> Sek.</p>
-          <div class="inline-actions">
-            <button id="xp-refresh-timer" type="button">Timer aktualisieren</button>
-            <button id="xp-connect-ws" type="button">Live verbinden</button>
-          </div>
-        </section>
-
-        <section>
-          <h4>Chat</h4>
-          <div id="xp-chat-timeline" class="chat-timeline"></div>
-          <label>Nachricht
-            <input id="xp-chat-input" value="Statusreport." />
-          </label>
-          <div class="inline-actions">
-            <button id="xp-send-chat" type="button">Senden</button>
-            <button id="xp-regenerate-chat" type="button">Regenerate</button>
-            <button id="xp-load-chat" type="button">Verlauf</button>
-          </div>
-        </section>
-
-        <section>
-          <h4>Tasks</h4>
-          <label>Titel
-            <input id="xp-task-title" value="Hydration Check" />
-          </label>
-          <div class="inline-actions">
-            <button id="xp-create-task" type="button">Task erstellen</button>
-            <button id="xp-list-tasks" type="button">Tasks laden</button>
-          </div>
-          <div id="xp-task-board" class="task-board"></div>
-        </section>
-
-        <section>
-          <h4>Safety</h4>
-          <div class="inline-actions">
-            <button id="xp-safety-yellow" type="button">Gelb</button>
-            <button id="xp-safety-red" type="button">Rot</button>
-            <button id="xp-safety-safeword" type="button">Safeword</button>
-          </div>
-        </section>
-      </div>
-
-      <pre id="xp-output">Willkommen im Experience Mode.</pre>
-    </article>
   </div>
 
-  <div class="xp-safety-dock" id="xp-safety-dock">
-    <button id="xp-dock-yellow" type="button">Gelb</button>
-    <button id="xp-dock-red" type="button">Rot</button>
-    <button id="xp-dock-safeword" type="button">Safeword</button>
-  </div>
+  <pre id="xp-output" class="xp-debug-output"></pre>
 </section>
 {% endblock %}
 

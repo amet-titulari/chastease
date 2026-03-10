@@ -16,10 +16,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "auth_users",
-        sa.Column("active_session_id", sa.Integer(), sa.ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True),
-    )
+    bind = op.get_bind()
+    cols = [row[1] for row in bind.execute(sa.text("PRAGMA table_info(auth_users)")).fetchall()]
+    if "active_session_id" not in cols:
+        # SQLite does not support adding FK constraints via ALTER TABLE;
+        # add as a plain integer column (FK is enforced at the ORM level).
+        op.add_column(
+            "auth_users",
+            sa.Column("active_session_id", sa.Integer(), nullable=True),
+        )
 
 
 def downgrade() -> None:
