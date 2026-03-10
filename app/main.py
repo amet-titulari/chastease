@@ -13,6 +13,7 @@ from sqlalchemy import create_engine, text
 
 from app.config import settings
 from app.models import (  # noqa: F401
+    auth_user,
     contract,
     hygiene_opening,
     message,

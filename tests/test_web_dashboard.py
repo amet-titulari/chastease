@@ -3,9 +3,19 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
-def test_dashboard_renders():
+def test_landing_page_renders_auth_ui():
     with TestClient(app) as client:
         resp = client.get("/")
+        assert resp.status_code == 200
+        html = resp.text
+        assert "Willkommen im Ritualraum" in html
+        assert "/auth/register" in html
+        assert "/auth/login" in html
+
+
+def test_dashboard_renders():
+    with TestClient(app) as client:
+        resp = client.get("/testconsole")
         assert resp.status_code == 200
         html = resp.text
         assert "Chastease Test Console" in html

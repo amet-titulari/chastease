@@ -1,3 +1,4 @@
+from app.models.auth_user import AuthUser
 from app.models.contract import Contract, ContractAddendum
 from app.models.hygiene_opening import HygieneOpening
 from app.models.message import Message
@@ -11,6 +12,7 @@ from app.models.task import Task
 from app.models.verification import Verification
 
 __all__ = [
+    "AuthUser",
     "Contract",
     "ContractAddendum",
     "HygieneOpening",

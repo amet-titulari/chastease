@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="/static/css/landing.css" />
+</head>
+<body>
+  <main class="landing-shell">
+    <section class="hero-card">
+      <p class="eyebrow">Chastease</p>
+      <h1>Willkommen im Ritualraum</h1>
+      <p>
+        Starte mit einem sauberen Account-Setup. Nach Login oder Registrierung fuehren wir dich Schritt fuer Schritt
+        durch die Konfiguration, bevor die Experience startet.
+      </p>
+      {% if current_user %}
+      <div class="logged-in-box">
+        <p>Aktiv angemeldet als <strong>{{ current_user.username }}</strong>.</p>
+        <a class="primary-link" href="/setup">Zum Setup</a>
+        <a class="secondary-link" href="/experience">Direkt zur Experience</a>
+      </div>
+      {% endif %}
+      <a class="ghost-link" href="/testconsole">Zur Testkonsole</a>
+    </section>
+
+    <section class="auth-card">
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab is-active" data-auth-target="register">Registrieren</button>
+        <button type="button" class="auth-tab" data-auth-target="login">Anmelden</button>
+      </div>
+
+      {% if auth_error %}
+      <p class="auth-error">{{ auth_error }}</p>
+      {% endif %}
+
+      <form id="register-form" class="auth-form is-active" method="post" action="/auth/register">
+        <label>Nutzername
+          <input name="username" minlength="3" required />
+        </label>
+        <label>E-Mail
+          <input name="email" type="email" required />
+        </label>
+        <label>Passwort
+          <input name="password" type="password" minlength="8" required />
+        </label>
+        <label>Passwort wiederholen
+          <input name="password_confirm" type="password" minlength="8" required />
+        </label>
+        <button type="submit">Account erstellen</button>
+      </form>
+
+      <form id="login-form" class="auth-form" method="post" action="/auth/login">
+        <label>E-Mail
+          <input name="email" type="email" required />
+        </label>
+        <label>Passwort
+          <input name="password" type="password" required />
+        </label>
+        <button type="submit">Anmelden</button>
+      </form>
+    </section>
+  </main>
+  <script src="/static/js/landing.js"></script>
+</body>
+</html>

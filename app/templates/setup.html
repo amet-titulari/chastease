@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="/static/css/setup.css" />
+</head>
+<body>
+  <main class="setup-shell">
+    <section class="setup-hero">
+      <p class="eyebrow">Setup Wizard</p>
+      <h1>Hi {{ current_user.username }}, wir richten jetzt alles gemeinsam ein.</h1>
+      <p>Folge den drei Schritten. Danach landest du direkt in der Experience.</p>
+    </section>
+
+    <section class="setup-card">
+      <div class="stepper" aria-label="Setup Schritte">
+        <div class="step-pill is-active" data-step-pill="1">1. Stil</div>
+        <div class="step-pill" data-step-pill="2">2. Ziel</div>
+        <div class="step-pill" data-step-pill="3">3. Grenzen</div>
+      </div>
+
+      <form id="setup-form" method="post" action="/setup/complete">
+        <section class="wizard-step is-active" data-step="1">
+          <h2>Welcher Leitstil passt?</h2>
+          <p>Das hilft dem System, spaeter passende Aufgaben und Tonalitaet vorzuschlagen.</p>
+          <label>Leitstil
+            <select name="role_style" required>
+              <option value="strict">Strict</option>
+              <option value="structured">Structured</option>
+              <option value="supportive">Supportive</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="wizard-step" data-step="2">
+          <h2>Was ist dein Hauptziel?</h2>
+          <p>Wofuer nutzt du Chastease in den naechsten Wochen?</p>
+          <label>Primarziel
+            <input name="primary_goal" maxlength="120" placeholder="z.B. Routine und bessere Compliance" required />
+          </label>
+        </section>
+
+        <section class="wizard-step" data-step="3">
+          <h2>Wichtige Grenze notieren</h2>
+          <p>Ein kurzer Hinweis zu Limits oder Tabus fuer sichere Vorschlaege.</p>
+          <label>Boundary Note
+            <textarea name="boundary_note" rows="4" maxlength="1500" placeholder="z.B. Keine Aufgaben waehrend Arbeitszeit" required></textarea>
+          </label>
+        </section>
+
+        <div class="wizard-actions">
+          <button type="button" id="setup-prev" disabled>Zurueck</button>
+          <button type="button" id="setup-next">Weiter</button>
+          <button type="submit" id="setup-finish" class="is-hidden">Setup abschliessen</button>
+        </div>
+      </form>
+
+      <form method="post" action="/auth/logout" class="logout-row">
+        <button type="submit" class="ghost">Abmelden</button>
+      </form>
+    </section>
+  </main>
+
+  <script src="/static/js/setup.js"></script>
+</body>
+</html>

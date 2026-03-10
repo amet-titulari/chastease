@@ -1,10 +1,39 @@
 from fastapi.testclient import TestClient
+from uuid import uuid4
 
 from app.main import app
 
 
+def _register_and_finish_setup(client: TestClient, email: str = "xp-user@example.com"):
+    username = f"xp-{uuid4().hex[:8]}"
+    unique_email = email if email != "xp-user@example.com" else f"xp-{uuid4().hex[:8]}@example.com"
+
+    register_resp = client.post(
+        "/auth/register",
+        data={
+            "username": username,
+            "email": unique_email,
+            "password": "verysecure1",
+            "password_confirm": "verysecure1",
+        },
+        follow_redirects=False,
+    )
+    assert register_resp.status_code == 303
+
+    setup_resp = client.post(
+        "/setup/complete",
+        data={
+            "role_style": "structured",
+            "primary_goal": "Play",
+            "boundary_note": "No work hours",
+        },
+    )
+    assert setup_resp.status_code == 200
+
+
 def test_experience_page_renders():
     with TestClient(app) as client:
+        _register_and_finish_setup(client)
         resp = client.get("/experience")
         assert resp.status_code == 200
         html = resp.text
