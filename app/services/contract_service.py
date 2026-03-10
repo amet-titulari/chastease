@@ -1,4 +1,4 @@
-from app.services.ai_gateway import AIGateway
+from app.services.ai_gateway import get_ai_gateway
 
 
 def build_contract_text(
@@ -7,7 +7,7 @@ def build_contract_text(
     min_duration_seconds: int,
     max_duration_seconds: int | None,
 ) -> str:
-    gateway = AIGateway()
+    gateway = get_ai_gateway()
     return gateway.generate_contract(
         persona_name=persona_name,
         player_nickname=player_nickname,

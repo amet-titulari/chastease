@@ -36,6 +36,7 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Frontend**: Jinja2 + Vanilla JavaScript
 - **Datenbank**: SQLite (lokal)
 - **KI**: Abstraktionsschicht – Standard xAI (Grok), erweiterbar auf lokale LLMs
+- **KI-Provider**: `stub` (default) oder `ollama` fuer Vertragsgenerierung
 
 ## Schnellstart
 
@@ -161,6 +162,14 @@ Operations-Hinweise:
 - DB-Migrationen vor Start auf aktuellen Stand bringen: `alembic upgrade head`
 - Tests im Projekt-Interpreter ausfuehren: `python -m pytest -q`
 - Scheduler-Feature-Flags in `.env` setzen (Task-Sweep, Proactive Messages, Timer-Sweeper)
+
+Ollama-Provider (optional):
+
+- `CHASTEASE_AI_PROVIDER=ollama`
+- `CHASTEASE_AI_OLLAMA_BASE_URL=http://127.0.0.1:11434`
+- `CHASTEASE_AI_OLLAMA_MODEL=llama3.1`
+- `CHASTEASE_AI_OLLAMA_TIMEOUT_SECONDS=15`
+- Falls Ollama nicht erreichbar ist, faellt die Vertragsgenerierung automatisch auf den Stub zurueck.
 
 ## Lizenz
 
