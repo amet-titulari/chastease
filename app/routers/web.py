@@ -232,6 +232,39 @@ def complete_setup(
     return RedirectResponse(url="/experience", status_code=303)
 
 
+@router.post("/setup/test-llm")
+async def setup_test_llm(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+    body = await request.json()
+    api_url = str(body.get("api_url", "")).strip()
+    api_key = str(body.get("api_key", "")).strip()
+    chat_model = str(body.get("chat_model", "")).strip()
+    if not api_url or not chat_model:
+        return JSONResponse({"ok": False, "error": "API URL und Chat-Modell sind Pflichtfelder."})
+    if not api_key:
+        stored = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+        if stored and stored.api_key:
+            api_key = stored.api_key
+    try:
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                api_url,
+                headers=headers,
+                json={"model": chat_model, "messages": [{"role": "user", "content": "Say OK"}], "max_tokens": 5},
+            )
+        resp.raise_for_status()
+        return JSONResponse({"ok": True, "status": resp.status_code})
+    except httpx.HTTPStatusError as exc:
+        return JSONResponse({"ok": False, "error": f"HTTP {exc.response.status_code}"})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)[:200]})
+
+
 @router.get("/profile", response_class=HTMLResponse)
 def profile_page(request: Request, db: Session = Depends(get_db)):
     user = _get_current_user(request, db)

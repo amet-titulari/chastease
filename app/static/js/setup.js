@@ -133,5 +133,62 @@
     });
   }
 
+  // LLM connection test (step 4)
+  const testLlmBtn = document.getElementById("setup-test-llm");
+  const testLlmResult = document.getElementById("setup-llm-test-result");
+  let llmTestPassed = false;
+
+  const setTestResult = (ok, msg) => {
+    if (!testLlmResult) return;
+    testLlmResult.textContent = msg;
+    testLlmResult.className = ok ? "hint hint--ok" : "hint hint--error";
+    llmTestPassed = ok;
+  };
+
+  if (testLlmBtn) {
+    testLlmBtn.addEventListener("click", async () => {
+      const apiUrl = document.getElementById("setup-llm-api-url")?.value.trim() || "";
+      const apiKey = document.getElementById("setup-llm-api-key")?.value.trim() || "";
+      const chatModel = document.getElementById("setup-llm-chat-model")?.value.trim() || "";
+      if (!apiUrl || !chatModel) {
+        setTestResult(false, "API URL und Chat-Modell benoetigt.");
+        return;
+      }
+      testLlmBtn.disabled = true;
+      testLlmBtn.textContent = "Teste...";
+      try {
+        const resp = await fetch("/setup/test-llm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_url: apiUrl, api_key: apiKey, chat_model: chatModel }),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          setTestResult(true, "Verbindung erfolgreich.");
+        } else {
+          setTestResult(false, `Fehler: ${data.error || "Unbekannter Fehler"}`);
+        }
+      } catch (err) {
+        setTestResult(false, `Netzwerkfehler: ${err.message}`);
+      } finally {
+        testLlmBtn.disabled = false;
+        testLlmBtn.textContent = "Verbindung testen";
+      }
+    });
+  }
+
+  const setupForm = document.getElementById("setup-form");
+  if (finishBtn && setupForm) {
+    finishBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (!llmTestPassed) {
+        setTestResult(false, "Bitte zuerst die Verbindung erfolgreich testen.");
+        testLlmResult?.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      setupForm.submit();
+    });
+  }
+
   refresh();
 })();

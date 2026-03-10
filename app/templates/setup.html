@@ -146,34 +146,38 @@
 
         <section class="wizard-step" data-step="4">
           <h2>KI-Anbindung</h2>
-          <p>Verbinde Chastease mit einem OpenAI-kompatiblen Sprachmodell. Ohne Konfiguration laeuft das System im Demo-Modus.</p>
+          <p>Chastease benoetigt eine funktionierende LLM-Verbindung. Konfiguriere deinen KI-Provider und teste die Verbindung &mdash; ohne erfolgreichem Test kann das Setup nicht abgeschlossen werden.</p>
           <label>Provider
             <select name="llm_provider" id="setup-llm-provider">
-              <option value="stub" {% if not llm or llm.provider == 'stub' %}selected{% endif %}>Kein LLM (Demo-Modus)</option>
-              <option value="custom" {% if llm and llm.provider == 'custom' %}selected{% endif %}>OpenAI-kompatibel (xAI, OpenRouter, LM Studio ...)</option>
+              <option value="custom" {% if not llm or llm.provider in ('custom', 'stub') %}selected{% endif %}>OpenAI-kompatibel (xAI, OpenRouter, LM Studio ...)</option>
               <option value="ollama" {% if llm and llm.provider == 'ollama' %}selected{% endif %}>Ollama (lokal)</option>
             </select>
           </label>
           <label>API URL
-            <input name="llm_api_url" type="url" placeholder="https://api.x.ai/v1/chat/completions"
-              value="{{ llm.api_url or '' if llm else '' }}" />
+            <input name="llm_api_url" id="setup-llm-api-url" type="url" required
+              value="{{ llm.api_url or 'https://api.x.ai/v1/chat/completions' if llm else 'https://api.x.ai/v1/chat/completions' }}" />
           </label>
           <label>API Key
-            <input name="llm_api_key" type="password" placeholder="Leer lassen, falls nicht benoetigt" autocomplete="new-password" />
+            <input name="llm_api_key" id="setup-llm-api-key" type="password"
+              placeholder="{% if llm and llm.api_key %}gespeichert &#8211; leer lassen zum Behalten{% else %}z.B. xai-...{% endif %}"
+              autocomplete="new-password" />
           </label>
           <label>Chat-Modell
-            <input name="llm_chat_model" type="text" placeholder="z.B. grok-3-mini"
-              value="{{ llm.chat_model or '' if llm else '' }}" />
+            <input name="llm_chat_model" id="setup-llm-chat-model" type="text" required
+              value="{{ llm.chat_model or 'grok-3-mini' if llm else 'grok-3-mini' }}" />
           </label>
           <label>Vision-Modell (optional)
-            <input name="llm_vision_model" type="text" placeholder="z.B. grok-2-vision-1212"
-              value="{{ llm.vision_model or '' if llm else '' }}" />
+            <input name="llm_vision_model" id="setup-llm-vision-model" type="text"
+              value="{{ llm.vision_model or 'grok-2-vision-1212' if llm else 'grok-2-vision-1212' }}" />
           </label>
           <label class="checkbox-row">
-            <input name="llm_active" type="checkbox" value="true" {% if llm and llm.profile_active %}checked{% endif %} />
+            <input name="llm_active" type="checkbox" value="true" checked />
             KI-Profil aktivieren
           </label>
-          <p class="hint">Du kannst diesen Schritt ueberspringen — die KI-Verbindung laesst sich jederzeit im Profil anpassen.</p>
+          <div class="llm-test-row">
+            <button type="button" id="setup-test-llm">Verbindung testen</button>
+            <span id="setup-llm-test-result" class="hint"></span>
+          </div>
         </section>
 
         <div class="wizard-actions">
