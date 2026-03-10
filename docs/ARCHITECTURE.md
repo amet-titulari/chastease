@@ -4,7 +4,7 @@
 
 Chastease folgt einem **privaten Client-Server-Modell**: Das Python-Backend läuft auf einem dedizierten Heimgerät (PC, Heimserver oder NAS). Alle Daten – Sessionverläufe, Chats, Fotos, Konfiguration – werden **ausschliesslich auf diesem Backend-Server** gespeichert.
 
-Client-Geräte (Smartphone, Tablet, weiterer PC) sind **zustandslose Browser-Clients**: Sie speichern keinerlei Daten lokal. Fotos (z.B. Verifikationsaufnahmen) werden direkt via Upload-Stream an das Backend übertragen und nie im Gerätespeicher des Clients abgelegt. Die einzige externe Verbindung sind API-Calls an den konfigurierten KI-Anbieter.
+Client-Geräte (Smartphone, Tablet, weiterer PC) sind **zustandsarme Browser-Clients**: Die Anwendung persistiert dort absichtlich keine langlebigen App-Daten. Fotos (z.B. Verifikationsaufnahmen) werden direkt via Upload-Stream an das Backend übertragen und sollen nicht in der Bildergalerie des Clients landen. Unvermeidbare temporäre Zwischenspeicher des Browsers oder Betriebssystems werden minimiert, aber nicht als technisch unmöglich behauptet. Die einzige externe Verbindung sind API-Calls an den konfigurierten KI-Anbieter.
 
 > **Deployment-Modell**: Der Backend-Server läuft im Heimnetz und ist über dessen lokale IP oder einen lokalen Hostnamen erreichbar. Ein Zugriff von ausserhalb (unterwegs) ist über ein VPN (z.B. WireGuard, Tailscale) möglich, ohne den Server direkt dem Internet auszusetzen.
 
@@ -88,11 +88,17 @@ personas
 └── strictness_level, created_at
 
 sessions
-├── id, persona_id (FK)
+├── id, persona_id (FK), player_profile_id (FK)
 ├── status (active / paused / completed / emergency_stopped)
 ├── lock_start, lock_end (geplant), lock_end_actual
 ├── timer_frozen (bool), freeze_start
 ├── min_duration_seconds, max_duration_seconds  # Intervalle als Integer-Sekunden (None = kein Maximum)
+└── created_at, updated_at
+
+player_profiles
+├── id, nickname, experience_level
+├── preferences_json, soft_limits_json, hard_limits_json
+├── reaction_patterns_json, needs_json
 └── created_at, updated_at
 
 messages
@@ -114,6 +120,21 @@ verifications
 ├── status (pending / confirmed / suspicious)
 ├── ai_response, created_at
 └── requested_at
+
+hygiene_openings
+├── id, session_id (FK)
+├── requested_at, approved_at, opened_at
+├── due_back_at, relocked_at
+├── status (requested / approved / active / overdue / closed / denied)
+├── old_seal_number, new_seal_number
+└── overrun_seconds
+
+seal_history
+├── id, session_id (FK), hygiene_opening_id (FK, optional)
+├── seal_number
+├── status (active / destroyed / replaced)
+├── applied_at, invalidated_at
+└── note
 
 session_events
 ├── id, session_id (FK)
@@ -140,8 +161,10 @@ contracts
 
 contract_addenda
 ├── id, contract_id (FK)
+├── proposed_changes_json   # strukturierte Parameteränderungen
 ├── change_description      # was geändert wurde
 ├── proposed_by             # 'ai'
+├── player_consent          # approved / rejected
 ├── player_consent_at       # Zeitstempel der Zustimmung durch den Nutzer
 └── created_at
 ```
@@ -215,7 +238,7 @@ chastease/                       # läuft auf dem Heimserver
 
 ### Mediendateien (Verifikationsfotos)
 - Fotos werden per **Multipart-Upload direkt an das Backend gestreamt** – kein Zwischenspeichern auf dem Client-Gerät
-- Das Frontend verwendet `<input type="file" capture="environment">` ohne Download-Attribut; nach dem Upload hat der Client keine Kopie
+- Das Frontend verwendet `<input type="file" capture="environment">`; die Anwendung speichert Bilder nicht absichtlich lokal oder in einer Galerie
 - Server speichert Fotos ausschliesslich im `data/media/`-Verzeichnis des Backend-Servers
 - Dateinamen sind nicht erratbar (UUID-basiert)
 - Das `data/`-Verzeichnis ist in `.gitignore` eingetragen
@@ -230,10 +253,52 @@ chastease/                       # läuft auf dem Heimserver
 ## KI-Gateway Abstraktion
 
 ```python
-# Abstraktes Interface – erlaubt einfachen Wechsel des KI-Backends
+# Source of truth: reichhaltiges, strukturiertes Interface aus AI_DESIGN.md
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+@dataclass
+class AIResponse:
+  message: str
+  actions: list[dict]
+  mood: str
+  intensity: int
+
 class AIGateway(ABC):
-    async def chat(self, messages: list[Message], persona: Persona) -> str: ...
-    async def analyze_image(self, image_path: str, context: str) -> str: ...
+  @abstractmethod
+  async def chat(
+    self,
+    session_context: dict,
+    conversation_history: list[dict],
+    persona: dict,
+    player_profile: dict,
+    user_message: str | None = None,
+  ) -> AIResponse: ...
+
+  @abstractmethod
+  async def analyze_image(
+    self,
+    image_path: str,
+    verification_context: dict,
+    persona: dict,
+    player_profile: dict,
+  ) -> dict: ...
+
+  @abstractmethod
+  async def generate_contract(
+    self,
+    session_context: dict,
+    persona: dict,
+    player_profile: dict,
+  ) -> str: ...
+
+  @abstractmethod
+  async def generate_task(
+    self,
+    session_context: dict,
+    persona: dict,
+    player_profile: dict,
+  ) -> dict: ...
 
 class GrokGateway(AIGateway): ...
 class OllamaGateway(AIGateway): ...

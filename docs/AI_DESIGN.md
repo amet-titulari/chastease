@@ -174,6 +174,7 @@ class AIGateway(ABC):
         session_context: dict,
         conversation_history: list[dict],
         persona: dict,
+    player_profile: dict,
         user_message: str | None = None
     ) -> AIResponse: ...
 
@@ -182,14 +183,24 @@ class AIGateway(ABC):
         self,
         image_path: str,
         verification_context: dict,
-        persona: dict
+    persona: dict,
+    player_profile: dict
     ) -> dict: ...
+
+  @abstractmethod
+  async def generate_contract(
+    self,
+    session_context: dict,
+    persona: dict,
+    player_profile: dict
+  ) -> str: ...
 
     @abstractmethod
     async def generate_task(
         self,
         session_context: dict,
-        persona: dict
+    persona: dict,
+    player_profile: dict
     ) -> dict: ...
 ```
 

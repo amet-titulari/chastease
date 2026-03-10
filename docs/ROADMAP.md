@@ -9,12 +9,14 @@
 **Ziel**: Lauffähiges Grundgerüst, Entwicklungsumgebung steht
 
 - [ ] Python-Projekt aufsetzen (FastAPI, SQLAlchemy, Alembic)
-- [ ] SQLite-Datenbank & erstes Schema (Session, Persona, Message)
+- [ ] SQLite-Datenbank & erstes Schema (Session, Persona, Message, PlayerProfile, Contract)
 - [ ] Alembic Migrationen einrichten
 - [ ] Basis-Jinja2-Template mit Tailwind CSS
 - [ ] HTMX Integration
 - [ ] `.env`-Konfiguration & Pydantic Settings
 - [ ] `data/`-Verzeichnis in `.gitignore`
+- [ ] Client-Privacy-Baseline: kein LocalStorage, kein IndexedDB, kein Service-Worker-Cache
+- [ ] Upload-Pfad für Verifikationsbilder so definieren, dass keine bewusste Galerie-Speicherung durch die App erfolgt
 
 **Deliverable**: `python -m uvicorn app.main:app` startet ohne Fehler
 
@@ -27,9 +29,12 @@
 - [ ] `AIGateway`-Abstraktion implementieren
 - [ ] Grok-Provider implementieren (OpenAI SDK kompatibel)
 - [ ] Persona-Builder: System-Prompt aus Konfiguration generieren
+- [ ] Spieler-Psychogramm modellieren und Onboarding-Fragebogen definieren
+- [ ] Player-Profile in den Prompt-Kontext integrieren
 - [ ] Chat-Router & WebSocket-Verbindung
 - [ ] Chat-Interface (Jinja2 + HTMX)
 - [ ] Persona-Konfigurationsseite
+- [ ] Spielerprofil-Konfigurationsseite
 - [ ] KI-Konfigurationsseite (API-Key, Modell)
 - [ ] API-Key Verschlüsselung (Fernet)
 
@@ -42,6 +47,10 @@
 **Ziel**: Vollständige Session mit Timer-Logik
 
 - [ ] Session-Start mit Konfiguration (Min/Max-Dauer, zufällige Bestimmung)
+- [ ] Vertragsgenerator als letzter Setup-Schritt vor Sessionstart
+- [ ] Digitale Unterzeichnung und Start-Gating: Session beginnt erst nach Signatur
+- [ ] Vertrags-Snapshot und Unveränderlichkeit nach Signatur
+- [ ] Vertrags-Addenda für KI-initiierte Änderungen mit explizitem Consent
 - [ ] Timer-Service: läuft im Background via APScheduler
 - [ ] Timer-Operationen: add/remove/freeze/unfreeze
 - [ ] Timer-Anzeige im Dashboard (WebSocket-Updates)
@@ -62,6 +71,7 @@
 - [ ] Task-Anzeige im UI (Aufgabenliste)
 - [ ] Task als erledigt markieren (mit optionalem Kommentar)
 - [ ] Automatische Konsequenzen bei Completion / Failure
+- [ ] Psychogramm-gesteuerte Aufgaben- und Straflogik anwenden
 - [ ] Belohnungs/Bestrafungs-Events im Verlauf dokumentieren
 - [ ] KI-Antworten inkl. Actions-Schema stabil
 
@@ -93,6 +103,9 @@
 - [ ] KI-Bildanalyse-Integration (Verifikation)
 - [ ] Optionale Seal-Nummer in Verifikationsanfrage
 - [ ] Verifikations-UI (Anfrage + Upload + Ergebnis)
+- [ ] Hygiene-Öffnungen: Kontingente pro Tag/Woche/Monat implementieren
+- [ ] Hygiene-Öffnungen: Countdown, Wiederverschluss-Bestätigung und automatische Bestrafung bei Überziehung
+- [ ] Plomben-Historie: Zerstörung alter Plombe und Pflicht-Eintrag neuer Plombe nach Öffnung
 - [ ] APScheduler: proaktive Keyholderin-Nachrichten
 - [ ] Browser Push Notifications (Web Push API)
 - [ ] Konfigurierbare Benachrichtigungs-Häufigkeit
@@ -108,9 +121,10 @@
 - [ ] Responsive Design (Mobile-Optimierung)
 - [ ] Error Handling & User Feedback
 - [ ] Session-History-Seite
+- [ ] Vertragsansicht inkl. Addenda und Export
 - [ ] Persona-Bibliothek (mehrere gespeicherte Personas)
 - [ ] Ollama-Provider implementieren
-- [ ] Unit Tests kritischer Services (Timer, Safety)
+- [ ] Unit Tests kritischer Services (Timer, Safety, Contract, Hygiene, Media)
 - [ ] Dokumentation finalisieren
 
 **Deliverable**: MVP – vollständig funktionsfähig
@@ -144,10 +158,13 @@
 | Feature | Priorität | Aufwand | Phase |
 |---|---|---|---|
 | Chat mit Keyholderin | MUSS | Mittel | 1 |
+| Spieler-Psychogramm | MUSS | Mittel | 1 |
+| Keuschheits-Vertrag | MUSS | Mittel | 2 |
 | Timer-Management | MUSS | Mittel | 2 |
 | Safety-System | MUSS | Niedrig | 4 |
 | Aufgaben-System | MUSS | Mittel | 3 |
-| Bildverifikation | SOLL | Mittel | 5 |
+| Hygiene-Öffnungen | MUSS | Mittel | 5 |
+| Bildverifikation | MUSS | Mittel | 5 |
 | Benachrichtigungen | SOLL | Mittel | 5 |
 | Gamification | KANN | Hoch | v2.0 |
 | Remote-Keyholder | KANN | Sehr hoch | v3.0 |

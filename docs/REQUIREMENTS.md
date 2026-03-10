@@ -162,8 +162,7 @@
 ### FR-12: Keuschheits-Vertrag
 
 | ID | Anforderung | Priorität |
-|---|---|
----|
+|---|---|---|
 | FR-12.1 | Als letzter Schritt der Session-Erstellung wird automatisch ein Keuschheits-Vertrag generiert | Hoch |
 | FR-12.2 | Der Vertrag fasst alle Session-Parameter zusammen: Keyholderin-Persona, Mindest-/Maximaldauer, Hygiene-Regelung, Aufgaben-Regeln, Plomben-Status, Safeword | Hoch |
 | FR-12.3 | Der Vertrag wird von der KI in der Sprache und im Stil der Keyholderin-Persona formuliert | Hoch |
@@ -184,8 +183,8 @@
 | ID | Anforderung | Priorität |
 |---|---|---|
 | NFR-01 | **Datenschutz – Server**: Alle Nutzerdaten (DB, Fotos, Konfiguration, Chat) werden ausschliesslich auf dem Backend-Server gespeichert – kein Cloud-Dienst, keine Telemetrie | Hoch |
-| NFR-01a | **Datenschutz – Client**: Client-Geräte (Smartphone, Tablet) speichern keinerlei App-Daten lokal – kein LocalStorage, kein IndexedDB, kein Foto-Cache | Hoch |
-| NFR-01b | **Foto-Upload**: Verifikationsfotos werden direkt per Stream an das Backend übertragen und nie im Gerätespeicher des Clients abgelegt | Hoch |
+| NFR-01a | **Datenschutz – Client**: Die Anwendung persistiert absichtlich keine langlebigen App-Daten auf Client-Geräten – kein LocalStorage, kein IndexedDB, kein bewusster Offline-Cache | Hoch |
+| NFR-01b | **Foto-Upload**: Verifikationsfotos werden direkt per Stream an das Backend übertragen und sollen nicht in der Galerie des Endgeräts gespeichert werden; unvermeidbare temporäre OS-/Browser-Caches werden minimiert | Hoch |
 | NFR-02 | **Geräteunabhängigkeit**: Läuft auf jedem modernen Browser (Desktop, Tablet, Mobile) ohne Installation | Hoch |
 | NFR-03 | **Netzwerk**: Der Backend-Server ist im Heimnetz erreichbar; Fernzugriff erfolgt ausschliesslich über VPN (z.B. WireGuard, Tailscale) | Mittel |
 | NFR-04 | **Performance**: Timer-Logik ist präzise auch bei längeren Laufzeiten | Hoch |

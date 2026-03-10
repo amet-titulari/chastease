@@ -4,7 +4,7 @@ Eine immersive, datenschutzfreundliche Web-Applikation für KI-gestützte Chasti
 
 ## Projektübersicht
 
-Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, in denen eine KI die Rolle der Keyholderin übernimmt. Die Applikation läuft vollständig lokal im Browser und speichert alle Daten privat auf dem eigenen Gerät – keine Cloud, keine externen Server für persönliche Daten.
+Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, in denen eine KI die Rolle der Keyholderin übernimmt. Die Applikation nutzt einen privaten Backend-Server im Heimnetz; dort werden Sessiondaten, Konfigurationen und Verifikationsbilder gespeichert. Client-Geräte dienen als Browser-Zugänge und sollen absichtlich keine langlebigen App-Daten oder Verifikationsbilder in der lokalen Galerie behalten.
 
 ## Features (Übersicht)
 

@@ -12,11 +12,11 @@
 > Als Keuschling möchte ich vor dem Start einer Session die Mindest- und optionale Maximaldauer konfigurieren, damit der Zufall innerhalb meiner Grenzen arbeitet.
 
 **Akzeptanzkriterien:**
-- Eingabefeld für Mindestdauer (in Stunden/Tagen)
-- Optionales Eingabefeld für Maximaldauer
+- Eingabefeld für Mindestdauer in menschenlesbaren Einheiten (z.B. Minuten, Stunden, Tage)
+- Optionales Eingabefeld für Maximaldauer in menschenlesbaren Einheiten
 - Auswahl der Keyholderin-Persona
-- Bestätigung zeigt die zufällig berechnete Sperrdauer (ohne genaues Ende sichtbar zu machen, optional per Einstellung)
-- Session ist nach Bestätigung aktiv und timer läuft
+- Bestätigung zeigt die zufällig berechnete Sperrdauer als Vertragsvorschau (ohne genaues Ende sichtbar zu machen, optional per Einstellung)
+- Nach der Konfiguration ist die Session noch **nicht** aktiv; der Start erfolgt erst nach Vertragsunterzeichnung
 
 ---
 

@@ -21,7 +21,9 @@ Das Ziel ist nicht ein einfacher Chatbot, sondern eine strukturierte, spielmecha
 Die Keyholderin soll sich wie eine echte Person anfühlen – mit Persönlichkeit, Stimmungsschwankungen, Reaktionen auf das Verhalten des Nutzers und einem konsistenten Gesprächsstil. Kein generischer Chatbot.
 
 ### 2. Privatsphäre & Datenschutz
-Alle persönlichen Daten – Sessionverläufe, Chats, Fotos, Konfigurationen – bleiben **ausschließlich lokal** auf dem Gerät des Nutzers. Kein Cloud-Sync, keine Telemetrie, keine externe Datenspeicherung.
+Alle persönlichen Daten – Sessionverläufe, Chats, Fotos, Konfigurationen – bleiben **ausschließlich auf dem privaten Backend-Server des Nutzers**. Kein Cloud-Sync, keine Telemetrie, keine externe Datenspeicherung.
+
+Client-Geräte dienen nur als Zugänge zur Anwendung. Die App soll absichtlich keine langlebigen lokalen Daten auf Smartphone, Tablet oder Browser ablegen. Insbesondere sollen Verifikationsbilder nicht in der Galerie des Endgeräts verbleiben, sondern direkt an das Backend übertragen werden. Temporäre Zwischenspeicher des Betriebssystems oder Browsers sollen minimiert, aber nicht als absolut ausgeschlossen versprochen werden.
 
 Die einzige Ausnahme: API-Calls an den gewählten KI-Anbieter (z.B. xAI/Grok). Der Nutzer wählt und konfiguriert diesen selbst und trägt die Verantwortung für dessen Datenschutzbedingungen.
 
