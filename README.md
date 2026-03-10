@@ -139,6 +139,14 @@ Tests ausführen:
 python -m pytest -q
 ```
 
+Fehlerformat (API):
+
+- Einheitliches JSON fuer Fehlerantworten:
+	- `request_id`
+	- `error.code`
+	- `error.message`
+	- optional `error.details`
+
 ## Lizenz
 
 Privates Projekt – alle Rechte vorbehalten.

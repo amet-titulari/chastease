@@ -13,6 +13,16 @@ const openingIdEl = document.getElementById("opening-id");
 const timerRemainingEl = document.getElementById("timer-remaining");
 
 function writeOutput(title, data) {
+  if (data && typeof data === "object" && typeof data.error === "string") {
+    try {
+      const parsed = JSON.parse(data.error);
+      if (parsed && parsed.error && parsed.error.message) {
+        data = { ...data, error: parsed.error.message, error_code: parsed.error.code || null };
+      }
+    } catch {
+      // Keep original error string when parsing fails.
+    }
+  }
   outputEl.textContent = `${title}\n${JSON.stringify(data, null, 2)}`;
 }
 

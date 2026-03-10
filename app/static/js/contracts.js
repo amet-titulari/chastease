@@ -9,6 +9,16 @@ function sessionId() {
 }
 
 function show(title, payload) {
+  if (typeof payload === "string") {
+    try {
+      const parsed = JSON.parse(payload);
+      if (parsed && parsed.error && parsed.error.message) {
+        payload = `${parsed.error.message} (${parsed.error.code || "error"})`;
+      }
+    } catch {
+      // Keep plain string.
+    }
+  }
   output.textContent = `${title}\n${typeof payload === "string" ? payload : JSON.stringify(payload, null, 2)}`;
 }
 

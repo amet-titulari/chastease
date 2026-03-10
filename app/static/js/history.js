@@ -18,6 +18,16 @@ function params() {
 }
 
 function write(title, data) {
+  if (typeof data === "string") {
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed && parsed.error && parsed.error.message) {
+        data = `${parsed.error.message} (${parsed.error.code || "error"})`;
+      }
+    } catch {
+      // Keep plain string.
+    }
+  }
   out.textContent = `${title}\n${typeof data === "string" ? data : JSON.stringify(data, null, 2)}`;
 }
 

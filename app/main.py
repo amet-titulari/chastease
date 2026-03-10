@@ -1,10 +1,13 @@
 from pathlib import Path
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from alembic import command
 from alembic.config import Config
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, text
 
@@ -72,6 +75,60 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)
+
+
+def _error_response(status_code: int, code: str, message: str, details=None) -> JSONResponse:
+    payload = {
+        "request_id": uuid4().hex[:12],
+        "error": {
+            "code": code,
+            "message": message,
+        },
+        "detail": message,
+    }
+    if details is not None:
+        payload["error"]["details"] = details
+    return JSONResponse(status_code=status_code, content=payload)
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_: Request, exc: HTTPException):
+    detail = exc.detail
+    if isinstance(detail, str):
+        message = detail
+    else:
+        message = "Request failed"
+    return _error_response(
+        status_code=exc.status_code,
+        code="http_error",
+        message=message,
+        details=detail if not isinstance(detail, str) else None,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_: Request, exc: RequestValidationError):
+    return _error_response(
+        status_code=422,
+        code="validation_error",
+        message="Request validation failed",
+        details=exc.errors(),
+    )
+
+
+@app.exception_handler(Exception)
+async def unexpected_exception_handler(_: Request, exc: Exception):
+    if settings.debug:
+        return _error_response(
+            status_code=500,
+            code="internal_error",
+            message=str(exc),
+        )
+    return _error_response(
+        status_code=500,
+        code="internal_error",
+        message="Internal server error",
+    )
 
 
 def init_app_storage() -> None:

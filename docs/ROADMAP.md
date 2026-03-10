@@ -19,7 +19,8 @@
 - Implementiert: Aggregierter Session-Verlauf/Event-Log (`GET /api/sessions/{id}/events`) inkl. Dashboard-Abruf
 - Implementiert: Session-History-Seite (`/history`) mit Filtern und Export (`/events/export`)
 - Implementiert: Vertragsansicht inkl. Addenda und Export (`/contracts`, `/contract/export`)
-- Teststatus: `36 passed` (lokale automatisierte Tests)
+- Implementiert: Einheitliches API-Fehlerformat + verbessertes UI-Fehlerfeedback (Dashboard/History/Contracts)
+- Teststatus: `38 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---
@@ -140,7 +141,7 @@
 **Ziel**: MVP ist produktionsreif für den privaten Einsatz
 
 - [ ] Responsive Design (Mobile-Optimierung)
-- [ ] Error Handling & User Feedback
+- [x] Error Handling & User Feedback
 - [x] Session-History-Seite
 - [x] Vertragsansicht inkl. Addenda und Export
 - [ ] Persona-Bibliothek (mehrere gespeicherte Personas)
