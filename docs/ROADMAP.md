@@ -148,7 +148,7 @@
 - [ ] Persona-Bibliothek (mehrere gespeicherte Personas)
 - [ ] Ollama-Provider implementieren
 - [x] Unit/Integration Tests kritischer Services und Flows (Timer, Safety, Contract, Hygiene, Verification)
-- [ ] Dokumentation finalisieren
+- [x] Dokumentation finalisieren
 
 **Deliverable**: MVP – vollständig funktionsfähig
 

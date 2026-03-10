@@ -32,7 +32,7 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 ## Tech-Stack
 
 - **Backend**: Python 3.12+ / FastAPI
-- **Frontend**: Jinja2 + HTMX
+- **Frontend**: Jinja2 + Vanilla JavaScript
 - **Datenbank**: SQLite (lokal)
 - **KI**: Abstraktionsschicht – Standard xAI (Grok), erweiterbar auf lokale LLMs
 
@@ -147,6 +147,19 @@ Fehlerformat (API):
 	- `error.code`
 	- `error.message`
 	- optional `error.details`
+
+Sicherheit (Kurzfassung):
+
+- Chat-WebSocket ist token-pflichtig (`ws_auth_token` pro Session).
+- WS-Token-Rotation invalidiert alte Verbindungen serverseitig.
+- Sensible Steuer-Endpunkte koennen optional mit `CHASTEASE_ADMIN_SECRET` + Header `X-Admin-Secret` geschuetzt werden.
+- Vollstaendige Matrix: `docs/SECURITY.md`.
+
+Operations-Hinweise:
+
+- DB-Migrationen vor Start auf aktuellen Stand bringen: `alembic upgrade head`
+- Tests im Projekt-Interpreter ausfuehren: `python -m pytest -q`
+- Scheduler-Feature-Flags in `.env` setzen (Task-Sweep, Proactive Messages, Timer-Sweeper)
 
 ## Lizenz
 

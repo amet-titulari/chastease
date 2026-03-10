@@ -46,6 +46,15 @@ WebSocket:
 - `ws_auth_token` wird in Session-Responses bereitgestellt.
 - Token-Rotation invalidiert bestehende WS-Verbindungen serverseitig.
 
+## Fehlerformat und Nachvollziehbarkeit
+
+- API-Fehler verwenden ein einheitliches JSON-Format:
+	- `request_id`
+	- `error.code`
+	- `error.message`
+	- optional `error.details`
+- `request_id` erleichtert Korrelation zwischen Client-Fehlern und Server-Logs.
+
 ## Bedrohungsmodell (Kurz)
 
 - Fokus: Schutz vor unbeabsichtigter/unerwuenschter Steuerung durch fremde Clients im lokalen Netz.
@@ -57,3 +66,10 @@ WebSocket:
 - Rollen- und Nutzerkonzept statt globalem Shared Secret.
 - Rate-Limits und Audit-Trails fuer sensible Endpunkte.
 - Optional: Ende-zu-Ende Session-Binding fuer Browser-Clients.
+
+## Betriebs-Checklist (Empfehlung)
+
+- `CHASTEASE_ADMIN_SECRET` in produktionsnahen Setups setzen.
+- Secret nur ueber sichere Umgebungskonfiguration verteilen (nicht in VCS).
+- Regelmaessige Rotation des Admin-Secrets einplanen.
+- Reverse-Proxy/VPN-Setup so konfigurieren, dass der Server nicht direkt im Internet exponiert ist.
