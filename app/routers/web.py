@@ -205,6 +205,83 @@ def complete_setup(
     return RedirectResponse(url="/experience", status_code=303)
 
 
+@router.get("/profile", response_class=HTMLResponse)
+def profile_page(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="profile.html",
+        context={
+            "title": f"{settings.app_name} Profile",
+            "current_user": user,
+            "profile_message": None,
+            "profile_error": None,
+        },
+    )
+
+
+@router.post("/profile/setup")
+def update_profile_setup(
+    request: Request,
+    role_style: str = Form(...),
+    primary_goal: str = Form(...),
+    boundary_note: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+
+    style = role_style.strip()[:80]
+    goal = primary_goal.strip()[:120]
+    boundary = boundary_note.strip()[:1500]
+    if not style or not goal:
+        return templates.TemplateResponse(
+            request=request,
+            name="profile.html",
+            context={
+                "title": f"{settings.app_name} Profile",
+                "current_user": user,
+                "profile_message": None,
+                "profile_error": "Leitstil und Ziel duerfen nicht leer sein.",
+            },
+            status_code=400,
+        )
+
+    user.setup_style = style
+    user.setup_goal = goal
+    user.setup_boundary = boundary
+    user.setup_completed = True
+    db.commit()
+    return templates.TemplateResponse(
+        request=request,
+        name="profile.html",
+        context={
+            "title": f"{settings.app_name} Profile",
+            "current_user": user,
+            "profile_message": "Setup-Daten wurden aktualisiert.",
+            "profile_error": None,
+        },
+    )
+
+
+@router.post("/profile/restart-setup")
+def restart_setup(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+
+    user.setup_completed = False
+    user.setup_style = None
+    user.setup_goal = None
+    user.setup_boundary = None
+    db.commit()
+    return RedirectResponse(url="/setup", status_code=303)
+
+
 @router.get("/testconsole", response_class=HTMLResponse)
 def dashboard(request: Request):
     return templates.TemplateResponse(

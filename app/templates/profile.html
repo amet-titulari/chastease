@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="/static/css/profile.css" />
+</head>
+<body>
+  <main class="profile-shell">
+    <section class="profile-card">
+      <p class="eyebrow">Profil</p>
+      <h1>Setup-Verwaltung fuer {{ current_user.username }}</h1>
+      <p class="subline">Hier kannst du deinen Setup-Stand anpassen oder den Wizard neu starten.</p>
+
+      {% if profile_message %}
+      <p class="status success">{{ profile_message }}</p>
+      {% endif %}
+      {% if profile_error %}
+      <p class="status error">{{ profile_error }}</p>
+      {% endif %}
+
+      <form method="post" action="/profile/setup" class="stack">
+        <label>Leitstil
+          <select name="role_style" required>
+            <option value="strict" {% if current_user.setup_style == "strict" %}selected{% endif %}>Strict</option>
+            <option value="structured" {% if current_user.setup_style == "structured" %}selected{% endif %}>Structured</option>
+            <option value="supportive" {% if current_user.setup_style == "supportive" %}selected{% endif %}>Supportive</option>
+          </select>
+        </label>
+        <label>Primaerziel
+          <input name="primary_goal" maxlength="120" required value="{{ current_user.setup_goal or '' }}" />
+        </label>
+        <label>Boundary Note
+          <textarea name="boundary_note" rows="4" maxlength="1500" required>{{ current_user.setup_boundary or '' }}</textarea>
+        </label>
+        <button type="submit">Setup-Daten speichern</button>
+      </form>
+
+      <div class="action-row">
+        <form method="post" action="/profile/restart-setup">
+          <button type="submit" class="warn">Setup neu starten</button>
+        </form>
+        <a class="ghost" href="/experience">Zur Experience</a>
+        <a class="ghost" href="/">Zur Landing</a>
+      </div>
+
+      <form method="post" action="/auth/logout" class="logout-row">
+        <button type="submit" class="ghost-btn">Abmelden</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

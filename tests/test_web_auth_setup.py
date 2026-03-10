@@ -72,3 +72,60 @@ def test_experience_redirects_to_landing_when_logged_out():
         resp = client.get("/experience", follow_redirects=False)
         assert resp.status_code == 303
         assert resp.headers["location"] == "/"
+
+
+def test_profile_requires_authentication():
+    with TestClient(app) as client:
+        resp = client.get("/profile", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/"
+
+
+def test_profile_can_update_setup_data():
+    with TestClient(app) as client:
+        register_resp = _register(client, email=f"profile-update-{uuid4().hex[:8]}@example.com")
+        assert register_resp.status_code == 303
+
+        client.post(
+            "/setup/complete",
+            data={
+                "role_style": "strict",
+                "primary_goal": "Original Ziel",
+                "boundary_note": "Original Grenze",
+            },
+        )
+
+        update_resp = client.post(
+            "/profile/setup",
+            data={
+                "role_style": "supportive",
+                "primary_goal": "Neues Ziel",
+                "boundary_note": "Neue Grenze",
+            },
+        )
+        assert update_resp.status_code == 200
+        assert "Setup-Daten wurden aktualisiert." in update_resp.text
+        assert "Neues Ziel" in update_resp.text
+
+
+def test_profile_can_restart_setup_flow():
+    with TestClient(app) as client:
+        register_resp = _register(client, email=f"profile-restart-{uuid4().hex[:8]}@example.com")
+        assert register_resp.status_code == 303
+
+        client.post(
+            "/setup/complete",
+            data={
+                "role_style": "structured",
+                "primary_goal": "Routine",
+                "boundary_note": "Keine Nachtaufgaben",
+            },
+        )
+
+        restart_resp = client.post("/profile/restart-setup", follow_redirects=False)
+        assert restart_resp.status_code == 303
+        assert restart_resp.headers["location"] == "/setup"
+
+        experience_resp = client.get("/experience", follow_redirects=False)
+        assert experience_resp.status_code == 303
+        assert experience_resp.headers["location"] == "/setup"

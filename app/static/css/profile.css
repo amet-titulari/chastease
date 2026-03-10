@@ -1,0 +1,151 @@
+:root {
+  --bg: radial-gradient(circle at 10% 0%, #1b2a3b 0%, #0b131d 50%, #070a10 100%);
+  --card: #101a26;
+  --card-soft: #162435;
+  --ink: #e5eef9;
+  --muted: #9cafc7;
+  --line: #2d4258;
+  --accent: #5f8db8;
+  --warn: #9f4052;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+}
+
+.profile-shell {
+  width: min(760px, 96vw);
+  margin: 1.2rem auto;
+}
+
+.profile-card {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--card), var(--card-soft));
+  padding: 1rem;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.73rem;
+  color: #9ac1df;
+}
+
+h1 {
+  margin: 0.3rem 0 0.45rem;
+  font-size: clamp(1.3rem, 3vw, 1.85rem);
+}
+
+.subline {
+  margin-top: 0;
+  color: var(--muted);
+}
+
+.stack {
+  display: grid;
+  gap: 0.7rem;
+}
+
+label {
+  display: grid;
+  gap: 0.3rem;
+  color: #bed0e1;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.58rem 0.65rem;
+  background: #0a111a;
+  color: var(--ink);
+  font: inherit;
+}
+
+button,
+.ghost {
+  border-radius: 10px;
+  padding: 0.56rem 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-block;
+}
+
+button {
+  border: 1px solid #5f83a7;
+  background: linear-gradient(120deg, #375775, var(--accent));
+  color: #fff;
+  cursor: pointer;
+}
+
+button.warn {
+  border-color: #904556;
+  background: linear-gradient(120deg, #7f3142, var(--warn));
+}
+
+.ghost {
+  border: 1px solid var(--line);
+  color: #c2d3e5;
+  background: #101b26;
+}
+
+.ghost-btn {
+  border-color: var(--line);
+  background: #101b26;
+  color: #c2d3e5;
+}
+
+.status {
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+}
+
+.status.success {
+  border: 1px solid #2f6f63;
+  background: #163932;
+  color: #aee8d6;
+}
+
+.status.error {
+  border: 1px solid #87505b;
+  background: #3f2229;
+  color: #f2cdd4;
+}
+
+.action-row {
+  margin-top: 0.9rem;
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.logout-row {
+  margin-top: 0.9rem;
+}
+
+@media (max-width: 680px) {
+  .action-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .action-row form,
+  .action-row button,
+  .ghost,
+  .ghost-btn {
+    width: 100%;
+  }
+}

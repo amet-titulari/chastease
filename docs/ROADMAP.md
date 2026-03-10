@@ -21,7 +21,9 @@
 - Implementiert: Vertragsansicht inkl. Addenda und Export (`/contracts`, `/contract/export`)
 - Implementiert: Einheitliches API-Fehlerformat + verbessertes UI-Fehlerfeedback (Dashboard/History/Contracts)
 - Implementiert: Responsive Mobile-Optimierung fuer Dashboard/History/Contracts (Layout + Controls + Breakpoints)
-- Teststatus: `39 passed` (lokale automatisierte Tests)
+- Implementiert: Landingpage mit Registrierung/Anmeldung und gefuehrtem Setup-Wizard
+- Implementiert: Profilseite fuer Setup-Verwaltung inkl. "Setup neu starten"
+- Teststatus: `69 passed` (lokale automatisierte Tests)
 - Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
 
 ---
