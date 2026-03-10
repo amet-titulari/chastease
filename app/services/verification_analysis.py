@@ -21,6 +21,7 @@ def _openai_vision_analysis(
     api_key: str,
     model: str,
     timeout: float = 30.0,
+    verification_criteria: str | None = None,
 ) -> tuple[str, str] | None:
     """OpenAI-compatible vision analysis (works with Grok/xAI, OpenAI, OpenRouter, etc.)."""
     if not image_bytes:
@@ -36,8 +37,11 @@ def _openai_vision_analysis(
         "Antworte NUR als JSON mit zwei Schluesseln: 'status' (confirmed oder suspicious) und 'analysis' (kurze Begruendung auf Deutsch). "
         f"Erwartete Plombennummer: '{requested_seal_number or 'nicht angegeben'}'. "
         f"Beobachtete Plombennummer laut Wearer: '{observed_seal_number or 'nicht angegeben'}'. "
-        "Pruefe ob das Bild ein Keuschheitsgeraet zeigt und ob die Plombe erkennbar und unversehrt ist."
     )
+    if verification_criteria:
+        prompt += f"Pruefkriterien laut Keyholderin: {verification_criteria} "
+    else:
+        prompt += "Pruefe ob das Bild ein Keuschheitsgeraet zeigt und ob die Plombe erkennbar und unversehrt ist."
 
     headers = {"Content-Type": "application/json"}
     if api_key:
@@ -72,6 +76,7 @@ def _ollama_analysis(
     filename: str,
     requested_seal_number: str | None,
     observed_seal_number: str | None,
+    verification_criteria: str | None = None,
 ) -> tuple[str, str] | None:
     if not image_bytes:
         return None
@@ -83,6 +88,8 @@ def _ollama_analysis(
         "requested_seal_number kann leer sein. "
         f"requested_seal_number={requested_seal_number or ''}, observed_seal_number={observed_seal_number or ''}, filename={filename}."
     )
+    if verification_criteria:
+        prompt += f" Pruefkriterien: {verification_criteria}"
 
     payload = {
         "model": settings.verification_ollama_model,
@@ -126,6 +133,7 @@ def analyze_verification(
     filename: str,
     requested_seal_number: str | None,
     observed_seal_number: str | None,
+    verification_criteria: str | None = None,
 ) -> tuple[str, str]:
     provider = settings.verification_ai_provider.strip().lower()
 
@@ -136,6 +144,7 @@ def analyze_verification(
                 filename=filename,
                 requested_seal_number=requested_seal_number,
                 observed_seal_number=observed_seal_number,
+                verification_criteria=verification_criteria,
             )
             if result is not None:
                 return result
@@ -162,6 +171,7 @@ def analyze_verification(
                     api_key=profile.api_key or "",
                     model=profile.chat_model,
                     timeout=30.0,
+                    verification_criteria=verification_criteria,
                 )
                 if result is not None:
                     return result
@@ -176,6 +186,7 @@ def analyze_verification(
                 filename=filename,
                 requested_seal_number=requested_seal_number,
                 observed_seal_number=observed_seal_number,
+                verification_criteria=verification_criteria,
             )
             if result is not None:
                 return result

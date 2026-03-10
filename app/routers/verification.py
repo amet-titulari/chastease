@@ -1,5 +1,6 @@
 from pathlib import Path
 from uuid import uuid4
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -8,8 +9,11 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models.session import Session as SessionModel
+from app.models.task import Task
+from app.models.message import Message
 from app.models.verification import Verification
 from app.security import verify_admin_secret
+from app.services.task_service import TaskService
 from app.services.verification_analysis import analyze_verification
 
 router = APIRouter(prefix="/api/sessions", tags=["verification"])
@@ -17,6 +21,8 @@ router = APIRouter(prefix="/api/sessions", tags=["verification"])
 
 class VerificationRequest(BaseModel):
     requested_seal_number: str | None = None
+    linked_task_id: int | None = None
+    verification_criteria: str | None = None
 
 
 def _load_session(db: Session, session_id: int) -> SessionModel:
@@ -33,6 +39,8 @@ def request_verification(session_id: int, payload: VerificationRequest, db: Sess
         session_id=session_id,
         requested_seal_number=payload.requested_seal_number,
         status="pending",
+        linked_task_id=payload.linked_task_id,
+        verification_criteria=payload.verification_criteria,
     )
     db.add(record)
     db.commit()
@@ -74,9 +82,35 @@ async def upload_verification(
         filename=file.filename or "upload.jpg",
         requested_seal_number=record.requested_seal_number,
         observed_seal_number=observed_seal_number,
+        verification_criteria=record.verification_criteria,
     )
     record.status = status
     record.ai_response = analysis
+
+    # Auto-resolve linked task
+    if record.linked_task_id:
+        task = db.query(Task).filter(Task.id == record.linked_task_id, Task.session_id == session_id).first()
+        if task and task.status == "pending":
+            now = datetime.now(timezone.utc)
+            if status == "confirmed":
+                task.status = "completed"
+                task.completed_at = now
+                db.add(Message(
+                    session_id=session_id,
+                    role="system",
+                    content=f"Task '{task.title}' per Foto-Verifikation abgeschlossen.",
+                    message_type="task_reward",
+                ))
+            else:
+                task.status = "failed"
+                TaskService.apply_task_consequence(db=db, session_obj=_load_session(db, session_id), task=task, now=now)
+                db.add(Message(
+                    session_id=session_id,
+                    role="system",
+                    content=f"Task '{task.title}' fehlgeschlagen: Verifikation nicht bestätigt.",
+                    message_type="task_failed",
+                ))
+            db.add(task)
 
     db.add(record)
     db.commit()

@@ -62,6 +62,13 @@ def _normalize_create_task_action(raw: dict) -> dict | None:
         except Exception:
             pass
 
+    requires_verification = raw.get("requires_verification")
+    if requires_verification is True or str(requires_verification).lower() == "true":
+        normalized["requires_verification"] = True
+        criteria = raw.get("verification_criteria")
+        if criteria and isinstance(criteria, str) and criteria.strip():
+            normalized["verification_criteria"] = criteria.strip()[:500]
+
     return normalized
 
 
@@ -251,8 +258,10 @@ class OllamaGateway(AIGateway):
             "Antworte als Keyholderin auf Deutsch und nutze strukturiertes JSON mit den Feldern "
             "message, actions, mood, intensity. "
             "actions ist eine Liste und darf Action-Objekte vom Typ create_task enthalten. "
+            "WICHTIG: Jede Aufgabe/Anweisung MUSS als create_task eingetragen werden. "
             "Schema create_task: type,title,description(optional),deadline_minutes(optional),"
-            "consequence_type(optional),consequence_value(optional).\n"
+            "consequence_type(optional),consequence_value(optional),"
+            "requires_verification(true wenn Foto-Nachweis noetig),verification_criteria(was auf dem Foto sichtbar sein muss).\n"
             f"persona_name={persona_name}\n"
             f"user_text={user_text}\n"
             f"{context_payload}"
@@ -371,7 +380,9 @@ class CustomOpenAIGateway(AIGateway):
             "Schema:\n"
             "{ \"type\": \"create_task\", \"title\": \"...\", \"description\": \"...\", "
             "\"deadline_minutes\": <int oder null>, "
-            "\"consequence_type\": \"lock_extension_seconds\", \"consequence_value\": <int> }\n"
+            "\"consequence_type\": \"lock_extension_seconds\", \"consequence_value\": <int>,\n"
+            "  \"requires_verification\": <true wenn der Wearer ein Foto als Nachweis schicken soll, sonst false>,\n"
+            "  \"verification_criteria\": \"<was auf dem Foto erkennbar sein muss, nur wenn requires_verification=true>\" }\n"
             "Kein Text ausserhalb des JSON-Objekts."
         )
         system_content = (prompt_modules or f"Du bist {persona_name}. Antworte auf Deutsch.") + json_instruction

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, func
 
 from app.database import Base
 
@@ -18,3 +18,5 @@ class Task(Base):
     consequence_applied_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    requires_verification = Column(Boolean, default=False, nullable=False)
+    verification_criteria = Column(Text, nullable=True)

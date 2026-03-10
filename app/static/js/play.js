@@ -1,4 +1,4 @@
-/* play.js – Play Mode (v0.1.3) */
+/* play.js – Play Mode (v0.1.4) */
 "use strict";
 
 // -- State from server-rendered dataset --
@@ -108,17 +108,18 @@ function plRenderTasks(items) {
   }
   taskBoard.innerHTML = pending
     .map((item) => {
-      const isDone = false;
-      const isFailed = false;
-      const disabled = "";
       const title = String(item.title || "").replace(/</g, "&lt;");
       const extraClass = "";
+      const actionButtons = item.requires_verification
+        ? `<button class="btn-verify" data-action="verify">&#128247; Foto senden</button>
+           <button class="btn-fail" data-action="fail">&#10007; Fail</button>`
+        : `<button class="btn-done" data-action="complete">&#10003; Done</button>
+           <button class="btn-fail" data-action="fail">&#10007; Fail</button>`;
       return `
-        <div class="task-card ${extraClass}" data-task-id="${item.id}">
+        <div class="task-card ${extraClass}" data-task-id="${item.id}" data-requires-verification="${item.requires_verification ? '1' : ''}" data-verification-criteria="${String(item.verification_criteria || "").replace(/"/g, "&quot;")}"> 
           <div class="task-card-title">${title}</div>
           <div class="task-card-actions">
-            <button class="btn-done" data-action="complete" ${disabled}>&#10003; Done</button>
-            <button class="btn-fail" data-action="fail" ${disabled}>&#10007; Fail</button>
+            ${actionButtons}
           </div>
         </div>`;
     })
@@ -129,7 +130,50 @@ function plRenderTasks(items) {
       const card = btn.closest(".task-card");
       const taskId = card ? Number(card.dataset.taskId) : 0;
       if (!taskId || !SESSION_ID) return;
-      const status = btn.dataset.action === "complete" ? "completed" : "failed";
+      const action = btn.dataset.action;
+
+      if (action === "verify") {
+        // Request a linked verification and surface upload area
+        btn.disabled = true;
+        try {
+          const criteria = card.dataset.verificationCriteria || null;
+          let sealNumber = null;
+          try {
+            const sealData = await plGet(`/api/sessions/${SESSION_ID}/seal-history`);
+            const active = (sealData.items || []).find((s) => s.status === "active");
+            if (active) sealNumber = active.seal_number;
+          } catch (_) {}
+          const data = await plPost(`/api/sessions/${SESSION_ID}/verifications/request`, {
+            requested_seal_number: sealNumber,
+            linked_task_id: taskId,
+            verification_criteria: criteria,
+          });
+          plPendingVerifyId = data.verification_id;
+          const sealEl = document.getElementById("play-verify-seal");
+          if (sealEl) sealEl.textContent = sealNumber || "—";
+          const uploadArea = document.getElementById("play-verify-upload-area");
+          if (uploadArea) uploadArea.classList.remove("is-hidden");
+          // Show criteria hint if present
+          let hintEl = document.getElementById("play-verify-criteria-hint");
+          if (!hintEl) {
+            hintEl = document.createElement("p");
+            hintEl.id = "play-verify-criteria-hint";
+            hintEl.className = "verify-hint";
+            uploadArea?.prepend(hintEl);
+          }
+          hintEl.textContent = criteria ? `Prüfkriterium: ${criteria}` : "";
+          hintEl.style.display = criteria ? "" : "none";
+          // Scroll to verify section
+          document.querySelector(".play-verify-section")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          plWrite("Verifikation angefordert (Task)", data);
+        } catch (err) {
+          plWrite("Fehler Verifikation", { error: String(err) });
+          btn.disabled = false;
+        }
+        return;
+      }
+
+      const status = action === "complete" ? "completed" : "failed";
       try {
         await plPost(`/api/sessions/${SESSION_ID}/tasks/${taskId}/status`, { status });
         await plListTasks();
@@ -381,7 +425,10 @@ document.getElementById("play-verify-submit")?.addEventListener("click", async (
     if (uploadArea) uploadArea.classList.add("is-hidden");
     if (fileInput) fileInput.value = "";
     if (sealInput) sealInput.value = "";
+    const criteriaHint = document.getElementById("play-verify-criteria-hint");
+    if (criteriaHint) { criteriaHint.textContent = ""; criteriaHint.style.display = "none"; }
     await plLoadVerifications();
+    await plListTasks();
     plWrite("Verifikation", data);
   } catch (err) {
     plWrite("Fehler Upload", { error: String(err) });

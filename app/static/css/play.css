@@ -365,6 +365,12 @@ body:has(.play-shell) main.container {
   border-color: rgba(155, 63, 79, 0.3);
 }
 
+.task-card-actions .btn-verify {
+  background: rgba(95, 142, 185, 0.15);
+  color: #7aa8cc;
+  border-color: rgba(95, 142, 185, 0.3);
+}
+
 /* Info grid */
 .play-info-grid {
   display: grid;

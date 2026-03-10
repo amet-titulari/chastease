@@ -19,6 +19,8 @@ class CreateTaskRequest(BaseModel):
     deadline_minutes: int | None = Field(default=None, ge=1)
     consequence_type: str | None = None
     consequence_value: int | None = None
+    requires_verification: bool = False
+    verification_criteria: str | None = None
 
 
 class UpdateTaskStatusRequest(BaseModel):
@@ -47,6 +49,8 @@ def create_task(session_id: int, payload: CreateTaskRequest, db: Session = Depen
         deadline_at=deadline_at,
         consequence_type=payload.consequence_type,
         consequence_value=payload.consequence_value,
+        requires_verification=payload.requires_verification,
+        verification_criteria=payload.verification_criteria,
     )
     db.add(task)
     db.commit()
@@ -76,6 +80,8 @@ def list_tasks(session_id: int, db: Session = Depends(get_db)) -> dict:
                 "consequence_value": row.consequence_value,
                 "consequence_applied_seconds": row.consequence_applied_seconds,
                 "consequence_applied_at": str(row.consequence_applied_at) if row.consequence_applied_at else None,
+                "requires_verification": bool(row.requires_verification),
+                "verification_criteria": row.verification_criteria,
             }
             for row in rows
         ],
@@ -104,6 +110,13 @@ def update_task_status(
     task = db.query(Task).filter(Task.id == task_id, Task.session_id == session_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    # Block direct completion if photo verification is required
+    if payload.status == "completed" and task.requires_verification:
+        raise HTTPException(
+            status_code=409,
+            detail="requires_verification",
+        )
 
     task.status = payload.status
     if payload.status == "completed":

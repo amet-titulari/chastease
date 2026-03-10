@@ -189,6 +189,11 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
             if not isinstance(consequence_value, int):
                 consequence_value = None
 
+            requires_verification = bool(action.get("requires_verification", False))
+            verification_criteria_value = action.get("verification_criteria")
+            if verification_criteria_value:
+                verification_criteria_value = str(verification_criteria_value).strip()[:500] or None
+
             task = Task(
                 session_id=session_id,
                 title=title,
@@ -196,6 +201,8 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str) -> Message:
                 deadline_at=deadline_at,
                 consequence_type=consequence_type,
                 consequence_value=consequence_value,
+                requires_verification=requires_verification,
+                verification_criteria=verification_criteria_value,
             )
             db.add(task)
             db.flush()
