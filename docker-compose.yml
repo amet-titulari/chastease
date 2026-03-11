@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - chastease_data:/app/data
+    env_file:
+      - .env
+    environment:
+      - CHASTEASE_DATABASE_URL=sqlite:////app/data/chastease.db
+      - CHASTEASE_MEDIA_DIR=/app/data/media
+    restart: unless-stopped
+
+volumes:
+  chastease_data:
