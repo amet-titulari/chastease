@@ -12,7 +12,6 @@ from app.models.session import Session as SessionModel
 from app.models.task import Task
 from app.models.message import Message
 from app.models.verification import Verification
-from app.security import verify_admin_secret
 from app.services.task_service import TaskService
 from app.services.verification_analysis import analyze_verification
 
@@ -52,7 +51,6 @@ def request_verification(session_id: int, payload: VerificationRequest, db: Sess
 async def upload_verification(
     session_id: int,
     verification_id: int,
-    _: None = Depends(verify_admin_secret),
     file: UploadFile = File(...),
     observed_seal_number: str | None = Form(default=None),
     db: Session = Depends(get_db),

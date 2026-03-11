@@ -161,7 +161,7 @@ def analyze_verification(
                 profile = db.query(LlmProfileModel).filter(LlmProfileModel.profile_key == "default").first()
             finally:
                 db.close()
-            if profile and profile.api_url and profile.chat_model:
+            if profile and profile.api_url and (profile.vision_model or profile.chat_model):
                 result = _openai_vision_analysis(
                     image_bytes=image_bytes,
                     filename=filename,
@@ -169,7 +169,7 @@ def analyze_verification(
                     observed_seal_number=observed_seal_number,
                     api_url=profile.api_url,
                     api_key=profile.api_key or "",
-                    model=profile.chat_model,
+                    model=profile.vision_model or profile.chat_model,
                     timeout=30.0,
                     verification_criteria=verification_criteria,
                 )

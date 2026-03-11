@@ -117,33 +117,32 @@ function plRenderChat(items) {
 }
 
 // -- Render tasks --
-function plRenderTasks(items) {
-  if (!taskBoard) return;
+const taskDropBoard = document.getElementById("play-task-drop-board");
+const tasksToggleBtn = document.getElementById("play-tasks-toggle");
+const tasksBadge = document.getElementById("play-tasks-badge");
+
+function plBuildTaskCards(items) {
   const pending = Array.isArray(items) ? items.filter((i) => i.status === "pending") : [];
-  if (!pending.length) {
-    taskBoard.innerHTML = "<p>Keine offenen Tasks.</p>";
-    return;
-  }
-  taskBoard.innerHTML = pending
+  if (!pending.length) return "<p>Keine offenen Tasks.</p>";
+  return pending
     .map((item) => {
       const title = String(item.title || "").replace(/</g, "&lt;");
-      const extraClass = "";
       const actionButtons = item.requires_verification
         ? `<button class="btn-verify" data-action="verify">&#128247; Foto senden</button>
            <button class="btn-fail" data-action="fail">&#10007; Fail</button>`
         : `<button class="btn-done" data-action="complete">&#10003; Done</button>
            <button class="btn-fail" data-action="fail">&#10007; Fail</button>`;
       return `
-        <div class="task-card ${extraClass}" data-task-id="${item.id}" data-requires-verification="${item.requires_verification ? '1' : ''}" data-verification-criteria="${String(item.verification_criteria || "").replace(/"/g, "&quot;")}"> 
+        <div class="task-card" data-task-id="${item.id}" data-requires-verification="${item.requires_verification ? '1' : ''}" data-verification-criteria="${String(item.verification_criteria || "").replace(/"/g, "&quot;")}">
           <div class="task-card-title">${title}</div>
-          <div class="task-card-actions">
-            ${actionButtons}
-          </div>
+          <div class="task-card-actions">${actionButtons}</div>
         </div>`;
     })
     .join("");
+}
 
-  taskBoard.querySelectorAll("button[data-action]").forEach((btn) => {
+function plAttachTaskHandlers(container) {
+  container.querySelectorAll("button[data-action]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const card = btn.closest(".task-card");
       const taskId = card ? Number(card.dataset.taskId) : 0;
@@ -151,7 +150,6 @@ function plRenderTasks(items) {
       const action = btn.dataset.action;
 
       if (action === "verify") {
-        // Request a linked verification and surface upload area
         btn.disabled = true;
         try {
           const criteria = card.dataset.verificationCriteria || null;
@@ -170,7 +168,6 @@ function plRenderTasks(items) {
           plSetVerifySeal(sealNumber);
           const uploadArea = document.getElementById("play-verify-upload-area");
           if (uploadArea) uploadArea.classList.remove("is-hidden");
-          // Show criteria hint if present
           let hintEl = document.getElementById("play-verify-criteria-hint");
           if (!hintEl) {
             hintEl = document.createElement("p");
@@ -180,7 +177,6 @@ function plRenderTasks(items) {
           }
           hintEl.textContent = criteria ? `Prüfkriterium: ${criteria}` : "";
           hintEl.style.display = criteria ? "" : "none";
-          // Scroll to verify section
           document.querySelector(".play-verify-section")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
           plWrite("Verifikation angefordert (Task)", data);
         } catch (err) {
@@ -199,6 +195,38 @@ function plRenderTasks(items) {
       }
     });
   });
+}
+
+function plRenderTasks(items) {
+  const pending = Array.isArray(items) ? items.filter((i) => i.status === "pending") : [];
+  const count = pending.length;
+  const html = plBuildTaskCards(items);
+
+  if (taskBoard) {
+    taskBoard.innerHTML = html;
+    plAttachTaskHandlers(taskBoard);
+  }
+  if (taskDropBoard) {
+    taskDropBoard.innerHTML = html;
+    plAttachTaskHandlers(taskDropBoard);
+  }
+
+  // Update toggle button appearance
+  if (tasksToggleBtn) {
+    if (count > 0) {
+      tasksToggleBtn.classList.add("has-pending");
+    } else {
+      tasksToggleBtn.classList.remove("has-pending");
+    }
+  }
+  if (tasksBadge) {
+    if (count > 0) {
+      tasksBadge.textContent = count;
+      tasksBadge.classList.remove("is-hidden");
+    } else {
+      tasksBadge.classList.add("is-hidden");
+    }
+  }
 }
 
 // -- Load functions --
@@ -373,10 +401,79 @@ document.getElementById("play-resume-session")?.addEventListener("click", async 
   }
 });
 
-document.getElementById("play-safety-green")?.addEventListener("click", () => plSafety("green"));
-document.getElementById("play-safety-yellow")?.addEventListener("click", () => plSafety("yellow"));
-document.getElementById("play-safety-red")?.addEventListener("click", () => plSafety("red"));
-document.getElementById("play-safety-safeword")?.addEventListener("click", plSafeword);
+// -- Tasks dropdown toggle --
+const tasksDropdown = document.getElementById("play-tasks-dropdown");
+
+function closeTasksDropdown() {
+  tasksDropdown?.classList.remove("is-open");
+  document.getElementById("play-tasks-toggle")?.setAttribute("aria-expanded", "false");
+}
+
+document.getElementById("play-tasks-toggle")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const open = tasksDropdown.classList.toggle("is-open");
+  document.getElementById("play-tasks-toggle").setAttribute("aria-expanded", String(open));
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#play-tasks-menu")) closeTasksDropdown();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeTasksDropdown();
+});
+
+// -- Safety dropdown toggle --
+const safetyToggle = document.getElementById("play-safety-toggle");
+const safetyDropdown = document.getElementById("play-safety-dropdown");
+
+function closeSafetyDropdown() {
+  safetyDropdown?.classList.remove("is-open");
+  safetyToggle?.setAttribute("aria-expanded", "false");
+}
+
+safetyToggle?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const open = safetyDropdown.classList.toggle("is-open");
+  safetyToggle.setAttribute("aria-expanded", String(open));
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#play-safety-menu")) closeSafetyDropdown();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeSafetyDropdown();
+});
+
+function updateSafetyToggleStyle(color) {
+  if (!safetyToggle) return;
+  safetyToggle.classList.remove("is-yellow", "is-red", "is-safeword");
+  if (color === "yellow") safetyToggle.classList.add("is-yellow");
+  else if (color === "red") safetyToggle.classList.add("is-red");
+  else if (color === "safeword") safetyToggle.classList.add("is-safeword");
+}
+
+document.getElementById("play-safety-green")?.addEventListener("click", () => {
+  closeSafetyDropdown();
+  updateSafetyToggleStyle("green");
+  plSafety("green");
+});
+document.getElementById("play-safety-yellow")?.addEventListener("click", () => {
+  closeSafetyDropdown();
+  updateSafetyToggleStyle("yellow");
+  plSafety("yellow");
+});
+document.getElementById("play-safety-red")?.addEventListener("click", () => {
+  closeSafetyDropdown();
+  updateSafetyToggleStyle("red");
+  plSafety("red");
+});
+document.getElementById("play-safety-safeword")?.addEventListener("click", () => {
+  closeSafetyDropdown();
+  updateSafetyToggleStyle("safeword");
+  plSafeword();
+});
 
 // -- Hygiene opening --
 let plHygieneOpeningId = null;

@@ -14,7 +14,7 @@ body:has(.play-shell) main.container {
 .play-shell {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 56px - 72px); /* minus topbar + safety-dock */
+  height: calc(100vh - 56px); /* minus topbar */
   min-height: 0;
   gap: 0;
 }
@@ -830,80 +830,214 @@ body:has(.play-shell) main.container {
   display: none !important;
 }
 
-/* --- Safety Dock (fixed bottom) --- */
-.play-safety-dock {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  background: rgba(8, 14, 22, 0.92);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid var(--line);
+/* --- Safety Dropdown (header) --- */
+.play-safety-menu {
+  position: relative;
 }
 
-.play-safety-dock button {
-  padding: 0.5rem 1.6rem;
+.play-safety-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.7rem;
+  background: rgba(76, 175, 130, 0.1);
+  border: 1px solid rgba(76, 175, 130, 0.3);
   border-radius: 8px;
-  font-size: 0.88rem;
+  color: #4caf82;
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s;
-  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
 }
 
-.play-safety-dock button:active {
-  transform: scale(0.96);
+.play-safety-toggle:hover {
+  background: rgba(76, 175, 130, 0.2);
 }
 
-.dock-green {
-  background: rgba(76, 175, 130, 0.15);
-  color: #4caf82;
-  border-color: rgba(76, 175, 130, 0.35);
-}
-
-.dock-green:hover {
-  background: rgba(76, 175, 130, 0.28);
-}
-
-.dock-yellow {
-  background: rgba(255, 193, 7, 0.15);
-  color: #ffc107;
+.play-safety-toggle.is-yellow {
+  background: rgba(255, 193, 7, 0.12);
   border-color: rgba(255, 193, 7, 0.35);
+  color: #ffc107;
 }
 
-.dock-yellow:hover {
-  background: rgba(255, 193, 7, 0.28);
-}
-
-.dock-red {
+.play-safety-toggle.is-red {
   background: rgba(155, 63, 79, 0.18);
-  color: #e05a6a;
   border-color: rgba(155, 63, 79, 0.4);
+  color: #e05a6a;
 }
 
-.dock-red:hover {
-  background: rgba(155, 63, 79, 0.32);
-}
-
-.dock-safeword {
+.play-safety-toggle.is-safeword {
   background: rgba(124, 180, 224, 0.12);
-  color: #7cb4e0;
   border-color: rgba(124, 180, 224, 0.3);
+  color: #7cb4e0;
 }
 
-.dock-safeword:hover {
-  background: rgba(124, 180, 224, 0.22);
+.safety-indicator {
+  font-size: 0.6rem;
+}
+
+.safety-chevron {
+  font-size: 0.65rem;
+  margin-left: 0.1rem;
+}
+
+.play-safety-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 140px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.35rem 0;
+  z-index: 200;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+}
+
+.play-safety-dropdown.is-open {
+  display: block;
+}
+
+.play-safety-dropdown button {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 1rem;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.sdrop-green  { color: #4caf82; }
+.sdrop-green:hover  { background: rgba(76, 175, 130, 0.12); }
+.sdrop-yellow { color: #ffc107; }
+.sdrop-yellow:hover { background: rgba(255, 193, 7, 0.12); }
+.sdrop-red    { color: #e05a6a; }
+.sdrop-red:hover    { background: rgba(155, 63, 79, 0.14); }
+.sdrop-safeword { color: #7cb4e0; }
+.sdrop-safeword:hover { background: rgba(124, 180, 224, 0.12); }
+
+.sdrop-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 0.3rem 0.6rem;
+}
+
+/* --- Tasks Dropdown (header) --- */
+.play-tasks-menu {
+  position: relative;
+}
+
+.play-tasks-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.7rem;
+  background: rgba(160, 160, 175, 0.1);
+  border: 1px solid rgba(160, 160, 175, 0.28);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.play-tasks-toggle:hover {
+  background: rgba(160, 160, 175, 0.18);
+}
+
+.play-tasks-toggle.has-pending {
+  background: rgba(155, 63, 79, 0.16);
+  border-color: rgba(155, 63, 79, 0.4);
+  color: #e05a6a;
+}
+
+.play-tasks-toggle.has-pending:hover {
+  background: rgba(155, 63, 79, 0.26);
+}
+
+.tasks-chevron {
+  font-size: 0.65rem;
+  order: -1;
+}
+
+.tasks-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: #e05a6a;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border-radius: 20px;
+  line-height: 1;
+}
+
+.tasks-badge.is-hidden {
+  display: none;
+}
+
+.play-tasks-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 280px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  z-index: 200;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+
+.play-tasks-dropdown.is-open {
+  display: flex;
+  flex-direction: column;
+}
+
+.tasks-drop-header {
+  padding: 0.5rem 0.85rem 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.task-drop-board {
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: 0.82rem;
+}
+
+.task-drop-board p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 0.25rem 0.25rem 0.1rem;
 }
 
 /* --- Debug output --- */
 .play-debug-output {
   position: fixed;
-  bottom: 60px;
+  bottom: 1rem;
   right: 1rem;
   width: 320px;
   max-height: 160px;

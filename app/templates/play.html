@@ -21,6 +21,36 @@
       <span class="play-timer-label">Verbleibend</span>
       <code id="play-countdown" class="play-countdown">—</code>
       <button id="play-connect-ws" class="play-ws-btn" type="button" title="Live verbinden">&#9679;</button>
+
+      <!-- Tasks Dropdown -->
+      <div class="play-tasks-menu" id="play-tasks-menu">
+        <button id="play-tasks-toggle" class="play-tasks-toggle" type="button" title="Tasks" aria-haspopup="true" aria-expanded="false">
+          <span class="tasks-chevron">&#9662;</span>
+          Tasks
+          <span id="play-tasks-badge" class="tasks-badge is-hidden">0</span>
+        </button>
+        <div class="play-tasks-dropdown" id="play-tasks-dropdown" role="menu">
+          <div class="tasks-drop-header">Offene Tasks</div>
+          <div id="play-task-drop-board" class="task-drop-board"></div>
+        </div>
+      </div>
+
+      <!-- Safety Dropdown -->
+      <div class="play-safety-menu" id="play-safety-menu">
+        <button id="play-safety-toggle" class="play-safety-toggle" type="button" title="Safety" aria-haspopup="true" aria-expanded="false">
+          <span class="safety-indicator" id="play-safety-indicator">&#9679;</span>
+          Safety
+          <span class="safety-chevron">&#9662;</span>
+        </button>
+        <div class="play-safety-dropdown" id="play-safety-dropdown" role="menu">
+          <button id="play-safety-green" class="sdrop-green" type="button" role="menuitem">&#9679; Gr&uuml;n</button>
+          <button id="play-safety-yellow" class="sdrop-yellow" type="button" role="menuitem">&#9679; Gelb</button>
+          <button id="play-safety-red" class="sdrop-red" type="button" role="menuitem">&#9679; Rot</button>
+          <div class="sdrop-divider"></div>
+          <button id="play-safety-safeword" class="sdrop-safeword" type="button" role="menuitem">Safeword</button>
+        </div>
+      </div>
+
       <button id="play-settings-open" class="play-settings-btn" type="button" title="Einstellungen">&#9881;</button>
     </div>
   </header>
@@ -89,14 +119,6 @@
 
     </aside>
   </div>
-</div>
-
-<!-- Safety Dock (always visible) -->
-<div class="play-safety-dock" id="play-safety-dock">
-  <button id="play-safety-green" class="dock-green" type="button">Gr&uuml;n</button>
-  <button id="play-safety-yellow" class="dock-yellow" type="button">Gelb</button>
-  <button id="play-safety-red" class="dock-red" type="button">Rot</button>
-  <button id="play-safety-safeword" class="dock-safeword" type="button">Safeword</button>
 </div>
 
 <!-- Settings Drawer -->
