@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     proactive_messages_enabled: bool = True
     proactive_messages_interval_seconds: int = 120
     proactive_messages_cooldown_seconds: int = 600
+    proactive_messages_max_consecutive: int = 3
     session_timer_sweeper_enabled: bool = True
     session_timer_sweeper_interval_seconds: int = 30
     admin_secret: str | None = None

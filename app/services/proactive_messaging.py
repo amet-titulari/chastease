@@ -46,6 +46,26 @@ def sweep_proactive_messages_for_active_sessions() -> dict:
             if last_assistant is not None and _as_utc(last_assistant.created_at) > (now - cooldown):
                 continue
 
+            # Count how many proactive reminders have been sent since the last user message
+            last_user = (
+                db.query(Message)
+                .filter(Message.session_id == session_obj.id, Message.role == "user")
+                .order_by(Message.id.desc())
+                .first()
+            )
+            last_user_id = last_user.id if last_user else 0
+            consecutive_reminders = (
+                db.query(Message)
+                .filter(
+                    Message.session_id == session_obj.id,
+                    Message.message_type == "proactive_reminder",
+                    Message.id > last_user_id,
+                )
+                .count()
+            )
+            if consecutive_reminders >= settings.proactive_messages_max_consecutive:
+                continue
+
             persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
             persona_name = persona.name if persona else "Keyholderin"
             reminder = Message(
