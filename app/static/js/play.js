@@ -92,11 +92,15 @@ async function plPost(url, payload) {
   return data;
 }
 
+// Pending tasks state – kept so plRenderChat can append cards after each reload
+let _pendingTaskItems = [];
+
 // -- Render chat --
 function plRenderChat(items) {
   if (!chatTimeline) return;
   if (!Array.isArray(items) || !items.length) {
     chatTimeline.innerHTML = "<p>Noch keine Nachrichten.</p>";
+    plAppendActionCards();
     return;
   }
   chatTimeline.innerHTML = items
@@ -113,6 +117,20 @@ function plRenderChat(items) {
         </div>`;
     })
     .join("");
+  plAppendActionCards();
+  chatTimeline.scrollTop = chatTimeline.scrollHeight;
+}
+
+function plAppendActionCards() {
+  if (!chatTimeline) return;
+  const existing = chatTimeline.querySelector(".play-action-cards");
+  if (existing) existing.remove();
+  if (!_pendingTaskItems.length) return;
+  const wrapper = document.createElement("div");
+  wrapper.className = "play-action-cards";
+  wrapper.innerHTML = plBuildActionCards(_pendingTaskItems);
+  chatTimeline.appendChild(wrapper);
+  plAttachActionCardHandlers(wrapper);
   chatTimeline.scrollTop = chatTimeline.scrollHeight;
 }
 
@@ -121,30 +139,107 @@ const taskDropBoard = document.getElementById("play-task-drop-board");
 const tasksToggleBtn = document.getElementById("play-tasks-toggle");
 const tasksBadge = document.getElementById("play-tasks-badge");
 
+// Dropdown: read-only list of pending task names
 function plBuildTaskCards(items) {
   const pending = Array.isArray(items) ? items.filter((i) => i.status === "pending") : [];
   if (!pending.length) return "<p>Keine offenen Tasks.</p>";
   return pending
     .map((item) => {
       const title = String(item.title || "").replace(/</g, "&lt;");
-      const actionButtons = item.requires_verification
-        ? `<button class="btn-verify" data-action="verify">&#128247; Foto senden</button>
-           <button class="btn-fail" data-action="fail">&#10007; Fail</button>`
-        : `<button class="btn-done" data-action="complete">&#10003; Done</button>
-           <button class="btn-fail" data-action="fail">&#10007; Fail</button>`;
+      const icon = item.requires_verification ? "&#128247;" : "&#128203;";
+      return `<div class="task-card"><div class="task-card-title">${icon} ${title}</div></div>`;
+    })
+    .join("");
+}
+
+// Action cards: full interactive cards rendered above the chat input
+function plBuildActionCards(items) {
+  const pending = Array.isArray(items) ? items.filter((i) => i.status === "pending") : [];
+  if (!pending.length) return "";
+  return pending
+    .map((item) => {
+      const title = String(item.title || "").replace(/</g, "&lt;");
+      const criteria = String(item.verification_criteria || "").replace(/"/g, "&quot;");
+      const isVerify = !!item.requires_verification;
+      const criteriaHtml =
+        isVerify && item.verification_criteria
+          ? `<p class="ac-hint">&#128203; ${String(item.verification_criteria).replace(/</g, "&lt;")}</p>`
+          : "";
+      const actions = isVerify
+        ? `<button class="ac-btn ac-btn--photo" data-action="verify">&#128247; Foto senden</button>
+           <button class="ac-btn ac-btn--fail" data-action="fail">&#10007; Fail</button>`
+        : `<button class="ac-btn ac-btn--done" data-action="complete">&#10003; Erledigt</button>
+           <button class="ac-btn ac-btn--fail" data-action="fail">&#10007; Fail</button>`;
+      const uploadArea = isVerify
+        ? `<div class="ac-upload is-hidden">
+            <p class="ac-seal-row" style="display:none">Plombe: <code class="ac-seal-code"></code></p>
+            <label class="ac-file-label">
+              <input type="file" accept="image/*" capture="environment" class="ac-file-input" />
+              <span>Foto w&auml;hlen</span>
+            </label>
+            <button class="ac-submit-btn" type="button">Hochladen &amp; Pr&uuml;fen</button>
+          </div>`
+        : "";
       return `
-        <div class="task-card" data-task-id="${item.id}" data-requires-verification="${item.requires_verification ? '1' : ''}" data-verification-criteria="${String(item.verification_criteria || "").replace(/"/g, "&quot;")}">
-          <div class="task-card-title">${title}</div>
-          <div class="task-card-actions">${actionButtons}</div>
+        <div class="action-card ${isVerify ? "action-card--verify" : "action-card--task"}"
+             data-task-id="${item.id}"
+             data-requires-verification="${isVerify ? "1" : ""}"
+             data-verification-criteria="${criteria}">
+          <div class="ac-header">
+            <span class="ac-label">${isVerify ? "&#128247; Verifikation" : "&#128203; Task"}</span>
+            <span class="ac-title">${title}</span>
+          </div>
+          ${criteriaHtml}
+          <div class="ac-actions">${actions}</div>
+          ${uploadArea}
         </div>`;
     })
     .join("");
 }
 
-function plAttachTaskHandlers(container) {
-  container.querySelectorAll("button[data-action]").forEach((btn) => {
+async function plSubmitVerificationCard(card) {
+  const verifyId = card.dataset.verifyId;
+  const sealNumber = card.dataset.verifySeal || null;
+  if (!verifyId) return;
+  const fileInput = card.querySelector(".ac-file-input");
+  const file = fileInput?.files?.[0];
+  if (!file) { plWrite("Hinweis", { error: "Kein Bild ausgewählt." }); return; }
+  const submitBtn = card.querySelector(".ac-submit-btn");
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Wird geprüft\u2026"; }
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    if (sealNumber) form.append("observed_seal_number", sealNumber);
+    const res = await fetch(`/api/sessions/${SESSION_ID}/verifications/${verifyId}/upload`, {
+      method: "POST",
+      body: form,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(data));
+    const pill =
+      data.status === "confirmed"
+        ? "<span class='verify-pill confirmed'>&#10003; Best&auml;tigt</span>"
+        : data.status === "suspicious"
+        ? "<span class='verify-pill suspicious'>&#9888; Verdacht</span>"
+        : "<span class='verify-pill pending'>&#8987; Ausstehend</span>";
+    const uploadArea = card.querySelector(".ac-upload");
+    if (uploadArea) {
+      uploadArea.innerHTML = `<div class="ac-result">${pill}${
+        data.analysis ? `<p class="ac-hint">${String(data.analysis).replace(/</g, "&lt;")}</p>` : ""
+      }</div>`;
+    }
+    await plListTasks();
+    plWrite("Verifikation", data);
+  } catch (err) {
+    plWrite("Fehler Upload", { error: String(err) });
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Hochladen & Prüfen"; }
+  }
+}
+
+function plAttachActionCardHandlers(container) {
+  container.querySelectorAll(".action-card button[data-action]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const card = btn.closest(".task-card");
+      const card = btn.closest(".action-card");
       const taskId = card ? Number(card.dataset.taskId) : 0;
       if (!taskId || !SESSION_ID) return;
       const action = btn.dataset.action;
@@ -156,7 +251,7 @@ function plAttachTaskHandlers(container) {
           let sealNumber = null;
           try {
             const sealData = await plGet(`/api/sessions/${SESSION_ID}/seal-history`);
-            const active = (sealData.items || []).find((s) => s.status === "active");
+            const active = (sealData.entries || []).find((s) => s.status === "active");
             if (active) sealNumber = active.seal_number;
           } catch (_) {}
           const data = await plPost(`/api/sessions/${SESSION_ID}/verifications/request`, {
@@ -164,21 +259,25 @@ function plAttachTaskHandlers(container) {
             linked_task_id: taskId,
             verification_criteria: criteria,
           });
-          plPendingVerifyId = data.verification_id;
-          plSetVerifySeal(sealNumber);
-          const uploadArea = document.getElementById("play-verify-upload-area");
+          card.dataset.verifyId = data.verification_id;
+          card.dataset.verifySeal = sealNumber || "";
+          const uploadArea = card.querySelector(".ac-upload");
           if (uploadArea) uploadArea.classList.remove("is-hidden");
-          let hintEl = document.getElementById("play-verify-criteria-hint");
-          if (!hintEl) {
-            hintEl = document.createElement("p");
-            hintEl.id = "play-verify-criteria-hint";
-            hintEl.className = "verify-hint";
-            uploadArea?.prepend(hintEl);
+          const sealRow = card.querySelector(".ac-seal-row");
+          const sealCode = card.querySelector(".ac-seal-code");
+          if (sealNumber && sealRow && sealCode) {
+            sealCode.textContent = sealNumber;
+            sealRow.style.display = "";
           }
-          hintEl.textContent = criteria ? `Prüfkriterium: ${criteria}` : "";
-          hintEl.style.display = criteria ? "" : "none";
-          document.querySelector(".play-verify-section")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-          plWrite("Verifikation angefordert (Task)", data);
+          btn.style.display = "none";
+          card.querySelector(".ac-submit-btn")?.addEventListener("click", () => plSubmitVerificationCard(card));
+          card.querySelector(".ac-file-input")?.addEventListener("change", (e) => {
+            const f = e.target?.files?.[0];
+            const span = e.target?.closest(".ac-file-label")?.querySelector("span");
+            if (span) span.textContent = f ? f.name : "Foto wählen";
+          });
+          chatTimeline?.scrollTo({ top: chatTimeline.scrollHeight, behavior: "smooth" });
+          plWrite("Verifikation angefordert", data);
         } catch (err) {
           plWrite("Fehler Verifikation", { error: String(err) });
           btn.disabled = false;
@@ -200,18 +299,19 @@ function plAttachTaskHandlers(container) {
 function plRenderTasks(items) {
   const pending = Array.isArray(items) ? items.filter((i) => i.status === "pending") : [];
   const count = pending.length;
-  const html = plBuildTaskCards(items);
 
-  if (taskBoard) {
-    taskBoard.innerHTML = html;
-    plAttachTaskHandlers(taskBoard);
-  }
+  // Store for re-use when chat is re-rendered
+  _pendingTaskItems = pending;
+
+  // Action cards appended at bottom of chat timeline
+  plAppendActionCards();
+
+  // Header dropdown (read-only overview)
   if (taskDropBoard) {
-    taskDropBoard.innerHTML = html;
-    plAttachTaskHandlers(taskDropBoard);
+    taskDropBoard.innerHTML = plBuildTaskCards(items);
   }
 
-  // Update toggle button appearance
+  // Update badge/button
   if (tasksToggleBtn) {
     if (count > 0) {
       tasksToggleBtn.classList.add("has-pending");
@@ -502,7 +602,7 @@ document.getElementById("psd-hygiene-open")?.addEventListener("click", async () 
     let oldSealNumber = null;
     try {
       const sealData = await plGet(`/api/sessions/${SESSION_ID}/seal-history`);
-      const active = (sealData.items || []).find((s) => s.status === "active");
+      const active = (sealData.entries || []).find((s) => s.status === "active");
       if (active) oldSealNumber = active.seal_number;
     } catch (_) {}
     plHygieneUsesSeal = !!oldSealNumber;
@@ -616,7 +716,7 @@ document.getElementById("play-request-verify")?.addEventListener("click", async 
     let sealNumber = null;
     try {
       const sealData = await plGet(`/api/sessions/${SESSION_ID}/seal-history`);
-      const active = (sealData.items || []).find((s) => s.status === "active");
+      const active = (sealData.entries || []).find((s) => s.status === "active");
       if (active) sealNumber = active.seal_number;
     } catch (_) {}
 

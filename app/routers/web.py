@@ -173,8 +173,9 @@ def login(
             status_code=401,
         )
 
-    user.session_token = secrets.token_urlsafe(32)
-    db.commit()
+    if not user.session_token:
+        user.session_token = secrets.token_urlsafe(32)
+        db.commit()
 
     target = "/setup" if not user.setup_completed else "/experience"
     play_target = _redirect_if_active_session(user, db)

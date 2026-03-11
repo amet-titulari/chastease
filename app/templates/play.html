@@ -73,51 +73,6 @@
       </div>
     </section>
 
-    <!-- ASIDE: Tasks + Info -->
-    <aside class="play-aside">
-
-      <section class="play-tasks-section">
-        <div class="play-aside-header">
-          <h3>Tasks</h3>
-        </div>
-        <div id="play-task-board" class="task-board"></div>
-      </section>
-
-      <section class="play-verify-section">
-        <div class="play-aside-header">
-          <h3>Verifikation</h3>
-          <button id="play-request-verify" type="button" class="aside-icon-btn" title="Verifikation anfordern">&#43;</button>
-        </div>
-        <div id="play-verify-upload-area" class="is-hidden">
-          <p id="play-verify-seal-row" class="verify-hint" style="display:none">Aktive Plombe: <code id="play-verify-seal"></code></p>
-          <label class="verify-file-label">
-            <input id="play-verify-file" type="file" accept="image/*" capture="environment" />
-            <span>Foto w&auml;hlen</span>
-          </label>
-          <button id="play-verify-submit" type="button">Hochladen &amp; Pr&uuml;fen</button>
-        </div>
-        <div id="play-verify-history" class="verify-history"></div>
-      </section>
-
-      <section class="play-info-section">
-        <h3>Session</h3>
-        <dl class="play-info-grid">
-          <dt>Wearer</dt>
-          <dd>{{ player_nickname }}</dd>
-          <dt>Keyholderin</dt>
-          <dd>{{ persona_name }}</dd>
-          <dt>Freigabe fr&uuml;hestens</dt>
-          <dd id="play-lock-end-display">{{ lock_end or '—' }}</dd>
-          <dt>Status</dt>
-          <dd id="play-status-text">{{ session_status }}</dd>
-        </dl>
-        {% if session_status in ('safeword_stopped', 'yellow', 'red') %}
-        <button id="play-resume-session" type="button" class="play-resume-btn">&#8635; Session reaktivieren</button>
-        {% endif %}
-        <a href="/contract/{{ session_id }}" class="play-contract-link">&#128220; Vertrag ansehen</a>
-      </section>
-
-    </aside>
   </div>
 </div>
 
@@ -129,6 +84,19 @@
     <button id="play-settings-close" type="button" class="psd-close" aria-label="Schlie&szlig;en">&times;</button>
   </div>
   <div class="psd-body">
+
+    <section class="psd-section">
+      <h4>Session</h4>
+      <dl class="psd-info-grid">
+        <dt>Wearer</dt><dd>{{ player_nickname }}</dd>
+        <dt>Keyholderin</dt><dd>{{ persona_name }}</dd>
+        <dt>Freigabe</dt><dd id="play-lock-end-display">{{ lock_end or '&mdash;' }}</dd>
+        <dt>Status</dt><dd id="play-status-text">{{ session_status }}</dd>
+      </dl>
+      {% if session_status in ('safeword_stopped', 'yellow', 'red') %}
+      <button id="play-resume-session" type="button" class="play-resume-btn">&#8635; Session reaktivieren</button>
+      {% endif %}
+    </section>
 
     <section class="psd-section">
       <h4>Dein Setup</h4>
