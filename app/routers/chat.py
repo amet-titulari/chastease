@@ -110,6 +110,21 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
     )
     context_items, context_summary = build_context_window(context_rows, max_messages=12)
 
+    # Inject pending tasks into context so the AI knows IDs for fail_task
+    pending_tasks = (
+        db.query(Task)
+        .filter(Task.session_id == session_id, Task.status == "pending")
+        .order_by(Task.id.asc())
+        .all()
+    )
+    if pending_tasks:
+        tasks_summary = "Offene Tasks: " + "; ".join(
+            f"id={t.id} '{t.title}'"
+            + (f" (Verifizierung noetig)" if t.requires_verification else "")
+            for t in pending_tasks
+        )
+        context_items = [{"role": "system", "content": tasks_summary, "message_type": "task_context"}] + (context_items or [])
+
     wearer_nickname = profile.nickname if profile else None
     experience_level = profile.experience_level if profile else None
     wearer_style: str | None = None
@@ -124,6 +139,12 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
                 wearer_boundary = prefs.get("wearer_boundary")
         except Exception:
             pass
+    # Fall back to the AuthUser-level setup_boundary if not set on the profile
+    if not wearer_boundary:
+        from app.models.auth_user import AuthUser as _AuthUser
+        _au = db.query(_AuthUser).filter(_AuthUser.active_session_id == session_id).first()
+        if _au and _au.setup_boundary:
+            wearer_boundary = _au.setup_boundary
 
     prompt_modules = build_prompt_modules(
         persona_name=persona_name,
@@ -168,6 +189,34 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
         for action in structured.actions:
             if not isinstance(action, dict):
                 continue
+
+            # --- fail_task action ---
+            if action.get("type") == "fail_task":
+                task_id = action.get("task_id")
+                if task_id:
+                    fail_task = db.query(Task).filter(
+                        Task.id == task_id,
+                        Task.session_id == session_id,
+                        Task.status == "pending",
+                    ).first()
+                    if fail_task:
+                        now = datetime.now(timezone.utc)
+                        fail_task.status = "failed"
+                        TaskService.apply_task_consequence(
+                            db=db,
+                            session_obj=session_obj,
+                            task=fail_task,
+                            now=now,
+                        )
+                        db.add(fail_task)
+                        db.add(Message(
+                            session_id=session_id,
+                            role="system",
+                            content=f"Task '{fail_task.title}' als fehlgeschlagen markiert (KI-Entscheidung).",
+                            message_type="task_failed",
+                        ))
+                continue
+
             if action.get("type") != "create_task":
                 continue
             title = str(action.get("title", "")).strip()[:200]

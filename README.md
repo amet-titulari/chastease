@@ -8,20 +8,21 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 
 ## Features (Übersicht)
 
-- **KI-Keyholderin** – Anpassbare Persona mit konsistentem Charakter
-- **Session-Mechanik** – Zufällige Sperrdauern, Timer-Management
-- **Bildverifikation** – Optionale Verifikation mit nummerierten Plomben
-- **Aufgaben-System** – Challenges mit Belohnungen und Bestrafungen
-- **KI-Taskvergabe** – Chat kann via Structured Output automatisch `create_task`-Aktionen ausloesen
-- **Actions-Schema Hardening** – KI-Actions werden validiert/normalisiert (nur erlaubte Typen, robuste Fallbacks bei fehlerhaftem JSON)
-- **Task-Eventlogging** – `task_reward`/`task_penalty` werden als Session-Events dokumentiert
-- **Persona-Presets** – Vordefinierte Keyholder-Personas (u.a. `Ballet Sub Ella`)
+- **KI-Keyholderin** – Anpassbare Persona mit konsistentem Charakter; Grenzen und Stil werden automatisch in den Prompt übernommen
+- **Session-Mechanik** – Zufällige Sperrdauern, Timer-Management, automatisches Session-Ende bei Timer-Ablauf
+- **Bildverifikation** – Optionale Verifikation mit nummerierten Plomben direkt im Chat
+- **Aufgaben-System** – Challenges mit Belohnungen und Bestrafungen; Aktionskarten inline im Chat
+- **KI-Taskvergabe** – Chat löst via Structured Output `create_task`, `fail_task` und `add_time`-Aktionen aus
+- **Actions-Schema Hardening** – KI-Actions werden validiert/normalisiert; Fallbacks bei fehlerhaftem JSON
+- **Task-Eventlogging** – `task_reward`/`task_penalty`/`task_failed` werden als Session-Events dokumentiert
+- **Persona-Presets** – Vordefinierte Keyholder-Personas mit individuellen Charakterzügen
 - **Sicherheitssystem** – Ampelsystem, Safeword, Emergency Release
-- **Safety-Override im Chat** – Gelb aktiviert Fuersorge-Modus, Rot pausiert mit deeskalierenden Antworten
+- **Safety-Override im Chat** – Gelb aktiviert Fürsorge-Modus, Rot pausiert mit deeskalierenden Antworten
+- **Hygiene-Öffnungen** – Zeitlich begrenzte Entsperrungen mit Protokollierung
 - **Benachrichtigungen** – Timer, Erinnerungen, Nachrichten der Keyholderin
-- **Web Push** – Browser-Subscriptions und Test-Dispatch ueber Web Push API
-- **Web Test Console** – Interaktive Browser-Oberfläche für Core-Flows
-- **Responsive UI** – Optimiert fuer Desktop und mobile Geraete
+- **Web Push** – Browser-Subscriptions und Test-Dispatch über Web Push API
+- **Multi-Device-Login** – Bestehende Sessions bleiben erhalten; kein gegenseitiges Ausloggen
+- **Responsive UI** – Optimiert für Desktop und Mobile (100dvh, kompakte Aktionskarten)
 
 ## Dokumentation
 
@@ -34,14 +35,16 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 | [AI_DESIGN.md](docs/AI_DESIGN.md) | Keyholder-Persona & Prompt-Engineering |
 | [ROADMAP.md](docs/ROADMAP.md) | Priorisierte Feature-Planung |
 | [SECURITY.md](docs/SECURITY.md) | Endpoint-Schutzmatrix & Sicherheitsregeln |
+| [BENUTZERANLEITUNG.md](docs/BENUTZERANLEITUNG.md) | Schritt-für-Schritt Bedienungsanleitung |
+| [CHANGELOG.md](docs/CHANGELOG.md) | Versionshistorie |
 
 ## Tech-Stack
 
 - **Backend**: Python 3.12+ / FastAPI
 - **Frontend**: Jinja2 + Vanilla JavaScript
 - **Datenbank**: SQLite (lokal)
-- **KI**: Abstraktionsschicht – Standard xAI (Grok), erweiterbar auf lokale LLMs
-- **KI-Provider**: `stub` (default) oder `ollama` fuer Vertragsgenerierung
+- **KI**: Abstraktionsschicht – Standard xAI (Grok), erweiterbar auf lokale LLMs (`ollama`, `stub`)
+- **KI-Actions**: `create_task`, `fail_task`, `add_time` – normalisiert und serverseitig validiert
 
 ## Schnellstart
 

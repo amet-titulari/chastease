@@ -86,6 +86,13 @@ def normalize_actions(raw_actions) -> list[dict]:
             parsed = _normalize_create_task_action(item)
             if parsed is not None:
                 normalized.append(parsed)
+        elif item.get("type") == "fail_task":
+            try:
+                task_id = int(item["task_id"])
+                if task_id > 0:
+                    normalized.append({"type": "fail_task", "task_id": task_id})
+            except (KeyError, TypeError, ValueError):
+                pass
     return normalized
 
 
@@ -269,8 +276,10 @@ class OllamaGateway(AIGateway):
         prompt = (
             "Antworte als Keyholderin auf Deutsch und nutze strukturiertes JSON mit den Feldern "
             "message, actions, mood, intensity. "
-            "actions ist eine Liste und darf Action-Objekte vom Typ create_task enthalten. "
+            "actions ist eine Liste und darf Action-Objekte vom Typ create_task oder fail_task enthalten. "
             "WICHTIG: Jede Aufgabe/Anweisung MUSS als create_task eingetragen werden. "
+            "Wenn der Wearer eine Aufgabe absichtlich nicht erfuellt oder du sie als fehlgeschlagen wertest, "
+            "gib { \"type\": \"fail_task\", \"task_id\": <id> } in actions an. "
             "Schema create_task: type,title,description(optional),deadline_minutes(optional),"
             "consequence_type(optional),consequence_value(optional),"
             "requires_verification(true wenn Foto-Nachweis noetig),verification_criteria(was auf dem Foto sichtbar sein muss).\n"
@@ -396,7 +405,9 @@ class CustomOpenAIGateway(AIGateway):
             "WICHTIG: Jedes Mal wenn du dem Wearer eine Aufgabe, Anweisung oder Übung gibst, "
             "MUSST du diese zwingend als create_task-Action in 'actions' eintragen. "
             "Verlass dich nicht darauf, dass der Wearer danach fragt. "
-            "Schema:\n"
+            "Wenn du eine bestehende Aufgabe als fehlgeschlagen wertest (intentional fail), "
+            "trage { \"type\": \"fail_task\", \"task_id\": <id> } in 'actions' ein. "
+            "Schema create_task:\n"
             "{ \"type\": \"create_task\", \"title\": \"...\", \"description\": \"...\", "
             "\"deadline_minutes\": <int oder null>, "
             "\"consequence_type\": \"lock_extension_seconds\", \"consequence_value\": <int>,\n"

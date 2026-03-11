@@ -289,6 +289,7 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
       experience_level: document.getElementById("xp-experience-level").value,
       preferences: {
         scenario_preset: document.getElementById("xp-scenario-preset")?.value || null,
+        wearer_boundary: document.getElementById("xp-hard-limits")?.dataset.setupBoundary?.trim() || null,
       },
       hard_limits: String(document.getElementById("xp-hard-limits").value)
         .split(",")

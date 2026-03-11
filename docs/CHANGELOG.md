@@ -1,0 +1,84 @@
+# Changelog – Chastease
+
+Alle nennenswerten Änderungen werden in dieser Datei dokumentiert.
+Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
+
+---
+
+## [0.1.0] – 2025-01-27
+
+Erste öffentliche Alpha-Version mit vollständigem Feature-Set für Solo-Nutzung im Heimnetz.
+
+### Hinzugefügt
+
+#### Core-Session-Mechanik
+- Session-Lifecycle: Erstellen, Starten, Beenden, Timer-Management (hinzufügen, entfernen, einfrieren)
+- Digitaler Vertrag mit Addenda und Consent-Workflow
+- Session-Event-Log mit PDF- und JSON-Export
+- APScheduler-Hintergrundjobs: Task-Overdue-Sweep, Timer-Ablauf-Sweep, proaktive Nachrichten
+
+#### KI-Keyholderin
+- Abstraktionsschicht für KI-Provider: `CustomOpenAI` (xAI/Grok-kompatibel), `Ollama`, `Stub`
+- Anpassbare Persona-Profile mit individuellen Charakterzügen und Presets
+- System-Prompt enthält Grenzen (`wearer_boundary`), Stil, Ziel und aktive Tasks
+- Structured-Output-Actions: `create_task`, `add_time`, `fail_task`
+- `normalize_actions()`: Validierung und Normalisierung aller KI-Actions; robuste Fallbacks bei fehlerhaftem JSON
+- Offene Tasks werden als Kontext-Block in jeden Chat-Request injiziert
+
+#### Aufgaben-System
+- Task-Modell mit `title`, `description`, `requires_verification`, `verification_criteria`, `consequence_type`/`value`
+- Status-Maschine: `pending` → `completed` / `failed`
+- Konsequenzen: Zeitstrafe (`add_time`) oder Zeitbonus (`remove_time`) bei Task-Abschluss
+- Task-Events: `task_reward`, `task_penalty`, `task_failed` im Session-Event-Log
+- `fail_task`-Action: KI kann Tasks direkt als fehlgeschlagen markieren
+
+#### Bildverifikation
+- Verifikations-Request mit erwarteter Plomben-Nummer
+- Foto-Upload direkt in der Aktionskarte (inline, kein Seitenwechsel)
+- KI-gestützte Bildanalyse (Plomben-Nummer-Erkennung)
+- Ergebnis (bestätigt/abgelehnt) im Chat und in der Aktionskarte
+- Seal-History-Protokollierung
+
+#### Sicherheitssystem
+- Ampelsystem (Grün/Gelb/Rot) mit Safety-Log
+- Safeword-Auslösung
+- Notfallentlassung (Emergency Release)
+- Safety-Override im Chat: Gelb → fürsorglich-sorgender Ton; Rot → Session pausiert, KI deeskaliert
+
+#### Hygiene-Öffnungen
+- Zeitlich begrenzte Entsperrung mit Kontingent-Management
+- Relock-Funktion (manuell oder automatisch bei Timer-Ablauf)
+- Protokollierung aller Öffnungen
+
+#### Web-UI (Jinja2 + Vanilla JS)
+- Play-Ansicht (`/play`): Single-Column-Layout, vollständig responsive (`100dvh`)
+- **Aktionskarten** inline in der Chat-Timeline (kein separates Panel)
+  - Pro offenem Task eine Karte mit Buttons „Erledigt", „Fehlgeschlagen", „Verifizieren"
+  - Verifikation läuft komplett inline in der Karte ab
+- Task-Dropdown im Header (read-only Übersicht) mit rotem Badge-Counter
+- Settings-Drawer: Session-Info, Hygiene, Ampel, Safeword, Notfall, Persona-Wechsel
+- Dashboard (`/`), Session History (`/history`), Contracts (`/contracts`)
+- Web Push: Browser-Subscriptions, Benachrichtigungen
+
+#### Authentifizierung & Multi-Device
+- Benutzerregistrierung und Login mit bcrypt-Passwort-Hashing
+- Dauerhaftes Session-Token (30 Tage, httpOnly-Cookie)
+- Multi-Device-Support: Login regeneriert Token **nicht**, wenn bereits eines existiert – kein gegenseitiges Ausloggen
+
+### Geändert / Behoben
+
+- **Seal-Anzeige**: `sealData.items` → `sealData.entries` in play.js (Verifikationsdetails wurden nicht angezeigt)
+- **Multi-Device-Logout**: Login generierte stets ein neues Token → behoben, Token bleibt erhalten
+- **fail_task-Action**: Fehlte vollständig in Normalizer, Prompt und Backend-Handler → komplett implementiert
+- **Boundary im AI-Kontext**: `wearer_boundary` wurde nicht in den KI-Prompt übertragen → Fallback-Chain aus `PlayerProfile.preferences_json` und `AuthUser.setup_boundary` implementiert
+- **Action-Karten-Position**: Karten erschienen unterhalb des Eingabefeldes → in Chat-Timeline verschoben
+- **Mobile Layouts**: Kompakter Header, `100dvh`, scrollbare Chat-Timeline, versteckte unwichtige Labels auf kleinen Screens
+
+### Entfernt
+
+- Aside-Panel in der Play-Ansicht (Task-Board als separate Sidebar) → ersetzt durch inline Aktionskarten
+- Separater `#play-action-cards`-Container → Karten jetzt direkt in `chatTimeline`
+
+---
+
+*Ältere Entwicklungs-Commits vor v0.1.0 sind im Git-Log dokumentiert.*
