@@ -154,21 +154,32 @@ async function xpLoadPersonaPresets() {
   const select = document.getElementById("xp-persona-preset");
   select.innerHTML = "";
   try {
-    const data = await xpGet("/api/personas");
-    xpPersonaPresets = data.items || [];
-    if (!xpPersonaPresets.length) {
+    const [dbData, presetData] = await Promise.all([
+      xpGet("/api/personas"),
+      xpGet("/api/personas/presets"),
+    ]);
+    const dbPersonas = dbData.items || [];
+    const hardcoded = presetData.items || [];
+    const dbNames = new Set(dbPersonas.map((p) => p.name));
+    // DB personas first, then any hardcoded presets not yet in DB
+    const merged = [
+      ...dbPersonas.map((p) => p.name),
+      ...hardcoded.filter((p) => !dbNames.has(p.name)).map((p) => p.name),
+    ];
+    xpPersonaPresets = merged.map((name) => ({ name }));
+    if (!merged.length) {
       select.innerHTML = '<option value="">Keine Personas vorhanden</option>';
       return;
     }
-    xpPersonaPresets.forEach((persona) => {
+    merged.forEach((name) => {
       const opt = document.createElement("option");
-      opt.value = persona.name;
-      opt.textContent = persona.name;
+      opt.value = name;
+      opt.textContent = name;
       select.appendChild(opt);
     });
-    const initial = xpPersonaPresets.find((item) => item.name === "Ametara Titulari") || xpPersonaPresets[0];
-    select.value = initial.name;
-    document.getElementById("xp-persona-name").value = initial.name;
+    const initialName = merged.find((n) => n === "Ametara Titulari") || merged[0];
+    select.value = initialName;
+    document.getElementById("xp-persona-name").value = initialName;
   } catch (err) {
     select.innerHTML = '<option value="">Fehler beim Laden</option>';
     xpWrite("Fehler Persona Laden", { error: String(err) });
