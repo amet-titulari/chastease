@@ -63,10 +63,16 @@ class TaskService:
         base = max(settings.task_overdue_default_penalty_seconds, 0)
 
         profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+        reaction = TaskService._safe_json_object(profile.reaction_patterns_json) if profile else {}
+
+        # Wearer-defined default takes precedence over global setting
+        wearer_default = reaction.get("default_penalty_seconds")
+        if isinstance(wearer_default, (int, float)) and wearer_default > 0:
+            base = int(wearer_default)
+
         multiplier = TaskService._psychogram_multiplier(profile)
         penalty = int(round(base * multiplier))
 
-        reaction = TaskService._safe_json_object(profile.reaction_patterns_json) if profile else {}
         max_penalty = reaction.get("max_penalty_seconds")
         if isinstance(max_penalty, int) and max_penalty > 0:
             penalty = min(penalty, max_penalty)

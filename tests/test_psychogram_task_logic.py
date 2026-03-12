@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.database import SessionLocal
 from app.main import app
 from app.models.session import Session
@@ -31,7 +32,11 @@ def test_profile_multiplier_affects_failed_task_penalty():
             f"/api/sessions/{session_id}/player-profile",
             json={
                 "experience_level": "advanced",
-                "reaction_patterns": {"penalty_multiplier": 2.0, "max_penalty_seconds": 2000},
+                "reaction_patterns": {
+                    "penalty_multiplier": 2.0,
+                    "max_penalty_seconds": 2000,
+                    "default_penalty_seconds": 300,  # explicit wearer default so test is deterministic
+                },
             },
         )
         assert profile_update.status_code == 200

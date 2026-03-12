@@ -51,6 +51,7 @@ def test_experience_assets_are_served():
         assert "xp-create-session" in js.text
         assert "xpLoadScenarioPresets" in js.text
         assert "sign-contract" in js.text
+        assert "xpSwitchStep(6)" in js.text
 
         # play.js handles the live chat/task/regenerate functionality
         play_js = client.get("/static/js/play.js")

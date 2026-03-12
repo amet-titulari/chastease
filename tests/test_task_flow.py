@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.database import SessionLocal
 from app.models.session import Session
 from app.models.task import Task
@@ -115,8 +116,9 @@ def test_overdue_evaluation_marks_task_and_applies_default_penalty():
             session_after = db.query(Session).filter(Session.id == session_id).first()
             task_row = db.query(Task).filter(Task.id == task_id).first()
             assert task_row.status == "overdue"
-            assert task_row.consequence_applied_seconds == 300
-            assert session_after.lock_end == lock_end_before + timedelta(seconds=300)
+            expected_penalty = settings.task_overdue_default_penalty_seconds
+            assert task_row.consequence_applied_seconds == expected_penalty
+            assert session_after.lock_end == lock_end_before + timedelta(seconds=expected_penalty)
 
 
 def test_chat_structured_output_can_create_task():

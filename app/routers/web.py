@@ -147,7 +147,7 @@ def register(
     db.add(user)
     db.commit()
 
-    response = RedirectResponse(url="/setup", status_code=303)
+    response = RedirectResponse(url="/experience", status_code=303)
     _set_auth_cookie(response, user.session_token)
     return response
 
@@ -155,12 +155,18 @@ def register(
 @router.post("/auth/login")
 def login(
     request: Request,
-    username: str = Form(...),
+    username: str = Form(default=""),
+    email: str = Form(default=""),
     password: str = Form(...),
     db: Session = Depends(get_db),
 ):
     normalized_username = username.strip()
-    user = db.query(AuthUser).filter(AuthUser.username == normalized_username).first()
+    normalized_email = email.strip().lower()
+    user = None
+    if normalized_username:
+        user = db.query(AuthUser).filter(AuthUser.username == normalized_username).first()
+    elif normalized_email:
+        user = db.query(AuthUser).filter(AuthUser.email == normalized_email).first()
     if user is None or user.password_hash != _hash_password(password, user.password_salt):
         return templates.TemplateResponse(
             request=request,
@@ -177,7 +183,7 @@ def login(
         user.session_token = secrets.token_urlsafe(32)
         db.commit()
 
-    target = "/setup" if not user.setup_completed else "/experience"
+    target = "/experience"
     play_target = _redirect_if_active_session(user, db)
     if play_target:
         target = play_target
@@ -202,19 +208,8 @@ def setup_page(request: Request, db: Session = Depends(get_db)):
     user = _get_current_user(request, db)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
-    if user.setup_completed:
-        return RedirectResponse(url="/experience", status_code=303)
-
-    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
-    return templates.TemplateResponse(
-        request=request,
-        name="setup.html",
-        context={
-            "title": f"{settings.app_name} Setup",
-            "current_user": user,
-            "llm": llm,
-        },
-    )
+    # Legacy endpoint: setup flow has been replaced by the experience onboarding.
+    return RedirectResponse(url="/experience", status_code=303)
 
 
 @router.post("/setup/complete")
@@ -224,6 +219,10 @@ def complete_setup(
     primary_goal: str = Form(...),
     boundary_note: str = Form(...),
     experience_level: str = Form(default="beginner"),
+    wearer_nickname: str = Form(default=""),
+    hard_limits: str = Form(default=""),
+    penalty_multiplier: float = Form(default=1.0),
+    gentle_mode: str = Form(default="false"),
     llm_provider: str = Form(default="stub"),
     llm_api_url: str = Form(default=""),
     llm_api_key: str = Form(default=""),
@@ -240,6 +239,10 @@ def complete_setup(
     user.setup_goal = primary_goal.strip()[:120]
     user.setup_boundary = boundary_note.strip()[:1500]
     user.setup_experience_level = experience_level.strip()[:50] if experience_level.strip() in ("beginner", "intermediate", "advanced") else "beginner"
+    user.setup_wearer_nickname = wearer_nickname.strip()[:80] or user.username
+    user.setup_hard_limits = hard_limits.strip()[:1500] or None
+    user.setup_penalty_multiplier = max(0.1, min(5.0, float(penalty_multiplier)))
+    user.setup_gentle_mode = gentle_mode.lower() in ("true", "on", "1", "enabled")
     user.setup_completed = True
     db.commit()
 
@@ -298,21 +301,7 @@ def profile_page(request: Request, db: Session = Depends(get_db)):
     user = _get_current_user(request, db)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
-
-    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
-    return templates.TemplateResponse(
-        request=request,
-        name="profile.html",
-        context={
-            "title": f"{settings.app_name} Profile",
-            "current_user": user,
-            "profile_message": None,
-            "profile_error": None,
-            "llm": llm,
-            "llm_message": None,
-            "llm_error": None,
-        },
-    )
+    return RedirectResponse(url="/experience", status_code=303)
 
 
 @router.get("/profile/llm/status")
@@ -412,6 +401,10 @@ def update_profile_setup(
     primary_goal: str = Form(...),
     boundary_note: str = Form(...),
     experience_level: str = Form(default="beginner"),
+    wearer_nickname: str = Form(default=""),
+    hard_limits: str = Form(default=""),
+    penalty_multiplier: float = Form(default=1.0),
+    gentle_mode: str = Form(default="false"),
     db: Session = Depends(get_db),
 ):
     user = _get_current_user(request, db)
@@ -442,6 +435,10 @@ def update_profile_setup(
     user.setup_goal = goal
     user.setup_boundary = boundary
     user.setup_experience_level = experience_level.strip()[:50] if experience_level.strip() in ("beginner", "intermediate", "advanced") else "beginner"
+    user.setup_wearer_nickname = wearer_nickname.strip()[:80] or user.username
+    user.setup_hard_limits = hard_limits.strip()[:1500] or None
+    user.setup_penalty_multiplier = max(0.1, min(5.0, float(penalty_multiplier)))
+    user.setup_gentle_mode = gentle_mode.lower() in ("true", "on", "1", "enabled")
     user.setup_completed = True
     db.commit()
     llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
@@ -470,8 +467,12 @@ def restart_setup(request: Request, db: Session = Depends(get_db)):
     user.setup_style = None
     user.setup_goal = None
     user.setup_boundary = None
+    user.setup_wearer_nickname = None
+    user.setup_hard_limits = None
+    user.setup_penalty_multiplier = None
+    user.setup_gentle_mode = False
     db.commit()
-    return RedirectResponse(url="/setup", status_code=303)
+    return RedirectResponse(url="/experience", status_code=303)
 
 
 @router.get("/testconsole", response_class=HTMLResponse)
@@ -635,11 +636,6 @@ def experience_page(request: Request, db: Session = Depends(get_db)):
     user = _get_current_user(request, db)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
-    if not user.setup_completed:
-        return RedirectResponse(url="/setup", status_code=303)
-    target = _redirect_if_active_session(user, db)
-    if target:
-        return RedirectResponse(url=target, status_code=303)
 
     return templates.TemplateResponse(
         request=request,

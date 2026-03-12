@@ -19,6 +19,9 @@
       {% endif %}
 
       <form method="post" action="/profile/setup" class="stack">
+        <label>Wearer Nickname
+          <input name="wearer_nickname" maxlength="80" value="{{ current_user.setup_wearer_nickname or current_user.username }}" />
+        </label>
         <label>Erfahrungslevel
           <select name="experience_level" required>
             <option value="beginner" {% if not current_user.setup_experience_level or current_user.setup_experience_level == "beginner" %}selected{% endif %}>Beginner</option>
@@ -39,12 +42,24 @@
         <label>Boundary Note
           <textarea name="boundary_note" rows="4" maxlength="1500" required>{{ current_user.setup_boundary or '' }}</textarea>
         </label>
+        <label>Hard Limits (kommagetrennt)
+          <input name="hard_limits" maxlength="1500" value="{{ current_user.setup_hard_limits or '' }}" />
+        </label>
+        <label>Penalty-Multiplikator
+          <input name="penalty_multiplier" type="number" min="0.1" max="5" step="0.1" value="{{ current_user.setup_penalty_multiplier if current_user.setup_penalty_multiplier is not none else 1.0 }}" />
+        </label>
+        <label>Gentle Mode
+          <select name="gentle_mode">
+            <option value="false" {% if not current_user.setup_gentle_mode %}selected{% endif %}>Nein</option>
+            <option value="true" {% if current_user.setup_gentle_mode %}selected{% endif %}>Ja</option>
+          </select>
+        </label>
         <button type="submit">Setup-Daten speichern</button>
       </form>
 
       <div class="action-row">
         <form method="post" action="/profile/restart-setup">
-          <button type="submit" class="warn">Setup neu starten</button>
+          <button type="submit" class="warn">Onboarding-Defaults zuruecksetzen</button>
         </form>
         <a class="ghost" href="/experience">Zur Experience</a>
         <a class="ghost" href="/">Zur Landing</a>

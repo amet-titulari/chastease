@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.contract import Contract, ContractAddendum
 from app.models.hygiene_opening import HygieneOpening
+from app.models.llm_profile import LlmProfile
 from app.models.message import Message
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
@@ -28,9 +29,9 @@ router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
 class CreateSessionRequest(BaseModel):
-    persona_name: str = Field(min_length=1, max_length=120)
-    player_nickname: str = Field(min_length=1, max_length=120)
-    min_duration_seconds: int = Field(ge=60)
+    persona_name: str | None = Field(default=None, min_length=1, max_length=120)
+    player_nickname: str | None = Field(default=None, min_length=1, max_length=120)
+    min_duration_seconds: int | None = Field(default=None, ge=60)
     max_duration_seconds: int | None = Field(default=None, ge=60)
     hygiene_limit_daily: int | None = Field(default=None, ge=0)
     hygiene_limit_weekly: int | None = Field(default=None, ge=0)
@@ -41,6 +42,13 @@ class CreateSessionRequest(BaseModel):
     wearer_boundary: str | None = Field(default=None, max_length=1500)
     scenario_preset: str | None = Field(default=None, max_length=120)
     initial_seal_number: str | None = Field(default=None, max_length=120)
+    template_session_id: int | None = Field(default=None, ge=1)
+    llm_provider: str | None = Field(default=None, max_length=50)
+    llm_api_url: str | None = Field(default=None, max_length=500)
+    llm_api_key: str | None = Field(default=None, max_length=4000)
+    llm_chat_model: str | None = Field(default=None, max_length=120)
+    llm_vision_model: str | None = Field(default=None, max_length=120)
+    llm_active: bool | None = Field(default=None)
 
 
 class ProposeAddendumRequest(BaseModel):
@@ -92,6 +100,74 @@ def _remaining_seconds(session_obj: SessionModel, now: datetime) -> int:
     return max(0, int((_as_utc(session_obj.lock_end) - anchor).total_seconds()))
 
 
+def _session_blueprint(db: Session, session_obj: SessionModel) -> dict:
+    persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
+    profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+    prefs = json.loads(profile.preferences_json) if profile else {}
+    hard_limits = json.loads(profile.hard_limits_json) if profile else []
+    reaction = json.loads(profile.reaction_patterns_json) if profile else {}
+    needs = json.loads(profile.needs_json) if profile else {}
+    return {
+        "session_id": session_obj.id,
+        "status": session_obj.status,
+        "persona_name": persona.name if persona else None,
+        "player_nickname": profile.nickname if profile else None,
+        "experience_level": profile.experience_level if profile else None,
+        "min_duration_seconds": session_obj.min_duration_seconds,
+        "max_duration_seconds": session_obj.max_duration_seconds,
+        "hygiene_limit_daily": session_obj.hygiene_limit_daily,
+        "hygiene_limit_weekly": session_obj.hygiene_limit_weekly,
+        "hygiene_limit_monthly": session_obj.hygiene_limit_monthly,
+        "wearer_style": prefs.get("wearer_style"),
+        "wearer_goal": prefs.get("wearer_goal"),
+        "wearer_boundary": prefs.get("wearer_boundary"),
+        "scenario_preset": prefs.get("scenario_preset"),
+        "hard_limits": hard_limits,
+        "penalty_multiplier": reaction.get("penalty_multiplier", 1.0),
+        "gentle_mode": bool(needs.get("gentle_mode")),
+        "llm": {
+            "provider": session_obj.llm_provider,
+            "api_url": session_obj.llm_api_url,
+            "chat_model": session_obj.llm_chat_model,
+            "vision_model": session_obj.llm_vision_model,
+            "active": bool(session_obj.llm_profile_active),
+            "api_key_stored": bool(session_obj.llm_api_key),
+        },
+    }
+
+
+@router.get("/blueprints/completed")
+def list_completed_blueprints(db: Session = Depends(get_db)) -> dict:
+    rows = (
+        db.query(SessionModel)
+        .filter(SessionModel.status == "completed")
+        .order_by(SessionModel.id.desc())
+        .limit(50)
+        .all()
+    )
+    items = []
+    for row in rows:
+        persona = db.query(Persona).filter(Persona.id == row.persona_id).first()
+        profile = db.query(PlayerProfile).filter(PlayerProfile.id == row.player_profile_id).first()
+        items.append({
+            "session_id": row.id,
+            "persona_name": persona.name if persona else "Persona",
+            "player_nickname": profile.nickname if profile else "Player",
+            "completed_at": str(row.lock_end_actual or row.updated_at),
+        })
+    return {"items": items}
+
+
+@router.get("/blueprints/{session_id}")
+def get_completed_blueprint(session_id: int, db: Session = Depends(get_db)) -> dict:
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session_obj.status != "completed":
+        raise HTTPException(status_code=409, detail="Blueprint nur fuer abgeschlossene Sessions verfuegbar")
+    return _session_blueprint(db, session_obj)
+
+
 @router.get("/{session_id}")
 def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
     session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -114,6 +190,14 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
         "hygiene_limit_daily": session_obj.hygiene_limit_daily,
         "hygiene_limit_weekly": session_obj.hygiene_limit_weekly,
         "hygiene_limit_monthly": session_obj.hygiene_limit_monthly,
+        "llm_session": {
+            "provider": session_obj.llm_provider,
+            "api_url": session_obj.llm_api_url,
+            "chat_model": session_obj.llm_chat_model,
+            "vision_model": session_obj.llm_vision_model,
+            "active": bool(session_obj.llm_profile_active),
+            "api_key_stored": bool(session_obj.llm_api_key),
+        },
         "lock_start": str(session_obj.lock_start) if session_obj.lock_start else None,
         "lock_end": str(session_obj.lock_end) if session_obj.lock_end else None,
         "ws_auth_token": session_obj.ws_auth_token,
@@ -473,37 +557,93 @@ def export_contract(
 
 @router.post("")
 def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db)) -> dict:
+    template_session = None
+    template_persona = None
+    template_profile = None
+    if payload.template_session_id:
+        template_session = db.query(SessionModel).filter(SessionModel.id == payload.template_session_id).first()
+        if not template_session:
+            raise HTTPException(status_code=404, detail="Template session not found")
+        if template_session.status != "completed":
+            raise HTTPException(status_code=409, detail="Template session is not completed")
+        template_persona = db.query(Persona).filter(Persona.id == template_session.persona_id).first()
+        template_profile = db.query(PlayerProfile).filter(PlayerProfile.id == template_session.player_profile_id).first()
+
+    persona_name = payload.persona_name or (template_persona.name if template_persona else None)
+    player_nickname = payload.player_nickname or (template_profile.nickname if template_profile else None)
+    min_duration_seconds = payload.min_duration_seconds or (template_session.min_duration_seconds if template_session else None)
+    if not persona_name or not player_nickname or not min_duration_seconds:
+        raise HTTPException(status_code=422, detail="persona_name, player_nickname und min_duration_seconds sind erforderlich")
+
     # Reuse an existing persona with the same name rather than creating a new stub
-    persona = db.query(Persona).filter(Persona.name == payload.persona_name).first()
+    persona = db.query(Persona).filter(Persona.name == persona_name).first()
     if not persona:
-        persona = Persona(name=payload.persona_name)
+        persona = Persona(name=persona_name)
         db.add(persona)
         db.flush()
-    prefs: dict = {}
-    if payload.scenario_preset:
+
+    template_prefs = {}
+    template_hard_limits = []
+    template_reaction = {}
+    template_needs = {}
+    if template_profile:
+        template_prefs = json.loads(template_profile.preferences_json or "{}")
+        template_hard_limits = json.loads(template_profile.hard_limits_json or "[]")
+        template_reaction = json.loads(template_profile.reaction_patterns_json or "{}")
+        template_needs = json.loads(template_profile.needs_json or "{}")
+
+    prefs: dict = dict(template_prefs)
+    if payload.scenario_preset is not None:
         prefs["scenario_preset"] = payload.scenario_preset
-    if payload.wearer_style:
+    if payload.wearer_style is not None:
         prefs["wearer_style"] = payload.wearer_style
-    if payload.wearer_goal:
+    if payload.wearer_goal is not None:
         prefs["wearer_goal"] = payload.wearer_goal
-    if payload.wearer_boundary:
+    if payload.wearer_boundary is not None:
         prefs["wearer_boundary"] = payload.wearer_boundary
+
+    experience_level = payload.experience_level or (template_profile.experience_level if template_profile else "beginner")
+
     player = PlayerProfile(
-        nickname=payload.player_nickname,
-        experience_level=payload.experience_level or "beginner",
+        nickname=player_nickname,
+        experience_level=experience_level,
         preferences_json=json.dumps(prefs),
+        hard_limits_json=json.dumps(template_hard_limits),
+        reaction_patterns_json=json.dumps(template_reaction),
+        needs_json=json.dumps(template_needs),
     )
     db.add(player)
     db.flush()
 
+    max_duration_seconds = payload.max_duration_seconds
+    if max_duration_seconds is None and template_session:
+        max_duration_seconds = template_session.max_duration_seconds
+    hygiene_limit_daily = payload.hygiene_limit_daily if payload.hygiene_limit_daily is not None else (template_session.hygiene_limit_daily if template_session else None)
+    hygiene_limit_weekly = payload.hygiene_limit_weekly if payload.hygiene_limit_weekly is not None else (template_session.hygiene_limit_weekly if template_session else None)
+    hygiene_limit_monthly = payload.hygiene_limit_monthly if payload.hygiene_limit_monthly is not None else (template_session.hygiene_limit_monthly if template_session else None)
+
+    default_llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+    llm_provider = payload.llm_provider if payload.llm_provider is not None else (template_session.llm_provider if template_session else (default_llm.provider if default_llm else None))
+    llm_api_url = payload.llm_api_url if payload.llm_api_url is not None else (template_session.llm_api_url if template_session else (default_llm.api_url if default_llm else None))
+    llm_api_key = payload.llm_api_key if payload.llm_api_key is not None else (template_session.llm_api_key if template_session else (default_llm.api_key if default_llm else None))
+    llm_chat_model = payload.llm_chat_model if payload.llm_chat_model is not None else (template_session.llm_chat_model if template_session else (default_llm.chat_model if default_llm else None))
+    llm_vision_model = payload.llm_vision_model if payload.llm_vision_model is not None else (template_session.llm_vision_model if template_session else (default_llm.vision_model if default_llm else None))
+    llm_active = payload.llm_active if payload.llm_active is not None else (bool(template_session.llm_profile_active) if template_session else bool(default_llm.profile_active if default_llm else False))
+
     session_obj = SessionModel(
         persona_id=persona.id,
         player_profile_id=player.id,
-        min_duration_seconds=payload.min_duration_seconds,
-        max_duration_seconds=payload.max_duration_seconds,
-        hygiene_limit_daily=payload.hygiene_limit_daily,
-        hygiene_limit_weekly=payload.hygiene_limit_weekly,
-        hygiene_limit_monthly=payload.hygiene_limit_monthly,
+        min_duration_seconds=min_duration_seconds,
+        max_duration_seconds=max_duration_seconds,
+        hygiene_limit_daily=hygiene_limit_daily,
+        hygiene_limit_weekly=hygiene_limit_weekly,
+        hygiene_limit_monthly=hygiene_limit_monthly,
+        llm_provider=llm_provider,
+        llm_api_url=llm_api_url,
+        llm_api_key=llm_api_key,
+        llm_chat_model=llm_chat_model,
+        llm_vision_model=llm_vision_model,
+        llm_profile_active=bool(llm_active),
         status="draft",
     )
     _ensure_ws_auth_token(session_obj)
@@ -517,6 +657,7 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
             player_nickname=player.nickname,
             min_duration_seconds=session_obj.min_duration_seconds,
             max_duration_seconds=session_obj.max_duration_seconds,
+            session_obj=session_obj,
         ),
         parameters_snapshot="{}",
     )
@@ -539,6 +680,13 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
         "ws_auth_token": session_obj.ws_auth_token,
         "contract_required": True,
         "contract_preview": contract.content_text,
+        "llm_session": {
+            "provider": session_obj.llm_provider,
+            "api_url": session_obj.llm_api_url,
+            "chat_model": session_obj.llm_chat_model,
+            "vision_model": session_obj.llm_vision_model,
+            "active": bool(session_obj.llm_profile_active),
+        },
     }
 
 

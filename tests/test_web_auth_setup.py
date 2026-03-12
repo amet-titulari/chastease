@@ -19,23 +19,15 @@ def _register(client: TestClient, email: str = "setup-user@example.com"):
     )
 
 
-def test_register_redirects_to_setup_and_setup_page_renders():
+def test_register_redirects_to_experience():
     with TestClient(app) as client:
         register_resp = _register(client)
         assert register_resp.status_code == 303
-        assert register_resp.headers["location"] == "/setup"
+        assert register_resp.headers["location"] == "/experience"
 
-        setup_resp = client.get("/setup")
-        assert setup_resp.status_code == 200
-        assert "Setup Wizard" in setup_resp.text
-        assert "setup-form" in setup_resp.text
-        assert "Leitstil Erklaerung" in setup_resp.text
-        assert "Auswirkungen: Structured" in setup_resp.text
-        assert "Ziel Vorschlaege" in setup_resp.text
-        assert "Eigenes Ziel frei eingeben" in setup_resp.text
-        assert "Grenzen Vorschlaege" in setup_resp.text
-        assert "Mehrfachauswahl" in setup_resp.text
-        assert "Auswahl in Boundary Note uebernehmen" in setup_resp.text
+        experience_resp = client.get("/experience")
+        assert experience_resp.status_code == 200
+        assert "Onboarding" in experience_resp.text
 
 
 def test_setup_completion_redirects_to_experience():
@@ -48,6 +40,10 @@ def test_setup_completion_redirects_to_experience():
                 "role_style": "structured",
                 "primary_goal": "Mehr Konsistenz",
                 "boundary_note": "Keine Aufgaben waehrend Meetings",
+                "wearer_nickname": "Eri",
+                "hard_limits": "kein pain, keine public tasks",
+                "penalty_multiplier": "1.3",
+                "gentle_mode": "true",
             },
             follow_redirects=False,
         )
@@ -56,9 +52,12 @@ def test_setup_completion_redirects_to_experience():
 
         experience_resp = client.get("/experience")
         assert experience_resp.status_code == 200
+        assert "value=\"Eri\"" in experience_resp.text
+        assert "kein pain, keine public tasks" in experience_resp.text
+        assert "value=\"1.3\"" in experience_resp.text
 
 
-def test_login_for_incomplete_setup_redirects_to_setup():
+def test_login_for_incomplete_setup_redirects_to_experience():
     with TestClient(app) as client:
         email = f"login-{uuid4().hex[:8]}@example.com"
         register_resp = _register(client, email=email)
@@ -71,7 +70,7 @@ def test_login_for_incomplete_setup_redirects_to_setup():
             follow_redirects=False,
         )
         assert login_resp.status_code == 303
-        assert login_resp.headers["location"] == "/setup"
+        assert login_resp.headers["location"] == "/experience"
 
 
 def test_experience_redirects_to_landing_when_logged_out():
@@ -108,11 +107,17 @@ def test_profile_can_update_setup_data():
                 "role_style": "supportive",
                 "primary_goal": "Neues Ziel",
                 "boundary_note": "Neue Grenze",
+                "wearer_nickname": "Neo",
+                "hard_limits": "kein sleep deprivation",
+                "penalty_multiplier": "0.8",
+                "gentle_mode": "true",
             },
         )
         assert update_resp.status_code == 200
         assert "Setup-Daten wurden aktualisiert." in update_resp.text
         assert "Neues Ziel" in update_resp.text
+        assert "value=\"Neo\"" in update_resp.text
+        assert "kein sleep deprivation" in update_resp.text
 
 
 def test_profile_can_restart_setup_flow():
@@ -131,8 +136,7 @@ def test_profile_can_restart_setup_flow():
 
         restart_resp = client.post("/profile/restart-setup", follow_redirects=False)
         assert restart_resp.status_code == 303
-        assert restart_resp.headers["location"] == "/setup"
+        assert restart_resp.headers["location"] == "/experience"
 
         experience_resp = client.get("/experience", follow_redirects=False)
-        assert experience_resp.status_code == 303
-        assert experience_resp.headers["location"] == "/setup"
+        assert experience_resp.status_code == 200

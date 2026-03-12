@@ -10,15 +10,14 @@
       <p class="eyebrow">Chastease</p>
       <h1>Willkommen im Ritualraum</h1>
       <p>
-        Starte mit einem sauberen Account-Setup. Nach Login oder Registrierung fuehren wir dich Schritt fuer Schritt
-        durch die Konfiguration, bevor die Experience startet.
+        Nach Login oder Registrierung startest du direkt ins Session-Onboarding der Experience.
+        Dort konfigurierst du Persona, Regeln, LLM und Vertrag pro Session.
       </p>
       {% if current_user %}
       <div class="logged-in-box">
         <p>Aktiv angemeldet als <strong>{{ current_user.username }}</strong>.</p>
         <a class="secondary-link" href="/profile">Profil verwalten</a>
-        <a class="primary-link" href="/setup">Zum Setup</a>
-        <a class="secondary-link" href="/experience">Direkt zur Experience</a>
+        <a class="primary-link" href="/experience">Zum Onboarding</a>
       </div>
       {% endif %}
       <a class="ghost-link" href="/testconsole">Zur Testkonsole</a>

@@ -91,7 +91,7 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
         except Exception:
             hard_limits = []
 
-    ai = get_ai_gateway()
+    ai = get_ai_gateway(session_obj=session_obj)
     prefs: dict = {}
     scenario_title = None
     if profile and profile.preferences_json:

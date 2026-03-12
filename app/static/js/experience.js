@@ -6,12 +6,21 @@ let xpScenarioPresets = [];
 let xpDbPersonas = [];       // DB personas with full data (id, name, ...)
 let xpHardcodedPresets = []; // Presets not yet in DB
 let xpEditPersonaId = null;  // null = new, int = edit
+let xpCompletedTemplates = [];
 
 const statusEl = document.getElementById("onboarding-status");
 const outputEl = document.getElementById("xp-output");
 const contractEl = document.getElementById("xp-contract-preview");
 const sessionIdEl = document.getElementById("xp-session-id");
 const sessionStatusEl = document.getElementById("xp-session-status");
+const gateEl = document.getElementById("xp-onboarding-gate");
+const gateLoadPanelEl = document.getElementById("xp-gate-load-panel");
+const onboardingBodyEl = document.getElementById("xp-onboarding-body");
+
+function xpShowOnboardingBody(show) {
+  if (!onboardingBodyEl) return;
+  onboardingBodyEl.style.display = show ? "" : "none";
+}
 
 function xpWrite(title, data) {
   if (!outputEl) return;
@@ -54,9 +63,75 @@ async function xpPut(url, payload) {
   return data;
 }
 
+// ---- localStorage persistence ----
+const XP_STORAGE_KEY = "xp_onboarding_draft";
+const XP_STORAGE_VERSION = "2"; // bump when HTML defaults change to discard stale drafts
+
+const XP_PERSIST_FIELDS = [
+  { id: "xp-pe-name",            type: "value" },
+  { id: "xp-pe-tone",            type: "value" },
+  { id: "xp-pe-dominance",       type: "value" },
+  { id: "xp-pe-description",     type: "value" },
+  { id: "xp-pe-system-prompt",   type: "value" },
+  { id: "xp-scenario-preset",    type: "value" },
+  { id: "xp-player-nickname",    type: "value" },
+  { id: "xp-experience-level",   type: "value" },
+  { id: "xp-hard-limits",        type: "value" },
+  { id: "xp-penalty-multiplier", type: "value" },
+  { id: "xp-gentle-mode",        type: "value" },
+  { id: "xp-min-days",           type: "value" },
+  { id: "xp-max-days",           type: "value" },
+  { id: "xp-max-no-limit",       type: "checked" },
+  { id: "xp-hygiene-day",        type: "value" },
+  { id: "xp-hygiene-week",       type: "value" },
+  { id: "xp-hygiene-month",      type: "value" },
+  { id: "xp-penalty-default-hours",  type: "value" },
+  { id: "xp-penalty-default-unit",   type: "value" },
+  { id: "xp-penalty-max-hours",      type: "value" },
+  { id: "xp-seal-enabled",       type: "checked" },
+  { id: "xp-seal-number",        type: "value" },
+  { id: "xp-llm-provider",       type: "value" },
+  { id: "xp-llm-api-url",        type: "value" },
+  { id: "xp-llm-api-key",        type: "value" },
+  { id: "xp-llm-chat-model",     type: "value" },
+  { id: "xp-llm-vision-model",   type: "value" },
+];
+
+function xpSaveDraft() {
+  const draft = { _v: XP_STORAGE_VERSION };
+  for (const { id, type } of XP_PERSIST_FIELDS) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    draft[id] = type === "checked" ? el.checked : el.value;
+  }
+  try { localStorage.setItem(XP_STORAGE_KEY, JSON.stringify(draft)); } catch (_) {}
+}
+
+function xpRestoreDraft() {
+  let draft;
+  try { draft = JSON.parse(localStorage.getItem(XP_STORAGE_KEY) || "null"); } catch (_) { return; }
+  if (!draft || draft._v !== XP_STORAGE_VERSION) {
+    xpClearDraft(); // stale or version-mismatched draft → discard
+    return;
+  }
+  for (const { id, type } of XP_PERSIST_FIELDS) {
+    const el = document.getElementById(id);
+    if (!el || !(id in draft)) continue;
+    if (type === "checked") el.checked = !!draft[id];
+    else el.value = draft[id];
+  }
+}
+
+function xpClearDraft() {
+  try { localStorage.removeItem(XP_STORAGE_KEY); } catch (_) {}
+}
+// ----------------------------------
+
 function xpSwitchStep(next) {
-  xpStep = Math.max(1, Math.min(5, next));
-  statusEl.textContent = `Schritt ${xpStep} von 5`;
+  xpSaveDraft();
+  xpStep = Math.max(1, Math.min(6, next));
+  const onboardingCard = document.getElementById("onboarding-card");
+  if (onboardingCard) onboardingCard.dataset.activeStep = String(xpStep);
 
   document.querySelectorAll(".step-tab").forEach((el) => {
     el.classList.toggle("is-active", Number(el.dataset.step) === xpStep);
@@ -65,9 +140,9 @@ function xpSwitchStep(next) {
     el.classList.toggle("is-active", Number(el.dataset.step) === xpStep);
   });
 
-  // Hide "Weiter" on step 4 ("Session erstellen" is the action) and step 5
+  // Hide "Weiter" on step 5 ("Session erstellen" is the action) and step 6.
   const nextBtn = document.getElementById("xp-next-step");
-  if (nextBtn) nextBtn.style.display = xpStep >= 4 ? "none" : "";
+  if (nextBtn) nextBtn.style.display = xpStep >= 5 ? "none" : "";
 }
 
 // --- Duration helpers ---
@@ -359,6 +434,94 @@ async function xpLoadScenarioPresets() {
   }
 }
 
+async function xpLoadCompletedTemplates() {
+  const select = document.getElementById("xp-template-session");
+  if (!select) return;
+  select.innerHTML = '<option value="">Keine Vorlage</option>';
+  try {
+    const data = await xpGet("/api/sessions/blueprints/completed");
+    xpCompletedTemplates = data.items || [];
+    xpCompletedTemplates.forEach((item) => {
+      const opt = document.createElement("option");
+      opt.value = String(item.session_id);
+      opt.textContent = `#${item.session_id} · ${item.persona_name} / ${item.player_nickname}`;
+      select.appendChild(opt);
+    });
+
+    if (xpCompletedTemplates.length > 0) {
+      gateEl?.classList.remove("is-hidden");
+      gateLoadPanelEl?.classList.add("is-hidden");
+      xpShowOnboardingBody(false);
+    } else {
+      gateEl?.classList.add("is-hidden");
+      xpShowOnboardingBody(true);
+    }
+  } catch (err) {
+    xpWrite("Fehler Vorlagen", { error: String(err) });
+    gateEl?.classList.add("is-hidden");
+    xpShowOnboardingBody(true);
+  }
+}
+
+async function xpApplyTemplateSession(sessionId) {
+  if (!sessionId) return;
+  const data = await xpGet(`/api/sessions/blueprints/${sessionId}`);
+
+  if (data.persona_name) {
+    const personaSelect = document.getElementById("xp-persona-preset");
+    if (personaSelect) {
+      const matching = Array.from(personaSelect.options).find((o) => o.value === data.persona_name || o.textContent.trim() === data.persona_name);
+      if (matching) {
+        personaSelect.value = matching.value;
+        xpFillPersonaEditor(matching.value);
+      } else {
+        document.getElementById("xp-pe-name").value = data.persona_name;
+      }
+    }
+  }
+
+  if (data.player_nickname) document.getElementById("xp-player-nickname").value = data.player_nickname;
+  if (data.experience_level) document.getElementById("xp-experience-level").value = data.experience_level;
+  if (Array.isArray(data.hard_limits)) document.getElementById("xp-hard-limits").value = data.hard_limits.join(", ");
+  if (data.penalty_multiplier != null) document.getElementById("xp-penalty-multiplier").value = String(data.penalty_multiplier);
+  document.getElementById("xp-gentle-mode").value = data.gentle_mode ? "true" : "false";
+
+  if (data.scenario_preset) {
+    const sc = document.getElementById("xp-scenario-preset");
+    sc.value = data.scenario_preset;
+    xpUpdateScenarioDetail(data.scenario_preset);
+  }
+
+  if (data.min_duration_seconds) {
+    document.getElementById("xp-min-days").value = String(Math.max(1, Math.round(data.min_duration_seconds / 86400)));
+    document.getElementById("xp-min-date").value = xpSecondsToDateLocal(data.min_duration_seconds);
+  }
+  if (data.max_duration_seconds) {
+    document.getElementById("xp-max-no-limit").checked = false;
+    document.getElementById("xp-max-days").value = String(Math.max(1, Math.round(data.max_duration_seconds / 86400)));
+    document.getElementById("xp-max-date").value = xpSecondsToDateLocal(data.max_duration_seconds);
+  } else {
+    document.getElementById("xp-max-no-limit").checked = true;
+  }
+
+  if (data.hygiene_limit_daily != null) document.getElementById("xp-hygiene-day").value = String(data.hygiene_limit_daily);
+  if (data.hygiene_limit_weekly != null) document.getElementById("xp-hygiene-week").value = String(data.hygiene_limit_weekly);
+  if (data.hygiene_limit_monthly != null) document.getElementById("xp-hygiene-month").value = String(data.hygiene_limit_monthly);
+
+  if (data.llm) {
+    if (data.llm.provider) document.getElementById("xp-llm-provider").value = data.llm.provider;
+    if (data.llm.api_url) document.getElementById("xp-llm-api-url").value = data.llm.api_url;
+    if (data.llm.chat_model) document.getElementById("xp-llm-chat-model").value = data.llm.chat_model;
+    if (data.llm.vision_model) document.getElementById("xp-llm-vision-model").value = data.llm.vision_model;
+    // llm_active is always true — no checkbox anymore
+  }
+
+  gateEl?.classList.add("is-hidden");
+  xpShowOnboardingBody(true);
+  xpSwitchStep(1);
+  xpWrite("Vorlage geladen", { session_id: data.session_id });
+}
+
 function xpUpdateScenarioDetail(key) {
   const scenario = xpScenarioPresets.find((p) => p.key === key);
   const titleEl = document.getElementById("xp-scenario-title");
@@ -446,6 +609,23 @@ document.getElementById("xp-scenario-preset").addEventListener("change", (e) => 
 
 document.getElementById("xp-new-persona-btn").addEventListener("click", xpClearPersonaEditor);
 document.getElementById("xp-pe-save-btn").addEventListener("click", xpSavePersonaEditor);
+document.getElementById("xp-gate-new")?.addEventListener("click", () => {
+  gateEl?.classList.add("is-hidden");
+  xpShowOnboardingBody(true);
+  xpSwitchStep(1);
+});
+document.getElementById("xp-gate-load")?.addEventListener("click", () => {
+  gateLoadPanelEl?.classList.remove("is-hidden");
+});
+document.getElementById("xp-load-template-btn")?.addEventListener("click", async () => {
+  const id = Number(document.getElementById("xp-template-session")?.value || 0);
+  if (!id) return;
+  try {
+    await xpApplyTemplateSession(id);
+  } catch (err) {
+    xpWrite("Fehler Vorlage", { error: String(err) });
+  }
+});
 
 document.querySelectorAll(".step-tab").forEach((btn) => {
   btn.addEventListener("click", () => xpSwitchStep(Number(btn.dataset.step)));
@@ -453,11 +633,7 @@ document.querySelectorAll(".step-tab").forEach((btn) => {
 
 document.getElementById("xp-prev-step").addEventListener("click", () => xpSwitchStep(xpStep - 1));
 document.getElementById("xp-next-step").addEventListener("click", () => {
-  if (xpStep === 4) {
-    document.getElementById("xp-create-session")?.click();
-  } else {
-    xpSwitchStep(xpStep + 1);
-  }
+  xpSwitchStep(xpStep + 1);
 });
 
 document.getElementById("xp-seal-enabled")?.addEventListener("change", (e) => {
@@ -517,6 +693,13 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
       experience_level: document.getElementById("xp-experience-level").value || "beginner",
       scenario_preset: scenarioPreset,
       initial_seal_number: sealNumber,
+      template_session_id: xpParseOptionalInt(document.getElementById("xp-template-session")?.value || ""),
+      llm_provider: document.getElementById("xp-llm-provider")?.value || null,
+      llm_api_url: document.getElementById("xp-llm-api-url")?.value?.trim() || null,
+      llm_api_key: document.getElementById("xp-llm-api-key")?.value?.trim() || null,
+      llm_chat_model: document.getElementById("xp-llm-chat-model")?.value?.trim() || null,
+      llm_vision_model: document.getElementById("xp-llm-vision-model")?.value?.trim() || null,
+      llm_active: true,
     };
     const created = await xpPost("/api/sessions", payload);
     xpSessionId = created.session_id;
@@ -537,6 +720,16 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
         .filter(Boolean),
       reaction_patterns: {
         penalty_multiplier: Number(document.getElementById("xp-penalty-multiplier").value || "1"),
+        default_penalty_seconds: (function() {
+          const h = parseFloat(document.getElementById("xp-penalty-default-hours")?.value || "0");
+          const unit = parseInt(document.getElementById("xp-penalty-default-unit")?.value || "3600", 10);
+          return h > 0 ? Math.round(h * unit) : null;
+        })(),
+        max_penalty_seconds: (function() {
+          const h = parseFloat(document.getElementById("xp-penalty-max-hours")?.value || "0");
+          const unit = parseInt(document.getElementById("xp-penalty-default-unit")?.value || "3600", 10);
+          return h > 0 ? Math.round(h * unit) : null;
+        })(),
       },
       needs: {
         gentle_mode: document.getElementById("xp-gentle-mode").value === "true",
@@ -544,13 +737,50 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
     };
     await xpPut(`/api/sessions/${xpSessionId}/player-profile`, profilePayload);
 
-    xpSwitchStep(4);
+    xpSwitchStep(6);
+    const contractStep = document.querySelector('.step-pane[data-step="6"]');
+    contractStep?.scrollIntoView({ behavior: "smooth", block: "start" });
     xpWrite("Session erstellt", created);
   } catch (err) {
     xpWrite("Fehler Session", { error: String(err) });
   } finally {
     createBtn.disabled = false;
     createBtn.classList.remove("is-loading");
+  }
+});
+
+document.getElementById("xp-llm-test").addEventListener("click", async () => {
+  const btn = document.getElementById("xp-llm-test");
+  const testStatus = document.getElementById("xp-llm-test-status");
+  btn.disabled = true;
+  btn.classList.add("is-loading");
+  testStatus.textContent = "Teste\u2026";
+  testStatus.className = "";
+  try {
+    const res = await fetch("/api/llm/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: document.getElementById("xp-llm-provider")?.value,
+        api_url: document.getElementById("xp-llm-api-url")?.value?.trim(),
+        api_key: document.getElementById("xp-llm-api-key")?.value?.trim(),
+        chat_model: document.getElementById("xp-llm-chat-model")?.value?.trim(),
+      }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      testStatus.textContent = "\u2713 Verbindung OK";
+      testStatus.className = "llm-test-ok";
+    } else {
+      testStatus.textContent = `\u2717 ${data.error || "Fehler"}`;
+      testStatus.className = "llm-test-fail";
+    }
+  } catch (e) {
+    testStatus.textContent = `\u2717 ${String(e)}`;
+    testStatus.className = "llm-test-fail";
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove("is-loading");
   }
 });
 
@@ -561,6 +791,7 @@ document.getElementById("xp-sign-contract").addEventListener("click", async () =
   signBtn.textContent = "Wird gestartet\u2026";
   try {
     await xpPost(`/api/sessions/${xpSessionId}/sign-contract`, {});
+    xpClearDraft();
     window.location.href = `/play/${xpSessionId}`;
   } catch (err) {
     xpWrite("Fehler Signatur", { error: String(err) });
@@ -573,16 +804,19 @@ document.getElementById("xp-sign-contract").addEventListener("click", async () =
 
 xpLoadPersonaPresets();
 xpLoadScenarioPresets();
+xpLoadCompletedTemplates();
 xpInitDurationDefaults();
 xpWireDuration("xp-min-date", "xp-min-days", "xp-min-summary");
 xpWireDuration("xp-max-date", "xp-max-days", "xp-max-summary");
 xpWireNoLimit();
+xpRestoreDraft();
 xpSwitchStep(1);
 
 // Pre-fill hard limits from setup boundary
 (function xpPrefillHardLimits() {
   const input = document.getElementById("xp-hard-limits");
   if (!input) return;
+  if (input.value && input.value.trim()) return;
   const raw = (input.dataset.setupBoundary || "").trim();
   if (!raw) return;
   const keywords = raw

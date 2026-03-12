@@ -472,7 +472,29 @@ class CustomOpenAIGateway(AIGateway):
         )
 
 
-def get_ai_gateway() -> AIGateway:
+def get_ai_gateway(session_obj=None) -> AIGateway:
+    # Prefer per-session LLM configuration when present and active.
+    try:
+        if session_obj is not None and bool(getattr(session_obj, "llm_profile_active", False)):
+            provider = str(getattr(session_obj, "llm_provider", "") or "").strip().lower()
+            api_url = getattr(session_obj, "llm_api_url", None)
+            api_key = getattr(session_obj, "llm_api_key", None) or ""
+            chat_model = getattr(session_obj, "llm_chat_model", None)
+            if provider in ("custom", "openai") and api_url and chat_model:
+                return CustomOpenAIGateway(
+                    api_url=api_url,
+                    api_key=api_key,
+                    chat_model=chat_model,
+                )
+            if provider == "ollama":
+                return OllamaGateway(
+                    base_url=api_url or settings.ai_ollama_base_url,
+                    model=chat_model or settings.ai_ollama_model,
+                    timeout_seconds=settings.ai_ollama_timeout_seconds,
+                )
+    except Exception:
+        pass
+
     # Check DB for an active LLM profile first
     try:
         from app.database import SessionLocal

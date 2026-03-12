@@ -1,6 +1,12 @@
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
+
+
+def _admin_headers() -> dict:
+    s = settings.admin_secret
+    return {"X-Admin-Secret": s} if s else {}
 
 
 def _create_and_sign(client: TestClient) -> int:
@@ -44,6 +50,7 @@ def test_chat_reply_switches_to_care_mode_on_yellow():
         yellow = client.post(
             f"/api/sessions/{session_id}/safety/traffic-light",
             json={"color": "yellow"},
+            headers=_admin_headers(),
         )
         assert yellow.status_code == 200
 
@@ -62,6 +69,7 @@ def test_chat_reply_respects_pause_on_red():
         red = client.post(
             f"/api/sessions/{session_id}/safety/traffic-light",
             json={"color": "red"},
+            headers=_admin_headers(),
         )
         assert red.status_code == 200
         assert red.json()["status"] == "paused"
