@@ -154,24 +154,24 @@ async function xpLoadPersonaPresets() {
   const select = document.getElementById("xp-persona-preset");
   select.innerHTML = "";
   try {
-    const data = await xpGet("/api/personas/presets");
+    const data = await xpGet("/api/personas");
     xpPersonaPresets = data.items || [];
     if (!xpPersonaPresets.length) {
-      select.innerHTML = '<option value="">Keine Presets</option>';
+      select.innerHTML = '<option value="">Keine Personas vorhanden</option>';
       return;
     }
-    xpPersonaPresets.forEach((preset) => {
+    xpPersonaPresets.forEach((persona) => {
       const opt = document.createElement("option");
-      opt.value = preset.key;
-      opt.textContent = preset.name;
+      opt.value = persona.name;
+      opt.textContent = persona.name;
       select.appendChild(opt);
     });
-    const initial = xpPersonaPresets.find((item) => item.key === "amet_titulari") || xpPersonaPresets[0];
-    select.value = initial.key;
+    const initial = xpPersonaPresets.find((item) => item.name === "Ametara Titulari") || xpPersonaPresets[0];
+    select.value = initial.name;
     document.getElementById("xp-persona-name").value = initial.name;
   } catch (err) {
-    select.innerHTML = '<option value="">Preset-Fehler</option>';
-    xpWrite("Fehler Persona Presets", { error: String(err) });
+    select.innerHTML = '<option value="">Fehler beim Laden</option>';
+    xpWrite("Fehler Persona Laden", { error: String(err) });
   }
 }
 
@@ -201,9 +201,8 @@ async function xpLoadScenarioPresets() {
 }
 
 document.getElementById("xp-persona-preset").addEventListener("change", (e) => {
-  const preset = xpPersonaPresets.find((item) => item.key === e.target.value);
-  if (preset) {
-    document.getElementById("xp-persona-name").value = preset.name;
+  if (e.target.value) {
+    document.getElementById("xp-persona-name").value = e.target.value;
   }
 });
 
