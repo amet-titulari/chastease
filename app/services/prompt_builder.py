@@ -8,17 +8,19 @@ class PromptModules:
     safety_module: str
     session_module: str
     style_module: str
+    scenario_module: str = ""
 
     def render(self) -> str:
-        return "\n\n".join(
-            [
-                self.persona_module,
-                self.wearer_module,
-                self.safety_module,
-                self.session_module,
-                self.style_module,
-            ]
-        )
+        parts = [
+            self.persona_module,
+            self.wearer_module,
+            self.safety_module,
+            self.session_module,
+            self.style_module,
+        ]
+        if self.scenario_module:
+            parts.append(self.scenario_module)
+        return "\n\n".join(parts)
 
 
 # Maps strictness_level (1-5) to a German style directive
@@ -46,6 +48,8 @@ def build_prompt_modules(
     speech_style_dominance: str | None = None,
     strictness_level: int = 3,
     hard_limits: list[str] | None = None,
+    active_phase: dict | None = None,
+    lorebook_entries: list[dict] | None = None,
 ) -> PromptModules:
     nickname_part = f"Wearer: {wearer_nickname}." if wearer_nickname else "Wearer: unbekannt."
     level_part = f"Erfahrungslevel: {experience_level}." if experience_level else ""
@@ -91,4 +95,35 @@ def build_prompt_modules(
             f"Scenario={scenario_title or 'default'}."
         ),
         style_module=f"Stil: Antworte immer auf Deutsch. {style_directive}",
+        scenario_module=_build_scenario_module(active_phase, lorebook_entries),
     )
+
+
+def _build_scenario_module(
+    active_phase: dict | None,
+    lorebook_entries: list[dict] | None,
+) -> str:
+    parts: list[str] = []
+
+    if active_phase:
+        phase_title = active_phase.get("title", "")
+        objective = active_phase.get("objective", "")
+        guidance = active_phase.get("guidance", "")
+        line = f"Aktive Phase: {phase_title}."
+        if objective:
+            line += f" Ziel: {objective}"
+        if guidance:
+            line += f" Führung: {guidance}"
+        parts.append(line)
+
+    if lorebook_entries:
+        lore_lines = []
+        for entry in lorebook_entries:
+            key = entry.get("key", "lore")
+            content = entry.get("content", "")
+            if content:
+                lore_lines.append(f"[{key}]: {content}")
+        if lore_lines:
+            parts.append("Lorebook:\n" + "\n".join(lore_lines))
+
+    return "\n\n".join(parts)

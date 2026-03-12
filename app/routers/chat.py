@@ -11,6 +11,7 @@ from app.models.message import Message
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
 from app.models.safety_log import SafetyLog
+from app.models.scenario import Scenario
 from app.models.session import Session as SessionModel
 from app.models.task import Task
 from app.services.ai_gateway import get_ai_gateway
@@ -91,6 +92,7 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
             hard_limits = []
 
     ai = get_ai_gateway()
+    prefs: dict = {}
     scenario_title = None
     if profile and profile.preferences_json:
         try:
@@ -98,9 +100,39 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
             if isinstance(prefs, dict) and prefs.get("scenario_preset"):
                 scenario_title = str(prefs.get("scenario_preset"))[:120]
         except Exception:
-            scenario_title = None
+            pass
     if scenario_title is None and persona and persona.description:
         scenario_title = persona.description[:120]
+
+    # Load full scenario for phase + lorebook injection
+    active_phase: dict | None = None
+    matched_lore: list[dict] = []
+    scenario_key = prefs.get("scenario_preset") if prefs else None
+    if scenario_key:
+        db_scenario = db.query(Scenario).filter(Scenario.key == scenario_key).first()
+        if db_scenario:
+            _phases = json.loads(db_scenario.phases_json or "[]")
+            _lorebook = json.loads(db_scenario.lorebook_json or "[]")
+        else:
+            from app.routers.scenarios import SCENARIO_PRESETS as _SP
+            _preset = next((p for p in _SP if p.get("key") == scenario_key), None)
+            _phases = _preset.get("phases", []) if _preset else []
+            _lorebook = _preset.get("lorebook", []) if _preset else []
+
+        # Active phase: from prefs or default to first
+        phase_id = prefs.get("scenario_phase_id") if prefs else None
+        if phase_id:
+            active_phase = next((p for p in _phases if p.get("phase_id") == phase_id), None)
+        if active_phase is None and _phases:
+            active_phase = _phases[0]
+
+        # Match lorebook entries by triggers in user_text (top 3 by priority)
+        text_lower = user_text.lower()
+        for entry in sorted(_lorebook, key=lambda e: e.get("priority", 0), reverse=True):
+            if any(str(t).lower() in text_lower for t in entry.get("triggers", [])):
+                matched_lore.append(entry)
+            if len(matched_lore) >= 3:
+                break
 
     context_rows = (
         db.query(Message)
@@ -130,15 +162,10 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
     wearer_style: str | None = None
     wearer_goal: str | None = None
     wearer_boundary: str | None = None
-    if profile and profile.preferences_json:
-        try:
-            prefs = json.loads(profile.preferences_json)
-            if isinstance(prefs, dict):
-                wearer_style = prefs.get("wearer_style")
-                wearer_goal = prefs.get("wearer_goal")
-                wearer_boundary = prefs.get("wearer_boundary")
-        except Exception:
-            pass
+    if prefs:
+        wearer_style = prefs.get("wearer_style")
+        wearer_goal = prefs.get("wearer_goal")
+        wearer_boundary = prefs.get("wearer_boundary")
     # Fall back to the AuthUser-level setup_boundary if not set on the profile
     if not wearer_boundary:
         from app.models.auth_user import AuthUser as _AuthUser
@@ -161,6 +188,8 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
         speech_style_dominance=persona.speech_style_dominance if persona else None,
         strictness_level=persona.strictness_level if persona else 3,
         hard_limits=hard_limits or None,
+        active_phase=active_phase,
+        lorebook_entries=matched_lore or None,
     ).render()
 
     structured = ai.generate_chat_response(
