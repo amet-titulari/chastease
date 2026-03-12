@@ -55,8 +55,8 @@ async function xpPut(url, payload) {
 }
 
 function xpSwitchStep(next) {
-  xpStep = Math.max(1, Math.min(4, next));
-  statusEl.textContent = `Schritt ${xpStep} von 4`;
+  xpStep = Math.max(1, Math.min(5, next));
+  statusEl.textContent = `Schritt ${xpStep} von 5`;
 
   document.querySelectorAll(".step-tab").forEach((el) => {
     el.classList.toggle("is-active", Number(el.dataset.step) === xpStep);
@@ -65,9 +65,9 @@ function xpSwitchStep(next) {
     el.classList.toggle("is-active", Number(el.dataset.step) === xpStep);
   });
 
-  // Hide "Weiter" on step 3 ("Session erstellen" is the action) and step 4
+  // Hide "Weiter" on step 4 ("Session erstellen" is the action) and step 5
   const nextBtn = document.getElementById("xp-next-step");
-  if (nextBtn) nextBtn.style.display = xpStep >= 3 ? "none" : "";
+  if (nextBtn) nextBtn.style.display = xpStep >= 4 ? "none" : "";
 }
 
 // --- Duration helpers ---
@@ -202,7 +202,7 @@ async function xpLoadPersonaPresets(selectName) {
 
     const chosen = selectName || merged.find((n) => n === "Ametara Titulari") || merged[0];
     if (merged.includes(chosen)) select.value = chosen;
-    document.getElementById("xp-persona-name").value = select.value;
+    if (select.value) xpFillPersonaEditor(select.value);
   } catch (err) {
     select.innerHTML = '<option value="">Fehler beim Laden</option>';
     xpWrite("Fehler Persona Laden", { error: String(err) });
@@ -213,41 +213,23 @@ async function xpLoadPersonaPresets(selectName) {
 
 const _DOMINANCE_STRICTNESS = { soft: 1, supportive: 2, "gentle-dominant": 3, firm: 4, "hard-dominant": 5 };
 
-function xpShowPersonaEditor(mode) {
-  // mode: 'new' | 'edit'
-  const editor = document.getElementById("xp-persona-editor");
-  const title  = document.getElementById("xp-persona-editor-title");
-  editor.classList.remove("is-hidden");
-
-  if (mode === "new") {
-    xpEditPersonaId = null;
-    title.textContent = "Neue Persona anlegen";
-    document.getElementById("xp-pe-name").value = "";
-    document.getElementById("xp-pe-tone").value = "";
-    document.getElementById("xp-pe-dominance").value = "gentle-dominant";
-    document.getElementById("xp-pe-description").value = "";
-    document.getElementById("xp-pe-system-prompt").value = "";
-    document.getElementById("xp-pe-name").focus();
-    return;
-  }
-
-  // edit: look up selected persona
-  const selectedName = document.getElementById("xp-persona-preset").value;
+// Fill the always-visible editor with data for the given persona name
+function xpFillPersonaEditor(selectedName) {
+  const title = document.getElementById("xp-persona-editor-title");
   const dbPersona = xpDbPersonas.find((p) => p.name === selectedName);
   if (dbPersona) {
     xpEditPersonaId = dbPersona.id;
-    title.textContent = `Persona bearbeiten: ${dbPersona.name}`;
+    title.textContent = dbPersona.name;
     document.getElementById("xp-pe-name").value = dbPersona.name || "";
     document.getElementById("xp-pe-tone").value = dbPersona.speech_style_tone || "";
     document.getElementById("xp-pe-dominance").value = dbPersona.speech_style_dominance || "gentle-dominant";
     document.getElementById("xp-pe-description").value = dbPersona.description || "";
     document.getElementById("xp-pe-system-prompt").value = dbPersona.system_prompt || "";
   } else {
-    // Hardcoded preset — pre-fill as new
-    xpEditPersonaId = null;
     const hc = xpHardcodedPresets.find((p) => p.name === selectedName);
-    title.textContent = hc ? `Preset anpassen & speichern: ${hc.name}` : "Persona erstellen";
-    document.getElementById("xp-pe-name").value = hc ? hc.name : selectedName;
+    xpEditPersonaId = null;
+    title.textContent = hc ? hc.name : (selectedName || "Neue Persona");
+    document.getElementById("xp-pe-name").value = hc ? hc.name : (selectedName || "");
     document.getElementById("xp-pe-tone").value = hc ? (hc.speech_style_tone || "") : "";
     document.getElementById("xp-pe-dominance").value = hc ? (hc.speech_style_dominance || "gentle-dominant") : "gentle-dominant";
     document.getElementById("xp-pe-description").value = hc ? (hc.description || "") : "";
@@ -255,9 +237,17 @@ function xpShowPersonaEditor(mode) {
   }
 }
 
-function xpHidePersonaEditor() {
-  document.getElementById("xp-persona-editor").classList.add("is-hidden");
+// Clear editor for a new persona
+function xpClearPersonaEditor() {
   xpEditPersonaId = null;
+  document.getElementById("xp-persona-editor-title").textContent = "Neue Persona";
+  document.getElementById("xp-pe-name").value = "";
+  document.getElementById("xp-pe-tone").value = "";
+  document.getElementById("xp-pe-dominance").value = "gentle-dominant";
+  document.getElementById("xp-pe-description").value = "";
+  document.getElementById("xp-pe-system-prompt").value = "";
+  document.getElementById("xp-persona-preset").value = "";
+  document.getElementById("xp-pe-name").focus();
 }
 
 async function xpSavePersonaEditor() {
@@ -301,10 +291,8 @@ async function xpSavePersonaEditor() {
       saved = data;
     }
     xpWrite("Persona gespeichert", { name: saved.name, id: saved.id });
-    xpHidePersonaEditor();
-    // Reload dropdown and select saved persona
+    // Reload dropdown and select saved persona (also refills editor)
     await xpLoadPersonaPresets(saved.name);
-    document.getElementById("xp-persona-name").value = saved.name;
   } catch (err) {
     xpWrite("Fehler Persona speichern", { error: String(err) });
   } finally {
@@ -330,31 +318,47 @@ async function xpLoadScenarioPresets() {
       select.appendChild(opt);
     });
     const initialScenario = xpScenarioPresets.find((item) => item.key === "amet_titulari_devotion_protocol") || xpScenarioPresets[0];
-    if (initialScenario) select.value = initialScenario.key;
+    if (initialScenario) {
+      select.value = initialScenario.key;
+      xpUpdateScenarioDetail(initialScenario.key);
+    }
   } catch (err) {
     select.innerHTML = '<option value="">Scenario-Fehler</option>';
     xpWrite("Fehler Scenario Presets", { error: String(err) });
   }
 }
 
+function xpUpdateScenarioDetail(key) {
+  const preset = xpScenarioPresets.find((p) => p.key === key);
+  const titleEl = document.getElementById("xp-scenario-title");
+  const summaryEl = document.getElementById("xp-scenario-summary");
+  const focusEl = document.getElementById("xp-scenario-focus");
+  if (!titleEl) return;
+  if (!preset) {
+    titleEl.textContent = "";
+    summaryEl.textContent = "";
+    if (focusEl) focusEl.innerHTML = "";
+    return;
+  }
+  titleEl.textContent = preset.title;
+  summaryEl.textContent = preset.summary;
+  if (focusEl) {
+    focusEl.innerHTML = (preset.focus || []).map((f) => `<span class="xp-focus-chip">${f}</span>`).join("");
+  }
+}
+
 document.getElementById("xp-persona-preset").addEventListener("change", (e) => {
   if (e.target.value) {
-    document.getElementById("xp-persona-name").value = e.target.value;
+    xpFillPersonaEditor(e.target.value);
   }
-  // Close editor when user picks a different persona
-  xpHidePersonaEditor();
 });
 
-document.getElementById("xp-edit-persona-btn").addEventListener("click", () => {
-  xpShowPersonaEditor("edit");
+document.getElementById("xp-scenario-preset").addEventListener("change", (e) => {
+  xpUpdateScenarioDetail(e.target.value);
 });
 
-document.getElementById("xp-new-persona-btn").addEventListener("click", () => {
-  xpShowPersonaEditor("new");
-});
-
+document.getElementById("xp-new-persona-btn").addEventListener("click", xpClearPersonaEditor);
 document.getElementById("xp-pe-save-btn").addEventListener("click", xpSavePersonaEditor);
-document.getElementById("xp-pe-cancel-btn").addEventListener("click", xpHidePersonaEditor);
 
 document.querySelectorAll(".step-tab").forEach((btn) => {
   btn.addEventListener("click", () => xpSwitchStep(Number(btn.dataset.step)));
@@ -362,7 +366,7 @@ document.querySelectorAll(".step-tab").forEach((btn) => {
 
 document.getElementById("xp-prev-step").addEventListener("click", () => xpSwitchStep(xpStep - 1));
 document.getElementById("xp-next-step").addEventListener("click", () => {
-  if (xpStep === 3) {
+  if (xpStep === 4) {
     document.getElementById("xp-create-session")?.click();
   } else {
     xpSwitchStep(xpStep + 1);
@@ -416,7 +420,7 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
     const sealEnabled = document.getElementById("xp-seal-enabled")?.checked || false;
     const sealNumber = sealEnabled ? (document.getElementById("xp-seal-number")?.value?.trim() || null) : null;
     const payload = {
-      persona_name: document.getElementById("xp-persona-name").value,
+      persona_name: document.getElementById("xp-pe-name").value.trim(),
       player_nickname: document.getElementById("xp-player-nickname").value,
       min_duration_seconds: Math.max(60, minSecs),
       max_duration_seconds: noLimit ? null : Math.max(60, maxSecs),

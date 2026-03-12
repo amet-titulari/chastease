@@ -80,7 +80,7 @@
 
 .step-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 0.4rem;
   margin-bottom: 0.8rem;
 }
@@ -89,9 +89,10 @@
   border: 1px solid var(--xp-border);
   background: #101a26;
   color: var(--xp-muted);
-  padding: 0.45rem;
+  padding: 0.38rem 0.15rem;
   border-radius: 10px;
   font-weight: 600;
+  font-size: 0.78rem;
 }
 
 .step-tab.is-active {
@@ -252,10 +253,6 @@ button {
   animation: xp-step 200ms ease-out;
 }
 
-.xp-persona-editor.is-hidden {
-  display: none;
-}
-
 .xp-persona-editor textarea {
   resize: vertical;
   min-height: 60px;
@@ -289,6 +286,70 @@ button {
   background: #1a2a3a !important;
   color: #7d9db8 !important;
   border: 1px solid var(--xp-border) !important;
+}
+
+/* Persona select row with inline + button */
+.xp-select-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.xp-select-label {
+  flex: 1;
+  margin-bottom: 0 !important;
+}
+
+.xp-btn-icon {
+  flex-shrink: 0;
+  padding: 0.55rem 0.75rem !important;
+  width: auto !important;
+  min-width: 36px;
+  font-size: 1.15rem !important;
+  line-height: 1;
+  font-weight: 700 !important;
+}
+
+/* Scenario detail card */
+.xp-scenario-detail {
+  background: rgba(11, 18, 26, 0.6);
+  border: 1px solid var(--xp-border);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  margin: 0.4rem 0 0.8rem;
+  min-height: 60px;
+}
+
+.xp-scenario-title {
+  margin: 0 0 0.3rem;
+  color: #d3deea;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.xp-scenario-summary {
+  margin: 0 0 0.5rem;
+  color: var(--xp-muted);
+  font-size: 0.87rem;
+  line-height: 1.4;
+}
+
+.xp-scenario-focus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.xp-focus-chip {
+  background: #1f3147;
+  border: 1px solid #3f5a7a;
+  color: #8ab8d8;
+  border-radius: 20px;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .duration-max-header {
