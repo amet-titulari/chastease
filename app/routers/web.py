@@ -529,6 +529,18 @@ def contract_view(session_id: int, request: Request, db: Session = Depends(get_d
     )
 
 
+@router.get("/personas", response_class=HTMLResponse)
+def personas_page(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse(
+        request=request,
+        name="personas.html",
+        context={"title": f"{settings.app_name} – Personas"},
+    )
+
+
 @router.get("/api/settings/summary")
 def settings_summary(request: Request, db: Session = Depends(get_db)):
     user = _get_current_user(request, db)

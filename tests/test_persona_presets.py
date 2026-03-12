@@ -3,15 +3,18 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
-def test_persona_presets_include_ballet_sub_ella():
+def test_persona_presets_include_core_personas():
     with TestClient(app) as client:
         resp = client.get("/api/personas/presets")
         assert resp.status_code == 200
         data = resp.json()
         assert "items" in data
-        assert any(item["name"] == "Ballet Sub Ella" for item in data["items"])
-        ella = next(item for item in data["items"] if item["key"] == "ballet_sub_ella")
-        assert ella["strictness_level"] >= 1
+        keys = {item["key"] for item in data["items"]}
+        assert "ametara_titulari" in keys
+        assert "iron_coach_mara" in keys
+        assert "calm_guardian_lina" in keys
+        ametara = next(item for item in data["items"] if item["key"] == "ametara_titulari")
+        assert ametara["strictness_level"] >= 1
 
 
 def test_scenario_presets_and_card_schema_exist():
@@ -34,9 +37,9 @@ def test_map_external_card_payload():
         "schema_version": 1,
         "characters": [
             {
-                "display_name": "Amet Titulari",
+                "display_name": "Ametara Titulari",
                 "persona": {
-                    "name": "Amet Titulari",
+                    "name": "Ametara Titulari",
                     "description": "Warm und praezise fuehrende Persona.",
                     "goals": [
                         "Vertiefe Hingabe und Verbindung.",
@@ -53,7 +56,7 @@ def test_map_external_card_payload():
         ],
         "scenarios": [
             {
-                "title": "Amet Titulari Devotion Protocol",
+                "title": "Ametara Titulari Devotion Protocol",
                 "summary": "Langfristige Chastity-Rahmung mit Ritualen.",
                 "tags": ["devotion", "ritual"],
                 "lorebook": [{"key": "session-rules", "content": "Regeln"}],
@@ -67,10 +70,10 @@ def test_map_external_card_payload():
         assert resp.status_code == 200
         data = resp.json()
         assert data["schema_version"] == "0.1.2"
-        assert data["persona_preset"]["name"] == "Amet Titulari"
+        assert data["persona_preset"]["name"] == "Ametara Titulari"
         assert data["persona_preset"]["strictness_level"] == 3
         assert data["setup_defaults"]["role_style"] == "supportive"
-        assert data["scenario_preset"]["title"] == "Amet Titulari Devotion Protocol"
+        assert data["scenario_preset"]["title"] == "Ametara Titulari Devotion Protocol"
 
 
 def test_map_card_requires_character_entry():

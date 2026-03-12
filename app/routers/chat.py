@@ -157,8 +157,10 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
         wearer_goal=wearer_goal,
         wearer_boundary=wearer_boundary,
         persona_system_prompt=persona.system_prompt if persona else None,
-        communication_style=persona.communication_style if persona else None,
+        speech_style_tone=persona.speech_style_tone if persona else None,
+        speech_style_dominance=persona.speech_style_dominance if persona else None,
         strictness_level=persona.strictness_level if persona else 3,
+        hard_limits=hard_limits or None,
     ).render()
 
     structured = ai.generate_chat_response(
@@ -224,8 +226,13 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
                 continue
 
             description_value = str(action.get("description")) if action.get("description") else ""
-            searchable = f"{title} {description_value}".lower()
-            if any(limit in searchable for limit in hard_limits):
+            raw_criteria = str(action.get("verification_criteria") or "")
+            searchable = f"{title} {description_value} {raw_criteria}".lower()
+            if any(
+                limit in searchable
+                or any(w in searchable for w in limit.split() if len(w) > 4)
+                for limit in hard_limits
+            ):
                 continue
 
             deadline_minutes = action.get("deadline_minutes")

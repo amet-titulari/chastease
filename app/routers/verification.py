@@ -93,22 +93,40 @@ async def upload_verification(
             if status == "confirmed":
                 task.status = "completed"
                 task.completed_at = now
+                content = f"✓ Verifikation bestätigt – Task '{task.title}' abgeschlossen."
+                if analysis:
+                    content += f" {analysis}"
                 db.add(Message(
                     session_id=session_id,
                     role="system",
-                    content=f"Task '{task.title}' per Foto-Verifikation abgeschlossen.",
+                    content=content,
                     message_type="task_reward",
                 ))
             else:
                 task.status = "failed"
                 TaskService.apply_task_consequence(db=db, session_obj=_load_session(db, session_id), task=task, now=now)
+                content = f"⚠ Verifikation abgelehnt – Task '{task.title}' fehlgeschlagen."
+                if analysis:
+                    content += f" {analysis}"
                 db.add(Message(
                     session_id=session_id,
                     role="system",
-                    content=f"Task '{task.title}' fehlgeschlagen: Verifikation nicht bestätigt.",
+                    content=content,
                     message_type="task_failed",
                 ))
             db.add(task)
+    else:
+        # Standalone verification (no linked task) – always write a result message
+        status_label = {"confirmed": "✓ bestätigt", "suspicious": "⚠ verdächtig"}.get(status, "⏳ ausstehend")
+        content = f"Verifikation {status_label}."
+        if analysis:
+            content += f" {analysis}"
+        db.add(Message(
+            session_id=session_id,
+            role="system",
+            content=content,
+            message_type="verification_result",
+        ))
 
     db.add(record)
     db.commit()

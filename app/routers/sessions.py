@@ -473,7 +473,12 @@ def export_contract(
 
 @router.post("")
 def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db)) -> dict:
-    persona = Persona(name=payload.persona_name)
+    # Reuse an existing persona with the same name rather than creating a new stub
+    persona = db.query(Persona).filter(Persona.name == payload.persona_name).first()
+    if not persona:
+        persona = Persona(name=payload.persona_name)
+        db.add(persona)
+        db.flush()
     prefs: dict = {}
     if payload.scenario_preset:
         prefs["scenario_preset"] = payload.scenario_preset
@@ -488,7 +493,7 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
         experience_level=payload.experience_level or "beginner",
         preferences_json=json.dumps(prefs),
     )
-    db.add_all([persona, player])
+    db.add(player)
     db.flush()
 
     session_obj = SessionModel(

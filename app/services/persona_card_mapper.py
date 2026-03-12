@@ -8,15 +8,14 @@ def _slugify(value: str, fallback: str = "imported_persona") -> str:
 
 def _style_to_strictness(dominance_style: str) -> int:
     token = dominance_style.strip().lower()
-    if token in {"strict", "hard-dominant"}:
-        return 5
-    if token in {"dominant", "firm"}:
-        return 4
-    if token in {"gentle-dominant", "balanced"}:
-        return 3
-    if token in {"supportive", "soft"}:
-        return 2
-    return 3
+    mapping = {
+        "soft": 1,
+        "supportive": 2,
+        "gentle-dominant": 3, "balanced": 3,
+        "firm": 4, "dominant": 4,
+        "strict": 5, "hard-dominant": 5,
+    }
+    return mapping.get(token, 3)
 
 
 def _map_role_style(tone: str, dominance_style: str) -> str:
@@ -82,9 +81,6 @@ def map_external_persona_card(payload: dict) -> dict:
     strictness_level = _style_to_strictness(dominance_style)
     role_style = _map_role_style(tone=tone, dominance_style=dominance_style)
 
-    communication_parts = [tone.strip(), dominance_style.strip()]
-    communication_style = ", ".join(part for part in communication_parts if part)
-
     lorebook_items = scenario.get("lorebook", []) if isinstance(scenario, dict) else []
     if not isinstance(lorebook_items, list):
         lorebook_items = []
@@ -99,7 +95,8 @@ def map_external_persona_card(payload: dict) -> dict:
             "key": _slugify(name),
             "name": name,
             "description": description,
-            "communication_style": communication_style,
+            "speech_style_tone": tone.strip() or None,
+            "speech_style_dominance": dominance_style.strip() or None,
             "strictness_level": strictness_level,
             "system_prompt": (
                 f"Du bist {name}. Ton={tone}. Dominance={dominance_style}. "

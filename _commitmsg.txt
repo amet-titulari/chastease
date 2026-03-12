@@ -1,0 +1,14 @@
+feat: persona speech_style refactor, management UI, export/import & play UX fixes
+
+- Split communication_style into speech_style_tone + speech_style_dominance (DB migration 0005)
+- Strenge slider replaced by auto-derivation from Dominanzstil (5 canonical values)
+- Full persona CRUD management page (/personas) with preset loader, export, import
+- Export/import uses SillyTavern-compatible character_card JSON schema (v0.1.2)
+- Rename Amet Titulari -> Ametara Titulari everywhere incl. JSON files
+- Fix hard limit enforcement: injected into AI system prompt + word-level matching
+- Play mode: WS button moved to top-left, LLM settings removed from sidebar (link to /profile)
+- Play mode: task cards inline after AI message, no race condition, chat refresh on task confirm
+- Verification result preserved in chat after photo upload
+- create_session reuses existing persona by name instead of creating stubs
+- Cleaned up 34 test-generated stub personas from DB
+- Reduce presets to 3 (Ametara, Iron Coach Mara, Calm Guardian Lina)

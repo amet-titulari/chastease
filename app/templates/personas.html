@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/profile.css" />
+<style>
+  .persona-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
+
+  .persona-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .persona-card-info { flex: 1; min-width: 0; }
+  .persona-card-name {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #d8e8f8;
+    margin: 0 0 0.15rem;
+  }
+  .persona-card-meta {
+    font-size: 0.78rem;
+    color: var(--color-text-muted, #8899aa);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .persona-card-actions { display: flex; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; }
+  .persona-card-actions button { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+
+  .import-zone {
+    border: 2px dashed rgba(255,255,255,0.15);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    font-size: 0.88rem;
+    color: var(--color-text-muted, #8899aa);
+  }
+  .import-zone:hover, .import-zone.drag-over { border-color: rgba(130,180,255,0.45); color: #d0e8ff; }
+  .import-zone input[type=file] { display: none; }
+
+  .form-panel {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 1.1rem 1.2rem;
+    margin-top: 1rem;
+  }
+  .form-panel h3 { margin: 0 0 0.8rem; font-size: 1rem; color: #d8e8f8; }
+
+  .strictness-label { font-size: 0.82rem; color: var(--color-text-muted, #8899aa); min-width: 4rem; }
+
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+  .preset-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 0.5rem 0.7rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .preset-btn:hover { background: rgba(255,255,255,0.1); }
+  .preset-btn-name { font-size: 0.88rem; font-weight: 600; color: #d0e4f8; display: block; }
+  .preset-btn-style { font-size: 0.74rem; color: var(--color-text-muted, #8899aa); display: block; margin-top: 0.15rem; }
+
+  .pm-notice { font-size: 0.82rem; color: var(--color-text-muted, #8899aa); margin-top: 0.3rem; }
+  .empty-hint { text-align: center; color: var(--color-text-muted, #8899aa); padding: 1.5rem 0; font-size: 0.9rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="profile-shell full">
+  <section class="profile-card">
+    <p class="eyebrow">Persona-Verwaltung</p>
+    <h1>Keyholderinnen</h1>
+    <p class="subline">Erstelle, bearbeite und verwalte deine Personas. Du kannst sie beim Starten einer Session auswählen.</p>
+
+    <div id="pm-status"></div>
+
+    <!-- ── Toolbar ── -->
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+      <button type="button" id="pm-export-all-btn" class="ghost" style="font-size:0.82rem;">&#8659; Alle exportieren</button>
+      <label class="import-zone" id="pm-import-zone" title="JSON-Datei importieren">
+        <input type="file" id="pm-import-input" accept=".json,application/json" multiple />
+        &#8657; Importieren (.json)
+      </label>
+    </div>
+
+    <!-- ── Persona-Liste ── -->
+    <div class="persona-list" id="pm-list">
+      <div class="empty-hint">Wird geladen…</div>
+    </div>
+
+    <!-- ── Neue Persona / Bearbeiten ── -->
+    <div class="form-panel" id="pm-form-panel">
+      <h3 id="pm-form-title">Neue Persona erstellen</h3>
+
+      <!-- Preset-Auswahl -->
+      <details id="pm-preset-section">
+        <summary style="cursor:pointer;font-size:0.8rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--color-text-muted,#8899aa);padding:0.3rem 0;">
+          Aus Preset laden
+        </summary>
+        <div class="preset-grid" id="pm-preset-grid">
+          <div class="empty-hint" style="grid-column:1/-1;">Wird geladen…</div>
+        </div>
+      </details>
+
+      <hr class="section-divider" />
+
+      <form id="pm-form" class="stack" autocomplete="off">
+        <input type="hidden" id="pm-edit-id" value="" />
+
+        <label>Name *
+          <input id="pm-name" type="text" maxlength="120" required placeholder="z.B. Ametara Titulari" />
+        </label>
+
+        <label>Ton
+          <input id="pm-tone" type="text" maxlength="60" list="pm-tone-list"
+            placeholder="z.B. warm, calm, precise, direct" />
+          <datalist id="pm-tone-list">
+            <option value="warm"></option>
+            <option value="calm"></option>
+            <option value="neutral"></option>
+            <option value="precise"></option>
+            <option value="direct"></option>
+            <option value="commanding"></option>
+            <option value="playful"></option>
+            <option value="cultivated"></option>
+          </datalist>
+        </label>
+
+        <label>Dominanzstil
+          <select id="pm-dominance" onchange="pmAutoStrictness(this.value)">
+            <option value="">— nicht gesetzt —</option>
+            <option value="soft">soft – sehr sanft</option>
+            <option value="supportive">supportive – sanft</option>
+            <option value="gentle-dominant">gentle-dominant – ausgewogen</option>
+            <option value="firm">firm – streng</option>
+            <option value="hard-dominant">hard-dominant – sehr streng</option>
+          </select>
+          <small style="color:var(--color-text-muted,#8899aa);font-size:0.75rem;">Bestimmt automatisch die Strenge (1–5)</small>
+        </label>
+
+        <label>Beschreibung
+          <textarea id="pm-description" rows="3" maxlength="4000"
+            placeholder="z.B. Du bist … Deine Kernmaxime: …"></textarea>
+        </label>
+
+        <label>System-Prompt
+          <textarea id="pm-system-prompt" rows="4" maxlength="4000"
+            placeholder="Der Prompt mit dem die KI als diese Persona instruiert wird."></textarea>
+        </label>
+
+        <input type="hidden" id="pm-strictness" value="3" />
+
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+          <button type="submit" id="pm-save-btn">Persona speichern</button>
+          <button type="button" id="pm-cancel-btn" class="ghost" style="display:none;">Abbrechen</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="action-row" style="margin-top:1rem;">
+      <a class="ghost" href="/profile">Profil</a>
+      <a class="ghost" href="/experience">Experience</a>
+    </div>
+  </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const STRICTNESS_LABELS = ["", "Sehr sanft", "Sanft", "Ausgewogen", "Streng", "Sehr streng"];
+
+// ── Status helper ──
+function pmStatus(msg, isError = false) {
+  const el = document.getElementById("pm-status");
+  el.innerHTML = `<p class="status ${isError ? "error" : "success"}">${msg}</p>`;
+  setTimeout(() => { el.innerHTML = ""; }, 4000);
+}
+
+// ── API helpers ──
+async function pmFetch(url, options = {}) {
+  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...options });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || res.statusText);
+  }
+  return res.json();
+}
+
+// ── Render list ──
+function pmRenderList(items) {
+  const container = document.getElementById("pm-list");
+  if (!items.length) {
+    container.innerHTML = `<div class="empty-hint">Noch keine Personas gespeichert. Erstelle deine erste unten.</div>`;
+    return;
+  }
+  container.innerHTML = items.map(p => `
+    <div class="persona-card" data-id="${p.id}">
+      <div class="persona-card-info">
+        <p class="persona-card-name">${escHtml(p.name)}</p>
+        <p class="persona-card-meta">
+          ${[p.speech_style_tone, p.speech_style_dominance].filter(Boolean).map(escHtml).join(" · ") || ""}
+          ${(p.speech_style_tone || p.speech_style_dominance) ? " · " : ""}
+          Strenge ${p.strictness_level} – ${STRICTNESS_LABELS[p.strictness_level] || ""}
+        </p>
+      </div>
+      <div class="persona-card-actions">
+        <button onclick="pmStartEdit(${p.id})" class="ghost">Bearbeiten</button>
+        <button onclick="pmExportOne(${p.id}, '${escHtml(p.name)}')">&#8659; Export</button>
+        <button onclick="pmDelete(${p.id}, '${escHtml(p.name)}')" class="warn">L&ouml;schen</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+// ── Load list ──
+async function pmLoadList() {
+  try {
+    const data = await pmFetch("/api/personas");
+    pmRenderList(data.items);
+  } catch (e) {
+    document.getElementById("pm-list").innerHTML =
+      `<div class="empty-hint">Fehler beim Laden: ${e.message}</div>`;
+  }
+}
+
+// ── Load presets ──
+async function pmLoadPresets() {
+  try {
+    const data = await pmFetch("/api/personas/presets");
+    const grid = document.getElementById("pm-preset-grid");
+    if (!data.items.length) { grid.innerHTML = ""; return; }
+    grid.innerHTML = data.items.map(p => `
+      <button type="button" class="preset-btn" onclick="pmLoadPreset(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+        <span class="preset-btn-name">${escHtml(p.name)}</span>
+        <span class="preset-btn-style">${escHtml([p.speech_style_tone, p.speech_style_dominance].filter(Boolean).join(", ") || "")}</span>
+      </button>
+    `).join("");
+  } catch (e) {
+    document.getElementById("pm-preset-grid").innerHTML = `<span style="font-size:0.8rem;color:#8899aa;">Presets nicht verfügbar.</span>`;
+  }
+}
+
+function pmLoadPreset(preset) {
+  pmResetForm();
+  document.getElementById("pm-name").value = preset.name || "";
+  document.getElementById("pm-tone").value = preset.speech_style_tone || "";
+  const dom = preset.speech_style_dominance || "";
+  document.getElementById("pm-dominance").value = dom;
+  pmAutoStrictness(dom);
+  document.getElementById("pm-description").value = preset.description || "";
+  document.getElementById("pm-system-prompt").value = preset.system_prompt || "";
+  document.getElementById("pm-form-title").textContent = `Aus Preset: ${preset.name}`;
+  document.getElementById("pm-cancel-btn").style.display = "inline-flex";
+  document.getElementById("pm-preset-section").removeAttribute("open");
+}
+
+// ── Edit ──
+async function pmStartEdit(id) {
+  try {
+    const p = await pmFetch(`/api/personas/${id}`);
+    document.getElementById("pm-edit-id").value = p.id;
+    document.getElementById("pm-name").value = p.name || "";
+    document.getElementById("pm-tone").value = p.speech_style_tone || "";
+    const dom = p.speech_style_dominance || "";
+    document.getElementById("pm-dominance").value = dom;
+    pmAutoStrictness(dom);
+    document.getElementById("pm-description").value = p.description || "";
+    document.getElementById("pm-system-prompt").value = p.system_prompt || "";
+    document.getElementById("pm-form-title").textContent = `Persona bearbeiten: ${p.name}`;
+    document.getElementById("pm-save-btn").textContent = "Änderungen speichern";
+    document.getElementById("pm-cancel-btn").style.display = "inline-flex";
+    document.getElementById("pm-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    pmStatus("Fehler: " + e.message, true);
+  }
+}
+
+// ── Delete ──
+async function pmDelete(id, name) {
+  if (!confirm(`Persona "${name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
+  try {
+    await pmFetch(`/api/personas/${id}`, { method: "DELETE" });
+    pmStatus(`Persona "${name}" gelöscht.`);
+    pmLoadList();
+  } catch (e) {
+    pmStatus("Fehler beim Löschen: " + e.message, true);
+  }
+}
+
+// ── Save (create or update) ──
+document.getElementById("pm-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const editId = document.getElementById("pm-edit-id").value;
+  const payload = {
+    name: document.getElementById("pm-name").value.trim(),
+    speech_style_tone: document.getElementById("pm-tone").value.trim() || null,
+    speech_style_dominance: document.getElementById("pm-dominance").value || null,
+    description: document.getElementById("pm-description").value.trim() || null,
+    system_prompt: document.getElementById("pm-system-prompt").value.trim() || null,
+    strictness_level: parseInt(document.getElementById("pm-strictness").value, 10),
+  };
+
+  const btn = document.getElementById("pm-save-btn");
+  btn.disabled = true;
+  try {
+    if (editId) {
+      await pmFetch(`/api/personas/${editId}`, { method: "PUT", body: JSON.stringify(payload) });
+      pmStatus(`Persona "${payload.name}" aktualisiert.`);
+    } else {
+      await pmFetch("/api/personas", { method: "POST", body: JSON.stringify(payload) });
+      pmStatus(`Persona "${payload.name}" erstellt.`);
+    }
+    pmResetForm();
+    pmLoadList();
+  } catch (e) {
+    pmStatus("Fehler: " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── Cancel ──
+document.getElementById("pm-cancel-btn").addEventListener("click", pmResetForm);
+
+function pmResetForm() {
+  document.getElementById("pm-edit-id").value = "";
+  document.getElementById("pm-form").reset();
+  document.getElementById("pm-tone").value = "";
+  document.getElementById("pm-dominance").value = "";
+  document.getElementById("pm-strictness").value = "3";
+  document.getElementById("pm-form-title").textContent = "Neue Persona erstellen";
+  document.getElementById("pm-save-btn").textContent = "Persona speichern";
+  document.getElementById("pm-cancel-btn").style.display = "none";
+}
+
+function escHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+// ── Auto-strictness from dominance style ──
+const DOMINANCE_STRICTNESS = {
+  "soft": 1, "supportive": 2, "gentle-dominant": 3, "balanced": 3,
+  "firm": 4, "dominant": 4, "strict": 5, "hard-dominant": 5,
+};
+function pmAutoStrictness(dominance) {
+  const val = DOMINANCE_STRICTNESS[dominance];
+  if (val !== undefined) {
+    document.getElementById("pm-strictness").value = val;
+  }
+}
+
+// ── Export single ──
+function pmExportOne(id, name) {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `persona-${id}`;
+  const a = document.createElement("a");
+  a.href = `/api/personas/${id}/export`;
+  a.download = `persona-${slug}.json`;
+  a.click();
+}
+
+// ── Export all ──
+document.getElementById("pm-export-all-btn").addEventListener("click", () => {
+  const a = document.createElement("a");
+  a.href = "/api/personas/export";
+  a.download = "personas-export.json";
+  a.click();
+});
+
+// ── Import ──
+async function pmImportFile(file) {
+  let raw;
+  try {
+    raw = JSON.parse(await file.text());
+  } catch (_) {
+    pmStatus(`${file.name}: Ungültiges JSON.`, true);
+    return 0;
+  }
+  // Support single card or collection
+  const cards = raw.kind === "persona_collection" && Array.isArray(raw.personas)
+    ? raw.personas
+    : [raw];
+  let imported = 0;
+  for (const card of cards) {
+    try {
+      await pmFetch("/api/personas/import", { method: "POST", body: JSON.stringify({ card }) });
+      imported++;
+    } catch (e) {
+      pmStatus(`Fehler beim Importieren von "${card.name || "?"}": ${e.message}`, true);
+    }
+  }
+  return imported;
+}
+
+const pmImportInput = document.getElementById("pm-import-input");
+const pmImportZone = document.getElementById("pm-import-zone");
+
+pmImportInput.addEventListener("change", async () => {
+  let total = 0;
+  for (const file of pmImportInput.files) {
+    total += await pmImportFile(file);
+  }
+  pmImportInput.value = "";
+  if (total > 0) {
+    pmStatus(`${total} Persona(s) importiert.`);
+    pmLoadList();
+  }
+});
+
+pmImportZone.addEventListener("dragover", (e) => { e.preventDefault(); pmImportZone.classList.add("drag-over"); });
+pmImportZone.addEventListener("dragleave", () => pmImportZone.classList.remove("drag-over"));
+pmImportZone.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  pmImportZone.classList.remove("drag-over");
+  const files = [...(e.dataTransfer?.files || [])].filter(f => f.name.endsWith(".json"));
+  let total = 0;
+  for (const file of files) total += await pmImportFile(file);
+  if (total > 0) { pmStatus(`${total} Persona(s) importiert.`); pmLoadList(); }
+});
+
+// ── Init ──
+pmLoadList();
+pmLoadPresets();
+</script>
+{% endblock %}

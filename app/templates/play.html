@@ -12,6 +12,7 @@
 
   <header class="play-header">
     <div class="play-header-left">
+      <button id="play-connect-ws" class="play-ws-btn" type="button" title="Live verbinden">&#9679;</button>
       <span class="play-persona">{{ persona_name }}</span>
       <span class="play-sep">&middot;</span>
       <span class="play-session-label">Session #{{ session_id }}</span>
@@ -20,7 +21,6 @@
     <div class="play-header-right">
       <span class="play-timer-label">Verbleibend</span>
       <code id="play-countdown" class="play-countdown">—</code>
-      <button id="play-connect-ws" class="play-ws-btn" type="button" title="Live verbinden">&#9679;</button>
 
       <!-- Tasks Dropdown -->
       <div class="play-tasks-menu" id="play-tasks-menu">
@@ -105,51 +105,11 @@
         <dt>Stil</dt><dd id="psd-style">—</dd>
         <dt>Ziel</dt><dd id="psd-goal">—</dd>
         <dt>Limits</dt><dd id="psd-boundary">—</dd>
+        <dt>LLM</dt><dd id="psd-llm-provider-display">—</dd>
+        <dt>Modell</dt><dd id="psd-llm-chat-display">—</dd>
+        <dt>API-Key</dt><dd id="psd-llm-key-display">—</dd>
       </dl>
-      <a href="/profile" class="psd-link">Vollst&auml;ndiges Profil &rarr;</a>
-    </section>
-
-    <section class="psd-section">
-      <h4>LLM Einstellungen</h4>
-      <div class="psd-field">
-        <label>Provider
-          <select id="psd-llm-provider">
-            <option value="stub">stub (Testmodus)</option>
-            <option value="custom">custom (OpenAI-kompatibel)</option>
-            <option value="ollama">ollama (lokal)</option>
-          </select>
-        </label>
-      </div>
-      <div class="psd-field">
-        <label>API URL
-          <input id="psd-llm-url" type="url" placeholder="https://api.x.ai/v1/chat/completions" />
-        </label>
-      </div>
-      <div class="psd-field">
-        <label>API Key
-          <input id="psd-llm-key" type="password" placeholder="leer lassen um bestehenden zu behalten" autocomplete="new-password" />
-        </label>
-      </div>
-      <div class="psd-field">
-        <label>Chat-Modell
-          <input id="psd-llm-chat" placeholder="z.B. grok-3-fast" />
-        </label>
-      </div>
-      <div class="psd-field">
-        <label>Vision-Modell
-          <input id="psd-llm-vision" placeholder="z.B. grok-2-vision-1212" />
-        </label>
-      </div>
-      <div class="psd-field psd-field--row">
-        <label>Aktiv
-          <input id="psd-llm-active" type="checkbox" />
-        </label>
-      </div>
-      <div class="psd-actions">
-        <button id="psd-llm-save" type="button">Speichern</button>
-        <button id="psd-llm-test" type="button" class="ghost">Verbindung testen</button>
-      </div>
-      <p id="psd-llm-feedback" class="psd-feedback"></p>
+      <a href="/profile" class="psd-link">Vollst&auml;ndiges Profil &amp; LLM-Einstellungen &rarr;</a>
     </section>
 
     <section class="psd-section">

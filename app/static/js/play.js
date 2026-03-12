@@ -94,44 +94,74 @@ async function plPost(url, payload) {
 
 // Pending tasks state – kept so plRenderChat can append cards after each reload
 let _pendingTaskItems = [];
+// Last known message list – used by plInstallInlineTaskCards for re-render without full HTTP reload
+let _lastMessageItems = [];
 
 // -- Render chat --
 function plRenderChat(items) {
   if (!chatTimeline) return;
-  if (!Array.isArray(items) || !items.length) {
+  _lastMessageItems = Array.isArray(items) ? items : [];
+  if (!_lastMessageItems.length) {
     chatTimeline.innerHTML = "<p>Noch keine Nachrichten.</p>";
-    plAppendActionCards();
+    plInstallInlineTaskCards();
     return;
   }
-  chatTimeline.innerHTML = items
+  chatTimeline.innerHTML = _lastMessageItems
     .slice(-80)
     .map((item) => {
       const role = item.role || "system";
       const cssRole = role === "assistant" ? "from-ai" : "from-user";
       const content = String(item.content || "").replace(/</g, "&lt;");
       const ts = item.created_at ? new Date(item.created_at).toLocaleTimeString("de-DE") : "";
+      // Store task IDs on task_assigned bubbles so cards can be injected inline
+      let taskAttr = "";
+      if (item.message_type === "task_assigned") {
+        const ids = (item.content || "").match(/\d+/g) || [];
+        taskAttr = ` data-msg-type="task_assigned" data-task-ids="${ids.join(",")}"`;
+      }
       return `
-        <div class="chat-bubble ${cssRole}">
+        <div class="chat-bubble ${cssRole}"${taskAttr}>
           <div class="bubble-body">${content}</div>
           <div class="bubble-meta">${role}${ts ? " &middot; " + ts : ""}</div>
         </div>`;
     })
     .join("");
-  plAppendActionCards();
+  plInstallInlineTaskCards();
   chatTimeline.scrollTop = chatTimeline.scrollHeight;
 }
 
-function plAppendActionCards() {
+// Insert task action cards inline after their task_assigned message (slide-up behaviour)
+function plInstallInlineTaskCards() {
   if (!chatTimeline) return;
-  const existing = chatTimeline.querySelector(".play-action-cards");
-  if (existing) existing.remove();
+  chatTimeline.querySelectorAll(".play-action-cards").forEach((w) => w.remove());
   if (!_pendingTaskItems.length) return;
-  const wrapper = document.createElement("div");
-  wrapper.className = "play-action-cards";
-  wrapper.innerHTML = plBuildActionCards(_pendingTaskItems);
-  chatTimeline.appendChild(wrapper);
-  plAttachActionCardHandlers(wrapper);
-  chatTimeline.scrollTop = chatTimeline.scrollHeight;
+
+  const pendingById = {};
+  _pendingTaskItems.forEach((t) => { pendingById[t.id] = t; });
+  const renderedIds = new Set();
+
+  // Place each card inline, right after its task_assigned system message
+  chatTimeline.querySelectorAll("[data-msg-type='task_assigned']").forEach((bubble) => {
+    const rawIds = (bubble.dataset.taskIds || "").split(",").map(Number).filter(Boolean);
+    const cards = rawIds
+      .filter((id) => pendingById[id] && !renderedIds.has(id))
+      .map((id) => { renderedIds.add(id); return plBuildSingleActionCard(pendingById[id]); });
+    if (!cards.length) return;
+    const wrapper = document.createElement("div");
+    wrapper.className = "play-action-cards";
+    wrapper.innerHTML = cards.join("");
+    bubble.after(wrapper);
+    plAttachActionCardHandlers(wrapper);
+  });
+
+  // Fallback: tasks not yet linked to a task_assigned message (edge case)
+  const unrendered = _pendingTaskItems.filter((t) => !renderedIds.has(t.id));
+  if (!unrendered.length) return;
+  const fallback = document.createElement("div");
+  fallback.className = "play-action-cards";
+  fallback.innerHTML = unrendered.map(plBuildSingleActionCard).join("");
+  chatTimeline.appendChild(fallback);
+  plAttachActionCardHandlers(fallback);
 }
 
 // -- Render tasks --
@@ -152,52 +182,53 @@ function plBuildTaskCards(items) {
     .join("");
 }
 
+// Build a single action card HTML string
+function plBuildSingleActionCard(item) {
+  const title = String(item.title || "").replace(/</g, "&lt;");
+  const criteria = String(item.verification_criteria || "").replace(/"/g, "&quot;");
+  const isVerify = !!item.requires_verification;
+  const criteriaHtml =
+    isVerify && item.verification_criteria
+      ? `<p class="ac-hint">&#128203; ${String(item.verification_criteria).replace(/</g, "&lt;")}</p>`
+      : "";
+  const actions = isVerify
+    ? `<button class="ac-btn ac-btn--photo" data-action="verify">&#128247; Foto senden</button>
+       <button class="ac-btn ac-btn--fail" data-action="fail">&#10007; Fail</button>`
+    : `<button class="ac-btn ac-btn--done" data-action="complete">&#10003; Erledigt</button>
+       <button class="ac-btn ac-btn--fail" data-action="fail">&#10007; Fail</button>`;
+  const uploadArea = isVerify
+    ? `<div class="ac-upload is-hidden">
+        <p class="ac-seal-row" style="display:none">Plombe: <code class="ac-seal-code"></code></p>
+        <label class="ac-file-label">
+          <input type="file" accept="image/*" capture="environment" class="ac-file-input" />
+          <span>Foto w&auml;hlen</span>
+        </label>
+        <button class="ac-submit-btn" type="button">Hochladen &amp; Pr&uuml;fen</button>
+      </div>`
+    : "";
+  return `
+    <div class="action-card ${isVerify ? "action-card--verify" : "action-card--task"}"
+         data-task-id="${item.id}"
+         data-requires-verification="${isVerify ? "1" : ""}"
+         data-verification-criteria="${criteria}">
+      <div class="ac-header">
+        <span class="ac-label">${isVerify ? "&#128247; Verifikation" : "&#128203; Task"}</span>
+        <span class="ac-title">${title}</span>
+      </div>
+      ${criteriaHtml}
+      <div class="ac-actions">${actions}</div>
+      ${uploadArea}
+    </div>`;
+}
+
 // Action cards: full interactive cards rendered above the chat input
 function plBuildActionCards(items) {
   const pending = Array.isArray(items) ? items.filter((i) => i.status === "pending") : [];
-  if (!pending.length) return "";
-  return pending
-    .map((item) => {
-      const title = String(item.title || "").replace(/</g, "&lt;");
-      const criteria = String(item.verification_criteria || "").replace(/"/g, "&quot;");
-      const isVerify = !!item.requires_verification;
-      const criteriaHtml =
-        isVerify && item.verification_criteria
-          ? `<p class="ac-hint">&#128203; ${String(item.verification_criteria).replace(/</g, "&lt;")}</p>`
-          : "";
-      const actions = isVerify
-        ? `<button class="ac-btn ac-btn--photo" data-action="verify">&#128247; Foto senden</button>
-           <button class="ac-btn ac-btn--fail" data-action="fail">&#10007; Fail</button>`
-        : `<button class="ac-btn ac-btn--done" data-action="complete">&#10003; Erledigt</button>
-           <button class="ac-btn ac-btn--fail" data-action="fail">&#10007; Fail</button>`;
-      const uploadArea = isVerify
-        ? `<div class="ac-upload is-hidden">
-            <p class="ac-seal-row" style="display:none">Plombe: <code class="ac-seal-code"></code></p>
-            <label class="ac-file-label">
-              <input type="file" accept="image/*" capture="environment" class="ac-file-input" />
-              <span>Foto w&auml;hlen</span>
-            </label>
-            <button class="ac-submit-btn" type="button">Hochladen &amp; Pr&uuml;fen</button>
-          </div>`
-        : "";
-      return `
-        <div class="action-card ${isVerify ? "action-card--verify" : "action-card--task"}"
-             data-task-id="${item.id}"
-             data-requires-verification="${isVerify ? "1" : ""}"
-             data-verification-criteria="${criteria}">
-          <div class="ac-header">
-            <span class="ac-label">${isVerify ? "&#128247; Verifikation" : "&#128203; Task"}</span>
-            <span class="ac-title">${title}</span>
-          </div>
-          ${criteriaHtml}
-          <div class="ac-actions">${actions}</div>
-          ${uploadArea}
-        </div>`;
-    })
-    .join("");
+  return pending.map(plBuildSingleActionCard).join("");
 }
 
 async function plSubmitVerificationCard(card) {
+  const taskId = Number(card.dataset.taskId || 0);
   const verifyId = card.dataset.verifyId;
   const sealNumber = card.dataset.verifySeal || null;
   if (!verifyId) return;
@@ -228,7 +259,12 @@ async function plSubmitVerificationCard(card) {
         data.analysis ? `<p class="ac-hint">${String(data.analysis).replace(/</g, "&lt;")}</p>` : ""
       }</div>`;
     }
-    await plListTasks();
+    // Pre-remove from pending so the card doesn't flash back on chat reload
+    if (taskId && data.status === "confirmed") {
+      _pendingTaskItems = _pendingTaskItems.filter((t) => t.id !== taskId);
+    }
+    await plLoadChat();   // shows backend result message in chat timeline
+    await plListTasks();  // syncs pending list
     plWrite("Verifikation", data);
   } catch (err) {
     plWrite("Fehler Upload", { error: String(err) });
@@ -288,7 +324,10 @@ function plAttachActionCardHandlers(container) {
       const status = action === "complete" ? "completed" : "failed";
       try {
         await plPost(`/api/sessions/${SESSION_ID}/tasks/${taskId}/status`, { status });
-        await plListTasks();
+        // Immediately hide the card before reload to avoid flicker
+        _pendingTaskItems = _pendingTaskItems.filter((t) => t.id !== taskId);
+        await plLoadChat();   // shows task_reward / consequence message
+        await plListTasks();  // syncs full pending list
       } catch (err) {
         plWrite("Fehler Task-Update", { error: String(err) });
       }
@@ -303,8 +342,8 @@ function plRenderTasks(items) {
   // Store for re-use when chat is re-rendered
   _pendingTaskItems = pending;
 
-  // Action cards appended at bottom of chat timeline
-  plAppendActionCards();
+  // Re-install inline task cards in the current chat DOM
+  plInstallInlineTaskCards();
 
   // Header dropdown (read-only overview)
   if (taskDropBoard) {
@@ -362,12 +401,12 @@ function plConnectWs() {
     plWrite("WebSocket", { status: "verbunden" });
     if (wsBtn) wsBtn.classList.add("is-connected");
   };
-  plSocket.onmessage = (event) => {
+  plSocket.onmessage = async (event) => {
     try {
       const payload = JSON.parse(event.data);
       if (payload.message_type && payload.message_type !== "timer_tick") {
-        plLoadChat();
-        plListTasks();
+        await plLoadChat();   // chat first so AI message appears before task card
+        await plListTasks();
       }
     } catch (_) {}
   };
@@ -818,69 +857,14 @@ async function plLoadSettingsSummary() {
     set("psd-boundary", data.boundary);
     if (data.llm) {
       const llm = data.llm;
-      const providerEl = document.getElementById("psd-llm-provider");
-      if (providerEl) providerEl.value = llm.provider || "stub";
-      const urlEl = document.getElementById("psd-llm-url");
-      if (urlEl) urlEl.value = llm.api_url || "";
-      const chatEl = document.getElementById("psd-llm-chat");
-      if (chatEl) chatEl.value = llm.chat_model || "";
-      const visionEl = document.getElementById("psd-llm-vision");
-      if (visionEl) visionEl.value = llm.vision_model || "";
-      const activeEl = document.getElementById("psd-llm-active");
-      if (activeEl) activeEl.checked = !!llm.profile_active;
-      const feedback = document.getElementById("psd-llm-feedback");
-      if (feedback) {
-        feedback.textContent = llm.api_key_stored ? "API-Key hinterlegt ✓" : "Kein API-Key gespeichert";
-        feedback.style.color = llm.api_key_stored ? "var(--color-success, #81c784)" : "var(--muted)";
-      }
+      set("psd-llm-provider-display", llm.provider || "—");
+      set("psd-llm-chat-display", llm.chat_model || "—");
+      set("psd-llm-key-display", llm.api_key_stored ? "hinterlegt ✓" : "nicht gesetzt");
+      const keyEl = document.getElementById("psd-llm-key-display");
+      if (keyEl) keyEl.style.color = llm.api_key_stored ? "var(--color-success, #81c784)" : "var(--muted)";
     }
   } catch (err) {
     plWrite("Settings load error", { error: String(err) });
   }
 }
-
-document.getElementById("psd-llm-save")?.addEventListener("click", async () => {
-  const btn = document.getElementById("psd-llm-save");
-  const feedback = document.getElementById("psd-llm-feedback");
-  btn.disabled = true;
-  if (feedback) feedback.textContent = "Speichere…";
-  try {
-    const payload = {
-      provider: document.getElementById("psd-llm-provider")?.value || "stub",
-      api_url: document.getElementById("psd-llm-url")?.value?.trim() || "",
-      api_key: document.getElementById("psd-llm-key")?.value?.trim() || "",
-      chat_model: document.getElementById("psd-llm-chat")?.value?.trim() || "",
-      vision_model: document.getElementById("psd-llm-vision")?.value?.trim() || "",
-      profile_active: document.getElementById("psd-llm-active")?.checked || false,
-    };
-    await plPost("/api/settings/llm", payload);
-    if (feedback) { feedback.textContent = "Gespeichert ✓"; feedback.style.color = "var(--color-success, #81c784)"; }
-    // Clear API key field after save for security
-    const keyEl = document.getElementById("psd-llm-key");
-    if (keyEl) keyEl.value = "";
-  } catch (err) {
-    if (feedback) { feedback.textContent = `Fehler: ${err}`; feedback.style.color = "var(--color-error, #f44)"; }
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-document.getElementById("psd-llm-test")?.addEventListener("click", async () => {
-  const btn = document.getElementById("psd-llm-test");
-  const feedback = document.getElementById("psd-llm-feedback");
-  btn.disabled = true;
-  if (feedback) feedback.textContent = "Teste…";
-  try {
-    const resp = await fetch("/profile/llm/test", { method: "POST" });
-    const data = await resp.json();
-    if (feedback) {
-      feedback.textContent = data.ok ? `✓ OK (HTTP ${data.status})` : `✗ ${data.error}`;
-      feedback.style.color = data.ok ? "var(--color-success, #81c784)" : "var(--color-error, #f44)";
-    }
-  } catch (err) {
-    if (feedback) { feedback.textContent = `✗ ${err}`; feedback.style.color = "var(--color-error, #f44)"; }
-  } finally {
-    btn.disabled = false;
-  }
-});
 
