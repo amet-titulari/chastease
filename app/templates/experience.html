@@ -58,10 +58,6 @@
           </label>
           <button id="xp-pe-save-btn" type="button">Speichern</button>
         </div>
-
-        <label>Dein Nickname
-          <input id="xp-player-nickname" value="{{ current_user.username if current_user else 'Player' }}" />
-        </label>
       </section>
 
       <section class="step-pane" data-step="2">
@@ -78,6 +74,9 @@
 
       <section class="step-pane" data-step="3">
         <p class="step-title">Spielerprofil</p>
+        <label>Dein Nickname
+          <input id="xp-player-nickname" value="{{ current_user.username if current_user else 'Player' }}" />
+        </label>
         <label>Erfahrungslevel
           <select id="xp-experience-level">
             <option value="beginner" {% if not current_user or not current_user.setup_experience_level or current_user.setup_experience_level == 'beginner' %}selected{% endif %}>Beginner</option>
