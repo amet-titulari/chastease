@@ -28,6 +28,40 @@
         <label>Keyholderin wählen
           <select id="xp-persona-preset"></select>
         </label>
+        <div class="inline-actions xp-persona-actions">
+          <button id="xp-edit-persona-btn" type="button">Anpassen</button>
+          <button id="xp-new-persona-btn" type="button">Neu anlegen</button>
+        </div>
+
+        <div id="xp-persona-editor" class="xp-persona-editor is-hidden">
+          <p class="xp-editor-title" id="xp-persona-editor-title">Persona bearbeiten</p>
+          <label>Name
+            <input id="xp-pe-name" maxlength="120" placeholder="z.B. Mistress Ava" />
+          </label>
+          <label>Ton
+            <input id="xp-pe-tone" maxlength="60" placeholder="z.B. warm, direkt, sinnlich" />
+          </label>
+          <label>Dominanzstil
+            <select id="xp-pe-dominance">
+              <option value="soft">Soft – sanft, fürsorglich</option>
+              <option value="supportive">Supportive – motivierend, ermutigend</option>
+              <option value="gentle-dominant" selected>Gentle-Dominant – liebevoll leitend</option>
+              <option value="firm">Firm – klar, strukturiert</option>
+              <option value="hard-dominant">Hard-Dominant – direkt, streng</option>
+            </select>
+          </label>
+          <label>Beschreibung <span class="hint-inline">(optional)</span>
+            <textarea id="xp-pe-description" rows="3" maxlength="4000" placeholder="Kurze Charakterbeschreibung der Persona"></textarea>
+          </label>
+          <label>System Prompt <span class="hint-inline">(optional)</span>
+            <textarea id="xp-pe-system-prompt" rows="4" maxlength="4000" placeholder="Verhaltensanweisung für die KI – wird nicht angezeigt"></textarea>
+          </label>
+          <div class="inline-actions">
+            <button id="xp-pe-save-btn" type="button">Speichern</button>
+            <button id="xp-pe-cancel-btn" type="button" class="xp-btn-secondary">Abbrechen</button>
+          </div>
+        </div>
+
         <label>Scenario Preset
           <select id="xp-scenario-preset"></select>
         </label>

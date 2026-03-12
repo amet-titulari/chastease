@@ -243,6 +243,54 @@ button {
   display: none;
 }
 
+.xp-persona-editor {
+  background: rgba(11, 18, 26, 0.75);
+  border: 1px solid var(--xp-border);
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  margin-bottom: 0.8rem;
+  animation: xp-step 200ms ease-out;
+}
+
+.xp-persona-editor.is-hidden {
+  display: none;
+}
+
+.xp-persona-editor textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.xp-editor-title {
+  margin: 0 0 0.7rem;
+  color: #a8c0d6;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.xp-persona-actions {
+  margin-bottom: 0.7rem;
+}
+
+.xp-persona-actions button {
+  font-size: 0.85rem;
+  padding: 0.42rem 0.6rem;
+}
+
+.hint-inline {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: #7d8da1;
+}
+
+.xp-btn-secondary {
+  background: #1a2a3a !important;
+  color: #7d9db8 !important;
+  border: 1px solid var(--xp-border) !important;
+}
+
 .duration-max-header {
   display: flex;
   align-items: center;

@@ -3,6 +3,9 @@ let xpWsToken = null;
 let xpStep = 1;
 let xpPersonaPresets = [];
 let xpScenarioPresets = [];
+let xpDbPersonas = [];       // DB personas with full data (id, name, ...)
+let xpHardcodedPresets = []; // Presets not yet in DB
+let xpEditPersonaId = null;  // null = new, int = edit
 
 const statusEl = document.getElementById("onboarding-status");
 const outputEl = document.getElementById("xp-output");
@@ -150,7 +153,7 @@ function xpWireNoLimit() {
   });
 }
 
-async function xpLoadPersonaPresets() {
+async function xpLoadPersonaPresets(selectName) {
   const select = document.getElementById("xp-persona-preset");
   select.innerHTML = "";
   try {
@@ -158,31 +161,154 @@ async function xpLoadPersonaPresets() {
       xpGet("/api/personas"),
       xpGet("/api/personas/presets"),
     ]);
-    const dbPersonas = dbData.items || [];
+    xpDbPersonas = dbData.items || [];
     const hardcoded = presetData.items || [];
-    const dbNames = new Set(dbPersonas.map((p) => p.name));
-    // DB personas first, then any hardcoded presets not yet in DB
-    const merged = [
-      ...dbPersonas.map((p) => p.name),
-      ...hardcoded.filter((p) => !dbNames.has(p.name)).map((p) => p.name),
-    ];
+    const dbNames = new Set(xpDbPersonas.map((p) => p.name));
+    xpHardcodedPresets = hardcoded.filter((p) => !dbNames.has(p.name));
+
+    // DB personas first, then hardcoded presets not yet in DB
+    const dbOpts = xpDbPersonas.map((p) => p.name);
+    const hcOpts = xpHardcodedPresets.map((p) => p.name);
+    const merged = [...dbOpts, ...hcOpts];
     xpPersonaPresets = merged.map((name) => ({ name }));
+
     if (!merged.length) {
       select.innerHTML = '<option value="">Keine Personas vorhanden</option>';
       return;
     }
-    merged.forEach((name) => {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      select.appendChild(opt);
-    });
-    const initialName = merged.find((n) => n === "Ametara Titulari") || merged[0];
-    select.value = initialName;
-    document.getElementById("xp-persona-name").value = initialName;
+
+    if (dbOpts.length) {
+      const grpDb = document.createElement("optgroup");
+      grpDb.label = "Meine Personas";
+      dbOpts.forEach((name) => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        grpDb.appendChild(opt);
+      });
+      select.appendChild(grpDb);
+    }
+    if (hcOpts.length) {
+      const grpHc = document.createElement("optgroup");
+      grpHc.label = "Integrierte Presets";
+      hcOpts.forEach((name) => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        grpHc.appendChild(opt);
+      });
+      select.appendChild(grpHc);
+    }
+
+    const chosen = selectName || merged.find((n) => n === "Ametara Titulari") || merged[0];
+    if (merged.includes(chosen)) select.value = chosen;
+    document.getElementById("xp-persona-name").value = select.value;
   } catch (err) {
     select.innerHTML = '<option value="">Fehler beim Laden</option>';
     xpWrite("Fehler Persona Laden", { error: String(err) });
+  }
+}
+
+// ── Inline Persona Editor ────────────────────────────────────────────────────
+
+const _DOMINANCE_STRICTNESS = { soft: 1, supportive: 2, "gentle-dominant": 3, firm: 4, "hard-dominant": 5 };
+
+function xpShowPersonaEditor(mode) {
+  // mode: 'new' | 'edit'
+  const editor = document.getElementById("xp-persona-editor");
+  const title  = document.getElementById("xp-persona-editor-title");
+  editor.classList.remove("is-hidden");
+
+  if (mode === "new") {
+    xpEditPersonaId = null;
+    title.textContent = "Neue Persona anlegen";
+    document.getElementById("xp-pe-name").value = "";
+    document.getElementById("xp-pe-tone").value = "";
+    document.getElementById("xp-pe-dominance").value = "gentle-dominant";
+    document.getElementById("xp-pe-description").value = "";
+    document.getElementById("xp-pe-system-prompt").value = "";
+    document.getElementById("xp-pe-name").focus();
+    return;
+  }
+
+  // edit: look up selected persona
+  const selectedName = document.getElementById("xp-persona-preset").value;
+  const dbPersona = xpDbPersonas.find((p) => p.name === selectedName);
+  if (dbPersona) {
+    xpEditPersonaId = dbPersona.id;
+    title.textContent = `Persona bearbeiten: ${dbPersona.name}`;
+    document.getElementById("xp-pe-name").value = dbPersona.name || "";
+    document.getElementById("xp-pe-tone").value = dbPersona.speech_style_tone || "";
+    document.getElementById("xp-pe-dominance").value = dbPersona.speech_style_dominance || "gentle-dominant";
+    document.getElementById("xp-pe-description").value = dbPersona.description || "";
+    document.getElementById("xp-pe-system-prompt").value = dbPersona.system_prompt || "";
+  } else {
+    // Hardcoded preset — pre-fill as new
+    xpEditPersonaId = null;
+    const hc = xpHardcodedPresets.find((p) => p.name === selectedName);
+    title.textContent = hc ? `Preset anpassen & speichern: ${hc.name}` : "Persona erstellen";
+    document.getElementById("xp-pe-name").value = hc ? hc.name : selectedName;
+    document.getElementById("xp-pe-tone").value = hc ? (hc.speech_style_tone || "") : "";
+    document.getElementById("xp-pe-dominance").value = hc ? (hc.speech_style_dominance || "gentle-dominant") : "gentle-dominant";
+    document.getElementById("xp-pe-description").value = hc ? (hc.description || "") : "";
+    document.getElementById("xp-pe-system-prompt").value = hc ? (hc.system_prompt || "") : "";
+  }
+}
+
+function xpHidePersonaEditor() {
+  document.getElementById("xp-persona-editor").classList.add("is-hidden");
+  xpEditPersonaId = null;
+}
+
+async function xpSavePersonaEditor() {
+  const name = document.getElementById("xp-pe-name").value.trim();
+  if (!name) {
+    xpWrite("Hinweis", { error: "Bitte einen Namen eingeben." });
+    return;
+  }
+  const dominance = document.getElementById("xp-pe-dominance").value;
+  const payload = {
+    name,
+    speech_style_tone: document.getElementById("xp-pe-tone").value.trim() || null,
+    speech_style_dominance: dominance || null,
+    strictness_level: _DOMINANCE_STRICTNESS[dominance] || 3,
+    description: document.getElementById("xp-pe-description").value.trim() || null,
+    system_prompt: document.getElementById("xp-pe-system-prompt").value.trim() || null,
+  };
+  const saveBtn = document.getElementById("xp-pe-save-btn");
+  saveBtn.disabled = true;
+  try {
+    let saved;
+    if (xpEditPersonaId !== null) {
+      // Update existing
+      const res = await fetch(`/api/personas/${xpEditPersonaId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(JSON.stringify(data));
+      saved = data;
+    } else {
+      // Create new
+      const res = await fetch("/api/personas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(JSON.stringify(data));
+      saved = data;
+    }
+    xpWrite("Persona gespeichert", { name: saved.name, id: saved.id });
+    xpHidePersonaEditor();
+    // Reload dropdown and select saved persona
+    await xpLoadPersonaPresets(saved.name);
+    document.getElementById("xp-persona-name").value = saved.name;
+  } catch (err) {
+    xpWrite("Fehler Persona speichern", { error: String(err) });
+  } finally {
+    saveBtn.disabled = false;
   }
 }
 
@@ -215,7 +341,20 @@ document.getElementById("xp-persona-preset").addEventListener("change", (e) => {
   if (e.target.value) {
     document.getElementById("xp-persona-name").value = e.target.value;
   }
+  // Close editor when user picks a different persona
+  xpHidePersonaEditor();
 });
+
+document.getElementById("xp-edit-persona-btn").addEventListener("click", () => {
+  xpShowPersonaEditor("edit");
+});
+
+document.getElementById("xp-new-persona-btn").addEventListener("click", () => {
+  xpShowPersonaEditor("new");
+});
+
+document.getElementById("xp-pe-save-btn").addEventListener("click", xpSavePersonaEditor);
+document.getElementById("xp-pe-cancel-btn").addEventListener("click", xpHidePersonaEditor);
 
 document.querySelectorAll(".step-tab").forEach((btn) => {
   btn.addEventListener("click", () => xpSwitchStep(Number(btn.dataset.step)));
