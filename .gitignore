@@ -8,3 +8,4 @@ htmlcov/
 *.pyc
 .env
 data/
+.DS_Store
