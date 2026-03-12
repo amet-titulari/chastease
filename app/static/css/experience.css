@@ -352,6 +352,63 @@ button {
   letter-spacing: 0.02em;
 }
 
+.xp-scenario-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+
+.xp-scenario-meta-badge {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.74rem;
+  color: var(--xp-muted, #8899aa);
+}
+
+.xp-scenario-phases {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.xp-scenario-phases-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--xp-muted, #8899aa);
+  margin: 0 0 0.2rem;
+}
+
+.xp-phase-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.83rem;
+}
+
+.xp-phase-num {
+  background: #1f3147;
+  border: 1px solid #3f5a7a;
+  border-radius: 50%;
+  width: 1.4rem;
+  height: 1.4rem;
+  line-height: 1.4rem;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #8ab8d8;
+  flex-shrink: 0;
+}
+
+.xp-phase-obj {
+  color: var(--xp-muted, #8899aa);
+  font-size: 0.8rem;
+}
+
 .duration-max-header {
   display: flex;
   align-items: center;

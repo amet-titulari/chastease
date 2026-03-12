@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/profile.css" />
+<style>
+  .scenario-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
+
+  .scenario-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .scenario-card-info { flex: 1; min-width: 0; }
+  .scenario-card-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #d8e8f8;
+    margin: 0 0 0.15rem;
+  }
+  .scenario-card-meta {
+    font-size: 0.78rem;
+    color: var(--color-text-muted, #8899aa);
+    margin: 0 0 0.2rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .scenario-card-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
+  .scenario-tag {
+    background: #1f3147;
+    border: 1px solid #3f5a7a;
+    color: #8ab8d8;
+    border-radius: 20px;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  .scenario-card-actions { display: flex; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; }
+  .scenario-card-actions button { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+
+  .import-zone {
+    border: 2px dashed rgba(255,255,255,0.15);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    font-size: 0.88rem;
+    color: var(--color-text-muted, #8899aa);
+  }
+  .import-zone:hover, .import-zone.drag-over { border-color: rgba(130,180,255,0.45); color: #d0e8ff; }
+  .import-zone input[type=file] { display: none; }
+
+  .form-panel {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 1.1rem 1.2rem;
+    margin-top: 1rem;
+  }
+  .form-panel h3 { margin: 0 0 0.8rem; font-size: 1rem; color: #d8e8f8; }
+
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+  .preset-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 0.5rem 0.7rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .preset-btn:hover { background: rgba(255,255,255,0.1); }
+  .preset-btn-name { font-size: 0.88rem; font-weight: 600; color: #d0e4f8; display: block; }
+  .preset-btn-meta { font-size: 0.74rem; color: var(--color-text-muted, #8899aa); display: block; margin-top: 0.15rem; }
+
+  .phases-editor { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.4rem; }
+  .phase-block {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 10px;
+    padding: 0.7rem 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .phase-block-header { display: flex; justify-content: space-between; align-items: center; }
+  .phase-block-title { font-size: 0.82rem; font-weight: 600; color: #a8c8e8; }
+  .phase-block-remove { background: none !important; border: none !important; color: #7d9db8; font-size: 1rem; cursor: pointer; padding: 0 !important; width: auto !important; }
+  .phase-block label { margin-bottom: 0.3rem; font-size: 0.82rem; }
+  .phase-block input, .phase-block textarea { font-size: 0.85rem; }
+
+  .empty-hint { text-align: center; color: var(--color-text-muted, #8899aa); padding: 1.5rem 0; font-size: 0.9rem; }
+  .sm-notice { font-size: 0.82rem; color: var(--color-text-muted, #8899aa); margin-top: 0.3rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="profile-shell full">
+  <section class="profile-card">
+    <p class="eyebrow">Scenario-Verwaltung</p>
+    <h1>Scenarios</h1>
+    <p class="subline">Erstelle, bearbeite und verwalte Scenarios. Ein Scenario definiert Phasen, Lore und Ton einer Session.</p>
+
+    <div id="sm-status"></div>
+
+    <!-- ── Toolbar ── -->
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+      <label class="import-zone" id="sm-import-zone" title="JSON-Datei importieren">
+        <input type="file" id="sm-import-input" accept=".json,application/json" multiple />
+        &#8657; Importieren (.json)
+      </label>
+    </div>
+
+    <!-- ── Scenario-Liste ── -->
+    <div class="scenario-list" id="sm-list">
+      <div class="empty-hint">Wird geladen…</div>
+    </div>
+
+    <!-- ── Formular ── -->
+    <div class="form-panel" id="sm-form-panel">
+      <h3 id="sm-form-title">Neues Scenario erstellen</h3>
+
+      <!-- Presets -->
+      <details id="sm-preset-section">
+        <summary style="cursor:pointer;font-size:0.8rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--color-text-muted,#8899aa);padding:0.3rem 0;">
+          Aus Preset laden
+        </summary>
+        <div class="preset-grid" id="sm-preset-grid">
+          <div class="empty-hint" style="grid-column:1/-1;">Wird geladen…</div>
+        </div>
+      </details>
+
+      <hr class="section-divider" />
+
+      <form id="sm-form" class="stack" autocomplete="off">
+        <input type="hidden" id="sm-edit-id" value="" />
+
+        <label>Titel *
+          <input id="sm-title" type="text" maxlength="200" required placeholder="z.B. Devotion Protocol" oninput="smAutoKey()" />
+        </label>
+
+        <label>Key <span style="font-weight:400;font-size:0.8rem;color:#7d8da1;">(eindeutiger Bezeichner)</span>
+          <input id="sm-key" type="text" maxlength="120" required placeholder="z.B. devotion_protocol" />
+        </label>
+
+        <label>Verknüpfte Persona <span style="font-weight:400;font-size:0.8rem;color:#7d8da1;">(optional, Name)</span>
+          <input id="sm-character-ref" type="text" maxlength="120" placeholder="z.B. Ametara Titulari"
+            list="sm-persona-list" />
+          <datalist id="sm-persona-list"></datalist>
+        </label>
+
+        <label>Zusammenfassung
+          <textarea id="sm-summary" rows="3" maxlength="4000" placeholder="Kurze Beschreibung des Scenarios"></textarea>
+        </label>
+
+        <label>Tags <span style="font-weight:400;font-size:0.8rem;color:#7d8da1;">(kommagetrennt)</span>
+          <input id="sm-tags" type="text" placeholder="z.B. ritual, devotion, long-term" />
+        </label>
+
+        <!-- ── Phasen-Editor ── -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
+            <label style="margin:0;">Phasen</label>
+            <button type="button" id="sm-add-phase-btn" class="ghost" style="font-size:0.8rem;padding:0.25rem 0.6rem;">+ Phase</button>
+          </div>
+          <div class="phases-editor" id="sm-phases-editor"></div>
+          <p class="sm-notice">Jede Phase definiert ein Ziel und Führungshinweise für die KI.</p>
+        </div>
+
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-top:0.4rem;">
+          <button type="submit" id="sm-save-btn">Scenario speichern</button>
+          <button type="button" id="sm-cancel-btn" class="ghost" style="display:none;">Abbrechen</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="action-row" style="margin-top:1rem;">
+      <a class="ghost" href="/personas">Personas</a>
+      <a class="ghost" href="/experience">Experience</a>
+    </div>
+  </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Status helper ──
+function smStatus(msg, isError = false) {
+  const el = document.getElementById("sm-status");
+  el.innerHTML = `<p class="status ${isError ? "error" : "success"}">${msg}</p>`;
+  setTimeout(() => { el.innerHTML = ""; }, 4000);
+}
+
+// ── API helpers ──
+async function smFetch(url, options = {}) {
+  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...options });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || res.statusText);
+  }
+  return res.json();
+}
+
+// ── Key auto-generate ──
+function smAutoKey() {
+  const id = document.getElementById("sm-edit-id").value;
+  if (id) return; // editing existing, don't overwrite
+  const title = document.getElementById("sm-title").value;
+  document.getElementById("sm-key").value = title.toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
+
+// ── Phase editor ──
+let smPhaseCount = 0;
+
+function smAddPhase(data = {}) {
+  smPhaseCount++;
+  const idx = smPhaseCount;
+  const container = document.getElementById("sm-phases-editor");
+  const block = document.createElement("div");
+  block.className = "phase-block";
+  block.dataset.phaseIdx = idx;
+  block.innerHTML = `
+    <div class="phase-block-header">
+      <span class="phase-block-title">Phase ${idx}</span>
+      <button type="button" class="phase-block-remove" onclick="smRemovePhase(${idx})" title="Phase entfernen">✕</button>
+    </div>
+    <label>Titel
+      <input class="phase-title" type="text" maxlength="120" value="${escHtml(data.title || "")}" placeholder="z.B. Initiierung" />
+    </label>
+    <label>Ziel
+      <input class="phase-objective" type="text" maxlength="300" value="${escHtml(data.objective || "")}" placeholder="Was soll die Phase erreichen?" />
+    </label>
+    <label>Führungshinweis <span style="font-weight:400;font-size:0.75rem;color:#7d8da1;">(KI-Anweisung)</span>
+      <textarea class="phase-guidance" rows="3" maxlength="2000" placeholder="Wie soll die KI in dieser Phase vorgehen?">${escHtml(data.guidance || "")}</textarea>
+    </label>`;
+  container.appendChild(block);
+}
+
+function smRemovePhase(idx) {
+  const block = document.querySelector(`.phase-block[data-phase-idx="${idx}"]`);
+  if (block) block.remove();
+}
+
+function smCollectPhases() {
+  return Array.from(document.querySelectorAll(".phase-block")).map((block, i) => ({
+    phase_id: `phase_${i + 1}`,
+    title: block.querySelector(".phase-title").value.trim(),
+    objective: block.querySelector(".phase-objective").value.trim(),
+    guidance: block.querySelector(".phase-guidance").value.trim(),
+  })).filter(p => p.title || p.objective);
+}
+
+function smSetPhases(phases) {
+  document.getElementById("sm-phases-editor").innerHTML = "";
+  smPhaseCount = 0;
+  (phases || []).forEach(p => smAddPhase(p));
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ── Render list ──
+function smRenderList(items) {
+  const list = document.getElementById("sm-list");
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-hint">Noch keine Scenarios gespeichert.</div>';
+    return;
+  }
+  list.innerHTML = items.map(s => {
+    const tags = (s.tags || []).map(t => `<span class="scenario-tag">${escHtml(t)}</span>`).join("");
+    const phases = (s.phases || []).length;
+    const lore = (s.lorebook || []).length;
+    return `
+      <div class="scenario-card" data-id="${s.id}">
+        <div class="scenario-card-info">
+          <p class="scenario-card-title">${escHtml(s.title)}</p>
+          <p class="scenario-card-meta">${escHtml(s.summary || "")} ${s.character_ref ? `· Persona: ${escHtml(s.character_ref)}` : ""}</p>
+          <p class="scenario-card-meta">${phases} Phase(n) · ${lore} Lore-Eintrag/-Einträge · Key: <code>${escHtml(s.key)}</code></p>
+          <div class="scenario-card-tags">${tags}</div>
+        </div>
+        <div class="scenario-card-actions">
+          <button type="button" onclick="smStartEdit(${s.id})">Bearbeiten</button>
+          <button type="button" onclick="smExport(${s.id})">&#8659;</button>
+          <button type="button" onclick="smDelete(${s.id})" class="ghost">Löschen</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+// ── Load list ──
+async function smLoadList() {
+  try {
+    const data = await smFetch("/api/scenarios");
+    smRenderList(data.items || []);
+  } catch (err) {
+    smStatus("Fehler beim Laden: " + err.message, true);
+  }
+}
+
+// ── Load presets ──
+async function smLoadPresets() {
+  try {
+    const data = await smFetch("/api/scenarios/presets");
+    const grid = document.getElementById("sm-preset-grid");
+    const presets = data.items || [];
+    if (!presets.length) { grid.innerHTML = '<div class="empty-hint">Keine Presets.</div>'; return; }
+    grid.innerHTML = presets.map(p =>
+      `<button type="button" class="preset-btn" onclick="smLoadPreset(${JSON.stringify(p).replace(/"/g, "&quot;")})">
+        <span class="preset-btn-name">${escHtml(p.title)}</span>
+        <span class="preset-btn-meta">${(p.tags || []).slice(0, 3).join(", ")}</span>
+      </button>`
+    ).join("");
+  } catch (err) {
+    document.getElementById("sm-preset-grid").innerHTML = '<div class="empty-hint">Fehler beim Laden.</div>';
+  }
+}
+
+// ── Load persona names for datalist ──
+async function smLoadPersonaNames() {
+  try {
+    const data = await smFetch("/api/personas");
+    const list = document.getElementById("sm-persona-list");
+    (data.items || []).forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.name;
+      list.appendChild(opt);
+    });
+  } catch (_) {}
+}
+
+// ── Load preset into form ──
+function smLoadPreset(preset) {
+  smReset();
+  document.getElementById("sm-title").value = preset.title || "";
+  document.getElementById("sm-key").value = preset.key || "";
+  document.getElementById("sm-character-ref").value = preset.character_ref || "";
+  document.getElementById("sm-summary").value = preset.summary || "";
+  document.getElementById("sm-tags").value = (preset.tags || []).join(", ");
+  smSetPhases(preset.phases || []);
+}
+
+// ── Start edit ──
+async function smStartEdit(id) {
+  try {
+    const s = await smFetch(`/api/scenarios/${id}`);
+    smReset();
+    document.getElementById("sm-edit-id").value = s.id;
+    document.getElementById("sm-form-title").textContent = `Scenario bearbeiten: ${s.title}`;
+    document.getElementById("sm-title").value = s.title;
+    document.getElementById("sm-key").value = s.key;
+    document.getElementById("sm-character-ref").value = s.character_ref || "";
+    document.getElementById("sm-summary").value = s.summary || "";
+    document.getElementById("sm-tags").value = (s.tags || []).join(", ");
+    smSetPhases(s.phases || []);
+    document.getElementById("sm-cancel-btn").style.display = "";
+    document.getElementById("sm-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    smStatus("Fehler beim Laden: " + err.message, true);
+  }
+}
+
+// ── Reset form ──
+function smReset() {
+  document.getElementById("sm-edit-id").value = "";
+  document.getElementById("sm-form-title").textContent = "Neues Scenario erstellen";
+  document.getElementById("sm-form").reset();
+  smSetPhases([]);
+  document.getElementById("sm-cancel-btn").style.display = "none";
+}
+
+// ── Delete ──
+async function smDelete(id) {
+  if (!confirm("Scenario wirklich löschen?")) return;
+  try {
+    await smFetch(`/api/scenarios/${id}`, { method: "DELETE" });
+    smStatus("Scenario gelöscht.");
+    smLoadList();
+  } catch (err) {
+    smStatus("Fehler: " + err.message, true);
+  }
+}
+
+// ── Export ──
+function smExport(id) {
+  window.open(`/api/scenarios/${id}/export`, "_blank");
+}
+
+// ── Save form ──
+document.getElementById("sm-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = document.getElementById("sm-edit-id").value;
+  const payload = {
+    title: document.getElementById("sm-title").value.trim(),
+    key: document.getElementById("sm-key").value.trim(),
+    character_ref: document.getElementById("sm-character-ref").value.trim() || null,
+    summary: document.getElementById("sm-summary").value.trim() || null,
+    tags: document.getElementById("sm-tags").value.split(",").map(t => t.trim()).filter(Boolean),
+    phases: smCollectPhases(),
+    lorebook: [],
+  };
+  const saveBtn = document.getElementById("sm-save-btn");
+  saveBtn.disabled = true;
+  try {
+    if (id) {
+      await smFetch(`/api/scenarios/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+      smStatus("Scenario aktualisiert.");
+    } else {
+      await smFetch("/api/scenarios", { method: "POST", body: JSON.stringify(payload) });
+      smStatus("Scenario erstellt.");
+    }
+    smReset();
+    smLoadList();
+  } catch (err) {
+    smStatus("Fehler: " + err.message, true);
+  } finally {
+    saveBtn.disabled = false;
+  }
+});
+
+document.getElementById("sm-cancel-btn").addEventListener("click", smReset);
+document.getElementById("sm-add-phase-btn").addEventListener("click", () => smAddPhase());
+
+// ── Import ──
+document.getElementById("sm-import-input").addEventListener("change", async (e) => {
+  const files = Array.from(e.target.files);
+  for (const file of files) {
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      await smFetch("/api/scenarios/import", { method: "POST", body: JSON.stringify(json) });
+      smStatus(`"${file.name}" importiert.`);
+    } catch (err) {
+      smStatus(`Fehler bei "${file.name}": ${err.message}`, true);
+    }
+  }
+  smLoadList();
+  e.target.value = "";
+});
+
+// Drag-and-drop import
+const importZone = document.getElementById("sm-import-zone");
+importZone.addEventListener("dragover", e => { e.preventDefault(); importZone.classList.add("drag-over"); });
+importZone.addEventListener("dragleave", () => importZone.classList.remove("drag-over"));
+importZone.addEventListener("drop", async e => {
+  e.preventDefault();
+  importZone.classList.remove("drag-over");
+  for (const file of Array.from(e.dataTransfer.files)) {
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      await smFetch("/api/scenarios/import", { method: "POST", body: JSON.stringify(json) });
+      smStatus(`"${file.name}" importiert.`);
+    } catch (err) {
+      smStatus(`Fehler bei "${file.name}": ${err.message}`, true);
+    }
+  }
+  smLoadList();
+});
+
+// ── Init ──
+smLoadList();
+smLoadPresets();
+smLoadPersonaNames();
+</script>
+{% endblock %}

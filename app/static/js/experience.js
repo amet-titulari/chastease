@@ -305,19 +305,50 @@ async function xpLoadScenarioPresets() {
   if (!select) return;
   select.innerHTML = "";
   try {
-    const data = await xpGet("/api/personas/scenario-presets");
-    xpScenarioPresets = data.items || [];
+    // Load DB scenarios and hardcoded presets, merge with DB taking priority
+    const [dbData, presetData] = await Promise.all([
+      xpGet("/api/scenarios"),
+      xpGet("/api/scenarios/presets"),
+    ]);
+    const dbItems = (dbData.items || []).map((s) => ({ ...s, _source: "db" }));
+    const presetItems = (presetData.items || []).map((s) => ({ ...s, _source: "preset" }));
+    const dbKeys = new Set(dbItems.map((s) => s.key));
+    const merged = [...dbItems, ...presetItems.filter((p) => !dbKeys.has(p.key))];
+    xpScenarioPresets = merged;
+
     if (!xpScenarioPresets.length) {
       select.innerHTML = '<option value="">Keine Scenarios</option>';
       return;
     }
-    xpScenarioPresets.forEach((preset) => {
-      const opt = document.createElement("option");
-      opt.value = preset.key;
-      opt.textContent = preset.title;
-      select.appendChild(opt);
-    });
-    const initialScenario = xpScenarioPresets.find((item) => item.key === "amet_titulari_devotion_protocol") || xpScenarioPresets[0];
+
+    // Build optgroups: DB scenarios first, then hardcoded presets
+    const dbOnes = merged.filter((s) => s._source === "db");
+    const presetOnes = merged.filter((s) => s._source === "preset");
+    if (dbOnes.length) {
+      const grp = document.createElement("optgroup");
+      grp.label = "Meine Scenarios";
+      dbOnes.forEach((s) => {
+        const opt = document.createElement("option");
+        opt.value = s.key;
+        opt.textContent = s.title;
+        grp.appendChild(opt);
+      });
+      select.appendChild(grp);
+    }
+    if (presetOnes.length) {
+      const grp = document.createElement("optgroup");
+      grp.label = "Vorgefertigte Scenarios";
+      presetOnes.forEach((s) => {
+        const opt = document.createElement("option");
+        opt.value = s.key;
+        opt.textContent = s.title;
+        grp.appendChild(opt);
+      });
+      select.appendChild(grp);
+    }
+
+    const preferred = ["ametara_titulari_devotion_protocol", "amet_titulari_devotion_protocol"];
+    const initialScenario = xpScenarioPresets.find((s) => preferred.includes(s.key)) || xpScenarioPresets[0];
     if (initialScenario) {
       select.value = initialScenario.key;
       xpUpdateScenarioDetail(initialScenario.key);
@@ -329,21 +360,77 @@ async function xpLoadScenarioPresets() {
 }
 
 function xpUpdateScenarioDetail(key) {
-  const preset = xpScenarioPresets.find((p) => p.key === key);
+  const scenario = xpScenarioPresets.find((p) => p.key === key);
   const titleEl = document.getElementById("xp-scenario-title");
   const summaryEl = document.getElementById("xp-scenario-summary");
   const focusEl = document.getElementById("xp-scenario-focus");
+  const phasesEl = document.getElementById("xp-scenario-phases");
+  const lorebookEl = document.getElementById("xp-scenario-lorebook");
+  const charRefEl = document.getElementById("xp-scenario-charref");
   if (!titleEl) return;
-  if (!preset) {
+  if (!scenario) {
     titleEl.textContent = "";
     summaryEl.textContent = "";
     if (focusEl) focusEl.innerHTML = "";
+    if (phasesEl) phasesEl.innerHTML = "";
+    if (lorebookEl) lorebookEl.innerHTML = "";
+    if (charRefEl) charRefEl.innerHTML = "";
     return;
   }
-  titleEl.textContent = preset.title;
-  summaryEl.textContent = preset.summary;
+  titleEl.textContent = scenario.title;
+  summaryEl.textContent = scenario.summary || "";
+
+  // Tags / focus chips
+  const tags = scenario.tags || scenario.focus || [];
   if (focusEl) {
-    focusEl.innerHTML = (preset.focus || []).map((f) => `<span class="xp-focus-chip">${f}</span>`).join("");
+    focusEl.innerHTML = tags.map((f) => `<span class="xp-focus-chip">${f}</span>`).join("");
+  }
+
+  // Character ref (linked persona)
+  if (charRefEl) {
+    if (scenario.character_ref) {
+      charRefEl.innerHTML = `<span class="xp-scenario-meta-badge">&#x1F464; ${scenario.character_ref}</span>`;
+      // Auto-select the linked persona in step 1 dropdown
+      const personaSelect = document.getElementById("xp-persona-preset");
+      if (personaSelect) {
+        const matchingOpt = Array.from(personaSelect.options).find(
+          (o) => o.textContent.trim() === scenario.character_ref || o.value === scenario.character_ref
+        );
+        if (matchingOpt) {
+          personaSelect.value = matchingOpt.value;
+          xpFillPersonaEditor(matchingOpt.value);
+        }
+      }
+    } else {
+      charRefEl.innerHTML = "";
+    }
+  }
+
+  // Phases list
+  const phases = scenario.phases || [];
+  if (phasesEl) {
+    if (phases.length) {
+      phasesEl.innerHTML = `<p class="xp-scenario-phases-label">Phasen (${phases.length})</p>` +
+        phases.map((ph, i) =>
+          `<div class="xp-phase-item">
+            <span class="xp-phase-num">${i + 1}</span>
+            <div>
+              <strong>${ph.title || "Phase " + (i + 1)}</strong>
+              ${ph.objective ? `<br><span class="xp-phase-obj">${ph.objective}</span>` : ""}
+            </div>
+          </div>`
+        ).join("");
+    } else {
+      phasesEl.innerHTML = "";
+    }
+  }
+
+  // Lorebook info
+  const lorebook = scenario.lorebook || [];
+  if (lorebookEl) {
+    lorebookEl.innerHTML = lorebook.length
+      ? `<span class="xp-scenario-meta-badge">&#x1F4DA; ${lorebook.length} Lore-Eintrag/-Einträge</span>`
+      : "";
   }
 }
 
