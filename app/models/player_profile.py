@@ -7,6 +7,7 @@ class PlayerProfile(Base):
     __tablename__ = "player_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
+    auth_user_id = Column(Integer, ForeignKey("auth_users.id", ondelete="SET NULL"), nullable=True)
     nickname = Column(String(120), nullable=False)
     experience_level = Column(String(50), default="beginner", nullable=False)
     preferences_json = Column(Text, default="{}", nullable=False)

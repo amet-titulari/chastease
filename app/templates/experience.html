@@ -104,7 +104,7 @@
       <section class="step-pane" data-step="3">
         <p class="step-title">Spielerprofil</p>
         <label>Dein Nickname
-          <input id="xp-player-nickname" value="{{ current_user.setup_wearer_nickname if current_user and current_user.setup_wearer_nickname else (current_user.username if current_user else 'Player') }}" />
+          <input id="xp-player-nickname" value="{{ setup.wearer_nickname if setup else (current_user.username if current_user else 'Player') }}" />
         </label>
         <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
           <img id="xp-player-avatar-preview" alt="Player Avatar" style="display:none;width:48px;height:48px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.2);" />
@@ -114,21 +114,21 @@
         </div>
         <label>Erfahrungslevel
           <select id="xp-experience-level">
-            <option value="beginner" {% if not current_user or not current_user.setup_experience_level or current_user.setup_experience_level == 'beginner' %}selected{% endif %}>Beginner</option>
-            <option value="intermediate" {% if current_user and current_user.setup_experience_level == 'intermediate' %}selected{% endif %}>Intermediate</option>
-            <option value="advanced" {% if current_user and current_user.setup_experience_level == 'advanced' %}selected{% endif %}>Advanced</option>
+            <option value="beginner" {% if not setup or not setup.experience_level or setup.experience_level == 'beginner' %}selected{% endif %}>Beginner</option>
+            <option value="intermediate" {% if setup and setup.experience_level == 'intermediate' %}selected{% endif %}>Intermediate</option>
+            <option value="advanced" {% if setup and setup.experience_level == 'advanced' %}selected{% endif %}>Advanced</option>
           </select>
         </label>
         <label>Hard Limits (kommagetrennt)
-          <input id="xp-hard-limits" placeholder="z.B. running, humiliation" value="" />
+          <input id="xp-hard-limits" placeholder="z.B. running, humiliation" value="{{ setup.hard_limits if setup else '' }}" />
         </label>
         <label>Penalty-Multiplikator
-          <input id="xp-penalty-multiplier" type="number" step="0.1" value="{{ current_user.setup_penalty_multiplier if current_user and current_user.setup_penalty_multiplier is not none else 1.0 }}" />
+          <input id="xp-penalty-multiplier" type="number" step="0.1" value="{{ setup.penalty_multiplier if setup and setup.penalty_multiplier is not none else 1.0 }}" />
         </label>
         <label>Gentle Mode
           <select id="xp-gentle-mode">
-            <option value="false" {% if not current_user or not current_user.setup_gentle_mode %}selected{% endif %}>Nein</option>
-            <option value="true" {% if current_user and current_user.setup_gentle_mode %}selected{% endif %}>Ja</option>
+            <option value="false" {% if not setup or not setup.gentle_mode %}selected{% endif %}>Nein</option>
+            <option value="true" {% if setup and setup.gentle_mode %}selected{% endif %}>Ja</option>
           </select>
         </label>
       </section>

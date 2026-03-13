@@ -104,6 +104,93 @@ def _redirect_if_active_session(user, db) -> str | None:
     return None
 
 
+def _load_json_dict(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
+def _load_json_list(raw: str | None) -> list:
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, list) else []
+    except Exception:
+        return []
+
+
+def _resolve_default_player_profile(user: AuthUser, db: Session, create_if_missing: bool = False) -> PlayerProfile | None:
+    profile = None
+    if user.default_player_profile_id:
+        profile = db.query(PlayerProfile).filter(PlayerProfile.id == user.default_player_profile_id).first()
+
+    if profile is None and user.active_session_id:
+        active_session = db.query(SessionModel).filter(SessionModel.id == user.active_session_id).first()
+        if active_session:
+            profile = db.query(PlayerProfile).filter(PlayerProfile.id == active_session.player_profile_id).first()
+            if profile:
+                user.default_player_profile_id = profile.id
+                if profile.auth_user_id is None:
+                    profile.auth_user_id = user.id
+
+    if profile is None and create_if_missing:
+        profile = PlayerProfile(
+            auth_user_id=user.id,
+            nickname=user.username,
+            experience_level="beginner",
+            preferences_json=json.dumps({}),
+            hard_limits_json=json.dumps([]),
+            reaction_patterns_json=json.dumps({"penalty_multiplier": 1.0}),
+            needs_json=json.dumps({"gentle_mode": False}),
+        )
+        db.add(profile)
+        db.flush()
+        user.default_player_profile_id = profile.id
+
+    if profile and profile.auth_user_id is None:
+        profile.auth_user_id = user.id
+
+    return profile
+
+
+def _setup_context_from_user_and_profile(user: AuthUser, profile: PlayerProfile | None) -> dict:
+    if not profile:
+        return {
+            "wearer_nickname": user.username,
+            "experience_level": "beginner",
+            "style": "structured",
+            "goal": "",
+            "boundary": "",
+            "hard_limits": "",
+            "penalty_multiplier": 1.0,
+            "gentle_mode": False,
+        }
+
+    prefs = _load_json_dict(profile.preferences_json)
+    reaction = _load_json_dict(profile.reaction_patterns_json)
+    needs = _load_json_dict(profile.needs_json)
+    hard_limits = _load_json_list(profile.hard_limits_json)
+    return {
+        "wearer_nickname": profile.nickname or user.username,
+        "experience_level": profile.experience_level or "beginner",
+        "style": prefs.get("wearer_style") or "structured",
+        "goal": prefs.get("wearer_goal") or "",
+        "boundary": prefs.get("wearer_boundary") or "",
+        "hard_limits": ", ".join(str(x).strip() for x in hard_limits if str(x).strip()),
+        "penalty_multiplier": (
+            reaction.get("penalty_multiplier")
+            if isinstance(reaction.get("penalty_multiplier"), (int, float))
+            else 1.0
+        ),
+        "gentle_mode": bool(needs.get("gentle_mode", False)),
+    }
+
+
 def _render_profile_page(
     request: Request,
     user: AuthUser,
@@ -114,6 +201,8 @@ def _render_profile_page(
     llm_error: str | None = None,
 ):
     llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+    default_profile = _resolve_default_player_profile(user, db, create_if_missing=False)
+    setup_ctx = _setup_context_from_user_and_profile(user, default_profile)
     active_session = None
     if user.active_session_id:
         active_session = db.query(SessionModel).filter(SessionModel.id == user.active_session_id).first()
@@ -166,6 +255,7 @@ def _render_profile_page(
             "llm_message": llm_message,
             "llm_error": llm_error,
             "active_play_url": active_play_url,
+            "setup": setup_ctx,
             "audio": {
                 "transcription_enabled": bool(settings.transcription_enabled),
                 "transcription_api_url": transcription_api_url,
@@ -269,6 +359,21 @@ def register(
         setup_completed=False,
     )
     db.add(user)
+    db.flush()
+
+    profile = PlayerProfile(
+        auth_user_id=user.id,
+        nickname=user.username,
+        experience_level="beginner",
+        preferences_json=json.dumps({}),
+        soft_limits_json=json.dumps([]),
+        hard_limits_json=json.dumps([]),
+        reaction_patterns_json=json.dumps({"penalty_multiplier": 1.0}),
+        needs_json=json.dumps({"gentle_mode": False}),
+    )
+    db.add(profile)
+    db.flush()
+    user.default_player_profile_id = profile.id
     db.commit()
 
     response = RedirectResponse(url="/experience", status_code=303)
@@ -359,15 +464,32 @@ def complete_setup(
     if user is None:
         return RedirectResponse(url="/", status_code=303)
 
-    user.setup_style = role_style.strip()[:80]
-    user.setup_goal = primary_goal.strip()[:120]
-    user.setup_boundary = boundary_note.strip()[:1500]
-    user.setup_experience_level = experience_level.strip()[:50] if experience_level.strip() in ("beginner", "intermediate", "advanced") else "beginner"
-    user.setup_wearer_nickname = wearer_nickname.strip()[:80] or user.username
-    user.setup_hard_limits = hard_limits.strip()[:1500] or None
-    user.setup_penalty_multiplier = max(0.1, min(5.0, float(penalty_multiplier)))
-    user.setup_gentle_mode = gentle_mode.lower() in ("true", "on", "1", "enabled")
+    style = role_style.strip()[:80]
+    goal = primary_goal.strip()[:120]
+    boundary = boundary_note.strip()[:1500]
+    level = experience_level.strip()[:50] if experience_level.strip() in ("beginner", "intermediate", "advanced") else "beginner"
+    nickname = wearer_nickname.strip()[:80] or user.username
+    limits = [part.strip() for part in hard_limits.split(",") if part.strip()]
+    penalty = max(0.1, min(5.0, float(penalty_multiplier)))
+    gentle = gentle_mode.lower() in ("true", "on", "1", "enabled")
     user.setup_completed = True
+
+    profile = _resolve_default_player_profile(user, db, create_if_missing=True)
+    if profile:
+        profile.nickname = nickname
+        profile.experience_level = level
+        prefs = _load_json_dict(profile.preferences_json)
+        prefs["wearer_style"] = style
+        prefs["wearer_goal"] = goal
+        prefs["wearer_boundary"] = boundary
+        profile.preferences_json = json.dumps(prefs)
+        profile.hard_limits_json = json.dumps(limits)
+        reaction = _load_json_dict(profile.reaction_patterns_json)
+        reaction["penalty_multiplier"] = penalty
+        profile.reaction_patterns_json = json.dumps(reaction)
+        needs = _load_json_dict(profile.needs_json)
+        needs["gentle_mode"] = gentle
+        profile.needs_json = json.dumps(needs)
     db.commit()
 
     if llm_provider.strip() not in ("", "stub") or llm_api_url.strip() or llm_chat_model.strip():
@@ -425,6 +547,8 @@ def profile_page(request: Request, db: Session = Depends(get_db)):
     user = _get_current_user(request, db)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
+    _resolve_default_player_profile(user, db, create_if_missing=True)
+    db.commit()
     return _render_profile_page(request=request, user=user, db=db)
 
 
@@ -537,15 +661,29 @@ def update_profile_setup(
             profile_error="Leitstil und Ziel duerfen nicht leer sein.",
         )
 
-    user.setup_style = style
-    user.setup_goal = goal
-    user.setup_boundary = boundary
-    user.setup_experience_level = experience_level.strip()[:50] if experience_level.strip() in ("beginner", "intermediate", "advanced") else "beginner"
-    user.setup_wearer_nickname = wearer_nickname.strip()[:80] or user.username
-    user.setup_hard_limits = hard_limits.strip()[:1500] or None
-    user.setup_penalty_multiplier = max(0.1, min(5.0, float(penalty_multiplier)))
-    user.setup_gentle_mode = gentle_mode.lower() in ("true", "on", "1", "enabled")
+    level = experience_level.strip()[:50] if experience_level.strip() in ("beginner", "intermediate", "advanced") else "beginner"
+    nickname = wearer_nickname.strip()[:80] or user.username
+    limits = [part.strip() for part in hard_limits.split(",") if part.strip()]
+    penalty = max(0.1, min(5.0, float(penalty_multiplier)))
+    gentle = gentle_mode.lower() in ("true", "on", "1", "enabled")
     user.setup_completed = True
+
+    profile = _resolve_default_player_profile(user, db, create_if_missing=True)
+    if profile:
+        profile.nickname = nickname
+        profile.experience_level = level
+        prefs = _load_json_dict(profile.preferences_json)
+        prefs["wearer_style"] = style
+        prefs["wearer_goal"] = goal
+        prefs["wearer_boundary"] = boundary
+        profile.preferences_json = json.dumps(prefs)
+        profile.hard_limits_json = json.dumps(limits)
+        reaction = _load_json_dict(profile.reaction_patterns_json)
+        reaction["penalty_multiplier"] = penalty
+        profile.reaction_patterns_json = json.dumps(reaction)
+        needs = _load_json_dict(profile.needs_json)
+        needs["gentle_mode"] = gentle
+        profile.needs_json = json.dumps(needs)
     db.commit()
     return _render_profile_page(
         request=request,
@@ -664,13 +802,15 @@ def restart_setup(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/", status_code=303)
 
     user.setup_completed = False
-    user.setup_style = None
-    user.setup_goal = None
-    user.setup_boundary = None
-    user.setup_wearer_nickname = None
-    user.setup_hard_limits = None
-    user.setup_penalty_multiplier = None
-    user.setup_gentle_mode = False
+
+    profile = _resolve_default_player_profile(user, db, create_if_missing=False)
+    if profile:
+        profile.nickname = user.username
+        profile.experience_level = "beginner"
+        profile.preferences_json = json.dumps({})
+        profile.hard_limits_json = json.dumps([])
+        profile.reaction_patterns_json = json.dumps({"penalty_multiplier": 1.0})
+        profile.needs_json = json.dumps({"gentle_mode": False})
     db.commit()
     return RedirectResponse(url="/experience", status_code=303)
 
@@ -777,6 +917,9 @@ def settings_summary(
         return JSONResponse({"error": "unauthorized"}, status_code=401)
 
     llm_default = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+    default_profile = _resolve_default_player_profile(user, db, create_if_missing=True)
+    default_setup = _setup_context_from_user_and_profile(user, default_profile)
+    db.commit()
     profile_experience = None
     profile_style = None
     profile_goal = None
@@ -825,12 +968,12 @@ def settings_summary(
                 effective_hygiene_min_penalty = int(reaction.get("default_penalty_seconds"))
 
             if player:
-                profile_experience = player.experience_level or user.setup_experience_level
-                profile_style = prefs.get("wearer_style") or user.setup_style
-                profile_goal = prefs.get("wearer_goal") or user.setup_goal
+                profile_experience = player.experience_level or default_setup["experience_level"]
+                profile_style = prefs.get("wearer_style") or default_setup["style"]
+                profile_goal = prefs.get("wearer_goal") or default_setup["goal"]
                 boundary = prefs.get("wearer_boundary")
                 if boundary and hard_limits:
-                    hard_limits_str = "; ".join(hard_limits)
+                    hard_limits_str = ", ".join(hard_limits)
                     if str(boundary).strip().lower() == hard_limits_str.strip().lower():
                         profile_limits = hard_limits_str
                     else:
@@ -838,12 +981,12 @@ def settings_summary(
                 elif boundary:
                     profile_limits = boundary
                 elif hard_limits:
-                    profile_limits = "; ".join(hard_limits)
+                    profile_limits = ", ".join(hard_limits)
             else:
-                profile_experience = user.setup_experience_level
-                profile_style = user.setup_style
-                profile_goal = user.setup_goal
-                profile_limits = user.setup_boundary
+                profile_experience = default_setup["experience_level"]
+                profile_style = default_setup["style"]
+                profile_goal = default_setup["goal"]
+                profile_limits = default_setup["hard_limits"] or default_setup["boundary"]
 
             # For play mode, session-specific LLM config is the source of truth.
             llm_payload = {
@@ -932,13 +1075,13 @@ def settings_summary(
             }
 
     if profile_experience is None:
-        profile_experience = user.setup_experience_level
+        profile_experience = default_setup["experience_level"]
     if profile_style is None:
-        profile_style = user.setup_style
+        profile_style = default_setup["style"]
     if profile_goal is None:
-        profile_goal = user.setup_goal
+        profile_goal = default_setup["goal"]
     if profile_limits is None:
-        profile_limits = user.setup_hard_limits or user.setup_boundary
+        profile_limits = default_setup["hard_limits"] or default_setup["boundary"]
 
     return JSONResponse({
         "username": user.username,
@@ -995,29 +1138,38 @@ def save_experience_draft(
         "hard-dominant": 5,
     }
 
-    if payload.wearer_nickname is not None:
-        nickname = payload.wearer_nickname.strip()[:80]
-        user.setup_wearer_nickname = nickname or user.username
-
-    if payload.experience_level is not None:
-        level = payload.experience_level.strip()
-        user.setup_experience_level = level if level in ("beginner", "intermediate", "advanced") else "beginner"
-
-    if payload.hard_limits is not None:
-        user.setup_hard_limits = payload.hard_limits.strip()[:1500] or None
-
-    if payload.penalty_multiplier is not None:
-        user.setup_penalty_multiplier = max(0.1, min(5.0, float(payload.penalty_multiplier)))
-
-    if payload.gentle_mode is not None:
-        user.setup_gentle_mode = bool(payload.gentle_mode)
-
-    if payload.persona_tone is not None:
-        user.setup_style = payload.persona_tone.strip()[:80] or None
-    if payload.scenario_preset is not None:
-        user.setup_goal = payload.scenario_preset.strip()[:120] or None
-    if payload.hard_limits is not None:
-        user.setup_boundary = payload.hard_limits.strip()[:1500] or None
+    default_profile = _resolve_default_player_profile(user, db, create_if_missing=False)
+    if default_profile:
+        prefs = _load_json_dict(default_profile.preferences_json)
+        reaction = _load_json_dict(default_profile.reaction_patterns_json)
+        needs = _load_json_dict(default_profile.needs_json)
+        if payload.wearer_nickname is not None:
+            default_profile.nickname = payload.wearer_nickname.strip()[:80] or default_profile.nickname
+        if payload.experience_level is not None:
+            level_value = payload.experience_level.strip()
+            if level_value in ("beginner", "intermediate", "advanced"):
+                default_profile.experience_level = level_value
+        if payload.persona_tone is not None:
+            prefs["wearer_style"] = payload.persona_tone.strip()[:80] or None
+        if payload.scenario_preset is not None:
+            prefs["wearer_goal"] = payload.scenario_preset.strip()[:120] or None
+        if payload.hard_limits is not None:
+            prefs["wearer_boundary"] = payload.hard_limits.strip()[:1500] or None
+            limits = [part.strip() for part in payload.hard_limits.split(",") if part.strip()]
+            default_profile.hard_limits_json = json.dumps(limits)
+        if payload.penalty_multiplier is not None:
+            reaction["penalty_multiplier"] = max(0.1, min(5.0, float(payload.penalty_multiplier)))
+        if payload.default_penalty_seconds is not None:
+            reaction["default_penalty_seconds"] = int(payload.default_penalty_seconds)
+        if payload.max_penalty_seconds is not None:
+            reaction["max_penalty_seconds"] = int(payload.max_penalty_seconds)
+        if payload.gentle_mode is not None:
+            needs["gentle_mode"] = bool(payload.gentle_mode)
+        if payload.hygiene_opening_max_duration_seconds is not None:
+            prefs["hygiene_opening_max_duration_seconds"] = int(payload.hygiene_opening_max_duration_seconds)
+        default_profile.preferences_json = json.dumps(prefs)
+        default_profile.reaction_patterns_json = json.dumps(reaction)
+        default_profile.needs_json = json.dumps(needs)
 
     active_session = None
     active_player = None
@@ -1081,14 +1233,17 @@ def save_experience_draft(
             needs = {}
 
         if payload.wearer_nickname is not None:
-            active_player.nickname = user.setup_wearer_nickname or active_player.nickname
+            active_player.nickname = payload.wearer_nickname.strip()[:80] or active_player.nickname
         if payload.experience_level is not None:
-            active_player.experience_level = user.setup_experience_level or active_player.experience_level
+            level_value = payload.experience_level.strip()
+            active_player.experience_level = (
+                level_value if level_value in ("beginner", "intermediate", "advanced") else active_player.experience_level
+            )
         if payload.hard_limits is not None:
             limits = [part.strip() for part in payload.hard_limits.split(",") if part.strip()]
             active_player.hard_limits_json = json.dumps(limits)
         if payload.penalty_multiplier is not None:
-            reaction["penalty_multiplier"] = user.setup_penalty_multiplier
+            reaction["penalty_multiplier"] = max(0.1, min(5.0, float(payload.penalty_multiplier)))
         if payload.default_penalty_seconds is not None:
             reaction["default_penalty_seconds"] = int(payload.default_penalty_seconds)
         if payload.max_penalty_seconds is not None:
@@ -1212,8 +1367,12 @@ def experience_page(request: Request, db: Session = Depends(get_db)):
     if target:
         return RedirectResponse(url=target, status_code=303)
 
+    default_profile = _resolve_default_player_profile(user, db, create_if_missing=True)
+    setup_ctx = _setup_context_from_user_and_profile(user, default_profile)
+    db.commit()
+
     return templates.TemplateResponse(
         request=request,
         name="experience.html",
-        context={"title": f"{settings.app_name} Experience", "current_user": user},
+        context={"title": f"{settings.app_name} Experience", "current_user": user, "setup": setup_ctx},
     )

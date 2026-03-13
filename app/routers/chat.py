@@ -203,12 +203,6 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
         wearer_style = prefs.get("wearer_style")
         wearer_goal = prefs.get("wearer_goal")
         wearer_boundary = prefs.get("wearer_boundary")
-    # Fall back to the AuthUser-level setup_boundary if not set on the profile
-    if not wearer_boundary:
-        from app.models.auth_user import AuthUser as _AuthUser
-        _au = db.query(_AuthUser).filter(_AuthUser.active_session_id == session_id).first()
-        if _au and _au.setup_boundary:
-            wearer_boundary = _au.setup_boundary
 
     prompt_modules = build_prompt_modules(
         persona_name=persona_name,

@@ -3,7 +3,9 @@ from uuid import uuid4
 
 from app.database import SessionLocal
 from app.main import app
+from app.models.auth_user import AuthUser
 from app.models.llm_profile import LlmProfile
+from app.models.player_profile import PlayerProfile
 
 
 def _register(client: TestClient, email: str = "setup-user@example.com"):
@@ -55,8 +57,12 @@ def test_setup_completion_redirects_to_experience():
         experience_resp = client.get("/experience")
         assert experience_resp.status_code == 200
         assert "value=\"Eri\"" in experience_resp.text
-        assert "kein pain, keine public tasks" in experience_resp.text
         assert "value=\"1.3\"" in experience_resp.text
+
+        summary = client.get("/api/settings/summary")
+        assert summary.status_code == 200
+        payload = summary.json()
+        assert "kein pain, keine public tasks" in str(payload.get("boundary") or "")
 
 
 def test_login_for_incomplete_setup_redirects_to_experience():
@@ -98,7 +104,8 @@ def test_inventory_page_requires_authentication():
 
 def test_profile_can_update_setup_data():
     with TestClient(app) as client:
-        register_resp = _register(client, email=f"profile-update-{uuid4().hex[:8]}@example.com")
+        email = f"profile-update-{uuid4().hex[:8]}@example.com"
+        register_resp = _register(client, email=email)
         assert register_resp.status_code == 303
 
         client.post(
@@ -127,6 +134,19 @@ def test_profile_can_update_setup_data():
         assert "Neues Ziel" in update_resp.text
         assert "value=\"Neo\"" in update_resp.text
         assert "kein sleep deprivation" in update_resp.text
+
+        db = SessionLocal()
+        try:
+            user = db.query(AuthUser).filter(AuthUser.email == email).first()
+            assert user is not None
+            assert user.default_player_profile_id is not None
+            profile = db.query(PlayerProfile).filter(PlayerProfile.id == user.default_player_profile_id).first()
+            assert profile is not None
+            assert profile.auth_user_id == user.id
+            assert profile.nickname == "Neo"
+            assert profile.experience_level == "beginner"
+        finally:
+            db.close()
 
 
 def test_profile_page_renders_audio_gateway_section():

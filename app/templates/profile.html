@@ -20,38 +20,38 @@
 
       <form method="post" action="/profile/setup" class="stack">
         <label>Wearer Nickname
-          <input name="wearer_nickname" maxlength="80" value="{{ current_user.setup_wearer_nickname or current_user.username }}" />
+          <input name="wearer_nickname" maxlength="80" value="{{ setup.wearer_nickname }}" />
         </label>
         <label>Erfahrungslevel
           <select name="experience_level" required>
-            <option value="beginner" {% if not current_user.setup_experience_level or current_user.setup_experience_level == "beginner" %}selected{% endif %}>Beginner</option>
-            <option value="intermediate" {% if current_user.setup_experience_level == "intermediate" %}selected{% endif %}>Intermediate</option>
-            <option value="advanced" {% if current_user.setup_experience_level == "advanced" %}selected{% endif %}>Advanced</option>
+            <option value="beginner" {% if not setup.experience_level or setup.experience_level == "beginner" %}selected{% endif %}>Beginner</option>
+            <option value="intermediate" {% if setup.experience_level == "intermediate" %}selected{% endif %}>Intermediate</option>
+            <option value="advanced" {% if setup.experience_level == "advanced" %}selected{% endif %}>Advanced</option>
           </select>
         </label>
         <label>Leitstil
           <select name="role_style" required>
-            <option value="strict" {% if current_user.setup_style == "strict" %}selected{% endif %}>Strict</option>
-            <option value="structured" {% if current_user.setup_style == "structured" %}selected{% endif %}>Structured</option>
-            <option value="supportive" {% if current_user.setup_style == "supportive" %}selected{% endif %}>Supportive</option>
+            <option value="strict" {% if setup.style == "strict" %}selected{% endif %}>Strict</option>
+            <option value="structured" {% if setup.style == "structured" %}selected{% endif %}>Structured</option>
+            <option value="supportive" {% if setup.style == "supportive" %}selected{% endif %}>Supportive</option>
           </select>
         </label>
         <label>Primaerziel
-          <input name="primary_goal" maxlength="120" required value="{{ current_user.setup_goal or '' }}" />
+          <input name="primary_goal" maxlength="120" required value="{{ setup.goal or '' }}" />
         </label>
         <label>Boundary Note
-          <textarea name="boundary_note" rows="4" maxlength="1500" required>{{ current_user.setup_boundary or '' }}</textarea>
+          <textarea name="boundary_note" rows="4" maxlength="1500" required>{{ setup.boundary or '' }}</textarea>
         </label>
         <label>Hard Limits (kommagetrennt)
-          <input name="hard_limits" maxlength="1500" value="{{ current_user.setup_hard_limits or '' }}" />
+          <input name="hard_limits" maxlength="1500" value="{{ setup.hard_limits or '' }}" />
         </label>
         <label>Penalty-Multiplikator
-          <input name="penalty_multiplier" type="number" min="0.1" max="5" step="0.1" value="{{ current_user.setup_penalty_multiplier if current_user.setup_penalty_multiplier is not none else 1.0 }}" />
+          <input name="penalty_multiplier" type="number" min="0.1" max="5" step="0.1" value="{{ setup.penalty_multiplier if setup.penalty_multiplier is not none else 1.0 }}" />
         </label>
         <label>Gentle Mode
           <select name="gentle_mode">
-            <option value="false" {% if not current_user.setup_gentle_mode %}selected{% endif %}>Nein</option>
-            <option value="true" {% if current_user.setup_gentle_mode %}selected{% endif %}>Ja</option>
+            <option value="false" {% if not setup.gentle_mode %}selected{% endif %}>Nein</option>
+            <option value="true" {% if setup.gentle_mode %}selected{% endif %}>Ja</option>
           </select>
         </label>
         <button type="submit">Setup-Daten speichern</button>
