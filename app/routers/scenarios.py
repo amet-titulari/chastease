@@ -17,7 +17,6 @@ SCENARIO_PRESETS = [
     {
         "key": "ametara_titulari_devotion_protocol",
         "title": "Ametara Titulari Devotion Protocol",
-        "character_ref": None,
         "summary": "Langfristige Chastity-Rahmung mit wärmevoller, sinnlicher Kontrolle, täglichen Ritualen, intensivem Edging/Tease & Denial, Inspektionen, Aufgaben und sehr seltenen, bedeutungsvollen Belohnungen.",
         "tags": ["ritual", "devotion", "psychological", "control", "long-term-chastity", "edging", "tease-and-denial", "chronic-denial", "orgasm-control", "progressive-frustration"],
         "phases": [
@@ -94,7 +93,6 @@ SCENARIO_PRESETS = [
     {
         "key": "devotion_protocol",
         "title": "Devotion Protocol",
-        "character_ref": None,
         "summary": "Taegliche Rituale, kurze Checks und klare Konsequenzstufen.",
         "tags": ["ritual", "checkin", "consistency"],
         "phases": [
@@ -110,7 +108,6 @@ SCENARIO_PRESETS = [
     {
         "key": "cold_structure",
         "title": "Cold Structure",
-        "character_ref": None,
         "summary": "Nuechterne, klare Anleitung mit Fokus auf Regeltreue und Reporting.",
         "tags": ["discipline", "reporting", "tasks"],
         "phases": [
@@ -126,7 +123,6 @@ SCENARIO_PRESETS = [
     {
         "key": "careful_progression",
         "title": "Careful Progression",
-        "character_ref": None,
         "summary": "Sanfte, schrittweise Intensitaetssteuerung mit Safety-Prioritaet.",
         "tags": ["safety", "progression", "feedback"],
         "phases": [
@@ -147,7 +143,6 @@ SCENARIO_PRESETS = [
 class ScenarioCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     key: str = Field(min_length=1, max_length=120)
-    character_ref: str | None = Field(default=None, max_length=120)
     summary: str | None = Field(default=None, max_length=4000)
     lorebook: list = Field(default_factory=list)
     phases: list = Field(default_factory=list)
@@ -157,7 +152,6 @@ class ScenarioCreateRequest(BaseModel):
 class ScenarioUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     key: str | None = Field(default=None, min_length=1, max_length=120)
-    character_ref: str | None = Field(default=None, max_length=120)
     summary: str | None = Field(default=None, max_length=4000)
     lorebook: list | None = Field(default=None)
     phases: list | None = Field(default=None)
@@ -171,7 +165,6 @@ def _scenario_to_dict(s: Scenario) -> dict:
         "id": s.id,
         "title": s.title,
         "key": s.key,
-        "character_ref": s.character_ref,
         "summary": s.summary,
         "lorebook": json.loads(s.lorebook_json or "[]"),
         "phases": json.loads(s.phases_json or "[]"),
@@ -205,7 +198,6 @@ def create_scenario(payload: ScenarioCreateRequest, db: Session = Depends(get_db
     scenario = Scenario(
         title=payload.title.strip(),
         key=key,
-        character_ref=None,
         summary=payload.summary.strip() if payload.summary else None,
         lorebook_json=json.dumps(payload.lorebook, ensure_ascii=False),
         phases_json=json.dumps(payload.phases, ensure_ascii=False),
@@ -238,8 +230,6 @@ def update_scenario(scenario_id: int, payload: ScenarioUpdateRequest, db: Sessio
         if conflict:
             raise HTTPException(status_code=409, detail=f"Scenario key '{new_key}' already in use")
         s.key = new_key
-    # Scenario is intentionally decoupled from persona selection.
-    s.character_ref = None
     if payload.summary is not None:
         s.summary = payload.summary.strip() or None
     if payload.lorebook is not None:
@@ -274,7 +264,6 @@ def export_scenario(scenario_id: int, db: Session = Depends(get_db)) -> JSONResp
         "kind": "scenario_card",
         "title": s.title,
         "key": s.key,
-        "character_ref": None,
         "summary": s.summary,
         "lorebook": json.loads(s.lorebook_json or "[]"),
         "phases": json.loads(s.phases_json or "[]"),
@@ -304,7 +293,6 @@ async def import_scenario(request: Request, db: Session = Depends(get_db)) -> di
     s = Scenario(
         title=title,
         key=key,
-        character_ref=None,
         summary=str(body.get("summary", "")).strip() or None,
         lorebook_json=json.dumps(body.get("lorebook") or [], ensure_ascii=False),
         phases_json=json.dumps(body.get("phases") or [], ensure_ascii=False),
