@@ -81,8 +81,9 @@ Das Dashboard (`/`) ist deine Startseite nach dem Login.
 1. Klicke auf „Neue Session starten" im Dashboard oder navigiere zu `/experience`.
 2. Wähle oder bestätige die Persona-Auswahl.
 3. Wähle die Sperrdauer (zufällig oder fix).
-4. Schließe den digitalen Vertrag ab – er dokumentiert die Vereinbarungen für diese Session.
-5. Nach dem Signieren startet die Session und du gelangst zur Play-Ansicht.
+4. In „Regeln" gelten **Standard-Penalty (Wert)** und **Max-Penalty (Wert)** immer in der gewählten **Einheit** (Minuten/Stunden/Tage).
+5. Schließe den digitalen Vertrag ab – er dokumentiert die Vereinbarungen für diese Session.
+6. Nach dem Signieren startet die Session und du gelangst zur Play-Ansicht.
 
 ---
 

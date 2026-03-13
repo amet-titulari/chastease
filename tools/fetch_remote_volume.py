@@ -17,6 +17,8 @@ from datetime import datetime
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
+#defaultMode="db-only"
+defaultMode="all"
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -42,8 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mode",
         choices=("all", "db-only"),
-        #default="all", 
-        default="db-only",
+        default=defaultMode,
         help="all = copy full data dir, db-only = copy only DB file",
     )
     parser.add_argument(

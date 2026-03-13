@@ -35,7 +35,7 @@
       <div id="xp-onboarding-body">
 
       <div class="step-tabs" role="tablist" aria-label="Onboarding Steps">
-        <button class="step-tab is-active" data-step="1" type="button">Persona</button>
+        <button class="step-tab is-active" data-step="1" type="button">Keyholderin</button>
         <button class="step-tab" data-step="2" type="button">Scenario</button>
         <button class="step-tab" data-step="3" type="button">Profil</button>
         <button class="step-tab" data-step="4" type="button">Regeln</button>
@@ -49,7 +49,7 @@
           <label class="xp-select-label">Keyholderin wählen
             <select id="xp-persona-preset"></select>
           </label>
-          <button id="xp-new-persona-btn" type="button" class="xp-btn-secondary xp-btn-icon" title="Neue Persona anlegen">+</button>
+          <button id="xp-new-persona-btn" type="button" class="xp-btn-secondary xp-btn-icon" title="Neue Keyholderin anlegen">+</button>
         </div>
 
         <div id="xp-persona-editor" class="xp-persona-editor">
@@ -168,8 +168,11 @@
         <div class="rules-section-divider">Strafen bei Aufgaben-Fail</div>
 
         <div class="split-3">
-          <label>Standard-Penalty
-            <input id="xp-penalty-default-hours" type="number" min="0" step="0.5" value="3" />
+          <label>Standard-Penalty (Wert)
+            <input id="xp-penalty-default-value" type="number" min="0" step="0.5" value="3" />
+          </label>
+          <label>Max-Penalty (Wert)
+            <input id="xp-penalty-max-value" type="number" min="0" step="0.5" placeholder="unbegrenzt" />
           </label>
           <label class="duration-unit-label">Einheit
             <select id="xp-penalty-default-unit">
@@ -178,11 +181,8 @@
               <option value="60">Minuten</option>
             </select>
           </label>
-          <label>Max-Penalty
-            <input id="xp-penalty-max-hours" type="number" min="0" step="0.5" placeholder="unbegrenzt" />
-          </label>
         </div>
-        <p class="hint">Standard gilt wenn die AI keine eigene Strafzeit vorgibt. Max begrenzt jede Strafe nach oben.</p>
+        <p class="hint">Standard gilt wenn die AI keine eigene Strafzeit vorgibt. Max begrenzt jede Strafe nach oben. Beide Werte verwenden die ausgewaehlte Einheit.</p>
 
         <div class="rules-section-divider">Sicherung</div>
 

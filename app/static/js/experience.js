@@ -88,9 +88,9 @@ const XP_PERSIST_FIELDS = [
   { id: "xp-hygiene-week",       type: "value" },
   { id: "xp-hygiene-month",      type: "value" },
   { id: "xp-hygiene-max-minutes", type: "value" },
-  { id: "xp-penalty-default-hours",  type: "value" },
+  { id: "xp-penalty-default-value",  type: "value" },
   { id: "xp-penalty-default-unit",   type: "value" },
-  { id: "xp-penalty-max-hours",      type: "value" },
+  { id: "xp-penalty-max-value",      type: "value" },
   { id: "xp-seal-enabled",       type: "checked" },
   { id: "xp-seal-number",        type: "value" },
   { id: "xp-llm-provider",       type: "value" },
@@ -136,8 +136,8 @@ function xpBuildServerDraftPayload() {
   const maxSecs = noLimit ? null : (xpDateToSeconds(document.getElementById("xp-max-date")?.value) || xpDaysToSeconds(document.getElementById("xp-max-days")?.value || "30"));
   const sealEnabled = document.getElementById("xp-seal-enabled")?.checked || false;
   const unitSeconds = parseInt(document.getElementById("xp-penalty-default-unit")?.value || "3600", 10);
-  const defaultPenaltyHours = parseFloat(document.getElementById("xp-penalty-default-hours")?.value || "0");
-  const maxPenaltyHours = parseFloat(document.getElementById("xp-penalty-max-hours")?.value || "0");
+  const defaultPenaltyValue = parseFloat(document.getElementById("xp-penalty-default-value")?.value || "0");
+  const maxPenaltyValue = parseFloat(document.getElementById("xp-penalty-max-value")?.value || "0");
   return {
     persona_name: document.getElementById("xp-pe-name")?.value || "",
     persona_tone: document.getElementById("xp-pe-tone")?.value || "",
@@ -155,8 +155,8 @@ function xpBuildServerDraftPayload() {
     hygiene_limit_weekly: xpParseOptionalInt(document.getElementById("xp-hygiene-week")?.value),
     hygiene_limit_monthly: xpParseOptionalInt(document.getElementById("xp-hygiene-month")?.value),
     penalty_multiplier: Number(document.getElementById("xp-penalty-multiplier")?.value || "1"),
-    default_penalty_seconds: defaultPenaltyHours > 0 ? Math.round(defaultPenaltyHours * unitSeconds) : null,
-    max_penalty_seconds: maxPenaltyHours > 0 ? Math.round(maxPenaltyHours * unitSeconds) : null,
+    default_penalty_seconds: defaultPenaltyValue > 0 ? Math.round(defaultPenaltyValue * unitSeconds) : null,
+    max_penalty_seconds: maxPenaltyValue > 0 ? Math.round(maxPenaltyValue * unitSeconds) : null,
     gentle_mode: document.getElementById("xp-gentle-mode")?.value === "true",
     hygiene_opening_max_duration_seconds: Math.max(1, Math.round(Number(document.getElementById("xp-hygiene-max-minutes")?.value || "15") * 60)),
     seal_enabled: sealEnabled,
@@ -311,13 +311,13 @@ async function xpLoadPersonaPresets(selectName) {
     xpPersonaPresets = merged.map((name) => ({ name }));
 
     if (!merged.length) {
-      select.innerHTML = '<option value="">Keine Personas vorhanden</option>';
+      select.innerHTML = '<option value="">Keine Keyholderinnen vorhanden</option>';
       return;
     }
 
     if (dbOpts.length) {
       const grpDb = document.createElement("optgroup");
-      grpDb.label = "Meine Personas";
+      grpDb.label = "Meine Keyholderinnen";
       dbOpts.forEach((name) => {
         const opt = document.createElement("option");
         opt.value = name;
@@ -328,7 +328,7 @@ async function xpLoadPersonaPresets(selectName) {
     }
     if (hcOpts.length) {
       const grpHc = document.createElement("optgroup");
-      grpHc.label = "Integrierte Presets";
+      grpHc.label = "Integrierte Keyholderinnen";
       hcOpts.forEach((name) => {
         const opt = document.createElement("option");
         opt.value = name;
@@ -343,7 +343,7 @@ async function xpLoadPersonaPresets(selectName) {
     if (select.value) xpFillPersonaEditor(select.value);
   } catch (err) {
     select.innerHTML = '<option value="">Fehler beim Laden</option>';
-    xpWrite("Fehler Persona Laden", { error: String(err) });
+    xpWrite("Fehler Keyholderin Laden", { error: String(err) });
   }
 }
 
@@ -378,7 +378,7 @@ function xpFillPersonaEditor(selectedName) {
 // Clear editor for a new persona
 function xpClearPersonaEditor() {
   xpEditPersonaId = null;
-  document.getElementById("xp-persona-editor-title").textContent = "Neue Persona";
+  document.getElementById("xp-persona-editor-title").textContent = "Neue Keyholderin";
   document.getElementById("xp-pe-name").value = "";
   document.getElementById("xp-pe-tone").value = "";
   document.getElementById("xp-pe-dominance").value = "gentle-dominant";
@@ -428,11 +428,11 @@ async function xpSavePersonaEditor() {
       if (!res.ok) throw new Error(JSON.stringify(data));
       saved = data;
     }
-    xpWrite("Persona gespeichert", { name: saved.name, id: saved.id });
+    xpWrite("Keyholderin gespeichert", { name: saved.name, id: saved.id });
     // Reload dropdown and select saved persona (also refills editor)
     await xpLoadPersonaPresets(saved.name);
   } catch (err) {
-    xpWrite("Fehler Persona speichern", { error: String(err) });
+    xpWrite("Fehler Keyholderin speichern", { error: String(err) });
   } finally {
     saveBtn.disabled = false;
   }
@@ -595,7 +595,6 @@ function xpUpdateScenarioDetail(key) {
   const focusEl = document.getElementById("xp-scenario-focus");
   const phasesEl = document.getElementById("xp-scenario-phases");
   const lorebookEl = document.getElementById("xp-scenario-lorebook");
-  const charRefEl = document.getElementById("xp-scenario-charref");
   if (!titleEl) return;
   if (!scenario) {
     titleEl.textContent = "";
@@ -603,7 +602,6 @@ function xpUpdateScenarioDetail(key) {
     if (focusEl) focusEl.innerHTML = "";
     if (phasesEl) phasesEl.innerHTML = "";
     if (lorebookEl) lorebookEl.innerHTML = "";
-    if (charRefEl) charRefEl.innerHTML = "";
     return;
   }
   titleEl.textContent = scenario.title;
@@ -613,15 +611,6 @@ function xpUpdateScenarioDetail(key) {
   const tags = scenario.tags || scenario.focus || [];
   if (focusEl) {
     focusEl.innerHTML = tags.map((f) => `<span class="xp-focus-chip">${f}</span>`).join("");
-  }
-
-  // Character ref (linked persona)
-  if (charRefEl) {
-    if (scenario.character_ref) {
-      charRefEl.innerHTML = `<span class="xp-scenario-meta-badge">&#x1F464; ${scenario.character_ref}</span>`;
-    } else {
-      charRefEl.innerHTML = "";
-    }
   }
 
   // Phases list
@@ -777,12 +766,12 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
       reaction_patterns: {
         penalty_multiplier: Number(document.getElementById("xp-penalty-multiplier").value || "1"),
         default_penalty_seconds: (function() {
-          const h = parseFloat(document.getElementById("xp-penalty-default-hours")?.value || "0");
+          const h = parseFloat(document.getElementById("xp-penalty-default-value")?.value || "0");
           const unit = parseInt(document.getElementById("xp-penalty-default-unit")?.value || "3600", 10);
           return h > 0 ? Math.round(h * unit) : null;
         })(),
         max_penalty_seconds: (function() {
-          const h = parseFloat(document.getElementById("xp-penalty-max-hours")?.value || "0");
+          const h = parseFloat(document.getElementById("xp-penalty-max-value")?.value || "0");
           const unit = parseInt(document.getElementById("xp-penalty-default-unit")?.value || "3600", 10);
           return h > 0 ? Math.round(h * unit) : null;
         })(),

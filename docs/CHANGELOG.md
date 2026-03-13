@@ -5,6 +5,23 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ---
 
+## [0.2.0] – 2026-03-13
+
+### Geändert
+
+- Experience-Onboarding schreibt Werte bei Navigation direkt als Defaults und in die aktive Session.
+- Terminologie in der UI vereinheitlicht: "Persona" in zentralen Onboarding-Stellen zu "Keyholderin" geändert.
+- Scenario-Verwaltung von Persona-Verknüpfung entkoppelt; Scenarios erzwingen keine Keyholderin mehr.
+- Hygiene-Regelanzeige im Play-Drawer vereinfacht und auf Regeln aus Session/Profil abgestimmt.
+- Penalty-Felder in Experience klarer benannt ("Wert" + gemeinsame Einheit) inkl. Doku-Hinweis.
+
+### Behoben
+
+- Logik-/UI-Irritationen bei Scenario↔Persona-Verknüpfung im Onboarding.
+- Inkonsistenzen bei der Übernahme von Experience-Änderungen in laufende Sessions.
+
+---
+
 ## [0.1.0] – 2025-01-27
 
 Erste öffentliche Alpha-Version mit vollständigem Feature-Set für Solo-Nutzung im Heimnetz.

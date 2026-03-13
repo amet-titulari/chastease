@@ -170,12 +170,6 @@
           <input id="sm-key" type="text" maxlength="120" required placeholder="z.B. devotion_protocol" />
         </label>
 
-        <label>Verknüpfte Persona <span style="font-weight:400;font-size:0.8rem;color:#7d8da1;">(optional, Name)</span>
-          <input id="sm-character-ref" type="text" maxlength="120" placeholder="z.B. Ametara Titulari"
-            list="sm-persona-list" />
-          <datalist id="sm-persona-list"></datalist>
-        </label>
-
         <label>Zusammenfassung
           <textarea id="sm-summary" rows="3" maxlength="4000" placeholder="Kurze Beschreibung des Scenarios"></textarea>
         </label>
@@ -360,7 +354,7 @@ function smRenderList(items) {
       <div class="scenario-card" data-id="${s.id}">
         <div class="scenario-card-info">
           <p class="scenario-card-title">${escHtml(s.title)}</p>
-          <p class="scenario-card-meta">${escHtml(s.summary || "")} ${s.character_ref ? `· Persona: ${escHtml(s.character_ref)}` : ""}</p>
+          <p class="scenario-card-meta">${escHtml(s.summary || "")}</p>
           <p class="scenario-card-meta">${phases} Phase(n) · ${lore} Lore-Eintrag/-Einträge · Key: <code>${escHtml(s.key)}</code></p>
           <div class="scenario-card-tags">${tags}</div>
         </div>
@@ -401,25 +395,11 @@ async function smLoadPresets() {
   }
 }
 
-// ── Load persona names for datalist ──
-async function smLoadPersonaNames() {
-  try {
-    const data = await smFetch("/api/personas");
-    const list = document.getElementById("sm-persona-list");
-    (data.items || []).forEach(p => {
-      const opt = document.createElement("option");
-      opt.value = p.name;
-      list.appendChild(opt);
-    });
-  } catch (_) {}
-}
-
 // ── Load preset into form ──
 function smLoadPreset(preset) {
   smReset();
   document.getElementById("sm-title").value = preset.title || "";
   document.getElementById("sm-key").value = preset.key || "";
-  document.getElementById("sm-character-ref").value = preset.character_ref || "";
   document.getElementById("sm-summary").value = preset.summary || "";
   document.getElementById("sm-tags").value = (preset.tags || []).join(", ");
   smSetPhases(preset.phases || []);
@@ -435,7 +415,6 @@ async function smStartEdit(id) {
     document.getElementById("sm-form-title").textContent = `Scenario bearbeiten: ${s.title}`;
     document.getElementById("sm-title").value = s.title;
     document.getElementById("sm-key").value = s.key;
-    document.getElementById("sm-character-ref").value = s.character_ref || "";
     document.getElementById("sm-summary").value = s.summary || "";
     document.getElementById("sm-tags").value = (s.tags || []).join(", ");
     smSetPhases(s.phases || []);
@@ -481,7 +460,6 @@ document.getElementById("sm-form").addEventListener("submit", async (e) => {
   const payload = {
     title: document.getElementById("sm-title").value.trim(),
     key: document.getElementById("sm-key").value.trim(),
-    character_ref: document.getElementById("sm-character-ref").value.trim() || null,
     summary: document.getElementById("sm-summary").value.trim() || null,
     tags: document.getElementById("sm-tags").value.split(",").map(t => t.trim()).filter(Boolean),
     phases: smCollectPhases(),
@@ -550,6 +528,5 @@ importZone.addEventListener("drop", async e => {
 // ── Init ──
 smLoadList();
 smLoadPresets();
-smLoadPersonaNames();
 </script>
 {% endblock %}

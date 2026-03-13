@@ -17,7 +17,7 @@ SCENARIO_PRESETS = [
     {
         "key": "ametara_titulari_devotion_protocol",
         "title": "Ametara Titulari Devotion Protocol",
-        "character_ref": "Ametara Titulari",
+        "character_ref": None,
         "summary": "Langfristige Chastity-Rahmung mit wärmevoller, sinnlicher Kontrolle, täglichen Ritualen, intensivem Edging/Tease & Denial, Inspektionen, Aufgaben und sehr seltenen, bedeutungsvollen Belohnungen.",
         "tags": ["ritual", "devotion", "psychological", "control", "long-term-chastity", "edging", "tease-and-denial", "chronic-denial", "orgasm-control", "progressive-frustration"],
         "phases": [
@@ -205,7 +205,7 @@ def create_scenario(payload: ScenarioCreateRequest, db: Session = Depends(get_db
     scenario = Scenario(
         title=payload.title.strip(),
         key=key,
-        character_ref=payload.character_ref.strip() if payload.character_ref else None,
+        character_ref=None,
         summary=payload.summary.strip() if payload.summary else None,
         lorebook_json=json.dumps(payload.lorebook, ensure_ascii=False),
         phases_json=json.dumps(payload.phases, ensure_ascii=False),
@@ -238,8 +238,8 @@ def update_scenario(scenario_id: int, payload: ScenarioUpdateRequest, db: Sessio
         if conflict:
             raise HTTPException(status_code=409, detail=f"Scenario key '{new_key}' already in use")
         s.key = new_key
-    if payload.character_ref is not None:
-        s.character_ref = payload.character_ref.strip() or None
+    # Scenario is intentionally decoupled from persona selection.
+    s.character_ref = None
     if payload.summary is not None:
         s.summary = payload.summary.strip() or None
     if payload.lorebook is not None:
@@ -274,7 +274,7 @@ def export_scenario(scenario_id: int, db: Session = Depends(get_db)) -> JSONResp
         "kind": "scenario_card",
         "title": s.title,
         "key": s.key,
-        "character_ref": s.character_ref,
+        "character_ref": None,
         "summary": s.summary,
         "lorebook": json.loads(s.lorebook_json or "[]"),
         "phases": json.loads(s.phases_json or "[]"),
@@ -304,7 +304,7 @@ async def import_scenario(request: Request, db: Session = Depends(get_db)) -> di
     s = Scenario(
         title=title,
         key=key,
-        character_ref=str(body.get("character_ref", "")).strip() or None,
+        character_ref=None,
         summary=str(body.get("summary", "")).strip() or None,
         lorebook_json=json.dumps(body.get("lorebook") or [], ensure_ascii=False),
         phases_json=json.dumps(body.get("phases") or [], ensure_ascii=False),
