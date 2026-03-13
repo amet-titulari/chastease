@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     # Audit log – set CHASTEASE_AUDIT_LOG_ENABLED=true to activate
     audit_log_enabled: bool = False
     audit_log_path: str = "./data/audit.log"
+    # WebSocket debug output panel in play view
+    play_ws_debug_enabled: bool = True
 
     model_config = SettingsConfigDict(
         env_prefix="CHASTEASE_",

@@ -3,6 +3,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -572,8 +573,15 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
     persona_name = payload.persona_name or (template_persona.name if template_persona else None)
     player_nickname = payload.player_nickname or (template_profile.nickname if template_profile else None)
     min_duration_seconds = payload.min_duration_seconds or (template_session.min_duration_seconds if template_session else None)
-    if not persona_name or not player_nickname or not min_duration_seconds:
-        raise HTTPException(status_code=422, detail="persona_name, player_nickname und min_duration_seconds sind erforderlich")
+    _missing: list[dict] = []
+    if not persona_name:
+        _missing.append({"type": "missing", "loc": ("body", "persona_name"), "msg": "Field required", "input": None})
+    if not player_nickname:
+        _missing.append({"type": "missing", "loc": ("body", "player_nickname"), "msg": "Field required", "input": None})
+    if not min_duration_seconds:
+        _missing.append({"type": "missing", "loc": ("body", "min_duration_seconds"), "msg": "Field required", "input": None})
+    if _missing:
+        raise RequestValidationError(errors=_missing)
 
     # Reuse an existing persona with the same name rather than creating a new stub
     persona = db.query(Persona).filter(Persona.name == persona_name).first()

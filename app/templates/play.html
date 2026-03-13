@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="/static/css/play.css" />
+<link rel="stylesheet" href="/static/css/play.css?v=20260313b" />
 {% endblock %}
 
 {% block content %}
@@ -90,8 +90,20 @@
       <dl class="psd-info-grid">
         <dt>Wearer</dt><dd>{{ player_nickname }}</dd>
         <dt>Keyholderin</dt><dd>{{ persona_name }}</dd>
+        <dt>Session-ID</dt><dd id="psd-session-id">{{ session_id }}</dd>
+        <dt>Start</dt><dd id="psd-lock-start">&mdash;</dd>
         <dt>Freigabe</dt><dd id="play-lock-end-display">{{ lock_end or '&mdash;' }}</dd>
+        <dt>Verbleibend</dt><dd id="psd-remaining">&mdash;</dd>
         <dt>Status</dt><dd id="play-status-text">{{ session_status }}</dd>
+        <dt>Timer</dt><dd id="psd-timer-frozen">&mdash;</dd>
+        <dt>Mindestdauer</dt><dd id="psd-min-duration">&mdash;</dd>
+        <dt>Maximaldauer</dt><dd id="psd-max-duration">&mdash;</dd>
+        <dt>Aktive Plombe</dt><dd id="psd-active-seal">&mdash;</dd>
+        <dt>Hygiene zuletzt</dt><dd id="psd-last-opening">&mdash;</dd>
+        <dt>Hygiene-Limits</dt><dd id="psd-hygiene-limits">&mdash;</dd>
+        <dt>Task-Statistik</dt><dd id="psd-task-stats">&mdash;</dd>
+        <dt>Task-Strafen</dt><dd id="psd-task-penalty">&mdash;</dd>
+        <dt>Hygiene-Strafen</dt><dd id="psd-hygiene-penalty">&mdash;</dd>
       </dl>
       {% if session_status in ('safeword_stopped', 'yellow', 'red') %}
       <button id="play-resume-session" type="button" class="play-resume-btn">&#8635; Session reaktivieren</button>
@@ -109,7 +121,7 @@
         <dt>Modell</dt><dd id="psd-llm-chat-display">—</dd>
         <dt>API-Key</dt><dd id="psd-llm-key-display">—</dd>
       </dl>
-      <a href="/experience" class="psd-link">Onboarding &amp; Setup &rarr;</a>
+      <a href="/profile" class="psd-link">Profil &amp; Setup &rarr;</a>
     </section>
 
     <section class="psd-section">
@@ -148,7 +160,9 @@
   </div>
 </div>
 
+{% if ws_debug_enabled %}
 <pre id="play-output" class="play-debug-output">Bereit.</pre>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

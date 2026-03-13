@@ -1,5 +1,6 @@
 import hashlib
 import secrets
+from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, Form, Request
@@ -12,10 +13,13 @@ from app.config import settings
 from app.database import get_db
 from app.models.auth_user import AuthUser
 from app.models.contract import Contract
+from app.models.hygiene_opening import HygieneOpening
 from app.models.llm_profile import LlmProfile
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
+from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
+from app.models.task import Task
 
 router = APIRouter(tags=["web"])
 templates = Jinja2Templates(directory="app/templates")
@@ -559,13 +563,77 @@ def settings_summary(request: Request, db: Session = Depends(get_db)):
     user = _get_current_user(request, db)
     if user is None:
         return JSONResponse({"error": "unauthorized"}, status_code=401)
+
     llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+
+    session_summary = None
+    if user.active_session_id:
+        session_obj = db.query(SessionModel).filter(SessionModel.id == user.active_session_id).first()
+        if session_obj:
+            active_seal = (
+                db.query(SealHistory)
+                .filter(SealHistory.session_id == session_obj.id, SealHistory.status == "active")
+                .order_by(SealHistory.applied_at.desc())
+                .first()
+            )
+            last_opening = (
+                db.query(HygieneOpening)
+                .filter(HygieneOpening.session_id == session_obj.id)
+                .order_by(HygieneOpening.id.desc())
+                .first()
+            )
+
+            task_rows = db.query(Task).filter(Task.session_id == session_obj.id).all()
+            task_total = len(task_rows)
+            task_pending = sum(1 for t in task_rows if t.status == "pending")
+            task_completed = sum(1 for t in task_rows if t.status == "completed")
+            task_overdue = sum(1 for t in task_rows if t.status == "overdue")
+            task_failed = sum(1 for t in task_rows if t.status == "failed")
+            task_penalty_total_seconds = sum(int(t.consequence_applied_seconds or 0) for t in task_rows)
+
+            opening_rows = db.query(HygieneOpening).filter(HygieneOpening.session_id == session_obj.id).all()
+            hygiene_penalty_total_seconds = sum(int(item.penalty_seconds or 0) for item in opening_rows)
+            hygiene_overrun_total_seconds = sum(int(item.overrun_seconds or 0) for item in opening_rows)
+
+            remaining_seconds = None
+            if session_obj.lock_end is not None:
+                lock_end = session_obj.lock_end
+                if lock_end.tzinfo is None:
+                    lock_end = lock_end.replace(tzinfo=timezone.utc)
+                remaining_seconds = max(0, int((lock_end - datetime.now(timezone.utc)).total_seconds()))
+
+            session_summary = {
+                "session_id": session_obj.id,
+                "status": session_obj.status,
+                "lock_start": str(session_obj.lock_start) if session_obj.lock_start else None,
+                "lock_end": str(session_obj.lock_end) if session_obj.lock_end else None,
+                "remaining_seconds": remaining_seconds,
+                "timer_frozen": bool(session_obj.timer_frozen),
+                "min_duration_seconds": session_obj.min_duration_seconds,
+                "max_duration_seconds": session_obj.max_duration_seconds,
+                "hygiene_limit_daily": session_obj.hygiene_limit_daily,
+                "hygiene_limit_weekly": session_obj.hygiene_limit_weekly,
+                "hygiene_limit_monthly": session_obj.hygiene_limit_monthly,
+                "active_seal_number": active_seal.seal_number if active_seal else None,
+                "last_opening_status": last_opening.status if last_opening else None,
+                "last_opening_due_back_at": str(last_opening.due_back_at) if (last_opening and last_opening.due_back_at) else None,
+                "task_total": task_total,
+                "task_pending": task_pending,
+                "task_completed": task_completed,
+                "task_overdue": task_overdue,
+                "task_failed": task_failed,
+                "task_penalty_total_seconds": task_penalty_total_seconds,
+                "hygiene_penalty_total_seconds": hygiene_penalty_total_seconds,
+                "hygiene_overrun_total_seconds": hygiene_overrun_total_seconds,
+            }
+
     return JSONResponse({
         "username": user.username,
         "experience_level": user.setup_experience_level,
         "style": user.setup_style,
         "goal": user.setup_goal,
         "boundary": user.setup_boundary,
+        "session": session_summary,
         "llm": {
             "provider": llm.provider,
             "api_url": llm.api_url or "",
@@ -627,6 +695,7 @@ def play_page(session_id: int, request: Request, db: Session = Depends(get_db)):
             "persona_name": persona.name if persona else "Keyholderin",
             "player_nickname": player.nickname if player else user.username,
             "lock_end": session_obj.lock_end.isoformat() if session_obj.lock_end else None,
+            "ws_debug_enabled": settings.play_ws_debug_enabled,
         },
     )
 

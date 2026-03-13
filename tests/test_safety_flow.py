@@ -4,6 +4,11 @@ from app.config import settings
 from app.main import app
 
 
+def _admin_headers() -> dict:
+    s = settings.admin_secret
+    return {"X-Admin-Secret": s} if s else {}
+
+
 def _create_and_sign_session(client: TestClient) -> int:
     create_resp = client.post(
         "/api/sessions",
@@ -23,17 +28,26 @@ def test_traffic_light_and_emergency_logging():
     with TestClient(app) as client:
         session_id = _create_and_sign_session(client)
 
-        yellow = client.post(f"/api/sessions/{session_id}/safety/traffic-light", json={"color": "yellow"})
+        yellow = client.post(
+            f"/api/sessions/{session_id}/safety/traffic-light",
+            json={"color": "yellow"},
+            headers=_admin_headers(),
+        )
         assert yellow.status_code == 200
         assert yellow.json()["status"] in {"active", "paused"}
 
-        red = client.post(f"/api/sessions/{session_id}/safety/traffic-light", json={"color": "red"})
+        red = client.post(
+            f"/api/sessions/{session_id}/safety/traffic-light",
+            json={"color": "red"},
+            headers=_admin_headers(),
+        )
         assert red.status_code == 200
         assert red.json()["status"] == "paused"
 
         emergency = client.post(
             f"/api/sessions/{session_id}/safety/emergency-release",
             json={"reason": "Physical discomfort detected"},
+            headers=_admin_headers(),
         )
         assert emergency.status_code == 200
         assert emergency.json()["status"] == "emergency_stopped"

@@ -1218,13 +1218,13 @@ body:has(.play-shell) main.container {
 /* --- Debug output --- */
 .play-debug-output {
   position: fixed;
-  bottom: 1rem;
+  top: 1rem;
   right: 1rem;
   width: 320px;
   max-height: 160px;
   overflow-y: auto;
   font-size: 0.7rem;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.58);
   color: #8fb3d5;
   padding: 0.5rem 0.75rem;
   border-radius: 8px;
@@ -1339,5 +1339,12 @@ body:has(.play-shell) main.container {
 
   .action-card {
     padding: 0.5rem 0.65rem;
+  }
+
+  .play-debug-output {
+    top: 3.6rem;
+    right: 0.5rem;
+    width: min(300px, calc(100vw - 1rem));
+    max-height: 140px;
   }
 }

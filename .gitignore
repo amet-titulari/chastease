@@ -9,3 +9,6 @@ htmlcov/
 .env
 data/
 .DS_Store
+
+backups/
+data/

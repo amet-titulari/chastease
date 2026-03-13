@@ -6,6 +6,11 @@ from app.main import app
 from app.models.message import Message
 
 
+def _admin_headers() -> dict:
+    s = settings.admin_secret
+    return {"X-Admin-Secret": s} if s else {}
+
+
 def _create_and_sign(client: TestClient) -> tuple[int, str]:
     create_resp = client.post(
         "/api/sessions",
@@ -55,7 +60,10 @@ def test_rotate_ws_token_returns_new_token():
     with TestClient(app) as client:
         session_id, ws_auth_token = _create_and_sign(client)
 
-        rotate_resp = client.post(f"/api/sessions/{session_id}/chat/ws-token/rotate")
+        rotate_resp = client.post(
+            f"/api/sessions/{session_id}/chat/ws-token/rotate",
+            headers=_admin_headers(),
+        )
         assert rotate_resp.status_code == 200
         rotated = rotate_resp.json()
         assert rotated["session_id"] == session_id
@@ -68,7 +76,10 @@ def test_rotate_ws_token_invalidates_existing_connection():
         session_id, ws_auth_token = _create_and_sign(client)
 
         with client.websocket_connect(f"/api/sessions/{session_id}/chat/ws?token={ws_auth_token}") as ws:
-            rotate_resp = client.post(f"/api/sessions/{session_id}/chat/ws-token/rotate")
+            rotate_resp = client.post(
+                f"/api/sessions/{session_id}/chat/ws-token/rotate",
+                headers=_admin_headers(),
+            )
             assert rotate_resp.status_code == 200
 
             # Next interaction should be rejected because token was rotated server-side.

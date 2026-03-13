@@ -851,6 +851,42 @@ async function plLoadSettingsSummary() {
   try {
     const data = await plGet("/api/settings/summary");
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || "—"; };
+    const fmtDate = (val) => {
+      if (!val) return "—";
+      try {
+        return new Date(val).toLocaleString("de-DE");
+      } catch (_) {
+        return String(val);
+      }
+    };
+    const fmtSecs = (secs) => {
+      if (secs === null || secs === undefined || Number.isNaN(Number(secs))) return "—";
+      const total = Math.max(0, Number(secs));
+      const h = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = Math.floor(total % 60);
+      if (h > 0) return `${h}h ${m}m ${s}s`;
+      return `${m}m ${s}s`;
+    };
+
+    if (data.session) {
+      const s = data.session;
+      set("psd-session-id", s.session_id ? `#${s.session_id}` : "—");
+      set("psd-lock-start", fmtDate(s.lock_start));
+      set("play-lock-end-display", fmtDate(s.lock_end));
+      set("psd-remaining", fmtSecs(s.remaining_seconds));
+      set("play-status-text", s.status);
+      set("psd-timer-frozen", s.timer_frozen ? "eingefroren" : "laufend");
+      set("psd-min-duration", fmtSecs(s.min_duration_seconds));
+      set("psd-max-duration", s.max_duration_seconds ? fmtSecs(s.max_duration_seconds) : "—");
+      set("psd-active-seal", s.active_seal_number || "—");
+      set("psd-last-opening", s.last_opening_status ? `${s.last_opening_status}${s.last_opening_due_back_at ? ` (Rueckgabe: ${fmtDate(s.last_opening_due_back_at)})` : ""}` : "—");
+      set("psd-hygiene-limits", `Tag: ${s.hygiene_limit_daily ?? "—"}, Woche: ${s.hygiene_limit_weekly ?? "—"}, Monat: ${s.hygiene_limit_monthly ?? "—"}`);
+      set("psd-task-stats", `Gesamt: ${s.task_total ?? 0} | pending: ${s.task_pending ?? 0} | completed: ${s.task_completed ?? 0} | overdue: ${s.task_overdue ?? 0} | failed: ${s.task_failed ?? 0}`);
+      set("psd-task-penalty", fmtSecs(s.task_penalty_total_seconds));
+      set("psd-hygiene-penalty", `${fmtSecs(s.hygiene_penalty_total_seconds)} (Overrun: ${fmtSecs(s.hygiene_overrun_total_seconds)})`);
+    }
+
     set("psd-exp", data.experience_level);
     set("psd-style", data.style);
     set("psd-goal", data.goal);

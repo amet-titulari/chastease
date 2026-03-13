@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.database import SessionLocal
 from app.main import app
 from app.models.session import Session
@@ -45,6 +46,7 @@ def test_sweeper_marks_overdue_and_applies_penalty():
         with SessionLocal() as db:
             session_after = db.query(Session).filter(Session.id == session_id).first()
             task_after = db.query(Task).filter(Task.id == task_id).first()
+            expected_penalty = settings.task_overdue_default_penalty_seconds
             assert task_after.status == "overdue"
-            assert task_after.consequence_applied_seconds == 300
-            assert session_after.lock_end == lock_end_before + timedelta(seconds=300)
+            assert task_after.consequence_applied_seconds == expected_penalty
+            assert session_after.lock_end == lock_end_before + timedelta(seconds=expected_penalty)
