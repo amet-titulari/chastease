@@ -105,15 +105,36 @@ def upgrade() -> None:
 
     inspector = sa.inspect(bind)
     if not _column_exists(inspector, "personas", "avatar_media_id"):
-        op.add_column("personas", sa.Column("avatar_media_id", sa.Integer(), sa.ForeignKey("media_assets.id", ondelete="SET NULL"), nullable=True))
+        with op.batch_alter_table("personas") as batch_op:
+            batch_op.add_column(sa.Column("avatar_media_id", sa.Integer(), nullable=True))
+            batch_op.create_foreign_key(
+                "fk_personas_avatar_media_id_media_assets",
+                "media_assets",
+                ["avatar_media_id"],
+                ["id"],
+                ondelete="SET NULL",
+            )
     inspector = sa.inspect(bind)
     if not _column_exists(inspector, "player_profiles", "avatar_media_id"):
-        op.add_column("player_profiles", sa.Column("avatar_media_id", sa.Integer(), sa.ForeignKey("media_assets.id", ondelete="SET NULL"), nullable=True))
+        with op.batch_alter_table("player_profiles") as batch_op:
+            batch_op.add_column(sa.Column("avatar_media_id", sa.Integer(), nullable=True))
+            batch_op.create_foreign_key(
+                "fk_player_profiles_avatar_media_id_media_assets",
+                "media_assets",
+                ["avatar_media_id"],
+                ["id"],
+                ondelete="SET NULL",
+            )
 
 
 def downgrade() -> None:
-    op.drop_column("player_profiles", "avatar_media_id")
-    op.drop_column("personas", "avatar_media_id")
+    with op.batch_alter_table("player_profiles") as batch_op:
+        batch_op.drop_constraint("fk_player_profiles_avatar_media_id_media_assets", type_="foreignkey")
+        batch_op.drop_column("avatar_media_id")
+
+    with op.batch_alter_table("personas") as batch_op:
+        batch_op.drop_constraint("fk_personas_avatar_media_id_media_assets", type_="foreignkey")
+        batch_op.drop_column("avatar_media_id")
 
     op.drop_index("ix_session_items_item_id", table_name="session_items")
     op.drop_index("ix_session_items_session_id", table_name="session_items")
