@@ -21,6 +21,7 @@ class Session(Base):
     hygiene_limit_daily = Column(Integer, nullable=True)
     hygiene_limit_weekly = Column(Integer, nullable=True)
     hygiene_limit_monthly = Column(Integer, nullable=True)
+    hygiene_opening_max_duration_seconds = Column(Integer, nullable=True)
     llm_provider = Column(String(50), nullable=True)
     llm_api_url = Column(String(500), nullable=True)
     llm_api_key = Column(Text, nullable=True)

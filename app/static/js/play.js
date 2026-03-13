@@ -37,6 +37,44 @@ function plSetAttachedFile(file) {
   }
 }
 
+function plRenderHygieneQuota(quotaData) {
+  const el = document.getElementById("psd-hygiene-quota");
+  if (!el || !quotaData) return;
+
+  const limits = quotaData.limits || {};
+  const used = quotaData.used || {};
+  const remaining = quotaData.remaining || {};
+  const fmt = (v) => (v === null || v === undefined ? "unbegrenzt" : String(v));
+
+  el.textContent =
+    `Kontingent - Tag: ${fmt(used.daily)}/${fmt(limits.daily)} (rest ${fmt(remaining.daily)}), ` +
+    `Woche: ${fmt(used.weekly)}/${fmt(limits.weekly)} (rest ${fmt(remaining.weekly)}), ` +
+    `Monat: ${fmt(used.monthly)}/${fmt(limits.monthly)} (rest ${fmt(remaining.monthly)})`;
+}
+
+async function plLoadHygieneQuota() {
+  if (!SESSION_ID) return;
+  try {
+    const data = await plGet(`/api/sessions/${SESSION_ID}/hygiene/quota`);
+    plRenderHygieneQuota(data);
+  } catch (err) {
+    const el = document.getElementById("psd-hygiene-quota");
+    if (el) el.textContent = `Kontingent konnte nicht geladen werden (${String(err)}).`;
+  }
+}
+
+function plFormatMessageTime(value) {
+  if (!value) return "";
+  const raw = String(value).trim();
+  if (!raw) return "";
+
+  // Backends often return naive timestamps; interpret them as UTC to avoid shifted local display.
+  const normalized = /[zZ]|[+-]\d{2}:?\d{2}$/.test(raw) ? raw : `${raw.replace(" ", "T")}Z`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+}
+
 // -- Countdown timer --
 function plFormatRemaining(isoStr) {
   if (!isoStr) return "—";
@@ -110,9 +148,9 @@ function plRenderChat(items) {
     .slice(-80)
     .map((item) => {
       const role = item.role || "system";
-      const cssRole = role === "assistant" ? "from-ai" : "from-user";
+      const cssRole = role === "user" ? "from-user" : "from-ai";
       const content = String(item.content || "").replace(/</g, "&lt;");
-      const ts = item.created_at ? new Date(item.created_at).toLocaleTimeString("de-DE") : "";
+      const ts = plFormatMessageTime(item.created_at);
       // Store task IDs on task_assigned bubbles so cards can be injected inline
       let taskAttr = "";
       if (item.message_type === "task_assigned") {
@@ -617,6 +655,7 @@ document.getElementById("play-safety-safeword")?.addEventListener("click", () =>
 // -- Hygiene opening --
 let plHygieneOpeningId = null;
 let plHygieneUsesSeal = false;
+let plHygieneConfiguredDurationSeconds = 900;
 
 function plHygieneSetPhase(phase) {
   const openArea = document.getElementById("psd-hygiene-open-area");
@@ -637,7 +676,6 @@ document.getElementById("psd-hygiene-open")?.addEventListener("click", async () 
   const statusEl = document.getElementById("psd-hygiene-status");
   btn.disabled = true;
   try {
-    const durationMins = parseInt(document.getElementById("psd-hygiene-duration")?.value || "15", 10);
     let oldSealNumber = null;
     try {
       const sealData = await plGet(`/api/sessions/${SESSION_ID}/seal-history`);
@@ -646,11 +684,12 @@ document.getElementById("psd-hygiene-open")?.addEventListener("click", async () 
     } catch (_) {}
     plHygieneUsesSeal = !!oldSealNumber;
     const data = await plPost(`/api/sessions/${SESSION_ID}/hygiene/openings`, {
-      duration_seconds: durationMins * 60,
+      duration_seconds: Math.max(60, Math.round(Number(plHygieneConfiguredDurationSeconds) || 900)),
       old_seal_number: oldSealNumber,
     });
     plHygieneOpeningId = data.opening_id;
     if (statusEl) { statusEl.textContent = `⏱️ Rück bis: ${new Date(data.due_back_at).toLocaleTimeString("de-DE")}`; statusEl.style.color = "var(--color-warn,#ffb300)"; }
+    plRenderHygieneQuota(data.quota);
     plHygieneSetPhase("relock");
   } catch (err) {
     if (statusEl) { statusEl.textContent = `Fehler: ${err}`; statusEl.style.color = "var(--color-error,#f44)"; }
@@ -684,6 +723,7 @@ document.getElementById("psd-hygiene-relock")?.addEventListener("click", async (
     if (statusEl) { statusEl.textContent = "Wiederverschlossen ✓"; statusEl.style.color = "var(--color-success,#81c784)"; }
     // Update active seal display in verification area
     if (data.new_seal_number) plSetVerifySeal(data.new_seal_number);
+    await plLoadHygieneQuota();
     plWrite("Hygiene Wiederverschluss", data);
   } catch (err) {
     if (statusEl) { statusEl.textContent = `Fehler: ${err}`; statusEl.style.color = "var(--color-error,#f44)"; }
@@ -821,6 +861,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await plLoadChat();
   await plListTasks();
   await plLoadVerifications();
+  await plLoadHygieneQuota();
   plConnectWs();
 });
 
@@ -849,8 +890,15 @@ settingsOverlay?.addEventListener("click", plCloseSettings);
 
 async function plLoadSettingsSummary() {
   try {
-    const data = await plGet("/api/settings/summary");
+    const data = await plGet(`/api/settings/summary?session_id=${SESSION_ID}`);
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || "—"; };
+    const setIfPresent = (id, val) => {
+      if (val === null || val === undefined) return;
+      const normalized = String(val).trim();
+      if (!normalized) return;
+      const el = document.getElementById(id);
+      if (el) el.textContent = normalized;
+    };
     const fmtDate = (val) => {
       if (!val) return "—";
       try {
@@ -871,6 +919,8 @@ async function plLoadSettingsSummary() {
 
     if (data.session) {
       const s = data.session;
+      setIfPresent("psd-wearer", s.player_nickname);
+      setIfPresent("psd-keyholder", s.persona_name);
       set("psd-session-id", s.session_id ? `#${s.session_id}` : "—");
       set("psd-lock-start", fmtDate(s.lock_start));
       set("play-lock-end-display", fmtDate(s.lock_end));
@@ -881,10 +931,20 @@ async function plLoadSettingsSummary() {
       set("psd-max-duration", s.max_duration_seconds ? fmtSecs(s.max_duration_seconds) : "—");
       set("psd-active-seal", s.active_seal_number || "—");
       set("psd-last-opening", s.last_opening_status ? `${s.last_opening_status}${s.last_opening_due_back_at ? ` (Rueckgabe: ${fmtDate(s.last_opening_due_back_at)})` : ""}` : "—");
-      set("psd-hygiene-limits", `Tag: ${s.hygiene_limit_daily ?? "—"}, Woche: ${s.hygiene_limit_weekly ?? "—"}, Monat: ${s.hygiene_limit_monthly ?? "—"}`);
       set("psd-task-stats", `Gesamt: ${s.task_total ?? 0} | pending: ${s.task_pending ?? 0} | completed: ${s.task_completed ?? 0} | overdue: ${s.task_overdue ?? 0} | failed: ${s.task_failed ?? 0}`);
       set("psd-task-penalty", fmtSecs(s.task_penalty_total_seconds));
       set("psd-hygiene-penalty", `${fmtSecs(s.hygiene_penalty_total_seconds)} (Overrun: ${fmtSecs(s.hygiene_overrun_total_seconds)})`);
+
+      const rulesEl = document.getElementById("psd-hygiene-rules");
+      if (rulesEl) {
+        const basePenalty = fmtSecs(s.hygiene_overdue_penalty_min_seconds);
+        const maxMinutes = Math.max(1, Math.floor(Number(s.hygiene_opening_max_duration_seconds || 900) / 60));
+        rulesEl.textContent =
+          `Regeln: Maximaldauer ${maxMinutes} Minuten. ` +
+          `Bei Ueberziehung gilt Penalty = max(Overrun, ${basePenalty}). ` +
+          `Wenn mit Plombe geoeffnet wurde, ist beim Wiederverschliessen eine neue Plombennummer Pflicht.`;
+      }
+      plHygieneConfiguredDurationSeconds = Math.max(60, Math.round(Number(s.hygiene_opening_max_duration_seconds || 900)));
     }
 
     set("psd-exp", data.experience_level);

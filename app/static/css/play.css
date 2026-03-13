@@ -152,6 +152,9 @@ body:has(.play-shell) main.container {
   flex-direction: column;
   gap: 0.65rem;
   scroll-behavior: smooth;
+  background:
+    radial-gradient(circle at 85% 12%, rgba(124, 180, 224, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(8, 20, 32, 0.5) 0%, rgba(8, 20, 32, 0) 28%);
 }
 
 .play-chat-footer {
@@ -273,37 +276,41 @@ body:has(.play-shell) main.container {
 .chat-bubble {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.28rem;
 }
 
 .chat-bubble.from-ai .bubble-body {
   align-self: flex-start;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 4px 14px 14px 14px;
+  background: linear-gradient(180deg, rgba(16, 34, 52, 0.95), rgba(12, 28, 43, 0.95));
+  border: 1px solid rgba(124, 180, 224, 0.2);
+  border-radius: 8px 16px 16px 16px;
   color: var(--ink);
+  box-shadow: 0 4px 14px rgba(5, 10, 18, 0.35);
 }
 
 .chat-bubble.from-user .bubble-body {
   align-self: flex-end;
-  background: rgba(124, 180, 224, 0.12);
-  border: 1px solid rgba(124, 180, 224, 0.25);
-  border-radius: 14px 4px 14px 14px;
+  background: linear-gradient(180deg, rgba(95, 142, 185, 0.26), rgba(95, 142, 185, 0.2));
+  border: 1px solid rgba(124, 180, 224, 0.36);
+  border-radius: 16px 8px 16px 16px;
   color: var(--ink);
+  box-shadow: 0 4px 14px rgba(5, 10, 18, 0.3);
 }
 
 .bubble-body {
-  padding: 0.5rem 0.8rem;
-  font-size: 0.87rem;
-  line-height: 1.5;
-  max-width: 85%;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.9rem;
+  line-height: 1.52;
+  max-width: min(84%, 680px);
   white-space: pre-wrap;
 }
 
 .bubble-meta {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--muted);
-  padding: 0 0.4rem;
+  padding: 0 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .chat-bubble.from-user .bubble-meta {
@@ -697,7 +704,7 @@ body:has(.play-shell) main.container {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 0.6rem 0;
+  padding: 0.6rem 0 0.7rem;
   /* No background/border — floats naturally in the timeline */
 }
 
@@ -1256,6 +1263,11 @@ body:has(.play-shell) main.container {
     min-height: 0;
   }
 
+  .play-chat-timeline {
+    padding: 0.7rem 0.6rem 0.9rem;
+    gap: 0.5rem;
+  }
+
   /* Compact header on mobile */
   .play-header {
     padding: 0.4rem 0.6rem;
@@ -1333,12 +1345,24 @@ body:has(.play-shell) main.container {
 
   /* Action cards take less vertical space on mobile */
   .play-action-cards {
-    max-height: 200px;
-    padding: 0.45rem 0.55rem;
+    max-height: none;
+    overflow: visible;
+    padding: 0.4rem 0.15rem 0.55rem;
   }
 
   .action-card {
-    padding: 0.5rem 0.65rem;
+    padding: 0.55rem 0.62rem;
+    border-radius: 10px;
+    gap: 0.32rem;
+  }
+
+  .ac-actions {
+    gap: 0.3rem;
+  }
+
+  .ac-btn,
+  .ac-submit-btn {
+    min-height: 34px;
   }
 
   .play-debug-output {

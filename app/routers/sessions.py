@@ -8,6 +8,7 @@ from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models.contract import Contract, ContractAddendum
 from app.models.hygiene_opening import HygieneOpening
@@ -37,6 +38,7 @@ class CreateSessionRequest(BaseModel):
     hygiene_limit_daily: int | None = Field(default=None, ge=0)
     hygiene_limit_weekly: int | None = Field(default=None, ge=0)
     hygiene_limit_monthly: int | None = Field(default=None, ge=0)
+    hygiene_opening_max_duration_seconds: int | None = Field(default=None, ge=60)
     experience_level: str | None = Field(default=None, max_length=50)
     wearer_style: str | None = Field(default=None, max_length=80)
     wearer_goal: str | None = Field(default=None, max_length=120)
@@ -119,6 +121,7 @@ def _session_blueprint(db: Session, session_obj: SessionModel) -> dict:
         "hygiene_limit_daily": session_obj.hygiene_limit_daily,
         "hygiene_limit_weekly": session_obj.hygiene_limit_weekly,
         "hygiene_limit_monthly": session_obj.hygiene_limit_monthly,
+        "hygiene_opening_max_duration_seconds": session_obj.hygiene_opening_max_duration_seconds,
         "wearer_style": prefs.get("wearer_style"),
         "wearer_goal": prefs.get("wearer_goal"),
         "wearer_boundary": prefs.get("wearer_boundary"),
@@ -191,6 +194,7 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
         "hygiene_limit_daily": session_obj.hygiene_limit_daily,
         "hygiene_limit_weekly": session_obj.hygiene_limit_weekly,
         "hygiene_limit_monthly": session_obj.hygiene_limit_monthly,
+        "hygiene_opening_max_duration_seconds": session_obj.hygiene_opening_max_duration_seconds,
         "llm_session": {
             "provider": session_obj.llm_provider,
             "api_url": session_obj.llm_api_url,
@@ -629,6 +633,15 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
     hygiene_limit_daily = payload.hygiene_limit_daily if payload.hygiene_limit_daily is not None else (template_session.hygiene_limit_daily if template_session else None)
     hygiene_limit_weekly = payload.hygiene_limit_weekly if payload.hygiene_limit_weekly is not None else (template_session.hygiene_limit_weekly if template_session else None)
     hygiene_limit_monthly = payload.hygiene_limit_monthly if payload.hygiene_limit_monthly is not None else (template_session.hygiene_limit_monthly if template_session else None)
+    hygiene_opening_max_duration_seconds = (
+        payload.hygiene_opening_max_duration_seconds
+        if payload.hygiene_opening_max_duration_seconds is not None
+        else (
+            template_session.hygiene_opening_max_duration_seconds
+            if template_session and template_session.hygiene_opening_max_duration_seconds is not None
+            else settings.hygiene_opening_max_duration_seconds
+        )
+    )
 
     default_llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
     llm_provider = payload.llm_provider if payload.llm_provider is not None else (template_session.llm_provider if template_session else (default_llm.provider if default_llm else None))
@@ -646,6 +659,7 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
         hygiene_limit_daily=hygiene_limit_daily,
         hygiene_limit_weekly=hygiene_limit_weekly,
         hygiene_limit_monthly=hygiene_limit_monthly,
+        hygiene_opening_max_duration_seconds=hygiene_opening_max_duration_seconds,
         llm_provider=llm_provider,
         llm_api_url=llm_api_url,
         llm_api_key=llm_api_key,

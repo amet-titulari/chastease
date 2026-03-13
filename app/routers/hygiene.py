@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -6,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.hygiene_opening import HygieneOpening
+from app.models.player_profile import PlayerProfile
 from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
 from app.config import settings
@@ -72,6 +74,38 @@ def _quota_exceeded(quota: dict) -> bool:
     return False
 
 
+def _effective_hygiene_max_duration_seconds(db: Session, session_obj: SessionModel) -> int:
+    if isinstance(session_obj.hygiene_opening_max_duration_seconds, int) and session_obj.hygiene_opening_max_duration_seconds > 0:
+        return session_obj.hygiene_opening_max_duration_seconds
+
+    player = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+    if player:
+        try:
+            prefs = json.loads(player.preferences_json or "{}")
+            if isinstance(prefs, dict):
+                candidate = prefs.get("hygiene_opening_max_duration_seconds")
+                if isinstance(candidate, (int, float)) and int(candidate) > 0:
+                    return int(candidate)
+        except Exception:
+            pass
+
+    return settings.hygiene_opening_max_duration_seconds
+
+
+def _effective_hygiene_overdue_penalty_seconds(db: Session, session_obj: SessionModel) -> int:
+    player = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+    if player:
+        try:
+            reaction = json.loads(player.reaction_patterns_json or "{}")
+            if isinstance(reaction, dict):
+                candidate = reaction.get("default_penalty_seconds")
+                if isinstance(candidate, (int, float)) and int(candidate) > 0:
+                    return int(candidate)
+        except Exception:
+            pass
+    return settings.hygiene_overdue_penalty_seconds
+
+
 @router.get("/{session_id}/hygiene/quota")
 def get_hygiene_quota(session_id: int, db: Session = Depends(get_db)) -> dict:
     session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -96,6 +130,13 @@ def request_hygiene_opening(
         raise HTTPException(status_code=404, detail="Session not found")
     if session_obj.status != "active":
         raise HTTPException(status_code=400, detail="Session must be active")
+
+    max_duration = _effective_hygiene_max_duration_seconds(db=db, session_obj=session_obj)
+    if payload.duration_seconds > max_duration:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Hygiene opening duration exceeds allowed maximum ({max_duration} seconds)",
+        )
 
     now = datetime.now(timezone.utc)
     quota = _quota_payload(db=db, session_obj=session_obj, now=now)
@@ -156,11 +197,12 @@ def hygiene_opening_status(
             opening.status = "overdue"
             opening.overrun_seconds = status.overrun_seconds
             if opening.penalty_applied_at is None:
-                penalty_seconds = max(settings.hygiene_overdue_penalty_seconds, status.overrun_seconds)
+                session_obj = db.query(SessionModel).filter(SessionModel.id == opening.session_id).first()
+                min_penalty_seconds = _effective_hygiene_overdue_penalty_seconds(db=db, session_obj=session_obj) if session_obj else settings.hygiene_overdue_penalty_seconds
+                penalty_seconds = max(min_penalty_seconds, status.overrun_seconds)
                 opening.penalty_seconds = penalty_seconds
                 opening.penalty_applied_at = datetime.now(timezone.utc)
 
-                session_obj = db.query(SessionModel).filter(SessionModel.id == opening.session_id).first()
                 if session_obj and session_obj.lock_end is not None:
                     session_obj.lock_end = session_obj.lock_end + timedelta(seconds=penalty_seconds)
                     db.add(session_obj)

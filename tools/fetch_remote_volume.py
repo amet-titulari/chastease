@@ -42,7 +42,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mode",
         choices=("all", "db-only"),
-        default="all",
+        #default="all", 
+        default="db-only",
         help="all = copy full data dir, db-only = copy only DB file",
     )
     parser.add_argument(

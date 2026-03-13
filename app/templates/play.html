@@ -88,8 +88,8 @@
     <section class="psd-section">
       <h4>Session</h4>
       <dl class="psd-info-grid">
-        <dt>Wearer</dt><dd>{{ player_nickname }}</dd>
-        <dt>Keyholderin</dt><dd>{{ persona_name }}</dd>
+        <dt>Wearer</dt><dd id="psd-wearer">{{ player_nickname }}</dd>
+        <dt>Keyholderin</dt><dd id="psd-keyholder">{{ persona_name }}</dd>
         <dt>Session-ID</dt><dd id="psd-session-id">{{ session_id }}</dd>
         <dt>Start</dt><dd id="psd-lock-start">&mdash;</dd>
         <dt>Freigabe</dt><dd id="play-lock-end-display">{{ lock_end or '&mdash;' }}</dd>
@@ -100,7 +100,6 @@
         <dt>Maximaldauer</dt><dd id="psd-max-duration">&mdash;</dd>
         <dt>Aktive Plombe</dt><dd id="psd-active-seal">&mdash;</dd>
         <dt>Hygiene zuletzt</dt><dd id="psd-last-opening">&mdash;</dd>
-        <dt>Hygiene-Limits</dt><dd id="psd-hygiene-limits">&mdash;</dd>
         <dt>Task-Statistik</dt><dd id="psd-task-stats">&mdash;</dd>
         <dt>Task-Strafen</dt><dd id="psd-task-penalty">&mdash;</dd>
         <dt>Hygiene-Strafen</dt><dd id="psd-hygiene-penalty">&mdash;</dd>
@@ -111,7 +110,7 @@
     </section>
 
     <section class="psd-section">
-      <h4>Dein Setup</h4>
+      <h4>Dein Profil</h4>
       <dl class="psd-info-grid" id="psd-setup-grid">
         <dt>Erfahrung</dt><dd id="psd-exp">—</dd>
         <dt>Stil</dt><dd id="psd-style">—</dd>
@@ -121,18 +120,15 @@
         <dt>Modell</dt><dd id="psd-llm-chat-display">—</dd>
         <dt>API-Key</dt><dd id="psd-llm-key-display">—</dd>
       </dl>
-      <a href="/profile" class="psd-link">Profil &amp; Setup &rarr;</a>
+      <a href="/profile" class="psd-link">Profil bearbeiten &rarr;</a>
     </section>
 
     <section class="psd-section">
       <h4>Hygiene-&Ouml;ffnung</h4>
+      <p id="psd-hygiene-rules" class="psd-feedback">Regeln werden geladen...</p>
+      <p id="psd-hygiene-quota" class="psd-feedback">Kontingent wird geladen...</p>
       <p id="psd-hygiene-status" class="psd-feedback"></p>
       <div id="psd-hygiene-open-area">
-        <div class="psd-field">
-          <label>Dauer (Minuten)
-            <input id="psd-hygiene-duration" type="number" value="15" min="1" max="120" />
-          </label>
-        </div>
         <div class="psd-actions">
           <button id="psd-hygiene-open" type="button">&Ouml;ffnung beantragen</button>
         </div>

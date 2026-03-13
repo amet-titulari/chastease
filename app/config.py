@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/chastease.db"
     media_dir: str = "./data/media"
     hygiene_overdue_penalty_seconds: int = 600
+    hygiene_opening_max_duration_seconds: int = 900
     task_overdue_default_penalty_seconds: int = 300
     task_overdue_sweeper_enabled: bool = True
     task_overdue_sweeper_interval_seconds: int = 60

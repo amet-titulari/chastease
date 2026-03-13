@@ -7,6 +7,8 @@ let xpDbPersonas = [];       // DB personas with full data (id, name, ...)
 let xpHardcodedPresets = []; // Presets not yet in DB
 let xpEditPersonaId = null;  // null = new, int = edit
 let xpCompletedTemplates = [];
+let xpDraftSaveInFlight = false;
+let xpDraftSaveQueued = false;
 
 const statusEl = document.getElementById("onboarding-status");
 const outputEl = document.getElementById("xp-output");
@@ -85,6 +87,7 @@ const XP_PERSIST_FIELDS = [
   { id: "xp-hygiene-day",        type: "value" },
   { id: "xp-hygiene-week",       type: "value" },
   { id: "xp-hygiene-month",      type: "value" },
+  { id: "xp-hygiene-max-minutes", type: "value" },
   { id: "xp-penalty-default-hours",  type: "value" },
   { id: "xp-penalty-default-unit",   type: "value" },
   { id: "xp-penalty-max-hours",      type: "value" },
@@ -127,8 +130,68 @@ function xpClearDraft() {
 }
 // ----------------------------------
 
+function xpBuildServerDraftPayload() {
+  const noLimit = document.getElementById("xp-max-no-limit")?.checked;
+  const minSecs = xpDateToSeconds(document.getElementById("xp-min-date")?.value) || xpDaysToSeconds(document.getElementById("xp-min-days")?.value || "7");
+  const maxSecs = noLimit ? null : (xpDateToSeconds(document.getElementById("xp-max-date")?.value) || xpDaysToSeconds(document.getElementById("xp-max-days")?.value || "30"));
+  const sealEnabled = document.getElementById("xp-seal-enabled")?.checked || false;
+  const unitSeconds = parseInt(document.getElementById("xp-penalty-default-unit")?.value || "3600", 10);
+  const defaultPenaltyHours = parseFloat(document.getElementById("xp-penalty-default-hours")?.value || "0");
+  const maxPenaltyHours = parseFloat(document.getElementById("xp-penalty-max-hours")?.value || "0");
+  return {
+    persona_name: document.getElementById("xp-pe-name")?.value || "",
+    persona_tone: document.getElementById("xp-pe-tone")?.value || "",
+    persona_dominance: document.getElementById("xp-pe-dominance")?.value || "",
+    persona_description: document.getElementById("xp-pe-description")?.value || "",
+    persona_system_prompt: document.getElementById("xp-pe-system-prompt")?.value || "",
+    scenario_preset: document.getElementById("xp-scenario-preset")?.value || null,
+    wearer_nickname: document.getElementById("xp-player-nickname")?.value || "",
+    experience_level: document.getElementById("xp-experience-level")?.value || "beginner",
+    hard_limits: document.getElementById("xp-hard-limits")?.value || "",
+    min_duration_seconds: Math.max(60, minSecs),
+    max_duration_seconds: maxSecs === null ? null : Math.max(60, maxSecs),
+    no_max_limit: !!noLimit,
+    hygiene_limit_daily: xpParseOptionalInt(document.getElementById("xp-hygiene-day")?.value),
+    hygiene_limit_weekly: xpParseOptionalInt(document.getElementById("xp-hygiene-week")?.value),
+    hygiene_limit_monthly: xpParseOptionalInt(document.getElementById("xp-hygiene-month")?.value),
+    penalty_multiplier: Number(document.getElementById("xp-penalty-multiplier")?.value || "1"),
+    default_penalty_seconds: defaultPenaltyHours > 0 ? Math.round(defaultPenaltyHours * unitSeconds) : null,
+    max_penalty_seconds: maxPenaltyHours > 0 ? Math.round(maxPenaltyHours * unitSeconds) : null,
+    gentle_mode: document.getElementById("xp-gentle-mode")?.value === "true",
+    hygiene_opening_max_duration_seconds: Math.max(1, Math.round(Number(document.getElementById("xp-hygiene-max-minutes")?.value || "15") * 60)),
+    seal_enabled: sealEnabled,
+    initial_seal_number: sealEnabled ? (document.getElementById("xp-seal-number")?.value || "") : null,
+    llm_provider: document.getElementById("xp-llm-provider")?.value || "stub",
+    llm_api_url: document.getElementById("xp-llm-api-url")?.value || "",
+    llm_api_key: document.getElementById("xp-llm-api-key")?.value || "",
+    llm_chat_model: document.getElementById("xp-llm-chat-model")?.value || "",
+    llm_vision_model: document.getElementById("xp-llm-vision-model")?.value || "",
+    llm_active: true,
+  };
+}
+
+async function xpSaveDraftToServer() {
+  if (xpDraftSaveInFlight) {
+    xpDraftSaveQueued = true;
+    return;
+  }
+  xpDraftSaveInFlight = true;
+  try {
+    await xpPost("/api/experience/draft", xpBuildServerDraftPayload());
+  } catch (err) {
+    xpWrite("Warnung: Auto-Save", { error: String(err) });
+  } finally {
+    xpDraftSaveInFlight = false;
+    if (xpDraftSaveQueued) {
+      xpDraftSaveQueued = false;
+      xpSaveDraftToServer();
+    }
+  }
+}
+
 function xpSwitchStep(next) {
   xpSaveDraft();
+  xpSaveDraftToServer();
   xpStep = Math.max(1, Math.min(6, next));
   const onboardingCard = document.getElementById("onboarding-card");
   if (onboardingCard) onboardingCard.dataset.activeStep = String(xpStep);
@@ -507,6 +570,9 @@ async function xpApplyTemplateSession(sessionId) {
   if (data.hygiene_limit_daily != null) document.getElementById("xp-hygiene-day").value = String(data.hygiene_limit_daily);
   if (data.hygiene_limit_weekly != null) document.getElementById("xp-hygiene-week").value = String(data.hygiene_limit_weekly);
   if (data.hygiene_limit_monthly != null) document.getElementById("xp-hygiene-month").value = String(data.hygiene_limit_monthly);
+  if (data.hygiene_opening_max_duration_seconds != null) {
+    document.getElementById("xp-hygiene-max-minutes").value = String(Math.max(1, Math.round(data.hygiene_opening_max_duration_seconds / 60)));
+  }
 
   if (data.llm) {
     if (data.llm.provider) document.getElementById("xp-llm-provider").value = data.llm.provider;
@@ -553,17 +619,6 @@ function xpUpdateScenarioDetail(key) {
   if (charRefEl) {
     if (scenario.character_ref) {
       charRefEl.innerHTML = `<span class="xp-scenario-meta-badge">&#x1F464; ${scenario.character_ref}</span>`;
-      // Auto-select the linked persona in step 1 dropdown
-      const personaSelect = document.getElementById("xp-persona-preset");
-      if (personaSelect) {
-        const matchingOpt = Array.from(personaSelect.options).find(
-          (o) => o.textContent.trim() === scenario.character_ref || o.value === scenario.character_ref
-        );
-        if (matchingOpt) {
-          personaSelect.value = matchingOpt.value;
-          xpFillPersonaEditor(matchingOpt.value);
-        }
-      }
     } else {
       charRefEl.innerHTML = "";
     }
@@ -690,6 +745,7 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
       hygiene_limit_daily: xpParseOptionalInt(document.getElementById("xp-hygiene-day").value),
       hygiene_limit_weekly: xpParseOptionalInt(document.getElementById("xp-hygiene-week").value),
       hygiene_limit_monthly: xpParseOptionalInt(document.getElementById("xp-hygiene-month").value),
+      hygiene_opening_max_duration_seconds: Math.max(1, Math.round(Number(document.getElementById("xp-hygiene-max-minutes")?.value || "15") * 60)),
       experience_level: document.getElementById("xp-experience-level").value || "beginner",
       scenario_preset: scenarioPreset,
       initial_seal_number: sealNumber,
@@ -712,7 +768,7 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
       experience_level: document.getElementById("xp-experience-level").value,
       preferences: {
         scenario_preset: document.getElementById("xp-scenario-preset")?.value || null,
-        wearer_boundary: document.getElementById("xp-hard-limits")?.dataset.setupBoundary?.trim() || null,
+        hygiene_opening_max_duration_seconds: Math.max(1, Math.round(Number(document.getElementById("xp-hygiene-max-minutes")?.value || "15") * 60)),
       },
       hard_limits: String(document.getElementById("xp-hard-limits").value)
         .split(",")
@@ -811,18 +867,3 @@ xpWireDuration("xp-max-date", "xp-max-days", "xp-max-summary");
 xpWireNoLimit();
 xpRestoreDraft();
 xpSwitchStep(1);
-
-// Pre-fill hard limits from setup boundary
-(function xpPrefillHardLimits() {
-  const input = document.getElementById("xp-hard-limits");
-  if (!input) return;
-  if (input.value && input.value.trim()) return;
-  const raw = (input.dataset.setupBoundary || "").trim();
-  if (!raw) return;
-  const keywords = raw
-    .split(/[\n,]+/)
-    .map((s) => s.replace(/^[-*•]\s*/, "").trim())
-    .map((s) => s.replace(/^(keine|kein|no)\s+/i, "").trim())
-    .filter((s) => s.length > 2 && s.length < 60);
-  if (keywords.length > 0) input.value = keywords.join(", ");
-})();
