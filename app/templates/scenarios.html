@@ -118,6 +118,66 @@
   .lore-block-remove { background: none !important; border: none !important; color: #7d9db8; font-size: 1rem; cursor: pointer; padding: 0 !important; width: auto !important; }
   .lore-block label { margin-bottom: 0.3rem; font-size: 0.82rem; }
   .lore-block input, .lore-block textarea { font-size: 0.85rem; }
+  .inventory-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+  .inventory-row {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) 96px auto;
+    gap: 0.65rem;
+    align-items: center;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.02);
+  }
+  .inventory-row input[type="number"] { width: 100%; text-align: center; }
+  .inventory-row .inv-name {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.12rem;
+    min-width: 0;
+  }
+  .inventory-row .inv-title {
+    font-size: 0.95rem;
+    line-height: 1.15;
+    color: #d8e8f8;
+    word-break: break-word;
+  }
+  .inventory-row .inv-category {
+    color: #8ea2b8;
+    font-size: 0.78rem;
+  }
+  .inventory-row .inv-enabled-wrap,
+  .inventory-row .inv-required-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+  }
+  .inventory-row .inv-enabled-wrap {
+    justify-content: center;
+  }
+  .inventory-row .inv-required-wrap {
+    white-space: nowrap;
+    color: #b4c2d1;
+    font-size: 0.9rem;
+  }
+
+  @media (max-width: 760px) {
+    .inventory-row {
+      grid-template-columns: 24px minmax(0, 1fr) 84px;
+      gap: 0.5rem;
+    }
+    .inventory-row .inv-required-wrap {
+      grid-column: 2 / 4;
+      justify-self: start;
+      margin-top: -0.1rem;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -178,6 +238,16 @@
           <input id="sm-tags" type="text" placeholder="z.B. ritual, devotion, long-term" />
         </label>
 
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
+            <label style="margin:0;">Inventar (Items)</label>
+          </div>
+          <div id="sm-inventory-editor" class="inventory-editor">
+            <div class="empty-hint">Items werden geladen…</div>
+          </div>
+          <p class="sm-notice">Lege fest, welche Gegenstände im Scenario verfügbar oder Pflicht sind.</p>
+        </div>
+
         <!-- ── Phasen-Editor ── -->
         <div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
@@ -230,6 +300,80 @@ async function smFetch(url, options = {}) {
     throw new Error(err.detail || res.statusText);
   }
   return res.json();
+}
+
+let smInventoryCatalog = [];
+let smInventoryAssigned = [];
+
+function smRenderInventoryEditor() {
+  const host = document.getElementById("sm-inventory-editor");
+  if (!host) return;
+  if (!smInventoryCatalog.length) {
+    host.innerHTML = '<div class="empty-hint">Keine Items vorhanden. Lege zuerst Items unter Inventar an.</div>';
+    return;
+  }
+  const assignedMap = new Map(smInventoryAssigned.map((x) => [x.item.id, x]));
+  host.innerHTML = smInventoryCatalog.map((item) => {
+    const assigned = assignedMap.get(item.id);
+    return `
+      <div class="inventory-row" data-item-id="${item.id}">
+        <label class="inv-enabled-wrap" title="Im Scenario aktivieren">
+          <input type="checkbox" class="inv-enabled" ${assigned ? "checked" : ""} />
+        </label>
+        <div class="inv-name">
+          <span class="inv-title">${escHtml(item.name)}</span>
+          ${item.category ? `<span class="inv-category">${escHtml(item.category)}</span>` : ""}
+        </div>
+        <input class="inv-qty" type="number" min="1" value="${assigned ? assigned.default_quantity : 1}" />
+        <label class="inv-required-wrap">
+          <input class="inv-required" type="checkbox" ${assigned?.is_required ? "checked" : ""} />
+          <span>Pflicht</span>
+        </label>
+      </div>`;
+  }).join("");
+}
+
+async function smLoadInventoryCatalog() {
+  try {
+    const data = await smFetch("/api/inventory/items?include_inactive=false");
+    smInventoryCatalog = data.items || [];
+    smRenderInventoryEditor();
+  } catch (err) {
+    const host = document.getElementById("sm-inventory-editor");
+    if (host) host.innerHTML = `<div class="empty-hint">Fehler beim Laden der Items: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function smCollectInventoryEntries() {
+  return Array.from(document.querySelectorAll("#sm-inventory-editor .inventory-row")).map((row) => {
+    const itemId = Number(row.dataset.itemId || 0);
+    const enabled = row.querySelector(".inv-enabled")?.checked;
+    const qty = Number(row.querySelector(".inv-qty")?.value || 1);
+    const required = row.querySelector(".inv-required")?.checked;
+    return {
+      enabled,
+      payload: {
+        item_id: itemId,
+        is_required: !!required,
+        default_quantity: Math.max(1, Math.trunc(qty) || 1),
+      },
+    };
+  }).filter((x) => x.enabled).map((x) => x.payload);
+}
+
+async function smLoadScenarioInventory(scenarioId) {
+  smInventoryAssigned = [];
+  if (!scenarioId) {
+    smRenderInventoryEditor();
+    return;
+  }
+  try {
+    const data = await smFetch(`/api/inventory/scenarios/${scenarioId}/items`);
+    smInventoryAssigned = data.items || [];
+  } catch (_) {
+    smInventoryAssigned = [];
+  }
+  smRenderInventoryEditor();
 }
 
 // ── Key auto-generate ──
@@ -419,6 +563,7 @@ async function smStartEdit(id) {
     document.getElementById("sm-tags").value = (s.tags || []).join(", ");
     smSetPhases(s.phases || []);
     smSetLore(s.lorebook || []);
+    await smLoadScenarioInventory(id);
     document.getElementById("sm-cancel-btn").style.display = "";
     document.getElementById("sm-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
@@ -433,6 +578,8 @@ function smReset() {
   document.getElementById("sm-form").reset();
   smSetPhases([]);
   smSetLore([]);
+  smInventoryAssigned = [];
+  smRenderInventoryEditor();
   document.getElementById("sm-cancel-btn").style.display = "none";
 }
 
@@ -469,10 +616,18 @@ document.getElementById("sm-form").addEventListener("submit", async (e) => {
   saveBtn.disabled = true;
   try {
     if (id) {
-      await smFetch(`/api/scenarios/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+      const updated = await smFetch(`/api/scenarios/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+      await smFetch(`/api/inventory/scenarios/${updated.id}/items`, {
+        method: "PUT",
+        body: JSON.stringify({ entries: smCollectInventoryEntries() }),
+      });
       smStatus("Scenario aktualisiert.");
     } else {
-      await smFetch("/api/scenarios", { method: "POST", body: JSON.stringify(payload) });
+      const created = await smFetch("/api/scenarios", { method: "POST", body: JSON.stringify(payload) });
+      await smFetch(`/api/inventory/scenarios/${created.id}/items`, {
+        method: "PUT",
+        body: JSON.stringify({ entries: smCollectInventoryEntries() }),
+      });
       smStatus("Scenario erstellt.");
     }
     smReset();
@@ -528,5 +683,6 @@ importZone.addEventListener("drop", async e => {
 // ── Init ──
 smLoadList();
 smLoadPresets();
+smLoadInventoryCatalog();
 </script>
 {% endblock %}

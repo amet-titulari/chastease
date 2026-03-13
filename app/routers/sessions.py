@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models.contract import Contract, ContractAddendum
 from app.models.hygiene_opening import HygieneOpening
 from app.models.llm_profile import LlmProfile
+from app.models.media_asset import MediaAsset
 from app.models.message import Message
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
@@ -74,6 +75,18 @@ class UpdatePlayerProfileRequest(BaseModel):
     hard_limits: list[str] | None = None
     reaction_patterns: dict | None = None
     needs: dict | None = None
+    avatar_media_id: int | None = Field(default=None, ge=1)
+    clear_avatar: bool | None = None
+
+
+def _ensure_avatar_exists(db: Session, avatar_media_id: int | None) -> None:
+    if avatar_media_id is None:
+        return
+    asset = db.query(MediaAsset).filter(MediaAsset.id == avatar_media_id).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Avatar media not found")
+    if asset.media_kind != "avatar":
+        raise HTTPException(status_code=409, detail="Media asset is not an avatar")
 
 
 def _ensure_ws_auth_token(session_obj: SessionModel) -> None:
@@ -115,6 +128,7 @@ def _session_blueprint(db: Session, session_obj: SessionModel) -> dict:
         "status": session_obj.status,
         "persona_name": persona.name if persona else None,
         "player_nickname": profile.nickname if profile else None,
+        "player_avatar_media_id": profile.avatar_media_id if profile else None,
         "experience_level": profile.experience_level if profile else None,
         "min_duration_seconds": session_obj.min_duration_seconds,
         "max_duration_seconds": session_obj.max_duration_seconds,
@@ -247,6 +261,11 @@ def update_player_profile(
         profile.reaction_patterns_json = json.dumps(payload.reaction_patterns)
     if payload.needs is not None:
         profile.needs_json = json.dumps(payload.needs)
+    if payload.clear_avatar:
+        profile.avatar_media_id = None
+    elif payload.avatar_media_id is not None:
+        _ensure_avatar_exists(db, payload.avatar_media_id)
+        profile.avatar_media_id = payload.avatar_media_id
 
     db.add(profile)
     db.commit()
@@ -255,6 +274,8 @@ def update_player_profile(
         "session_id": session_id,
         "player_profile": {
             "id": profile.id,
+            "avatar_media_id": profile.avatar_media_id,
+            "avatar_url": f"/api/media/{profile.avatar_media_id}/content" if profile.avatar_media_id else None,
             "experience_level": profile.experience_level,
             "preferences": json.loads(profile.preferences_json),
             "soft_limits": json.loads(profile.soft_limits_json),
@@ -623,6 +644,7 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
         hard_limits_json=json.dumps(template_hard_limits),
         reaction_patterns_json=json.dumps(template_reaction),
         needs_json=json.dumps(template_needs),
+        avatar_media_id=template_profile.avatar_media_id if template_profile else None,
     )
     db.add(player)
     db.flush()

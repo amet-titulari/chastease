@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.main import app
+from app.services.transcription_service import TranscriptionResult
 
 
 def _admin_headers() -> dict:
@@ -100,3 +101,63 @@ def test_chat_can_regenerate_last_response():
         body = regen.json()
         assert body["message_type"] == "chat_regenerated"
         assert "reply" in body
+
+
+def test_chat_media_message_with_image():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        resp = client.post(
+            f"/api/sessions/{session_id}/messages/media",
+            data={"content": "Siehe Bild"},
+            files={"file": ("test.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["message_type"] == "chat_image"
+        assert "reply" in payload
+
+
+def test_chat_media_message_with_audio():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        original = settings.transcription_enabled
+        settings.transcription_enabled = False
+        try:
+            resp = client.post(
+                f"/api/sessions/{session_id}/messages/media",
+                data={"content": "Kurzes Update"},
+                files={"file": ("clip.mp3", b"ID3\x03\x00\x00\x00\x00\x00\x21", "audio/mpeg")},
+            )
+        finally:
+            settings.transcription_enabled = original
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["message_type"] == "chat_audio"
+        assert payload["transcription_status"] == "disabled"
+        assert payload["transcript"] is None
+        assert "reply" in payload
+
+
+def test_chat_media_message_with_audio_transcription(monkeypatch):
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        def _fake_transcribe_audio(**_: object) -> TranscriptionResult:
+            return TranscriptionResult(status="ok", text="Das ist ein Testtranskript.", provider="mock", model="mock")
+
+        monkeypatch.setattr("app.routers.chat.transcribe_audio", _fake_transcribe_audio)
+
+        resp = client.post(
+            f"/api/sessions/{session_id}/messages/media",
+            data={"content": "Bitte auswerten"},
+            files={"file": ("clip.webm", b"RIFF....", "audio/webm")},
+        )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["message_type"] == "chat_audio"
+        assert payload["transcription_status"] == "ok"
+        assert payload["transcript"] == "Das ist ein Testtranskript."

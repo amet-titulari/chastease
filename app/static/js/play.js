@@ -8,6 +8,14 @@ const WS_TOKEN = _shell?.dataset.wsToken || "";
 const LOCK_END = _shell?.dataset.lockEnd || "";
 
 let plSocket = null;
+let plVoiceSocket = null;
+let plVoiceAudioCtx = null;
+let plVoiceMicStream = null;
+let plVoiceProcessor = null;
+let plVoiceSessionReady = false;
+let plVoicePlayCursor = 0;
+let plVoiceAvailable = false;
+let plVoiceMode = "realtime-manual";
 
 // -- DOM refs --
 const countdownEl = document.getElementById("play-countdown");
@@ -18,6 +26,258 @@ const chatInput = document.getElementById("play-chat-input");
 const taskBoard = document.getElementById("play-task-board");
 const debugOut = document.getElementById("play-output");
 const wsBtn = document.getElementById("play-connect-ws");
+const voiceStatusEl = document.getElementById("play-voice-status");
+const voiceToggleBtn = document.getElementById("play-voice-toggle");
+
+function plIsVoiceRunning() {
+  return Boolean(
+    plVoiceSocket && (plVoiceSocket.readyState === WebSocket.OPEN || plVoiceSocket.readyState === WebSocket.CONNECTING)
+  );
+}
+
+function plSetVoiceStatus(text) {
+  if (voiceStatusEl) voiceStatusEl.textContent = text;
+}
+
+function plSyncVoiceToggleUi() {
+  if (!voiceToggleBtn) return;
+  const running = plIsVoiceRunning();
+  voiceToggleBtn.setAttribute("aria-pressed", running ? "true" : "false");
+  voiceToggleBtn.textContent = "🔊";
+  voiceToggleBtn.title = running ? "Talk stoppen" : "Talk starten";
+  voiceToggleBtn.setAttribute("aria-label", running ? "Talk stoppen" : "Talk starten");
+  voiceToggleBtn.disabled = !plVoiceAvailable;
+}
+
+async function plInitVoiceAvailability() {
+  plVoiceAvailable = false;
+  plSetVoiceStatus("Voice: pruefe Verfuegbarkeit...");
+  try {
+    const data = await plGet(`/api/voice/realtime/${SESSION_ID}/status`);
+    const enabled = Boolean(data && data.enabled);
+    const hasApiKey = Boolean(data && data.has_api_key);
+    const mode = (data && data.mode) || "realtime-manual";
+    const hasAgentId = Boolean(data && data.has_agent_id);
+    plVoiceMode = mode;
+    plVoiceAvailable = enabled && hasApiKey && (mode !== "voice-agent" || hasAgentId);
+    if (!enabled) {
+      plSetVoiceStatus("Voice: deaktiviert (Server)");
+    } else if (!hasApiKey) {
+      plSetVoiceStatus("Voice: kein API-Key konfiguriert");
+    } else if (mode === "voice-agent" && !hasAgentId) {
+      plSetVoiceStatus("Voice: Agent-ID fehlt");
+    } else {
+      plSetVoiceStatus(mode === "voice-agent" ? "Voice: bereit (Agent)" : "Voice: bereit");
+    }
+  } catch (err) {
+    plVoiceAvailable = false;
+    plSetVoiceStatus(`Voice: Statusfehler (${String(err)})`);
+  }
+  plSyncVoiceToggleUi();
+}
+
+function plPcm16ToBase64(float32Array) {
+  const int16 = new Int16Array(float32Array.length);
+  for (let i = 0; i < float32Array.length; i += 1) {
+    const s = Math.max(-1, Math.min(1, float32Array[i]));
+    int16[i] = s < 0 ? s * 32768 : s * 32767;
+  }
+  const bytes = new Uint8Array(int16.buffer);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function plBase64ToFloat32Pcm16(base64) {
+  const binary = atob(base64);
+  const length = binary.length;
+  const bytes = new Uint8Array(length);
+  for (let i = 0; i < length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const int16 = new Int16Array(bytes.buffer);
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i += 1) {
+    float32[i] = int16[i] / 32768;
+  }
+  return float32;
+}
+
+function plQueueVoiceAudioPcm(base64Pcm, sampleRate = 24000) {
+  if (!plVoiceAudioCtx) return;
+  const pcm = plBase64ToFloat32Pcm16(base64Pcm);
+  const buffer = plVoiceAudioCtx.createBuffer(1, pcm.length, sampleRate);
+  buffer.copyToChannel(pcm, 0);
+  const source = plVoiceAudioCtx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(plVoiceAudioCtx.destination);
+  const now = plVoiceAudioCtx.currentTime;
+  if (plVoicePlayCursor < now) plVoicePlayCursor = now;
+  source.start(plVoicePlayCursor);
+  plVoicePlayCursor += buffer.duration;
+}
+
+async function plStartVoiceMode() {
+  if (!SESSION_ID) return;
+  if (!plVoiceAvailable) {
+    plSetVoiceStatus("Voice: nicht verfuegbar");
+    plSyncVoiceToggleUi();
+    return;
+  }
+  if (plVoiceSocket && (plVoiceSocket.readyState === WebSocket.OPEN || plVoiceSocket.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  plSetVoiceStatus("Voice: initialisiere...");
+  if (voiceToggleBtn) voiceToggleBtn.disabled = true;
+
+  try {
+    const hasGetUserMedia = Boolean(
+      typeof navigator !== "undefined" &&
+      navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia === "function"
+    );
+    if (!hasGetUserMedia) {
+      const secureHint = (typeof window !== "undefined" && !window.isSecureContext)
+        ? " (nur in HTTPS oder localhost verfuegbar)"
+        : "";
+      throw new Error(`Mikrofon-API nicht verfuegbar${secureHint}`);
+    }
+
+    const bootstrapResp = await fetch(`/api/voice/realtime/${SESSION_ID}/client-secret`, { method: "POST" });
+    const bootstrap = await bootstrapResp.json();
+    if (!bootstrapResp.ok) {
+      throw new Error(bootstrap.detail || bootstrap.error || bootstrapResp.statusText);
+    }
+
+    const secret =
+      bootstrap?.client_secret?.value ||
+      bootstrap?.client_secret?.secret ||
+      bootstrap?.client_secret?.token ||
+      bootstrap?.client_secret?.client_secret?.value ||
+      bootstrap?.client_secret?.client_secret?.secret ||
+      bootstrap?.client_secret?.client_secret?.token;
+    if (!secret) {
+      throw new Error("Kein Ephemeral-Token erhalten");
+    }
+
+    const wsUrl = bootstrap.ws_url || "wss://api.x.ai/v1/realtime";
+    plVoiceSocket = new WebSocket(wsUrl, [`xai-client-secret.${secret}`]);
+    plVoiceSessionReady = false;
+
+    plVoiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    await plVoiceAudioCtx.resume();
+    plVoicePlayCursor = plVoiceAudioCtx.currentTime;
+
+    plVoiceMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = plVoiceAudioCtx.createMediaStreamSource(plVoiceMicStream);
+    plVoiceProcessor = plVoiceAudioCtx.createScriptProcessor(4096, 1, 1);
+    source.connect(plVoiceProcessor);
+    plVoiceProcessor.connect(plVoiceAudioCtx.destination);
+
+    plVoiceProcessor.onaudioprocess = (event) => {
+      if (!plVoiceSessionReady || !plVoiceSocket || plVoiceSocket.readyState !== WebSocket.OPEN) return;
+      const channel = event.inputBuffer.getChannelData(0);
+      const chunk = new Float32Array(channel.length);
+      chunk.set(channel);
+      const base64 = plPcm16ToBase64(chunk);
+      plVoiceSocket.send(JSON.stringify({ type: "input_audio_buffer.append", audio: base64 }));
+    };
+
+    plVoiceSocket.onopen = () => {
+      plSetVoiceStatus("Voice: verbunden");
+      if (bootstrap.session_update) {
+        plVoiceSocket?.send(JSON.stringify(bootstrap.session_update));
+      } else {
+        plVoiceSessionReady = true;
+        plSetVoiceStatus("Voice: bereit (Agent)");
+      }
+      plSyncVoiceToggleUi();
+    };
+
+    plVoiceSocket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "session.updated") {
+          plVoiceSessionReady = true;
+          plSetVoiceStatus("Voice: bereit");
+          plSyncVoiceToggleUi();
+          return;
+        }
+        if (data.type === "conversation.item.input_audio_transcription.completed" && data.transcript) {
+          if (chatTimeline) {
+            chatTimeline.innerHTML += `\n<div class="chat-bubble from-user"><div class="bubble-body">${String(data.transcript).replace(/</g, "&lt;")}</div><div class="bubble-meta">voice transcript</div></div>`;
+            chatTimeline.scrollTop = chatTimeline.scrollHeight;
+          }
+          return;
+        }
+        if (data.type === "response.output_audio.delta" && data.delta) {
+          plQueueVoiceAudioPcm(data.delta, 24000);
+          return;
+        }
+        if (data.type === "response.output_audio_transcript.delta" && data.delta) {
+          plWrite("Voice Transcript", { delta: data.delta });
+          return;
+        }
+      } catch (_) {}
+    };
+
+    plVoiceSocket.onerror = () => {
+      plSetVoiceStatus("Voice: Fehler");
+    };
+
+    plVoiceSocket.onclose = () => {
+      plSetVoiceStatus("Voice: getrennt");
+      plVoiceSessionReady = false;
+      plVoiceSocket = null;
+      plSyncVoiceToggleUi();
+    };
+  } catch (err) {
+    const errMsg = String(err);
+    plSetVoiceStatus(`Voice: Fehler (${errMsg})`);
+    plWrite("Voice Start Fehler", { error: errMsg });
+    await plStopVoiceMode({ preserveStatus: true });
+  } finally {
+    plSyncVoiceToggleUi();
+  }
+}
+
+async function plStopVoiceMode(options = {}) {
+  const preserveStatus = Boolean(options.preserveStatus);
+  if (plVoiceProcessor) {
+    try { plVoiceProcessor.disconnect(); } catch (_) {}
+    plVoiceProcessor.onaudioprocess = null;
+    plVoiceProcessor = null;
+  }
+  if (plVoiceMicStream) {
+    plVoiceMicStream.getTracks().forEach((track) => {
+      try { track.stop(); } catch (_) {}
+    });
+    plVoiceMicStream = null;
+  }
+  if (plVoiceSocket) {
+    try { plVoiceSocket.close(); } catch (_) {}
+    plVoiceSocket = null;
+  }
+  if (plVoiceAudioCtx) {
+    try { await plVoiceAudioCtx.close(); } catch (_) {}
+    plVoiceAudioCtx = null;
+  }
+  plVoiceSessionReady = false;
+  if (!preserveStatus) plSetVoiceStatus("Voice: aus");
+  plSyncVoiceToggleUi();
+}
+
+async function plToggleVoiceMode() {
+  if (plIsVoiceRunning()) {
+    await plStopVoiceMode();
+    return;
+  }
+  await plStartVoiceMode();
+}
 
 // -- Attach-image state --
 let plAttachedFile = null; // File | null
@@ -27,7 +287,8 @@ function plSetAttachedFile(file) {
   const preview = document.getElementById("play-attach-preview");
   const attachBtn = document.getElementById("play-attach");
   if (file) {
-    preview.textContent = `📎 ${file.name}`;
+    const kind = String(file.type || "").startsWith("audio/") ? "🎵" : "📎";
+    preview.textContent = `${kind} ${file.name}`;
     preview.style.display = "block";
     if (attachBtn) attachBtn.classList.add("has-attachment");
   } else {
@@ -515,7 +776,7 @@ document.getElementById("play-send")?.addEventListener("click", async () => {
       const fd = new FormData();
       fd.append("content", content);
       fd.append("file", fileToSend, fileToSend.name);
-      const resp = await fetch(`/api/sessions/${SESSION_ID}/messages/image`, {
+      const resp = await fetch(`/api/sessions/${SESSION_ID}/messages/media`, {
         method: "POST",
         body: fd,
       });
@@ -561,6 +822,7 @@ document.getElementById("play-regenerate")?.addEventListener("click", async () =
 
 document.getElementById("play-load-chat")?.addEventListener("click", plLoadChat);
 document.getElementById("play-connect-ws")?.addEventListener("click", plConnectWs);
+document.getElementById("play-voice-toggle")?.addEventListener("click", plToggleVoiceMode);
 
 document.getElementById("play-resume-session")?.addEventListener("click", async () => {
   if (!SESSION_ID) return;
@@ -858,6 +1120,7 @@ document.getElementById("play-verify-submit")?.addEventListener("click", async (
 // -- Auto-load on page ready --
 document.addEventListener("DOMContentLoaded", async () => {
   if (!SESSION_ID) return;
+  await plInitVoiceAvailability();
   await plLoadChat();
   await plListTasks();
   await plLoadVerifications();
@@ -891,6 +1154,17 @@ settingsOverlay?.addEventListener("click", plCloseSettings);
 async function plLoadSettingsSummary() {
   try {
     const data = await plGet(`/api/settings/summary?session_id=${SESSION_ID}`);
+    const setAvatar = (id, url) => {
+      const img = document.getElementById(id);
+      if (!img) return;
+      if (url) {
+        img.src = url;
+        img.style.display = "";
+      } else {
+        img.removeAttribute("src");
+        img.style.display = "none";
+      }
+    };
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || "—"; };
     const setIfPresent = (id, val) => {
       if (val === null || val === undefined) return;
@@ -919,6 +1193,8 @@ async function plLoadSettingsSummary() {
 
     if (data.session) {
       const s = data.session;
+      setAvatar("psd-keyholder-avatar", s.persona_avatar_url || null);
+      setAvatar("psd-player-avatar", s.player_avatar_url || null);
       setIfPresent("psd-wearer", s.player_nickname);
       setIfPresent("psd-keyholder", s.persona_name);
       set("psd-session-id", s.session_id ? `#${s.session_id}` : "—");

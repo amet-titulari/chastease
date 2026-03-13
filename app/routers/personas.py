@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.media_asset import MediaAsset
 from app.models.persona import Persona
 from app.services.persona_card_mapper import map_external_persona_card
 
@@ -125,6 +126,7 @@ class PersonaCreateRequest(BaseModel):
     speech_style_dominance: str | None = Field(default=None, max_length=60)
     system_prompt: str | None = Field(default=None, max_length=4000)
     strictness_level: int = Field(default=3, ge=1, le=5)
+    avatar_media_id: int | None = Field(default=None, ge=1)
 
 
 class PersonaUpdateRequest(BaseModel):
@@ -134,6 +136,17 @@ class PersonaUpdateRequest(BaseModel):
     speech_style_dominance: str | None = Field(default=None, max_length=60)
     system_prompt: str | None = Field(default=None, max_length=4000)
     strictness_level: int | None = Field(default=None, ge=1, le=5)
+    avatar_media_id: int | None = Field(default=None, ge=1)
+
+
+def _ensure_avatar_exists(db: Session, avatar_media_id: int | None) -> None:
+    if avatar_media_id is None:
+        return
+    asset = db.query(MediaAsset).filter(MediaAsset.id == avatar_media_id).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Avatar media not found")
+    if asset.media_kind != "avatar":
+        raise HTTPException(status_code=409, detail="Media asset is not an avatar")
 
 
 def _persona_to_dict(p: Persona) -> dict:
@@ -145,6 +158,8 @@ def _persona_to_dict(p: Persona) -> dict:
         "speech_style_dominance": p.speech_style_dominance,
         "system_prompt": p.system_prompt,
         "strictness_level": p.strictness_level,
+        "avatar_media_id": p.avatar_media_id,
+        "avatar_url": f"/api/media/{p.avatar_media_id}/content" if p.avatar_media_id else None,
         "created_at": p.created_at.isoformat() if p.created_at else None,
     }
 
@@ -157,6 +172,7 @@ def list_personas(db: Session = Depends(get_db)) -> dict:
 
 @router.post("")
 def create_persona(payload: PersonaCreateRequest, db: Session = Depends(get_db)) -> dict:
+    _ensure_avatar_exists(db, payload.avatar_media_id)
     persona = Persona(
         name=payload.name.strip(),
         description=payload.description.strip() if payload.description else None,
@@ -164,6 +180,7 @@ def create_persona(payload: PersonaCreateRequest, db: Session = Depends(get_db))
         speech_style_dominance=payload.speech_style_dominance.strip() if payload.speech_style_dominance else None,
         system_prompt=payload.system_prompt.strip() if payload.system_prompt else None,
         strictness_level=payload.strictness_level,
+        avatar_media_id=payload.avatar_media_id,
     )
     db.add(persona)
     db.commit()
@@ -196,6 +213,9 @@ def update_persona(persona_id: int, payload: PersonaUpdateRequest, db: Session =
         persona.system_prompt = payload.system_prompt.strip() or None
     if payload.strictness_level is not None:
         persona.strictness_level = payload.strictness_level
+    if payload.avatar_media_id is not None:
+        _ensure_avatar_exists(db, payload.avatar_media_id)
+        persona.avatar_media_id = payload.avatar_media_id
     db.add(persona)
     db.commit()
     db.refresh(persona)

@@ -77,6 +77,29 @@
 
   .pm-notice { font-size: 0.82rem; color: var(--color-text-muted, #8899aa); margin-top: 0.3rem; }
   .empty-hint { text-align: center; color: var(--color-text-muted, #8899aa); padding: 1.5rem 0; font-size: 0.9rem; }
+  .persona-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(255,255,255,0.2);
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.08);
+  }
+  .avatar-editor {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .avatar-editor img {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.08);
+  }
 </style>
 {% endblock %}
 
@@ -121,6 +144,15 @@
 
       <form id="pm-form" class="stack" autocomplete="off">
         <input type="hidden" id="pm-edit-id" value="" />
+        <input type="hidden" id="pm-avatar-media-id" value="" />
+
+        <div class="avatar-editor">
+          <img id="pm-avatar-preview" alt="Persona Avatar" style="display:none;" />
+          <span id="pm-avatar-empty" class="pm-notice">Kein Avatar gesetzt.</span>
+          <input id="pm-avatar-file" type="file" accept="image/*" />
+          <button id="pm-avatar-upload" type="button" class="ghost">Avatar hochladen</button>
+          <button id="pm-avatar-clear" type="button" class="ghost" style="display:none;">Avatar entfernen</button>
+        </div>
 
         <label>Name *
           <input id="pm-name" type="text" maxlength="120" required placeholder="z.B. Ametara Titulari" />
@@ -183,6 +215,55 @@
 {% block scripts %}
 <script>
 const STRICTNESS_LABELS = ["", "Sehr sanft", "Sanft", "Ausgewogen", "Streng", "Sehr streng"];
+let pmAvatarMediaId = null;
+
+function pmUpdateAvatarUi(url) {
+  const img = document.getElementById("pm-avatar-preview");
+  const empty = document.getElementById("pm-avatar-empty");
+  const clearBtn = document.getElementById("pm-avatar-clear");
+  if (url) {
+    img.src = url;
+    img.style.display = "";
+    empty.style.display = "none";
+    clearBtn.style.display = "inline-flex";
+  } else {
+    img.removeAttribute("src");
+    img.style.display = "none";
+    empty.style.display = "";
+    clearBtn.style.display = "none";
+  }
+}
+
+async function pmUploadAvatar() {
+  const fileInput = document.getElementById("pm-avatar-file");
+  const file = fileInput?.files?.[0];
+  if (!file) {
+    pmStatus("Bitte zuerst ein Bild auswählen.", true);
+    return;
+  }
+  const form = new FormData();
+  form.append("file", file, file.name);
+  form.append("visibility", "private");
+
+  const btn = document.getElementById("pm-avatar-upload");
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = "Upload…";
+  try {
+    const res = await fetch("/api/media/avatar", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || res.statusText);
+    pmAvatarMediaId = data.id;
+    document.getElementById("pm-avatar-media-id").value = String(data.id);
+    pmUpdateAvatarUi(data.content_url);
+    pmStatus("Avatar hochgeladen.");
+  } catch (e) {
+    pmStatus("Avatar-Upload fehlgeschlagen: " + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
 
 // ── Status helper ──
 function pmStatus(msg, isError = false) {
@@ -210,6 +291,7 @@ function pmRenderList(items) {
   }
   container.innerHTML = items.map(p => `
     <div class="persona-card" data-id="${p.id}">
+      ${p.avatar_url ? `<img class="persona-avatar" src="${escHtml(p.avatar_url)}" alt="Avatar" />` : ""}
       <div class="persona-card-info">
         <p class="persona-card-name">${escHtml(p.name)}</p>
         <p class="persona-card-meta">
@@ -281,6 +363,9 @@ async function pmStartEdit(id) {
     pmAutoStrictness(dom);
     document.getElementById("pm-description").value = p.description || "";
     document.getElementById("pm-system-prompt").value = p.system_prompt || "";
+    pmAvatarMediaId = p.avatar_media_id || null;
+    document.getElementById("pm-avatar-media-id").value = pmAvatarMediaId ? String(pmAvatarMediaId) : "";
+    pmUpdateAvatarUi(p.avatar_url || null);
     document.getElementById("pm-form-title").textContent = `Persona bearbeiten: ${p.name}`;
     document.getElementById("pm-save-btn").textContent = "Änderungen speichern";
     document.getElementById("pm-cancel-btn").style.display = "inline-flex";
@@ -313,6 +398,7 @@ document.getElementById("pm-form").addEventListener("submit", async (e) => {
     description: document.getElementById("pm-description").value.trim() || null,
     system_prompt: document.getElementById("pm-system-prompt").value.trim() || null,
     strictness_level: parseInt(document.getElementById("pm-strictness").value, 10),
+    avatar_media_id: pmAvatarMediaId,
   };
 
   const btn = document.getElementById("pm-save-btn");
@@ -343,6 +429,10 @@ function pmResetForm() {
   document.getElementById("pm-tone").value = "";
   document.getElementById("pm-dominance").value = "";
   document.getElementById("pm-strictness").value = "3";
+  document.getElementById("pm-avatar-file").value = "";
+  document.getElementById("pm-avatar-media-id").value = "";
+  pmAvatarMediaId = null;
+  pmUpdateAvatarUi(null);
   document.getElementById("pm-form-title").textContent = "Neue Persona erstellen";
   document.getElementById("pm-save-btn").textContent = "Persona speichern";
   document.getElementById("pm-cancel-btn").style.display = "none";
@@ -432,6 +522,14 @@ pmImportZone.addEventListener("drop", async (e) => {
   let total = 0;
   for (const file of files) total += await pmImportFile(file);
   if (total > 0) { pmStatus(`${total} Persona(s) importiert.`); pmLoadList(); }
+});
+
+document.getElementById("pm-avatar-upload")?.addEventListener("click", pmUploadAvatar);
+document.getElementById("pm-avatar-clear")?.addEventListener("click", () => {
+  pmAvatarMediaId = null;
+  document.getElementById("pm-avatar-media-id").value = "";
+  document.getElementById("pm-avatar-file").value = "";
+  pmUpdateAvatarUi(null);
 });
 
 // ── Init ──

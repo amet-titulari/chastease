@@ -88,6 +88,29 @@ body:has(.play-shell) main.container {
   gap: 0.55rem;
 }
 
+.play-header-chat-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.play-head-action {
+  padding: 0.34rem 0.68rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.play-head-action:hover {
+  background: rgba(124, 180, 224, 0.14);
+  color: var(--ink);
+  border-color: rgba(124, 180, 224, 0.45);
+}
+
 .play-timer-label {
   font-size: 0.74rem;
   color: var(--muted);
@@ -146,6 +169,7 @@ body:has(.play-shell) main.container {
 
 .play-chat-timeline {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 1rem;
   display: flex;
@@ -239,6 +263,30 @@ body:has(.play-shell) main.container {
   border-color: rgba(124, 180, 224, 0.5);
 }
 
+.chat-voice-btn {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.chat-voice-btn:hover {
+  background: rgba(124, 180, 224, 0.14);
+  color: var(--ink);
+  border-color: rgba(124, 180, 224, 0.45);
+}
+
 .chat-attach-preview {
   padding: 0.25rem 0.75rem 0.4rem;
   font-size: 0.78rem;
@@ -246,6 +294,12 @@ body:has(.play-shell) main.container {
   background: rgba(124, 180, 224, 0.07);
   border-top: 1px solid rgba(124, 180, 224, 0.15);
   border-radius: 0 0 6px 6px;
+}
+
+.play-voice-status-row {
+  padding: 0.15rem 0.75rem 0.55rem;
+  border-top: 1px solid rgba(124, 180, 224, 0.12);
+  background: var(--card-soft);
 }
 
 .play-chat-secondary button {
@@ -270,6 +324,57 @@ body:has(.play-shell) main.container {
   gap: 0.4rem;
   padding: 0.35rem 0.75rem 0.45rem;
   background: var(--card-soft);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.play-voice-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.play-voice-toggle {
+  font-weight: 700;
+}
+
+.play-voice-toggle[aria-pressed="true"] {
+  background: rgba(76, 175, 130, 0.18);
+  border-color: rgba(76, 175, 130, 0.45);
+  color: #b9ffd8;
+}
+
+.play-voice-toggle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+#play-voice-status {
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+@media (max-width: 980px) {
+  .play-header-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .play-header-chat-actions {
+    order: 3;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .play-chat-footer {
+    flex-wrap: wrap;
+  }
+
+  .play-chat-footer input {
+    order: 3;
+    width: 100%;
+  }
 }
 
 /* Chat message bubbles (shared with experience.js style) */

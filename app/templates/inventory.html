@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/profile.css" />
+<style>
+  .inventory-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
+
+  .inventory-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .inventory-card-info { flex: 1; min-width: 0; }
+  .inventory-card-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #d8e8f8;
+    margin: 0 0 0.15rem;
+  }
+  .inventory-card-meta {
+    font-size: 0.78rem;
+    color: var(--color-text-muted, #8899aa);
+    margin: 0 0 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .inventory-card-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
+  .inventory-tag {
+    background: #1f3147;
+    border: 1px solid #3f5a7a;
+    color: #8ab8d8;
+    border-radius: 20px;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  .inventory-card-actions { display: flex; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; }
+  .inventory-card-actions button { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+
+  .import-zone {
+    border: 2px dashed rgba(255,255,255,0.15);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    font-size: 0.88rem;
+    color: var(--color-text-muted, #8899aa);
+  }
+  .import-zone:hover, .import-zone.drag-over { border-color: rgba(130,180,255,0.45); color: #d0e8ff; }
+  .import-zone input[type=file] { display: none; }
+
+  .form-panel {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 1.1rem 1.2rem;
+    margin-top: 1rem;
+  }
+  .form-panel h3 { margin: 0 0 0.8rem; font-size: 1rem; color: #d8e8f8; }
+
+  .empty-hint { text-align: center; color: var(--color-text-muted, #8899aa); padding: 1.5rem 0; font-size: 0.9rem; }
+  .im-notice { font-size: 0.82rem; color: var(--color-text-muted, #8899aa); margin-top: 0.3rem; }
+  .active-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.32rem;
+    border-radius: 20px;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid rgba(76, 175, 130, 0.28);
+    color: #8ad5a8;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .inactive-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 20px;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid rgba(255,255,255,0.18);
+    color: #9ea9b8;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="profile-shell full">
+  <section class="profile-card">
+    <p class="eyebrow">Inventar-Verwaltung</p>
+    <h1>Items</h1>
+    <p class="subline">Pflege deinen Item-Katalog und exportiere/importiere ihn als JSON.</p>
+
+    <div id="im-status"></div>
+
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+      <button type="button" id="im-export-all-btn" class="ghost" style="font-size:0.82rem;">&#8659; Alle exportieren</button>
+      <label class="import-zone" id="im-import-zone" title="JSON-Datei importieren">
+        <input type="file" id="im-import-input" accept=".json,application/json" multiple />
+        &#8657; Importieren (.json)
+      </label>
+    </div>
+
+    <div class="inventory-list" id="im-list">
+      <div class="empty-hint">Wird geladen…</div>
+    </div>
+
+    <div class="form-panel" id="im-form-panel">
+      <h3 id="im-form-title">Neues Item erstellen</h3>
+      <form id="im-form" class="stack" autocomplete="off">
+        <input type="hidden" id="im-edit-id" value="" />
+
+        <label>Name *
+          <input id="im-name" type="text" maxlength="160" required placeholder="z.B. Stahlkaefig" oninput="imAutoKey()" />
+        </label>
+
+        <label>Key <span style="font-weight:400;font-size:0.8rem;color:#7d8da1;">(eindeutiger Bezeichner)</span>
+          <input id="im-key" type="text" maxlength="120" required placeholder="z.B. stahlkaefig" />
+        </label>
+
+        <label>Kategorie
+          <input id="im-category" type="text" maxlength="80" placeholder="z.B. device, toy, hygiene" />
+        </label>
+
+        <label>Tags <span style="font-weight:400;font-size:0.8rem;color:#7d8da1;">(kommagetrennt)</span>
+          <input id="im-tags" type="text" placeholder="z.B. steel, lock, ritual" />
+        </label>
+
+        <label>Beschreibung
+          <textarea id="im-description" rows="3" maxlength="4000" placeholder="Kurzbeschreibung des Items"></textarea>
+        </label>
+
+        <label style="display:flex;gap:0.45rem;align-items:center;">
+          <input id="im-is-active" type="checkbox" checked />
+          Item ist aktiv
+        </label>
+        <p class="im-notice">Inaktive Items bleiben erhalten, erscheinen aber nicht mehr in der Scenario-Auswahl.</p>
+
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+          <button type="submit" id="im-save-btn">Item speichern</button>
+          <button type="button" id="im-cancel-btn" class="ghost" style="display:none;">Abbrechen</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="action-row" style="margin-top:1rem;">
+      <a class="ghost" href="/scenarios">Scenarios</a>
+      <a class="ghost" href="/experience">Experience</a>
+    </div>
+  </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function imStatus(msg, isError = false) {
+  const el = document.getElementById("im-status");
+  el.innerHTML = `<p class="status ${isError ? "error" : "success"}">${msg}</p>`;
+  setTimeout(() => { el.innerHTML = ""; }, 4000);
+}
+
+async function imFetch(url, options = {}) {
+  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...options });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || res.statusText);
+  }
+  return res.json();
+}
+
+function imEscHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+function imAutoKey() {
+  const id = document.getElementById("im-edit-id").value;
+  if (id) return;
+  const name = document.getElementById("im-name").value;
+  document.getElementById("im-key").value = name.toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
+function imRenderList(items) {
+  const list = document.getElementById("im-list");
+  if (!Array.isArray(items) || !items.length) {
+    list.innerHTML = '<div class="empty-hint">Noch keine Items gespeichert.</div>';
+    return;
+  }
+  list.innerHTML = items.map((item) => {
+    const tags = (item.tags || []).map((tag) => `<span class="inventory-tag">${imEscHtml(tag)}</span>`).join("");
+    const statePill = item.is_active ? '<span class="active-pill">Aktiv</span>' : '<span class="inactive-pill">Inaktiv</span>';
+    return `
+      <div class="inventory-card" data-id="${item.id}">
+        <div class="inventory-card-info">
+          <p class="inventory-card-title">${imEscHtml(item.name)} ${statePill}</p>
+          <p class="inventory-card-meta">Key: <code>${imEscHtml(item.key)}</code>${item.category ? ` · Kategorie: ${imEscHtml(item.category)}` : ""}</p>
+          <p class="inventory-card-meta">${imEscHtml(item.description || "")}</p>
+          <div class="inventory-card-tags">${tags}</div>
+        </div>
+        <div class="inventory-card-actions">
+          <button type="button" onclick="imStartEdit(${item.id})" class="ghost">Bearbeiten</button>
+          <button type="button" onclick="imExportOne(${item.id}, '${imEscHtml(item.name)}')">&#8659; Export</button>
+          <button type="button" onclick="imDelete(${item.id}, '${imEscHtml(item.name)}')" class="warn">Loeschen</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+async function imLoadList() {
+  try {
+    const data = await imFetch("/api/inventory/items?include_inactive=true");
+    imRenderList(data.items || []);
+  } catch (err) {
+    document.getElementById("im-list").innerHTML = `<div class="empty-hint">Fehler beim Laden: ${imEscHtml(err.message)}</div>`;
+  }
+}
+
+async function imStartEdit(itemId) {
+  try {
+    const data = await imFetch("/api/inventory/items?include_inactive=true");
+    const item = (data.items || []).find((row) => row.id === itemId);
+    if (!item) throw new Error("Item nicht gefunden");
+
+    document.getElementById("im-edit-id").value = item.id;
+    document.getElementById("im-name").value = item.name || "";
+    document.getElementById("im-key").value = item.key || "";
+    document.getElementById("im-category").value = item.category || "";
+    document.getElementById("im-tags").value = (item.tags || []).join(", ");
+    document.getElementById("im-description").value = item.description || "";
+    document.getElementById("im-is-active").checked = !!item.is_active;
+
+    document.getElementById("im-form-title").textContent = `Item bearbeiten: ${item.name}`;
+    document.getElementById("im-save-btn").textContent = "Aenderungen speichern";
+    document.getElementById("im-cancel-btn").style.display = "inline-flex";
+    document.getElementById("im-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    imStatus("Fehler beim Laden: " + String(err), true);
+  }
+}
+
+function imResetForm() {
+  document.getElementById("im-edit-id").value = "";
+  document.getElementById("im-form").reset();
+  document.getElementById("im-is-active").checked = true;
+  document.getElementById("im-form-title").textContent = "Neues Item erstellen";
+  document.getElementById("im-save-btn").textContent = "Item speichern";
+  document.getElementById("im-cancel-btn").style.display = "none";
+}
+
+async function imDelete(id, name) {
+  if (!confirm(`Item "${name}" wirklich loeschen?`)) return;
+  try {
+    await imFetch(`/api/inventory/items/${id}`, { method: "DELETE" });
+    imStatus(`Item "${name}" geloescht.`);
+    imLoadList();
+  } catch (err) {
+    imStatus("Fehler beim Loeschen: " + err.message, true);
+  }
+}
+
+function imExportOne(id, name) {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `item-${id}`;
+  const a = document.createElement("a");
+  a.href = `/api/inventory/items/${id}/export`;
+  a.download = `item-${slug}.json`;
+  a.click();
+}
+
+document.getElementById("im-export-all-btn").addEventListener("click", () => {
+  const a = document.createElement("a");
+  a.href = "/api/inventory/items/export";
+  a.download = "items-export.json";
+  a.click();
+});
+
+async function imImportFile(file) {
+  let raw;
+  try {
+    raw = JSON.parse(await file.text());
+  } catch (_) {
+    imStatus(`${file.name}: Ungueltiges JSON.`, true);
+    return 0;
+  }
+
+  const cards = raw.kind === "item_collection" && Array.isArray(raw.items) ? raw.items : [raw];
+  let imported = 0;
+  for (const card of cards) {
+    try {
+      await imFetch("/api/inventory/items/import", { method: "POST", body: JSON.stringify({ card }) });
+      imported += 1;
+    } catch (err) {
+      const name = card && card.name ? String(card.name) : "?";
+      imStatus(`Fehler beim Importieren von "${name}": ${err.message}`, true);
+    }
+  }
+  return imported;
+}
+
+const imImportInput = document.getElementById("im-import-input");
+const imImportZone = document.getElementById("im-import-zone");
+
+imImportInput.addEventListener("change", async () => {
+  let total = 0;
+  for (const file of imImportInput.files) {
+    total += await imImportFile(file);
+  }
+  imImportInput.value = "";
+  if (total > 0) {
+    imStatus(`${total} Item(s) importiert.`);
+    imLoadList();
+  }
+});
+
+imImportZone.addEventListener("dragover", (e) => { e.preventDefault(); imImportZone.classList.add("drag-over"); });
+imImportZone.addEventListener("dragleave", () => imImportZone.classList.remove("drag-over"));
+imImportZone.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  imImportZone.classList.remove("drag-over");
+  const files = [...(e.dataTransfer?.files || [])].filter((file) => file.name.endsWith(".json"));
+  let total = 0;
+  for (const file of files) {
+    total += await imImportFile(file);
+  }
+  if (total > 0) {
+    imStatus(`${total} Item(s) importiert.`);
+    imLoadList();
+  }
+});
+
+document.getElementById("im-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const editId = document.getElementById("im-edit-id").value;
+  const payload = {
+    key: document.getElementById("im-key").value.trim(),
+    name: document.getElementById("im-name").value.trim(),
+    category: document.getElementById("im-category").value.trim() || null,
+    description: document.getElementById("im-description").value.trim() || null,
+    tags: document.getElementById("im-tags").value.split(",").map((v) => v.trim()).filter(Boolean),
+    is_active: document.getElementById("im-is-active").checked,
+  };
+
+  const saveBtn = document.getElementById("im-save-btn");
+  saveBtn.disabled = true;
+  try {
+    if (editId) {
+      await imFetch(`/api/inventory/items/${editId}`, { method: "PUT", body: JSON.stringify(payload) });
+      imStatus(`Item "${payload.name}" aktualisiert.`);
+    } else {
+      await imFetch("/api/inventory/items", { method: "POST", body: JSON.stringify(payload) });
+      imStatus(`Item "${payload.name}" erstellt.`);
+    }
+    imResetForm();
+    imLoadList();
+  } catch (err) {
+    imStatus("Fehler: " + err.message, true);
+  } finally {
+    saveBtn.disabled = false;
+  }
+});
+
+document.getElementById("im-cancel-btn").addEventListener("click", imResetForm);
+
+imLoadList();
+</script>
+{% endblock %}

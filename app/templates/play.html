@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="/static/css/play.css?v=20260313b" />
+<link rel="stylesheet" href="/static/css/play.css?v=20260313d" />
 {% endblock %}
 
 {% block content %}
@@ -21,6 +21,11 @@
     <div class="play-header-right">
       <span class="play-timer-label">Verbleibend</span>
       <code id="play-countdown" class="play-countdown">—</code>
+
+      <div class="play-header-chat-actions">
+        <button id="play-regenerate" type="button" class="play-head-action">Regenerate</button>
+        <button id="play-load-chat" type="button" class="play-head-action">Verlauf</button>
+      </div>
 
       <!-- Tasks Dropdown -->
       <div class="play-tasks-menu" id="play-tasks-menu">
@@ -61,15 +66,15 @@
     <section class="play-chat-section">
       <div id="play-chat-timeline" class="play-chat-timeline"></div>
       <div class="play-chat-footer">
-        <input id="play-file-input" type="file" accept="image/*" style="display:none" />
-        <button id="play-attach" type="button" class="chat-attach-btn" title="Bild anhängen">📎</button>
+        <input id="play-file-input" type="file" accept="image/*,audio/*" style="display:none" />
+        <button id="play-attach" type="button" class="chat-attach-btn" title="Bild oder Audio anhängen">📎</button>
+        <button id="play-voice-toggle" type="button" class="chat-voice-btn play-voice-toggle" aria-pressed="false" title="Talk starten" aria-label="Talk starten">🔊</button>
         <input id="play-chat-input" type="text" placeholder="Deine Nachricht..." />
         <button id="play-send" type="button" class="play-send-btn" title="Senden">&#10148;</button>
       </div>
       <div id="play-attach-preview" class="chat-attach-preview" style="display:none"></div>
-      <div class="play-chat-secondary">
-        <button id="play-regenerate" type="button">Regenerate</button>
-        <button id="play-load-chat" type="button">Verlauf</button>
+      <div class="play-voice-status-row">
+        <span id="play-voice-status" class="hint">Voice: pruefe Verfuegbarkeit...</span>
       </div>
     </section>
 
@@ -87,6 +92,10 @@
 
     <section class="psd-section">
       <h4>Session</h4>
+      <div style="display:flex;gap:0.7rem;align-items:center;margin-bottom:0.6rem;">
+        <img id="psd-keyholder-avatar" alt="Keyholder Avatar" style="display:none;width:38px;height:38px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.25);" />
+        <img id="psd-player-avatar" alt="Player Avatar" style="display:none;width:38px;height:38px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.25);" />
+      </div>
       <dl class="psd-info-grid">
         <dt>Wearer</dt><dd id="psd-wearer">{{ player_nickname }}</dd>
         <dt>Keyholderin</dt><dd id="psd-keyholder">{{ persona_name }}</dd>

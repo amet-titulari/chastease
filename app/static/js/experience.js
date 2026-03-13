@@ -9,6 +9,8 @@ let xpEditPersonaId = null;  // null = new, int = edit
 let xpCompletedTemplates = [];
 let xpDraftSaveInFlight = false;
 let xpDraftSaveQueued = false;
+let xpPersonaAvatarMediaId = null;
+let xpPlayerAvatarMediaId = null;
 
 const statusEl = document.getElementById("onboarding-status");
 const outputEl = document.getElementById("xp-output");
@@ -63,6 +65,44 @@ async function xpPut(url, payload) {
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data;
+}
+
+function xpSetAvatarPreview(prefix, url) {
+  const img = document.getElementById(`${prefix}-preview`);
+  const empty = document.getElementById(`${prefix}-empty`);
+  if (!img || !empty) return;
+  if (url) {
+    img.src = url;
+    img.style.display = "";
+    empty.style.display = "none";
+  } else {
+    img.removeAttribute("src");
+    img.style.display = "none";
+    empty.style.display = "";
+  }
+}
+
+async function xpUploadAvatar(fileInputId, target) {
+  const input = document.getElementById(fileInputId);
+  const file = input?.files?.[0];
+  if (!file) {
+    xpWrite("Avatar", { error: "Bitte zuerst ein Bild auswählen." });
+    return;
+  }
+  const form = new FormData();
+  form.append("file", file, file.name);
+  form.append("visibility", "private");
+  const res = await fetch("/api/media/avatar", { method: "POST", body: form });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  if (target === "persona") {
+    xpPersonaAvatarMediaId = data.id;
+    xpSetAvatarPreview("xp-pe-avatar", data.content_url);
+  } else if (target === "player") {
+    xpPlayerAvatarMediaId = data.id;
+    xpSetAvatarPreview("xp-player-avatar", data.content_url);
+  }
+  xpWrite("Avatar hochgeladen", { target, media_id: data.id });
 }
 
 // ---- localStorage persistence ----
@@ -363,6 +403,8 @@ function xpFillPersonaEditor(selectedName) {
     document.getElementById("xp-pe-dominance").value = dbPersona.speech_style_dominance || "gentle-dominant";
     document.getElementById("xp-pe-description").value = dbPersona.description || "";
     document.getElementById("xp-pe-system-prompt").value = dbPersona.system_prompt || "";
+    xpPersonaAvatarMediaId = dbPersona.avatar_media_id || null;
+    xpSetAvatarPreview("xp-pe-avatar", dbPersona.avatar_url || null);
   } else {
     const hc = xpHardcodedPresets.find((p) => p.name === selectedName);
     xpEditPersonaId = null;
@@ -372,6 +414,8 @@ function xpFillPersonaEditor(selectedName) {
     document.getElementById("xp-pe-dominance").value = hc ? (hc.speech_style_dominance || "gentle-dominant") : "gentle-dominant";
     document.getElementById("xp-pe-description").value = hc ? (hc.description || "") : "";
     document.getElementById("xp-pe-system-prompt").value = hc ? (hc.system_prompt || "") : "";
+    xpPersonaAvatarMediaId = null;
+    xpSetAvatarPreview("xp-pe-avatar", null);
   }
 }
 
@@ -384,6 +428,8 @@ function xpClearPersonaEditor() {
   document.getElementById("xp-pe-dominance").value = "gentle-dominant";
   document.getElementById("xp-pe-description").value = "";
   document.getElementById("xp-pe-system-prompt").value = "";
+  xpPersonaAvatarMediaId = null;
+  xpSetAvatarPreview("xp-pe-avatar", null);
   document.getElementById("xp-persona-preset").value = "";
   document.getElementById("xp-pe-name").focus();
 }
@@ -402,6 +448,7 @@ async function xpSavePersonaEditor() {
     strictness_level: _DOMINANCE_STRICTNESS[dominance] || 3,
     description: document.getElementById("xp-pe-description").value.trim() || null,
     system_prompt: document.getElementById("xp-pe-system-prompt").value.trim() || null,
+    avatar_media_id: xpPersonaAvatarMediaId,
   };
   const saveBtn = document.getElementById("xp-pe-save-btn");
   saveBtn.disabled = true;
@@ -595,6 +642,7 @@ function xpUpdateScenarioDetail(key) {
   const focusEl = document.getElementById("xp-scenario-focus");
   const phasesEl = document.getElementById("xp-scenario-phases");
   const lorebookEl = document.getElementById("xp-scenario-lorebook");
+  const itemsEl = document.getElementById("xp-scenario-items");
   if (!titleEl) return;
   if (!scenario) {
     titleEl.textContent = "";
@@ -602,6 +650,7 @@ function xpUpdateScenarioDetail(key) {
     if (focusEl) focusEl.innerHTML = "";
     if (phasesEl) phasesEl.innerHTML = "";
     if (lorebookEl) lorebookEl.innerHTML = "";
+    if (itemsEl) itemsEl.innerHTML = "";
     return;
   }
   titleEl.textContent = scenario.title;
@@ -638,6 +687,27 @@ function xpUpdateScenarioDetail(key) {
     lorebookEl.innerHTML = lorebook.length
       ? `<span class="xp-scenario-meta-badge">&#x1F4DA; ${lorebook.length} Lore-Eintrag/-Einträge</span>`
       : "";
+  }
+
+  xpLoadScenarioInventoryPreview(scenario, itemsEl);
+}
+
+async function xpLoadScenarioInventoryPreview(scenario, targetEl) {
+  if (!targetEl) return;
+  if (!scenario || !scenario.id) {
+    targetEl.innerHTML = "";
+    return;
+  }
+  try {
+    const data = await xpGet(`/api/inventory/scenarios/${scenario.id}/items`);
+    const items = data.items || [];
+    if (!items.length) {
+      targetEl.innerHTML = "<span class='xp-scenario-meta-badge'>Keine Inventar-Items hinterlegt</span>";
+      return;
+    }
+    targetEl.innerHTML = `<span class='xp-scenario-meta-badge'>🧰 ${items.length} Inventar-Item(s)</span>`;
+  } catch (_) {
+    targetEl.innerHTML = "";
   }
 }
 
@@ -779,6 +849,7 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
       needs: {
         gentle_mode: document.getElementById("xp-gentle-mode").value === "true",
       },
+      avatar_media_id: xpPlayerAvatarMediaId,
     };
     await xpPut(`/api/sessions/${xpSessionId}/player-profile`, profilePayload);
 
@@ -842,6 +913,22 @@ document.getElementById("xp-sign-contract").addEventListener("click", async () =
     xpWrite("Fehler Signatur", { error: String(err) });
     signBtn.disabled = false;
     signBtn.textContent = "Vertrag signieren und Play-Mode starten";
+  }
+});
+
+document.getElementById("xp-pe-avatar-upload")?.addEventListener("click", async () => {
+  try {
+    await xpUploadAvatar("xp-pe-avatar-file", "persona");
+  } catch (err) {
+    xpWrite("Fehler Persona-Avatar", { error: String(err) });
+  }
+});
+
+document.getElementById("xp-player-avatar-upload")?.addEventListener("click", async () => {
+  try {
+    await xpUploadAvatar("xp-player-avatar-file", "player");
+  } catch (err) {
+    xpWrite("Fehler Player-Avatar", { error: String(err) });
   }
 });
 

@@ -61,6 +61,9 @@
         <form method="post" action="/profile/restart-setup">
           <button type="submit" class="warn">Onboarding-Defaults zuruecksetzen</button>
         </form>
+        {% if active_play_url %}
+        <a class="ghost" href="{{ active_play_url }}">Zur laufenden Session</a>
+        {% endif %}
         <a class="ghost" href="/experience">Zur Experience</a>
         <a class="ghost" href="/">Zur Landing</a>
       </div>
@@ -122,6 +125,82 @@
         </form>
       </details>
 
+      <hr class="section-divider" />
+
+      <details class="llm-section">
+        <summary><span class="eyebrow">Audio Gateway</span></summary>
+        <p class="hint">Voice-Realtime und Transkription nutzen diese Konfiguration. API-Key kann leer bleiben, wenn dein LLM-Profil-Key genutzt werden soll.</p>
+        <p class="hint">Schnellvorschlaege: xAI Realtime + Whisper-kompatible Transkription vorausgefuellt.</p>
+
+        <form method="post" action="/profile/audio" class="stack">
+          <input type="hidden" name="voice_realtime_mode" value="realtime-manual" />
+          <input type="hidden" name="voice_realtime_agent_id" value="" />
+          <div class="llm-grid">
+            <label>Transkription aktiviert
+              <select name="transcription_enabled">
+                <option value="true" {% if audio and audio.transcription_enabled %}selected{% endif %}>enabled</option>
+                <option value="false" {% if not audio or not audio.transcription_enabled %}selected{% endif %}>disabled</option>
+              </select>
+            </label>
+            <label>Transkription API URL
+              <input name="transcription_api_url" id="audio-transcription-api-url" list="audio-transcription-api-url-suggestions" type="url" placeholder="https://api.x.ai/v1/audio/transcriptions" value="{{ audio.transcription_api_url if audio else '' }}" />
+              <datalist id="audio-transcription-api-url-suggestions">
+                <option value="https://api.x.ai/v1/audio/transcriptions"></option>
+                <option value="https://api.openai.com/v1/audio/transcriptions"></option>
+              </datalist>
+            </label>
+            <label>Transkription API Key
+              <input name="transcription_api_key" type="password" autocomplete="new-password" placeholder="leer lassen um bestehenden Key zu behalten" />
+            </label>
+            <label>Transkription Modell
+              <input name="transcription_model" list="audio-transcription-model-suggestions" value="{{ audio.transcription_model if audio else 'whisper-1' }}" />
+              <datalist id="audio-transcription-model-suggestions">
+                <option value="whisper-1"></option>
+                <option value="grok-voice-mini-transcribe"></option>
+              </datalist>
+            </label>
+            <label>Sprache
+              <input name="transcription_language" maxlength="20" value="{{ audio.transcription_language if audio else 'de' }}" />
+            </label>
+
+            <label>Voice Realtime aktiviert
+              <select name="voice_realtime_enabled">
+                <option value="true" {% if audio and audio.voice_realtime_enabled %}selected{% endif %}>enabled</option>
+                <option value="false" {% if not audio or not audio.voice_realtime_enabled %}selected{% endif %}>disabled</option>
+              </select>
+            </label>
+            <label>Realtime WS URL
+              <input name="voice_realtime_ws_url" id="audio-voice-ws-url" list="audio-voice-ws-url-suggestions" type="url" placeholder="wss://api.x.ai/v1/realtime" value="{{ audio.voice_realtime_ws_url if audio else 'wss://api.x.ai/v1/realtime' }}" />
+              <datalist id="audio-voice-ws-url-suggestions">
+                <option value="wss://api.x.ai/v1/realtime"></option>
+              </datalist>
+            </label>
+            <label>Voice API Key
+              <input name="voice_realtime_api_key" type="password" autocomplete="new-password" placeholder="leer lassen um bestehenden Key zu behalten" />
+            </label>
+            <label>Default Voice
+              <input name="voice_realtime_default_voice" id="audio-voice-default" list="audio-voice-default-suggestions" value="{{ audio.voice_realtime_default_voice if audio else 'Eve' }}" />
+              <datalist id="audio-voice-default-suggestions">
+                <option value="Eve"></option>
+                <option value="Ari"></option>
+                <option value="Nova"></option>
+                <option value="Sage"></option>
+              </datalist>
+            </label>
+          </div>
+
+          <div class="llm-actions">
+            <button type="button" id="audio-apply-xai" class="ghost">xAI Preset anwenden</button>
+            <button type="button" id="audio-apply-openai" class="ghost">OpenAI-STT Preset</button>
+            <button type="button" id="audio-test-btn" class="ghost">Voice Verbindung testen</button>
+          </div>
+
+          <p class="hint">Gespeicherte Keys: Transkription {{ "ja" if audio and audio.transcription_api_key_stored else "nein" }}, Voice {{ "ja" if audio and audio.voice_api_key_stored else "nein" }}.</p>
+          <p class="hint" id="audio-test-result"></p>
+          <button type="submit">Audio-Gateway speichern</button>
+        </form>
+      </details>
+
       <form method="post" action="/auth/logout" class="logout-row">
         <button type="submit" class="ghost-btn">Abmelden</button>
       </form>
@@ -141,6 +220,46 @@ document.getElementById("llm-test-btn")?.addEventListener("click", async () => {
     const data = await resp.json();
     result.textContent = data.ok ? `✓ Verbindung OK (HTTP ${data.status})` : `✗ Fehler: ${data.error}`;
     result.style.color = data.ok ? "var(--color-success, #4caf50)" : "var(--color-error, #f44)";
+  } catch (e) {
+    result.textContent = `✗ ${e}`;
+    result.style.color = "var(--color-error, #f44)";
+  }
+  btn.disabled = false;
+});
+
+document.getElementById("audio-apply-xai")?.addEventListener("click", () => {
+  const sttUrl = document.getElementById("audio-transcription-api-url");
+  const sttModel = document.querySelector("input[name='transcription_model']");
+  const wsUrl = document.getElementById("audio-voice-ws-url");
+  const voice = document.getElementById("audio-voice-default");
+  if (sttUrl) sttUrl.value = "https://api.x.ai/v1/audio/transcriptions";
+  if (sttModel) sttModel.value = "whisper-1";
+  if (wsUrl) wsUrl.value = "wss://api.x.ai/v1/realtime";
+  if (voice) voice.value = "Eve";
+});
+
+document.getElementById("audio-apply-openai")?.addEventListener("click", () => {
+  const sttUrl = document.getElementById("audio-transcription-api-url");
+  const sttModel = document.querySelector("input[name='transcription_model']");
+  if (sttUrl) sttUrl.value = "https://api.openai.com/v1/audio/transcriptions";
+  if (sttModel) sttModel.value = "whisper-1";
+});
+
+document.getElementById("audio-test-btn")?.addEventListener("click", async () => {
+  const btn = document.getElementById("audio-test-btn");
+  const result = document.getElementById("audio-test-result");
+  btn.disabled = true;
+  result.textContent = "Teste Voice Gateway...";
+  try {
+    const resp = await fetch("/profile/audio/test", { method: "POST" });
+    const data = await resp.json();
+    if (data.ok) {
+      result.textContent = `✓ ${data.message || "Voice Gateway erreichbar."}`;
+      result.style.color = "var(--color-success, #4caf50)";
+    } else {
+      result.textContent = `✗ ${data.error || "Unbekannter Fehler"}`;
+      result.style.color = "var(--color-error, #f44)";
+    }
   } catch (e) {
     result.textContent = `✗ ${e}`;
     result.style.color = "var(--color-error, #f44)";

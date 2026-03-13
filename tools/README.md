@@ -69,3 +69,50 @@ python tools/fetch_remote_volume.py --no-backup
 ```bash
 python tools/fetch_remote_volume.py --dry-run
 ```
+
+## push_remote_volume.py
+
+Upload local app data back to the remote docker volume.
+
+Features:
+- Mode switch: full data or DB-only
+- Optional remote safety backup before overwrite (`--remote-backup`)
+- SSH key compatible (`--identity-file` optional)
+
+### Usage
+
+```bash
+python tools/push_remote_volume.py
+```
+
+Default behavior:
+- mode: `db-only`
+- remote docker path: `/var/lib/docker/volumes/chastease_chastease_data/_data`
+- local source: `./data`
+
+### Upload only the database
+
+```bash
+python tools/push_remote_volume.py \
+  --mode db-only \
+  --local-dir ./data \
+  --db-filename chastease.db
+```
+
+### Upload all local data
+
+```bash
+python tools/push_remote_volume.py --mode all --local-dir ./data
+```
+
+### Create remote backup before overwrite
+
+```bash
+python tools/push_remote_volume.py --remote-backup
+```
+
+### Dry run
+
+```bash
+python tools/push_remote_volume.py --dry-run
+```

@@ -54,6 +54,12 @@
 
         <div id="xp-persona-editor" class="xp-persona-editor">
           <p class="xp-editor-title" id="xp-persona-editor-title">Persona</p>
+          <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+            <img id="xp-pe-avatar-preview" alt="Persona Avatar" style="display:none;width:48px;height:48px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.2);" />
+            <span id="xp-pe-avatar-empty" class="hint">Kein Avatar gesetzt.</span>
+            <input id="xp-pe-avatar-file" type="file" accept="image/*" />
+            <button id="xp-pe-avatar-upload" type="button" class="xp-btn-secondary">Avatar hochladen</button>
+          </div>
           <label>Name
             <input id="xp-pe-name" maxlength="120" placeholder="z.B. Mistress Ava" />
           </label>
@@ -91,6 +97,7 @@
           <div id="xp-scenario-charref" class="xp-scenario-meta-row"></div>
           <div id="xp-scenario-lorebook" class="xp-scenario-meta-row"></div>
           <div id="xp-scenario-phases" class="xp-scenario-phases"></div>
+          <div id="xp-scenario-items" class="xp-scenario-meta-row"></div>
         </div>
       </section>
 
@@ -99,6 +106,12 @@
         <label>Dein Nickname
           <input id="xp-player-nickname" value="{{ current_user.setup_wearer_nickname if current_user and current_user.setup_wearer_nickname else (current_user.username if current_user else 'Player') }}" />
         </label>
+        <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+          <img id="xp-player-avatar-preview" alt="Player Avatar" style="display:none;width:48px;height:48px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.2);" />
+          <span id="xp-player-avatar-empty" class="hint">Kein Avatar gesetzt.</span>
+          <input id="xp-player-avatar-file" type="file" accept="image/*" />
+          <button id="xp-player-avatar-upload" type="button" class="xp-btn-secondary">Avatar hochladen</button>
+        </div>
         <label>Erfahrungslevel
           <select id="xp-experience-level">
             <option value="beginner" {% if not current_user or not current_user.setup_experience_level or current_user.setup_experience_level == 'beginner' %}selected{% endif %}>Beginner</option>

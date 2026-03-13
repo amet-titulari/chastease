@@ -1,7 +1,9 @@
 from fastapi.testclient import TestClient
 from uuid import uuid4
 
+from app.database import SessionLocal
 from app.main import app
+from app.models.llm_profile import LlmProfile
 
 
 def _register(client: TestClient, email: str = "setup-user@example.com"):
@@ -87,6 +89,13 @@ def test_profile_requires_authentication():
         assert resp.headers["location"] == "/"
 
 
+def test_inventory_page_requires_authentication():
+    with TestClient(app) as client:
+        resp = client.get("/inventory", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/"
+
+
 def test_profile_can_update_setup_data():
     with TestClient(app) as client:
         register_resp = _register(client, email=f"profile-update-{uuid4().hex[:8]}@example.com")
@@ -118,6 +127,64 @@ def test_profile_can_update_setup_data():
         assert "Neues Ziel" in update_resp.text
         assert "value=\"Neo\"" in update_resp.text
         assert "kein sleep deprivation" in update_resp.text
+
+
+def test_profile_page_renders_audio_gateway_section():
+    with TestClient(app) as client:
+        register_resp = _register(client, email=f"profile-page-{uuid4().hex[:8]}@example.com")
+        assert register_resp.status_code == 303
+
+        resp = client.get("/profile", follow_redirects=False)
+        assert resp.status_code == 200
+        assert "Audio Gateway" in resp.text
+        assert "/profile/audio" in resp.text
+        assert "/profile/audio/test" in resp.text
+        assert "Voice Modus" not in resp.text
+        assert "Voice Agent ID" not in resp.text
+
+
+def test_profile_audio_test_requires_authentication():
+    with TestClient(app) as client:
+        resp = client.post("/profile/audio/test")
+        assert resp.status_code == 401
+        assert resp.json()["ok"] is False
+
+
+def test_profile_llm_falls_back_to_active_session_config_when_default_missing():
+    with TestClient(app) as client:
+        register_resp = _register(client, email=f"profile-llm-fallback-{uuid4().hex[:8]}@example.com")
+        assert register_resp.status_code == 303
+
+        created = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Fallback Persona",
+                "player_nickname": "Fallback Player",
+                "min_duration_seconds": 900,
+                "llm_provider": "custom",
+                "llm_api_url": "https://example.test/v1/chat/completions",
+                "llm_chat_model": "grok-session",
+                "llm_vision_model": "grok-vision-session",
+                "llm_active": True,
+            },
+        )
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+
+        play = client.get(f"/play/{session_id}", follow_redirects=False)
+        assert play.status_code == 200
+
+        db = SessionLocal()
+        try:
+            db.query(LlmProfile).filter(LlmProfile.profile_key == "default").delete(synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()
+
+        profile = client.get("/profile", follow_redirects=False)
+        assert profile.status_code == 200
+        assert "https://example.test/v1/chat/completions" in profile.text
+        assert "grok-session" in profile.text
 
 
 def test_profile_can_restart_setup_flow():

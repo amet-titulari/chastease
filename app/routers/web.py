@@ -80,8 +80,16 @@ def _set_auth_cookie(response: RedirectResponse, token: str) -> None:
     )
 
 
-# Statuses where the user should be redirected back to the play page
-_PLAY_REDIRECT_STATUSES = {"active", "safeword_stopped", "yellow", "red"}
+# Session statuses that should keep the user in the current play context.
+_PLAY_REDIRECT_STATUSES = {
+    "pending_contract",
+    "active",
+    "paused",
+    "safeword_stopped",
+    "emergency_stopped",
+    "yellow",
+    "red",
+}
 
 
 def _redirect_if_active_session(user, db) -> str | None:
@@ -94,6 +102,85 @@ def _redirect_if_active_session(user, db) -> str | None:
         if session:
             return f"/play/{session.id}"
     return None
+
+
+def _render_profile_page(
+    request: Request,
+    user: AuthUser,
+    db: Session,
+    profile_message: str | None = None,
+    profile_error: str | None = None,
+    llm_message: str | None = None,
+    llm_error: str | None = None,
+):
+    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+    active_session = None
+    if user.active_session_id:
+        active_session = db.query(SessionModel).filter(SessionModel.id == user.active_session_id).first()
+
+    # Fallback: if no default LLM profile exists, show active session LLM settings instead.
+    if llm is None and active_session and any(
+        [
+            active_session.llm_provider,
+            active_session.llm_api_url,
+            active_session.llm_chat_model,
+            active_session.llm_vision_model,
+            active_session.llm_api_key,
+        ]
+    ):
+        llm = {
+            "provider": active_session.llm_provider or "custom",
+            "api_url": active_session.llm_api_url or "",
+            "api_key": active_session.llm_api_key or "",
+            "chat_model": active_session.llm_chat_model or "",
+            "vision_model": active_session.llm_vision_model or "",
+            "profile_active": bool(active_session.llm_profile_active),
+        }
+
+    def _llm_field(obj, key: str):
+        if obj is None:
+            return None
+        if isinstance(obj, dict):
+            return obj.get(key)
+        return getattr(obj, key, None)
+
+    active_play_url = _redirect_if_active_session(user, db)
+
+    transcription_api_url = settings.transcription_api_url or ""
+    if not transcription_api_url and _llm_field(llm, "api_url"):
+        api_url_value = str(_llm_field(llm, "api_url") or "")
+        if "/chat/completions" in api_url_value:
+            transcription_api_url = api_url_value.replace("/chat/completions", "/audio/transcriptions")
+
+    voice_ws_url = settings.voice_realtime_ws_url or "wss://api.x.ai/v1/realtime"
+
+    return templates.TemplateResponse(
+        request=request,
+        name="profile.html",
+        context={
+            "title": f"{settings.app_name} Profile",
+            "current_user": user,
+            "profile_message": profile_message,
+            "profile_error": profile_error,
+            "llm": llm,
+            "llm_message": llm_message,
+            "llm_error": llm_error,
+            "active_play_url": active_play_url,
+            "audio": {
+                "transcription_enabled": bool(settings.transcription_enabled),
+                "transcription_api_url": transcription_api_url,
+                "transcription_model": settings.transcription_model or "",
+                "transcription_language": settings.transcription_language or "",
+                "voice_realtime_enabled": bool(settings.voice_realtime_enabled),
+                "voice_realtime_mode": settings.voice_realtime_mode or "realtime-manual",
+                "voice_realtime_agent_id": settings.voice_realtime_agent_id or "",
+                "voice_realtime_ws_url": voice_ws_url,
+                "voice_realtime_default_voice": settings.voice_realtime_default_voice or "",
+                "transcription_api_key_stored": bool(settings.transcription_api_key),
+                "voice_api_key_stored": bool(settings.voice_realtime_api_key),
+            },
+        },
+    )
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -338,7 +425,7 @@ def profile_page(request: Request, db: Session = Depends(get_db)):
     user = _get_current_user(request, db)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
-    return RedirectResponse(url="/experience", status_code=303)
+    return _render_profile_page(request=request, user=user, db=db)
 
 
 @router.get("/profile/llm/status")
@@ -388,20 +475,11 @@ def save_llm_profile(
     llm.vision_model = vision_model.strip()[:120] or None
     llm.profile_active = profile_active.lower() in ("true", "on", "1", "enabled")
     db.commit()
-
-    llm2 = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
-    return templates.TemplateResponse(
+    return _render_profile_page(
         request=request,
-        name="profile.html",
-        context={
-            "title": f"{settings.app_name} Profile",
-            "current_user": user,
-            "profile_message": None,
-            "profile_error": None,
-            "llm": llm2,
-            "llm_message": "LLM-Profil gespeichert.",
-            "llm_error": None,
-        },
+        user=user,
+        db=db,
+        llm_message="LLM-Profil gespeichert.",
     )
 
 
@@ -452,20 +530,11 @@ def update_profile_setup(
     goal = primary_goal.strip()[:120]
     boundary = boundary_note.strip()[:1500]
     if not style or not goal:
-        llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
-        return templates.TemplateResponse(
+        return _render_profile_page(
             request=request,
-            name="profile.html",
-            context={
-                "title": f"{settings.app_name} Profile",
-                "current_user": user,
-                "profile_message": None,
-                "profile_error": "Leitstil und Ziel duerfen nicht leer sein.",
-                "llm": llm,
-                "llm_message": None,
-                "llm_error": None,
-            },
-            status_code=400,
+            user=user,
+            db=db,
+            profile_error="Leitstil und Ziel duerfen nicht leer sein.",
         )
 
     user.setup_style = style
@@ -478,19 +547,113 @@ def update_profile_setup(
     user.setup_gentle_mode = gentle_mode.lower() in ("true", "on", "1", "enabled")
     user.setup_completed = True
     db.commit()
-    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
-    return templates.TemplateResponse(
+    return _render_profile_page(
         request=request,
-        name="profile.html",
-        context={
-            "title": f"{settings.app_name} Profile",
-            "current_user": user,
-            "profile_message": "Setup-Daten wurden aktualisiert.",
-            "profile_error": None,
-            "llm": llm,
-            "llm_message": None,
-            "llm_error": None,
-        },
+        user=user,
+        db=db,
+        profile_message="Setup-Daten wurden aktualisiert.",
+    )
+
+
+@router.post("/profile/audio")
+def save_audio_profile(
+    request: Request,
+    transcription_enabled: str = Form(default="false"),
+    transcription_api_url: str = Form(default=""),
+    transcription_api_key: str = Form(default=""),
+    transcription_model: str = Form(default="whisper-1"),
+    transcription_language: str = Form(default="de"),
+    voice_realtime_enabled: str = Form(default="false"),
+    voice_realtime_mode: str = Form(default="realtime-manual"),
+    voice_realtime_agent_id: str = Form(default=""),
+    voice_realtime_ws_url: str = Form(default="wss://api.x.ai/v1/realtime"),
+    voice_realtime_api_key: str = Form(default=""),
+    voice_realtime_default_voice: str = Form(default="Eve"),
+    db: Session = Depends(get_db),
+):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+
+    settings.transcription_enabled = transcription_enabled.lower() in ("true", "on", "1", "enabled")
+    settings.transcription_api_url = transcription_api_url.strip()[:500] or None
+    if transcription_api_key.strip():
+        settings.transcription_api_key = transcription_api_key.strip()[:4000]
+    settings.transcription_model = transcription_model.strip()[:120] or "whisper-1"
+    settings.transcription_language = transcription_language.strip()[:20] or None
+
+    settings.voice_realtime_enabled = voice_realtime_enabled.lower() in ("true", "on", "1", "enabled")
+    settings.voice_realtime_mode = "realtime-manual"
+    settings.voice_realtime_agent_id = None
+    settings.voice_realtime_ws_url = voice_realtime_ws_url.strip()[:500] or "wss://api.x.ai/v1/realtime"
+    if voice_realtime_api_key.strip():
+        settings.voice_realtime_api_key = voice_realtime_api_key.strip()[:4000]
+    settings.voice_realtime_default_voice = voice_realtime_default_voice.strip()[:80] or "Eve"
+
+    return _render_profile_page(
+        request=request,
+        user=user,
+        db=db,
+        llm_message="Audio-Gateway-Konfiguration gespeichert (laufende Instanz).",
+    )
+
+
+@router.post("/profile/audio/test")
+async def test_audio_gateway(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+
+    mode = (settings.voice_realtime_mode or "realtime-manual").strip().lower()
+    if mode not in {"realtime-manual", "voice-agent"}:
+        mode = "realtime-manual"
+
+    llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+    api_key = (settings.voice_realtime_api_key or "").strip() or ((llm.api_key if llm else "") or "").strip()
+    if not api_key:
+        return JSONResponse({"ok": False, "error": "Kein Voice API-Key gefunden (Audio Gateway oder LLM Profil)."})
+
+    if mode == "voice-agent" and not (settings.voice_realtime_agent_id or "").strip():
+        return JSONResponse({"ok": False, "error": "Voice Agent ID fehlt (Mode A)."})
+
+    payload = {"expires_after": {"seconds": 60}}
+    if mode == "voice-agent":
+        payload["voice_agent_id"] = settings.voice_realtime_agent_id
+
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            resp = await client.post(
+                settings.voice_realtime_client_secret_url,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.HTTPStatusError as exc:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": f"Voice Test fehlgeschlagen (HTTP {exc.response.status_code}).",
+                "details": str(exc)[:200],
+            }
+        )
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": f"Voice Test fehlgeschlagen: {str(exc)[:220]}"})
+
+    has_secret = bool(
+        data.get("client_secret")
+        or data.get("value")
+        or (isinstance(data.get("client_secret"), dict) and data["client_secret"].get("value"))
+    )
+    return JSONResponse(
+        {
+            "ok": has_secret,
+            "mode": mode,
+            "message": "Voice Gateway erreichbar." if has_secret else "Antwort erhalten, aber ohne client secret.",
+        }
     )
 
 
@@ -588,6 +751,18 @@ def scenarios_page(request: Request, db: Session = Depends(get_db)):
         request=request,
         name="scenarios.html",
         context={"title": f"{settings.app_name} – Scenarios"},
+    )
+
+
+@router.get("/inventory", response_class=HTMLResponse)
+def inventory_page(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse(
+        request=request,
+        name="inventory.html",
+        context={"title": f"{settings.app_name} – Inventory"},
     )
 
 
@@ -715,7 +890,11 @@ def settings_summary(
             session_summary = {
                 "session_id": session_obj.id,
                 "persona_name": persona.name if persona else "Keyholderin",
+                "persona_avatar_media_id": persona.avatar_media_id if persona else None,
+                "persona_avatar_url": (f"/api/media/{persona.avatar_media_id}/content" if (persona and persona.avatar_media_id) else None),
                 "player_nickname": player.nickname if player else None,
+                "player_avatar_media_id": player.avatar_media_id if player else None,
+                "player_avatar_url": (f"/api/media/{player.avatar_media_id}/content" if (player and player.avatar_media_id) else None),
                 "status": session_obj.status,
                 "lock_start": str(session_obj.lock_start) if session_obj.lock_start else None,
                 "lock_end": str(session_obj.lock_end) if session_obj.lock_end else None,
@@ -1029,6 +1208,9 @@ def experience_page(request: Request, db: Session = Depends(get_db)):
     user = _get_current_user(request, db)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
+    target = _redirect_if_active_session(user, db)
+    if target:
+        return RedirectResponse(url=target, status_code=303)
 
     return templates.TemplateResponse(
         request=request,

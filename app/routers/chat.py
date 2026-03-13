@@ -10,14 +10,19 @@ from app.database import SessionLocal, get_db
 from app.models.message import Message
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
+from app.models.item import Item
 from app.models.safety_log import SafetyLog
 from app.models.scenario import Scenario
+from app.models.scenario_item import ScenarioItem
 from app.models.session import Session as SessionModel
+from app.models.session_item import SessionItem
 from app.models.task import Task
 from app.services.ai_gateway import get_ai_gateway
 from app.services.audit_logger import audit_log
 from app.services.context_window import build_context_window
 from app.services.prompt_builder import build_prompt_modules
+from app.services.task_service import TaskService
+from app.services.transcription_service import transcribe_audio
 
 router = APIRouter(prefix="/api/sessions", tags=["chat"])
 
@@ -156,6 +161,38 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
             for t in pending_tasks
         )
         context_items = [{"role": "system", "content": tasks_summary, "message_type": "task_context"}] + (context_items or [])
+
+    session_inventory_rows = (
+        db.query(SessionItem, Item)
+        .join(Item, Item.id == SessionItem.item_id)
+        .filter(SessionItem.session_id == session_id)
+        .order_by(Item.name.asc())
+        .all()
+    )
+    if session_inventory_rows:
+        inventory_summary = "Session-Inventar: " + "; ".join(
+            f"{item.name} x{session_item.quantity} [{session_item.status}]"
+            + (" (equipped)" if session_item.is_equipped else "")
+            for session_item, item in session_inventory_rows
+        )
+        context_items = [{"role": "system", "content": inventory_summary, "message_type": "inventory_context"}] + (context_items or [])
+    elif scenario_key:
+        scenario_row = db.query(Scenario).filter(Scenario.key == scenario_key).first()
+        if scenario_row:
+            scenario_inventory_rows = (
+                db.query(ScenarioItem, Item)
+                .join(Item, Item.id == ScenarioItem.item_id)
+                .filter(ScenarioItem.scenario_id == scenario_row.id)
+                .order_by(Item.name.asc())
+                .all()
+            )
+            if scenario_inventory_rows:
+                inventory_summary = "Scenario-Inventar (Template): " + "; ".join(
+                    f"{item.name} x{scenario_item.default_quantity}"
+                    + (" [required]" if scenario_item.is_required else "")
+                    for scenario_item, item in scenario_inventory_rows
+                )
+                context_items = [{"role": "system", "content": inventory_summary, "message_type": "inventory_context"}] + (context_items or [])
 
     wearer_nickname = profile.nickname if profile else None
     experience_level = profile.experience_level if profile else None
@@ -408,7 +445,121 @@ def send_message(session_id: int, payload: SendMessageRequest, db: Session = Dep
 
 
 _ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+_ALLOWED_AUDIO_MIMES = {
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/mp4",
+    "audio/x-m4a",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/webm",
+    "audio/ogg",
+    "audio/flac",
+}
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
+_MAX_AUDIO_BYTES = 20 * 1024 * 1024  # 20 MB
+
+
+def _parse_upload_mime(file: UploadFile) -> str:
+    return (file.content_type or "").split(";")[0].strip().lower()
+
+
+async def _build_chat_media_payload(content: str, file: UploadFile | None) -> tuple[str, bytes | None, str | None, str | None, bytes | None, str | None, str | None]:
+    image_bytes: bytes | None = None
+    image_filename: str | None = None
+    media_kind: str | None = None
+    audio_bytes: bytes | None = None
+    audio_filename: str | None = None
+    audio_mime: str | None = None
+
+    if file is not None:
+        content_type = _parse_upload_mime(file)
+        raw = await file.read()
+        if content_type in _ALLOWED_IMAGE_MIMES:
+            if len(raw) > _MAX_IMAGE_BYTES:
+                raise HTTPException(status_code=413, detail="Bild ist zu groß (max. 10 MB).")
+            image_bytes = raw
+            image_filename = file.filename
+            media_kind = "image"
+        elif content_type in _ALLOWED_AUDIO_MIMES:
+            if len(raw) > _MAX_AUDIO_BYTES:
+                raise HTTPException(status_code=413, detail="Audio ist zu groß (max. 20 MB).")
+            media_kind = "audio"
+            audio_bytes = raw
+            audio_filename = file.filename or "audio-upload"
+            audio_mime = content_type
+        else:
+            raise HTTPException(
+                status_code=415,
+                detail="Nur Bild- oder Audiodateien sind erlaubt (JPEG, PNG, GIF, WEBP, MP3, M4A, WAV, OGG, WEBM, FLAC).",
+            )
+
+    user_text = content.strip()
+    if media_kind == "audio":
+        # Transcription is added by endpoint logic (provider-specific).
+        pass
+    elif not user_text and media_kind == "image":
+        user_text = "(Bild ohne Text)"
+    elif not user_text:
+        user_text = "(Nachricht ohne Text)"
+
+    return user_text, image_bytes, image_filename, media_kind, audio_bytes, audio_filename, audio_mime
+
+
+@router.post("/{session_id}/messages/media")
+async def send_message_with_media(
+    session_id: int,
+    content: str = Form(default=""),
+    file: UploadFile | None = File(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    user_text, image_bytes, image_filename, media_kind, audio_bytes, audio_filename, audio_mime = await _build_chat_media_payload(content=content, file=file)
+    transcript_text = None
+    transcription_status = None
+
+    if media_kind == "audio" and audio_bytes is not None:
+        session_obj = _load_session(db, session_id)
+        result = transcribe_audio(
+            db=db,
+            audio_bytes=audio_bytes,
+            filename=audio_filename or "audio-upload",
+            mime_type=audio_mime or "application/octet-stream",
+            session_obj=session_obj,
+        )
+        transcription_status = result.status
+        if result.status == "ok" and result.text:
+            transcript_text = result.text
+            if user_text:
+                user_text = f"{user_text}\n\n[Audio-Transkript]\n{result.text}"
+            else:
+                user_text = result.text
+        else:
+            audio_note = f"[Audio-Upload: {audio_filename or 'audio'}]"
+            if result.error:
+                audio_note += f" [Transkript nicht verfügbar: {result.error}]"
+            user_text = f"{user_text}\n\n{audio_note}".strip() if user_text else audio_note
+    assistant_msg = _persist_chat_turn(
+        db=db,
+        session_id=session_id,
+        user_text=user_text,
+        image_bytes=image_bytes,
+        image_filename=image_filename,
+    )
+    response_message_type = "chat"
+    if media_kind == "image":
+        response_message_type = "chat_image"
+    elif media_kind == "audio":
+        response_message_type = "chat_audio"
+    response = {
+        "session_id": session_id,
+        "reply": assistant_msg.content,
+        "reply_message_id": assistant_msg.id,
+        "message_type": response_message_type,
+    }
+    if media_kind == "audio":
+        response["transcription_status"] = transcription_status or "not-requested"
+        response["transcript"] = transcript_text
+    return response
 
 
 @router.post("/{session_id}/messages/image")
@@ -418,31 +569,8 @@ async def send_message_with_image(
     file: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    image_bytes: bytes | None = None
-    image_filename: str | None = None
-    if file is not None:
-        content_type = (file.content_type or "").split(";")[0].strip().lower()
-        if content_type not in _ALLOWED_IMAGE_MIMES:
-            raise HTTPException(status_code=415, detail="Nur Bilddateien sind erlaubt (JPEG, PNG, GIF, WEBP).")
-        raw = await file.read()
-        if len(raw) > _MAX_IMAGE_BYTES:
-            raise HTTPException(status_code=413, detail="Bild ist zu groß (max. 10 MB).")
-        image_bytes = raw
-        image_filename = file.filename
-
-    user_text = content.strip() or "(Bild ohne Text)"
-    assistant_msg = _persist_chat_turn(
-        db=db,
-        session_id=session_id,
-        user_text=user_text,
-        image_bytes=image_bytes,
-        image_filename=image_filename,
-    )
-    return {
-        "session_id": session_id,
-        "reply": assistant_msg.content,
-        "reply_message_id": assistant_msg.id,
-    }
+    # Backward-compatible alias for older frontend clients.
+    return await send_message_with_media(session_id=session_id, content=content, file=file, db=db)
 
 
 @router.post("/{session_id}/messages/regenerate")

@@ -112,6 +112,10 @@ def test_experience_draft_updates_active_session_player_and_hygiene_max():
         assert created.status_code == 200
         session_id = created.json()["session_id"]
 
+        signed = client.post(f"/api/sessions/{session_id}/sign-contract")
+        assert signed.status_code == 200
+        assert signed.json().get("status") == "active"
+
         play = client.get(f"/play/{session_id}", follow_redirects=False)
         assert play.status_code == 200
 
@@ -173,3 +177,35 @@ def test_experience_draft_updates_active_session_player_and_hygiene_max():
         assert reaction.get("penalty_multiplier") == 1.4
         assert reaction.get("default_penalty_seconds") == 5400
         assert reaction.get("max_penalty_seconds") == 21600
+
+
+def test_experience_and_profile_redirect_to_play_when_active_session_exists():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        created = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Redirect Persona",
+                "player_nickname": "Redirect Player",
+                "min_duration_seconds": 900,
+            },
+        )
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+
+        signed = client.post(f"/api/sessions/{session_id}/sign-contract")
+        assert signed.status_code == 200
+        assert signed.json().get("status") == "active"
+
+        play = client.get(f"/play/{session_id}", follow_redirects=False)
+        assert play.status_code == 200
+
+        experience = client.get("/experience", follow_redirects=False)
+        assert experience.status_code == 303
+        assert experience.headers.get("location") == f"/play/{session_id}"
+
+        profile = client.get("/profile", follow_redirects=False)
+        assert profile.status_code == 200
+        assert "Audio Gateway" in profile.text
+        assert "Zur laufenden Session" in profile.text
