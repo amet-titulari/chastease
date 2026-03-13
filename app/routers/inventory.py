@@ -1,12 +1,13 @@
 import json
 import re
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.auth_user import AuthUser
 from app.models.item import Item
 from app.models.scenario import Scenario
 from app.models.scenario_item import ScenarioItem
@@ -15,6 +16,7 @@ from app.models.session_item import SessionItem
 
 router = APIRouter(prefix="/api/inventory", tags=["inventory"])
 SCHEMA_VERSION = "0.1.0"
+AUTH_COOKIE_NAME = "chastease_auth"
 
 
 class ItemCreateRequest(BaseModel):
@@ -84,23 +86,23 @@ def _item_to_card(item: Item) -> dict:
     }
 
 
-def _unique_item_key(db: Session, key: str, ignore_item_id: int | None = None) -> str:
+def _unique_item_key(db: Session, owner_user_id: int, key: str, ignore_item_id: int | None = None) -> str:
     candidate = _normalise_key(key)
     if not candidate:
         candidate = "item"
     if ignore_item_id is not None:
-        exists = db.query(Item).filter(Item.key == candidate, Item.id != ignore_item_id).first()
+        exists = db.query(Item).filter(Item.owner_user_id == owner_user_id, Item.key == candidate, Item.id != ignore_item_id).first()
     else:
-        exists = db.query(Item).filter(Item.key == candidate).first()
+        exists = db.query(Item).filter(Item.owner_user_id == owner_user_id, Item.key == candidate).first()
     if not exists:
         return candidate
 
     for idx in range(2, 1000):
         alt = f"{candidate}_{idx}"
         if ignore_item_id is not None:
-            exists = db.query(Item).filter(Item.key == alt, Item.id != ignore_item_id).first()
+            exists = db.query(Item).filter(Item.owner_user_id == owner_user_id, Item.key == alt, Item.id != ignore_item_id).first()
         else:
-            exists = db.query(Item).filter(Item.key == alt).first()
+            exists = db.query(Item).filter(Item.owner_user_id == owner_user_id, Item.key == alt).first()
         if not exists:
             return alt
     raise HTTPException(status_code=409, detail="Unable to allocate unique item key")
@@ -118,6 +120,16 @@ def _item_to_dict(item: Item) -> dict:
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
     }
+
+
+def _require_current_user(request: Request, db: Session) -> AuthUser:
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    user = db.query(AuthUser).filter(AuthUser.session_token == token).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    return user
 
 
 def _scenario_item_to_dict(link: ScenarioItem, item: Item) -> dict:
@@ -148,8 +160,9 @@ def _session_item_to_dict(link: SessionItem, item: Item) -> dict:
 
 
 @router.get("/items")
-def list_items(include_inactive: bool = False, db: Session = Depends(get_db)) -> dict:
-    query = db.query(Item)
+def list_items(request: Request, include_inactive: bool = False, db: Session = Depends(get_db)) -> dict:
+    user = _require_current_user(request, db)
+    query = db.query(Item).filter(Item.owner_user_id == user.id)
     if not include_inactive:
         query = query.filter(Item.is_active == True)  # noqa: E712
     rows = query.order_by(Item.name.asc()).all()
@@ -157,14 +170,16 @@ def list_items(include_inactive: bool = False, db: Session = Depends(get_db)) ->
 
 
 @router.post("/items")
-def create_item(payload: ItemCreateRequest, db: Session = Depends(get_db)) -> dict:
+def create_item(payload: ItemCreateRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = _require_current_user(request, db)
     key = _normalise_key(payload.key)
     if not key:
         raise HTTPException(status_code=422, detail="Invalid item key")
-    if db.query(Item).filter(Item.key == key).first():
-        raise HTTPException(status_code=409, detail=f"Item key '{key}' already exists")
+    if db.query(Item).filter(Item.owner_user_id == user.id, Item.key == key).first():
+        key = _unique_item_key(db, user.id, key)
 
     row = Item(
+        owner_user_id=user.id,
         key=key,
         name=payload.name.strip(),
         category=payload.category.strip() if payload.category else None,
@@ -179,8 +194,9 @@ def create_item(payload: ItemCreateRequest, db: Session = Depends(get_db)) -> di
 
 
 @router.get("/items/{item_id}/export")
-def export_item(item_id: int, db: Session = Depends(get_db)) -> JSONResponse:
-    row = db.query(Item).filter(Item.id == item_id).first()
+def export_item(item_id: int, request: Request, db: Session = Depends(get_db)) -> JSONResponse:
+    user = _require_current_user(request, db)
+    row = db.query(Item).filter(Item.id == item_id, Item.owner_user_id == user.id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Item not found")
     slug = re.sub(r"[^a-z0-9]+", "-", row.name.lower()).strip("-") or f"item-{item_id}"
@@ -191,8 +207,9 @@ def export_item(item_id: int, db: Session = Depends(get_db)) -> JSONResponse:
 
 
 @router.get("/items/export")
-def export_all_items(db: Session = Depends(get_db)) -> JSONResponse:
-    rows = db.query(Item).order_by(Item.id.asc()).all()
+def export_all_items(request: Request, db: Session = Depends(get_db)) -> JSONResponse:
+    user = _require_current_user(request, db)
+    rows = db.query(Item).filter(Item.owner_user_id == user.id).order_by(Item.id.asc()).all()
     return JSONResponse(
         content={
             "schema_version": SCHEMA_VERSION,
@@ -204,7 +221,8 @@ def export_all_items(db: Session = Depends(get_db)) -> JSONResponse:
 
 
 @router.post("/items/import")
-def import_item(payload: ItemImportRequest, db: Session = Depends(get_db)) -> dict:
+def import_item(payload: ItemImportRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = _require_current_user(request, db)
     card = payload.card
     if not isinstance(card, dict):
         raise HTTPException(status_code=422, detail="card must be a JSON object")
@@ -214,7 +232,7 @@ def import_item(payload: ItemImportRequest, db: Session = Depends(get_db)) -> di
         raise HTTPException(status_code=422, detail="name is required")
 
     raw_key = str(card.get("key") or name).strip()
-    key = _unique_item_key(db, raw_key)
+    key = _unique_item_key(db, user.id, raw_key)
 
     raw_tags = card.get("tags")
     tags = []
@@ -222,6 +240,7 @@ def import_item(payload: ItemImportRequest, db: Session = Depends(get_db)) -> di
         tags = [str(tag).strip() for tag in raw_tags if str(tag).strip()][:50]
 
     row = Item(
+        owner_user_id=user.id,
         key=key,
         name=name,
         category=str(card.get("category") or "").strip()[:80] or None,
@@ -236,8 +255,9 @@ def import_item(payload: ItemImportRequest, db: Session = Depends(get_db)) -> di
 
 
 @router.put("/items/{item_id}")
-def update_item(item_id: int, payload: ItemUpdateRequest, db: Session = Depends(get_db)) -> dict:
-    row = db.query(Item).filter(Item.id == item_id).first()
+def update_item(item_id: int, payload: ItemUpdateRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = _require_current_user(request, db)
+    row = db.query(Item).filter(Item.id == item_id, Item.owner_user_id == user.id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Item not found")
 
@@ -245,7 +265,7 @@ def update_item(item_id: int, payload: ItemUpdateRequest, db: Session = Depends(
         key = _normalise_key(payload.key)
         if not key:
             raise HTTPException(status_code=422, detail="Invalid item key")
-        conflict = db.query(Item).filter(Item.key == key, Item.id != item_id).first()
+        conflict = db.query(Item).filter(Item.owner_user_id == user.id, Item.key == key, Item.id != item_id).first()
         if conflict:
             raise HTTPException(status_code=409, detail=f"Item key '{key}' already exists")
         row.key = key
@@ -267,8 +287,9 @@ def update_item(item_id: int, payload: ItemUpdateRequest, db: Session = Depends(
 
 
 @router.delete("/items/{item_id}")
-def delete_item(item_id: int, db: Session = Depends(get_db)) -> dict:
-    row = db.query(Item).filter(Item.id == item_id).first()
+def delete_item(item_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = _require_current_user(request, db)
+    row = db.query(Item).filter(Item.id == item_id, Item.owner_user_id == user.id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Item not found")
     db.delete(row)
@@ -277,7 +298,8 @@ def delete_item(item_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/scenarios/{scenario_id}/items")
-def list_scenario_inventory(scenario_id: int, db: Session = Depends(get_db)) -> dict:
+def list_scenario_inventory(scenario_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = _require_current_user(request, db)
     scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
@@ -285,7 +307,7 @@ def list_scenario_inventory(scenario_id: int, db: Session = Depends(get_db)) -> 
     rows = (
         db.query(ScenarioItem, Item)
         .join(Item, Item.id == ScenarioItem.item_id)
-        .filter(ScenarioItem.scenario_id == scenario_id)
+        .filter(ScenarioItem.scenario_id == scenario_id, Item.owner_user_id == user.id)
         .order_by(Item.name.asc())
         .all()
     )
@@ -299,15 +321,17 @@ def list_scenario_inventory(scenario_id: int, db: Session = Depends(get_db)) -> 
 def replace_scenario_inventory(
     scenario_id: int,
     payload: ScenarioInventoryReplaceRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
+    user = _require_current_user(request, db)
     scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
     item_ids = {entry.item_id for entry in payload.entries}
     if item_ids:
-        found = db.query(Item.id).filter(Item.id.in_(item_ids)).all()
+        found = db.query(Item.id).filter(Item.id.in_(item_ids), Item.owner_user_id == user.id).all()
         found_ids = {row[0] for row in found}
         missing = sorted(item_ids - found_ids)
         if missing:
@@ -327,11 +351,12 @@ def replace_scenario_inventory(
         )
 
     db.commit()
-    return list_scenario_inventory(scenario_id=scenario_id, db=db)
+    return list_scenario_inventory(scenario_id=scenario_id, request=request, db=db)
 
 
 @router.get("/sessions/{session_id}/items")
-def list_session_inventory(session_id: int, db: Session = Depends(get_db)) -> dict:
+def list_session_inventory(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = _require_current_user(request, db)
     session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session_obj:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -339,7 +364,7 @@ def list_session_inventory(session_id: int, db: Session = Depends(get_db)) -> di
     rows = (
         db.query(SessionItem, Item)
         .join(Item, Item.id == SessionItem.item_id)
-        .filter(SessionItem.session_id == session_id)
+        .filter(SessionItem.session_id == session_id, Item.owner_user_id == user.id)
         .order_by(Item.name.asc())
         .all()
     )
@@ -353,13 +378,15 @@ def list_session_inventory(session_id: int, db: Session = Depends(get_db)) -> di
 def add_session_item(
     session_id: int,
     payload: SessionInventoryCreateRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
+    user = _require_current_user(request, db)
     session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session_obj:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    item = db.query(Item).filter(Item.id == payload.item_id).first()
+    item = db.query(Item).filter(Item.id == payload.item_id, Item.owner_user_id == user.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
@@ -388,8 +415,10 @@ def update_session_item(
     session_id: int,
     session_item_id: int,
     payload: SessionInventoryUpdateRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
+    user = _require_current_user(request, db)
     row = (
         db.query(SessionItem)
         .filter(SessionItem.id == session_item_id, SessionItem.session_id == session_id)
@@ -410,20 +439,25 @@ def update_session_item(
     db.add(row)
     db.commit()
     db.refresh(row)
-    item = db.query(Item).filter(Item.id == row.item_id).first()
+    item = db.query(Item).filter(Item.id == row.item_id, Item.owner_user_id == user.id).first()
     if not item:
         raise HTTPException(status_code=500, detail="Corrupt session item reference")
     return _session_item_to_dict(row, item)
 
 
 @router.delete("/sessions/{session_id}/items/{session_item_id}")
-def delete_session_item(session_id: int, session_item_id: int, db: Session = Depends(get_db)) -> dict:
+def delete_session_item(session_id: int, session_item_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = _require_current_user(request, db)
     row = (
         db.query(SessionItem)
         .filter(SessionItem.id == session_item_id, SessionItem.session_id == session_id)
         .first()
     )
     if not row:
+        raise HTTPException(status_code=404, detail="Session item not found")
+
+    item = db.query(Item).filter(Item.id == row.item_id, Item.owner_user_id == user.id).first()
+    if not item:
         raise HTTPException(status_code=404, detail="Session item not found")
     db.delete(row)
     db.commit()

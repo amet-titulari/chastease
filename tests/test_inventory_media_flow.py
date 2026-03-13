@@ -5,12 +5,29 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
+def _register(client: TestClient):
+    unique = uuid4().hex[:8]
+    return client.post(
+        "/auth/register",
+        data={
+            "username": f"inv-{unique}",
+            "email": f"inv-{unique}@example.com",
+            "password": "verysecure1",
+            "password_confirm": "verysecure1",
+        },
+        follow_redirects=False,
+    )
+
+
 def test_inventory_catalog_scenario_and_session_flow():
     unique = uuid4().hex[:8]
     item_key = f"test_item_{unique}"
     scenario_key = f"test_scenario_{unique}"
 
     with TestClient(app) as client:
+        register_resp = _register(client)
+        assert register_resp.status_code == 303
+
         create_item = client.post(
             "/api/inventory/items",
             json={
@@ -83,6 +100,9 @@ def test_avatar_upload_and_assignment_to_persona_and_player():
     unique = uuid4().hex[:8]
 
     with TestClient(app) as client:
+        register_resp = _register(client)
+        assert register_resp.status_code == 303
+
         upload = client.post(
             "/api/media/avatar",
             files={"file": ("avatar.png", b"\x89PNG\r\n\x1a\n", "image/png")},
@@ -133,6 +153,9 @@ def test_inventory_item_export_and_import_flow():
     unique = uuid4().hex[:8]
 
     with TestClient(app) as client:
+        register_resp = _register(client)
+        assert register_resp.status_code == 303
+
         create_item = client.post(
             "/api/inventory/items",
             json={

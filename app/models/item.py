@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, func
 
 from app.database import Base
 
@@ -7,6 +7,7 @@ class Item(Base):
     __tablename__ = "items"
 
     id = Column(Integer, primary_key=True, index=True)
+    owner_user_id = Column(Integer, ForeignKey("auth_users.id", ondelete="CASCADE"), nullable=True, index=True)
     key = Column(String(120), nullable=False, unique=True, index=True)
     name = Column(String(160), nullable=False)
     category = Column(String(80), nullable=True)
