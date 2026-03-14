@@ -48,6 +48,21 @@ def _safe_suffix(filename: str | None) -> str:
     return suffix
 
 
+def _verification_image_url(image_path: str | None) -> str | None:
+    if not image_path:
+        return None
+    media_root = Path(settings.media_dir).resolve()
+    candidate = Path(image_path)
+    if not candidate.is_absolute():
+        candidate = media_root / candidate
+    try:
+        rel = candidate.resolve().relative_to(media_root)
+    except (ValueError, OSError):
+        return None
+    rel_posix = rel.as_posix()
+    return f"/media/{rel_posix}"
+
+
 @router.post("/{session_id}/verifications/request")
 def request_verification(session_id: int, payload: VerificationRequest, db: Session = Depends(get_db)) -> dict:
     _load_session(db, session_id)
@@ -155,6 +170,7 @@ async def upload_verification(
         "status": record.status,
         "observed_seal_number": record.observed_seal_number,
         "analysis": record.ai_response,
+        "image_url": _verification_image_url(record.image_path),
     }
 
 
@@ -176,6 +192,7 @@ def list_verifications(session_id: int, db: Session = Depends(get_db)) -> dict:
                 "requested_seal_number": item.requested_seal_number,
                 "observed_seal_number": item.observed_seal_number,
                 "analysis": item.ai_response,
+                "image_url": _verification_image_url(item.image_path),
             }
             for item in rows
         ],

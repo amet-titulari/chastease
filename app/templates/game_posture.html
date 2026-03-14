@@ -255,6 +255,7 @@ let totalTimerHandle = null;
 let phaseTimerHandle = null;
 let runPollHandle = null;
 let sequenceToken = 0;
+let sequenceStepId = null;
 let verifyInFlight = false;
 let runRefreshInFlight = false;
 let audioCtx = null;
@@ -402,10 +403,25 @@ function renderRun(run) {
 
   if (run.status === "active" && run.current_step) {
     startRunPolling();
-    startStepSequence(run.current_step, run.transition_seconds || 0);
+    if (sequenceStepId !== run.current_step.id) {
+      startStepSequence(run.current_step, run.transition_seconds || 0, run.remaining_seconds || 0);
+    }
   } else {
     stopRunPolling();
     stopStepSequence();
+  }
+
+  if (run.status === "completed") {
+    const summary = run.summary || {};
+    const reason = summary.end_reason === "time_elapsed" ? "Zeit abgelaufen" : "Alle Schritte verarbeitet";
+    const total = Number(summary.total_steps || 0);
+    const passed = Number(summary.passed_steps || 0);
+    const failed = Number(summary.failed_steps || 0);
+    const timeoutFailed = Number(summary.timeout_failed_steps || 0);
+    const misses = Number(summary.miss_count || run.miss_count || 0);
+    analysisEl.textContent = `Spiel beendet (${reason}). Schritte: ${passed}/${total} bestanden, ${failed} fehlgeschlagen (${timeoutFailed} wegen Zeitablauf). Misses: ${misses}.`;
+    setStatus("Spiel abgeschlossen.", false);
+    updatePhase("FERTIG", "--");
   }
 
   if (run.status === "active" && !cameraStream) {
@@ -417,6 +433,7 @@ function renderRun(run) {
 
 function stopStepSequence() {
   sequenceToken += 1;
+  sequenceStepId = null;
   if (phaseTimerHandle) {
     clearInterval(phaseTimerHandle);
     phaseTimerHandle = null;
@@ -427,6 +444,7 @@ function countdownPhase({
   token,
   label,
   startSeconds,
+  onTick,
   onFinished,
 }) {
   if (phaseTimerHandle) clearInterval(phaseTimerHandle);
@@ -446,6 +464,9 @@ function countdownPhase({
     }
 
     seconds = Math.max(0, seconds - 1);
+    if (onTick) {
+      onTick(seconds);
+    }
     if (seconds > 0 && seconds <= 5) {
       beep();
     }
@@ -459,23 +480,48 @@ function countdownPhase({
   }, 1000);
 }
 
-function startStepSequence(step, transitionSeconds) {
+function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
   sequenceToken += 1;
   const token = sequenceToken;
+  sequenceStepId = step.id;
+  const budget = Math.max(0, Number(runRemainingSeconds || 0));
+  const transition = Math.max(0, Math.min(Number(transitionSeconds || 0), budget));
+  const holdBudget = Math.max(0, budget - transition);
+  const holdSeconds = Math.max(0, Math.min(Number(step.target_seconds || 0), holdBudget));
+  const sampleWindowStart = 2;
+  const sampleWindowEnd = Math.max(sampleWindowStart, holdSeconds - 6);
+  const sampleSecond = holdSeconds >= 8
+    ? (sampleWindowStart + Math.floor(Math.random() * (sampleWindowEnd - sampleWindowStart + 1)))
+    : null;
+  let sampleTriggered = false;
 
   const beginHold = () => {
+    if (holdSeconds <= 0) {
+      loadRun().catch(() => {});
+      return;
+    }
     countdownPhase({
       token,
       label: "POSE HALTEN",
-      startSeconds: step.target_seconds || 0,
-      onFinished: () => verifyCurrentStep(token),
+      startSeconds: holdSeconds,
+      onTick: (secondsRemaining) => {
+        if (
+          sampleSecond !== null
+          && !sampleTriggered
+          && secondsRemaining === sampleSecond
+        ) {
+          sampleTriggered = true;
+          verifyCurrentStepWithMode(token, { sampleOnly: true }).catch(() => {});
+        }
+      },
+      onFinished: () => verifyCurrentStepWithMode(token, { sampleOnly: false }),
     });
   };
 
   countdownPhase({
     token,
     label: "POSE EINNEHMEN",
-    startSeconds: transitionSeconds,
+    startSeconds: transition,
     onFinished: beginHold,
   });
 }
@@ -561,16 +607,32 @@ async function captureFrameBlob() {
 }
 
 async function verifyCurrentStep(token) {
+  return verifyCurrentStepWithMode(token, { sampleOnly: false });
+}
+
+async function verifyCurrentStepWithMode(token, options = {}) {
+  const sampleOnly = Boolean(options.sampleOnly);
   if (token !== sequenceToken) return;
   if (!activeRun || activeRun.status !== "active" || !activeRun.current_step) return;
-  if (verifyInFlight) return;
+  if (verifyInFlight) {
+    if (!sampleOnly) {
+      setTimeout(() => {
+        if (token === sequenceToken) {
+          verifyCurrentStepWithMode(token, { sampleOnly: false }).catch(() => {});
+        }
+      }, 350);
+    }
+    return;
+  }
   if (!cameraStream) {
     setStatus("Kamera ist nicht aktiv. Bitte Seite neu laden und Kamera freigeben.", true);
     return;
   }
 
   verifyInFlight = true;
-  updatePhase("PRUEFUNG", "...");
+  if (!sampleOnly) {
+    updatePhase("PRUEFUNG", "...");
+  }
 
   try {
     const blob = await captureFrameBlob();
@@ -579,13 +641,22 @@ async function verifyCurrentStep(token) {
     const form = new FormData();
     form.append("file", blob, "autocap.jpg");
     form.append("observed_posture", activeRun.current_step.posture_name || "");
+    form.append("sample_only", sampleOnly ? "true" : "false");
 
     const result = await api(`/api/games/runs/${runId}/steps/${activeRun.current_step.id}/verify`, {
       method: "POST",
       body: form,
     });
 
-    analysisEl.textContent = result.step.analysis || "Pruefung abgeschlossen.";
+    if (sampleOnly) {
+      if (result.step && result.step.finalized) {
+        analysisEl.textContent = `Stichprobe fehlgeschlagen: ${result.step.analysis || "Pose nicht bestaetigt."}`;
+      } else {
+        analysisEl.textContent = "Stichprobe bestaetigt.";
+      }
+    } else {
+      analysisEl.textContent = result.step.analysis || "Pruefung abgeschlossen.";
+    }
     renderRun(result.run);
     if (result.run.status === "completed") {
       setStatus("Spiel abgeschlossen.", false);
@@ -596,7 +667,7 @@ async function verifyCurrentStep(token) {
     setStatus(`Verifikation fehlgeschlagen: ${err.message}`, true);
     setTimeout(() => {
       if (token === sequenceToken && activeRun && activeRun.status === "active") {
-        verifyCurrentStep(token).catch(() => {});
+        verifyCurrentStepWithMode(token, { sampleOnly }).catch(() => {});
       }
     }, 2500);
   } finally {

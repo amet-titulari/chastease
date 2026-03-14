@@ -371,29 +371,55 @@ def _active_step(db: Session, run_id: int) -> GameRunStep | None:
     )
 
 
+def _remaining_seconds_for_run(run: GameRun, now: datetime | None = None) -> int:
+    anchor = now or datetime.now(timezone.utc)
+    started = _as_utc(run.started_at) or anchor
+    elapsed_seconds = max(0, int((anchor - started).total_seconds()))
+    return max(0, int(run.total_duration_seconds) - elapsed_seconds)
+
+
 def _finish_run_if_done(db: Session, run: GameRun) -> bool:
-    has_pending = (
+    now = datetime.now(timezone.utc)
+    remaining_seconds = _remaining_seconds_for_run(run, now)
+    pending_steps = (
         db.query(GameRunStep)
         .filter(GameRunStep.run_id == run.id, GameRunStep.status == "pending")
-        .first()
+        .order_by(GameRunStep.order_index.asc(), GameRunStep.id.asc())
+        .all()
     )
-    if has_pending:
+    timed_out = run.status == "active" and remaining_seconds <= 0
+    if pending_steps and not timed_out:
         return False
     if run.status == "completed":
         return True
 
+    timeout_failed = 0
+    if timed_out and pending_steps:
+        for item in pending_steps:
+            item.status = "failed"
+            item.completed_at = now
+            item.last_analysis = item.last_analysis or "Nicht verifiziert: Gesamtzeit abgelaufen."
+            db.add(item)
+            timeout_failed += 1
+
     run.status = "completed"
-    run.finished_at = datetime.now(timezone.utc)
+    run.finished_at = now
 
     steps = db.query(GameRunStep).filter(GameRunStep.run_id == run.id).all()
     passed = sum(1 for item in steps if item.status == "passed")
     failed = sum(1 for item in steps if item.status == "failed")
+    total = len(steps)
+    end_reason = "time_elapsed" if timed_out else "all_steps_processed"
     report = {
+        "end_reason": end_reason,
+        "total_steps": total,
         "passed_steps": passed,
         "failed_steps": failed,
+        "timeout_failed_steps": timeout_failed,
         "miss_count": run.miss_count,
         "retry_extension_seconds": run.retry_extension_seconds,
         "session_penalty_applied": bool(run.session_penalty_applied),
+        "scheduled_duration_seconds": int(run.total_duration_seconds),
     }
     run.summary_json = json.dumps(report, ensure_ascii=True)
 
@@ -404,7 +430,8 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
             message_type="game_report",
             content=(
                 "Spielbericht Posture Training: "
-                f"passed={passed}, failed={failed}, misses={run.miss_count}, "
+                f"reason={end_reason}, total={total}, passed={passed}, failed={failed}, "
+                f"timeout_failed={timeout_failed}, misses={run.miss_count}, "
                 f"retry_extension_seconds={run.retry_extension_seconds}, "
                 f"session_penalty_applied={run.session_penalty_applied}"
             ),
@@ -417,10 +444,33 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
 def _run_payload(db: Session, run: GameRun) -> dict:
     now = datetime.now(timezone.utc)
     started = _as_utc(run.started_at) or now
-    elapsed_seconds = max(0, int((now - started).total_seconds()))
-    remaining_seconds = max(0, int(run.total_duration_seconds) - elapsed_seconds)
+    remaining_seconds = _remaining_seconds_for_run(run, now)
 
     current_step = _active_step(db, run.id)
+    summary_payload = None
+    if run.summary_json:
+        try:
+            summary_payload = json.loads(run.summary_json)
+        except json.JSONDecodeError:
+            summary_payload = {"raw": run.summary_json}
+
+    current_step_payload = None
+    if current_step:
+        transition_seconds = max(0, int(run.transition_seconds or 0))
+        max_hold_seconds = max(0, remaining_seconds - transition_seconds)
+        effective_target_seconds = min(int(current_step.target_seconds), max_hold_seconds)
+        current_step_payload = {
+            "id": current_step.id,
+            "order_index": current_step.order_index,
+            "posture_key": current_step.posture_key,
+            "posture_name": current_step.posture_name,
+            "posture_image_url": current_step.posture_image_url,
+            "instruction": current_step.instruction,
+            "target_seconds": effective_target_seconds,
+            "raw_target_seconds": current_step.target_seconds,
+            "verification_count": current_step.verification_count,
+        }
+
     return {
         "id": run.id,
         "session_id": run.session_id,
@@ -438,20 +488,8 @@ def _run_payload(db: Session, run: GameRun) -> dict:
         "remaining_seconds": remaining_seconds,
         "started_at": started.isoformat(),
         "finished_at": _as_utc(run.finished_at).isoformat() if run.finished_at else None,
-        "current_step": (
-            {
-                "id": current_step.id,
-                "order_index": current_step.order_index,
-                "posture_key": current_step.posture_key,
-                "posture_name": current_step.posture_name,
-                "posture_image_url": current_step.posture_image_url,
-                "instruction": current_step.instruction,
-                "target_seconds": current_step.target_seconds,
-                "verification_count": current_step.verification_count,
-            }
-            if current_step
-            else None
-        ),
+        "summary": summary_payload,
+        "current_step": current_step_payload,
     }
 
 
@@ -900,6 +938,7 @@ async def verify_game_step(
     step_id: int,
     file: UploadFile = File(...),
     observed_posture: str | None = Form(default=None),
+    sample_only: bool = Form(default=False),
     db: Session = Depends(get_db),
 ) -> dict:
     run = db.query(GameRun).filter(GameRun.id == run_id).first()
@@ -941,20 +980,8 @@ async def verify_game_step(
     step.last_analysis = analysis
     now = datetime.now(timezone.utc)
 
-    if status == "confirmed":
-        step.status = "passed"
-        step.completed_at = now
-        db.add(
-            Message(
-                session_id=run.session_id,
-                role="system",
-                message_type="game_step_pass",
-                content=f"Posture bestaetigt: {step.posture_name}",
-            )
-        )
-    else:
-        step.status = "failed"
-        step.completed_at = now
+    def _append_retry_step_for_failed_current_step() -> None:
+        nonlocal run, step
         run.miss_count += 1
         run.retry_extension_seconds += difficulty.retry_extension_seconds
         run.total_duration_seconds += difficulty.retry_extension_seconds
@@ -1014,6 +1041,45 @@ async def verify_game_step(
                 )
             )
 
+    if sample_only:
+        if status == "confirmed":
+            db.add(
+                Message(
+                    session_id=run.session_id,
+                    role="system",
+                    message_type="game_step_sample_pass",
+                    content=f"Stichprobe bestanden: {step.posture_name}",
+                )
+            )
+        else:
+            step.status = "failed"
+            step.completed_at = now
+            _append_retry_step_for_failed_current_step()
+
+            db.add(
+                Message(
+                    session_id=run.session_id,
+                    role="system",
+                    message_type="game_step_sample_fail",
+                    content=f"Stichprobe fehlgeschlagen: {step.posture_name}",
+                )
+            )
+    elif status == "confirmed":
+        step.status = "passed"
+        step.completed_at = now
+        db.add(
+            Message(
+                session_id=run.session_id,
+                role="system",
+                message_type="game_step_pass",
+                content=f"Posture bestaetigt: {step.posture_name}",
+            )
+        )
+    else:
+        step.status = "failed"
+        step.completed_at = now
+        _append_retry_step_for_failed_current_step()
+
     db.add(step)
     db.add(run)
     _finish_run_if_done(db, run)
@@ -1028,5 +1094,8 @@ async def verify_game_step(
             "verification_count": step.verification_count,
             "analysis": step.last_analysis,
             "capture_path": capture_rel_path,
+            "capture_url": f"/media/{capture_rel_path}",
+            "sample_only": sample_only,
+            "finalized": step.status != "pending",
         },
     }

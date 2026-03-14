@@ -1,12 +1,15 @@
 import io
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import zipfile
 
 from fastapi.testclient import TestClient
 
 from app.config import settings
+from app.database import SessionLocal
 from app.main import app
+from app.models.game_run import GameRun
 
 
 def _ppm_bytes(width: int, height: int, rgb: tuple[int, int, int] = (128, 128, 128)) -> bytes:
@@ -97,6 +100,44 @@ def test_verify_step_with_photo_advances_or_retries():
         assert payload["step"]["status"] in {"passed", "failed"}
 
 
+def test_sample_only_verification_keeps_step_pending_when_confirmed():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 10,
+                "max_misses_before_penalty": 1,
+                "session_penalty_seconds": 60,
+            },
+        )
+        assert start.status_code == 200
+        run = start.json()
+        run_id = run["id"]
+        step_id = run["current_step"]["id"]
+
+        verify = client.post(
+            f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+            files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+            data={
+                "observed_posture": run["current_step"]["posture_name"],
+                "sample_only": "true",
+            },
+        )
+        assert verify.status_code == 200
+        payload = verify.json()
+        assert payload["step"]["sample_only"] is True
+        assert payload["step"]["status"] == "pending"
+        assert payload["step"]["finalized"] is False
+
+        run_after = payload["run"]
+        assert run_after["status"] == "active"
+        assert run_after["current_step"] is not None
+        assert run_after["current_step"]["id"] == step_id
+
+
 def test_game_verification_capture_is_saved_under_session_with_run_start_prefix():
     with TestClient(app) as client:
         session_id = _create_and_sign(client)
@@ -150,6 +191,85 @@ def test_start_game_run_accepts_custom_transition_seconds():
         )
         assert resp.status_code == 200
         assert resp.json()["transition_seconds"] == 12
+
+
+def test_game_run_auto_completes_when_total_time_elapsed_with_summary():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 1,
+                "transition_seconds": 8,
+                "max_misses_before_penalty": 2,
+                "session_penalty_seconds": 120,
+            },
+        )
+        assert start.status_code == 200
+        run_id = start.json()["id"]
+
+        db = SessionLocal()
+        try:
+            run = db.query(GameRun).filter(GameRun.id == run_id).first()
+            assert run is not None
+            run.started_at = datetime.now(timezone.utc) - timedelta(seconds=120)
+            db.add(run)
+            db.commit()
+        finally:
+            db.close()
+
+        detail = client.get(f"/api/games/runs/{run_id}")
+        assert detail.status_code == 200
+        payload = detail.json()
+        assert payload["status"] == "completed"
+        assert payload["remaining_seconds"] == 0
+        assert payload["current_step"] is None
+
+        summary = payload.get("summary") or {}
+        assert summary.get("end_reason") == "time_elapsed"
+        assert int(summary.get("total_steps") or 0) >= 1
+
+
+def test_current_step_target_seconds_is_capped_by_remaining_budget():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 1,
+                "transition_seconds": 8,
+                "max_misses_before_penalty": 2,
+                "session_penalty_seconds": 120,
+            },
+        )
+        assert start.status_code == 200
+        run_id = start.json()["id"]
+
+        db = SessionLocal()
+        try:
+            run = db.query(GameRun).filter(GameRun.id == run_id).first()
+            assert run is not None
+            run.started_at = datetime.now(timezone.utc) - timedelta(seconds=56)
+            db.add(run)
+            db.commit()
+        finally:
+            db.close()
+
+        detail = client.get(f"/api/games/runs/{run_id}")
+        assert detail.status_code == 200
+        payload = detail.json()
+        assert payload["status"] == "active"
+        assert payload["remaining_seconds"] <= 4
+        step = payload.get("current_step")
+        assert step is not None
+
+        max_hold_budget = max(0, int(payload["remaining_seconds"]) - int(payload["transition_seconds"]))
+        assert int(step["target_seconds"]) <= max_hold_budget
+        assert int(step["raw_target_seconds"]) >= int(step["target_seconds"])
 
 
 def test_posture_management_crud_and_run_uses_managed_postures():
