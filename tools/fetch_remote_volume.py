@@ -25,7 +25,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="Fetch remote app data using scp with optional safety backups.",
     )
     parser.add_argument("--user", default="root", help="Remote SSH user (default: root)")
-    parser.add_argument("--host", default="65.108.149.214", help="Remote host")
+    #parser.add_argument("--host", default="65.108.149.214", help="Remote host")
+    parser.add_argument("--host", default="10.0.5.30", help="Remote host")
     parser.add_argument(
         "--remote-path",
         default="/var/lib/docker/volumes/chastease_chastease_data",

@@ -80,3 +80,115 @@ def test_map_card_requires_character_entry():
     with TestClient(app) as client:
         resp = client.post("/api/personas/map-card", json={"card": {"characters": []}})
         assert resp.status_code == 400
+
+
+def test_persona_task_template_crud_flow():
+    with TestClient(app) as client:
+        create_persona = client.post(
+            "/api/personas",
+            json={
+                "name": "Template Persona",
+                "description": "Persona fuer Task-Bibliothek",
+                "strictness_level": 3,
+            },
+        )
+        assert create_persona.status_code == 200
+        persona_id = create_persona.json()["id"]
+
+        create_template = client.post(
+            f"/api/personas/{persona_id}/task-templates",
+            json={
+                "title": "Morgen-Checkin",
+                "description": "Skala + kurzer Statusbericht",
+                "deadline_minutes": 120,
+                "requires_verification": False,
+                "category": "daily",
+                "tags": ["morning", "checkin"],
+            },
+        )
+        assert create_template.status_code == 200
+        template_payload = create_template.json()
+        assert template_payload["title"] == "Morgen-Checkin"
+        assert template_payload["deadline_minutes"] == 120
+        template_id = template_payload["id"]
+
+        list_templates = client.get(f"/api/personas/{persona_id}/task-templates")
+        assert list_templates.status_code == 200
+        assert any(item["id"] == template_id for item in list_templates.json()["items"])
+
+        update_template = client.put(
+            f"/api/personas/{persona_id}/task-templates/{template_id}",
+            json={
+                "title": "Morgen-Checkin v2",
+                "clear_deadline": True,
+                "is_active": True,
+            },
+        )
+        assert update_template.status_code == 200
+        assert update_template.json()["title"] == "Morgen-Checkin v2"
+        assert update_template.json()["deadline_minutes"] is None
+
+        delete_template = client.delete(f"/api/personas/{persona_id}/task-templates/{template_id}")
+        assert delete_template.status_code == 200
+        assert delete_template.json()["deleted"] == template_id
+
+
+def test_persona_task_library_export_and_cross_import():
+    with TestClient(app) as client:
+        source_persona = client.post(
+            "/api/personas",
+            json={
+                "name": "Source Persona",
+                "description": "Quelle",
+                "strictness_level": 3,
+            },
+        )
+        assert source_persona.status_code == 200
+        source_id = source_persona.json()["id"]
+
+        target_persona = client.post(
+            "/api/personas",
+            json={
+                "name": "Target Persona",
+                "description": "Ziel",
+                "strictness_level": 3,
+            },
+        )
+        assert target_persona.status_code == 200
+        target_id = target_persona.json()["id"]
+
+        create_template = client.post(
+            f"/api/personas/{source_id}/task-templates",
+            json={
+                "title": "Abend-Report",
+                "description": "Kurzer Tagesreport",
+                "deadline_minutes": 180,
+                "requires_verification": True,
+                "verification_criteria": "Plombe und Uhrzeit sichtbar",
+                "category": "daily",
+                "tags": ["evening", "report"],
+                "is_active": True,
+            },
+        )
+        assert create_template.status_code == 200
+
+        export_resp = client.get(f"/api/personas/{source_id}/task-templates/export")
+        assert export_resp.status_code == 200
+        library = export_resp.json()
+        assert library["kind"] == "persona_task_library"
+        assert len(library["templates"]) == 1
+        assert library["templates"][0]["title"] == "Abend-Report"
+
+        import_resp = client.post(
+            f"/api/personas/{target_id}/task-templates/import",
+            json={"library": library, "replace_existing": True},
+        )
+        assert import_resp.status_code == 200
+        assert import_resp.json()["imported"] == 1
+
+        target_templates = client.get(f"/api/personas/{target_id}/task-templates")
+        assert target_templates.status_code == 200
+        items = target_templates.json()["items"]
+        assert len(items) == 1
+        assert items[0]["title"] == "Abend-Report"
+        assert items[0]["requires_verification"] is True

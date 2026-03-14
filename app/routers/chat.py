@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal, get_db
 from app.models.message import Message
 from app.models.persona import Persona
+from app.models.persona_task_template import PersonaTaskTemplate
 from app.models.player_profile import PlayerProfile
 from app.models.item import Item
 from app.models.safety_log import SafetyLog
@@ -194,6 +195,37 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
             for t in pending_tasks
         )
         context_items = [{"role": "system", "content": tasks_summary, "message_type": "task_context"}] + (context_items or [])
+
+    if persona:
+        template_rows = (
+            db.query(PersonaTaskTemplate)
+            .filter(
+                PersonaTaskTemplate.persona_id == persona.id,
+                PersonaTaskTemplate.is_active == True,  # noqa: E712
+            )
+            .order_by(PersonaTaskTemplate.id.asc())
+            .limit(8)
+            .all()
+        )
+        if template_rows:
+            template_summary = (
+                "Persona-Task-Bibliothek (Inspiration, optional - kein Zwang): "
+                + "; ".join(
+                    f"{row.title}"
+                    + (f" [Kategorie: {row.category}]" if row.category else "")
+                    + (f" [Deadline-Vorschlag: {row.deadline_minutes} min]" if row.deadline_minutes else "")
+                    + (" [Fotoverifikation]" if row.requires_verification else "")
+                    + (f" - {row.description}" if row.description else "")
+                    for row in template_rows
+                )
+            )
+            context_items = [
+                {
+                    "role": "system",
+                    "content": template_summary,
+                    "message_type": "task_library_context",
+                }
+            ] + (context_items or [])
 
     session_inventory_rows = (
         db.query(SessionItem, Item)

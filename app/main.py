@@ -15,11 +15,16 @@ from app.config import settings
 from app.models import (  # noqa: F401
     auth_user,
     contract,
+    game_module_setting,
+    game_posture_template,
+    game_run,
+    game_run_step,
     hygiene_opening,
     item,
     media_asset,
     message,
     persona,
+    persona_task_template,
     player_profile,
     safety_log,
     scenario_item,
@@ -30,7 +35,7 @@ from app.models import (  # noqa: F401
     task,
     verification,
 )
-from app.routers import chat, health, hygiene, inventory, media, personas, push, safety, scenarios, sessions, tasks, verification as verification_router, voice, web
+from app.routers import chat, games, health, hygiene, inventory, media, personas, push, safety, scenarios, sessions, tasks, verification as verification_router, voice, web
 from app.services.proactive_messaging import sweep_proactive_messages_for_active_sessions
 from app.services.session_timer_sweeper import sweep_expired_active_sessions
 from app.services.task_sweeper import sweep_overdue_tasks_for_active_sessions
@@ -166,6 +171,7 @@ app.include_router(personas.router)
 app.include_router(scenarios.router)
 app.include_router(push.router)
 app.include_router(chat.router)
+app.include_router(games.router)
 app.include_router(tasks.router)
 app.include_router(hygiene.router)
 app.include_router(safety.router)

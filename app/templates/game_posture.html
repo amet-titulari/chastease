@@ -1,0 +1,667 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+  .game-shell { max-width: 1080px; margin: 0 auto; display: grid; gap: 0.9rem; }
+  .hidden { display: none !important; }
+  .game-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.9rem 1rem;
+  }
+  .setup-grid {
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: repeat(4, minmax(160px, 1fr));
+    align-items: end;
+  }
+  .setup-secondary {
+    display: grid;
+    gap: 0.6rem;
+    grid-template-columns: 1fr 1fr;
+    margin-top: 0.6rem;
+    align-items: start;
+  }
+  .penalty-triplet {
+    display: grid;
+    gap: 0.35rem;
+    grid-template-columns: repeat(3, minmax(70px, 1fr));
+  }
+  .penalty-triplet input { text-align: center; }
+  .setup-camera {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 0.7rem;
+    max-width: 560px;
+  }
+  .camera-video {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #05080c;
+    min-height: 320px;
+    max-height: 72vh;
+    object-fit: cover;
+  }
+  .play-stage {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+  }
+  .play-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.55rem;
+    display: grid;
+    gap: 0.45rem;
+    align-content: start;
+  }
+  .phase-wrap {
+    display: grid;
+    gap: 0.2rem;
+    justify-items: center;
+    text-align: center;
+  }
+  .phase-label {
+    color: #f0f7ff;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+  .phase-countdown {
+    color: #d9efff;
+    font-size: clamp(2.4rem, 6vw, 4.8rem);
+    line-height: 1;
+    font-weight: 800;
+  }
+  .posture-image {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    min-height: 420px;
+    max-height: 78vh;
+    object-fit: contain;
+  }
+  .top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 0.8rem;
+  }
+  .header-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .header-btn {
+    text-decoration: none;
+    text-align: center;
+    padding: 0.45rem 0.75rem;
+    border-radius: 10px;
+    border: 1px solid rgba(152, 198, 242, 0.42);
+    background: rgba(77, 130, 181, 0.3);
+    color: #eff7ff;
+    font-weight: 700;
+    font-size: 0.82rem;
+  }
+  .header-btn.secondary {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.06);
+    font-weight: 600;
+  }
+  .header-btn:hover {
+    background: rgba(95, 148, 198, 0.45);
+  }
+  .header-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .game-meta { color: #95a7b7; font-size: 0.82rem; margin: 0; }
+  .game-timer { font-size: 2rem; font-weight: 700; color: #d9efff; line-height: 1; }
+  .warn { color: #ffb4b4; }
+  .ok { color: #9de2bf; }
+  .compact {
+    margin: 0;
+    color: #cfe1f4;
+    font-size: 0.88rem;
+  }
+  .volume-wrap {
+    display: grid;
+    gap: 0.25rem;
+  }
+  .volume-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .volume-value {
+    font-size: 0.78rem;
+    color: #9db3c9;
+  }
+  @media (max-width: 980px) {
+    .setup-grid { grid-template-columns: 1fr; }
+    .setup-secondary { grid-template-columns: 1fr; }
+    .play-stage { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="game-shell">
+  <section id="gm-setup-section" class="game-card">
+    <div class="top-row" style="align-items:center;">
+      <h1 style="margin:0;">{{ module_title }}</h1>
+      <div class="header-actions">
+        <a class="header-btn" href="/games/postures?module_key={{ module_key }}">Postures verwalten</a>
+        <a class="header-btn secondary" href="/games">Zur Spieleauswahl</a>
+      </div>
+    </div>
+    <p class="game-meta">Session {{ session_id }} · {{ module_summary }}</p>
+    <p class="game-meta">Die Startwerte wurden aus dem letzten Run dieser Session uebernommen.</p>
+
+    <div class="setup-grid">
+      <label>Dauer (Min)
+        <input id="gm-duration" type="number" min="1" max="240" value="{{ initial_setup.duration_minutes }}" />
+      </label>
+      <label>Wechseldauer (Sek)
+        <input id="gm-transition-seconds" type="number" min="0" max="60" value="{{ initial_setup.transition_seconds }}" />
+      </label>
+      <label>Schwierigkeit
+        <select id="gm-difficulty"></select>
+      </label>
+      <label>Max Verfehlungen
+        <input id="gm-max-misses" type="number" min="1" max="20" value="{{ initial_setup.max_misses_before_penalty }}" />
+      </label>
+    </div>
+
+    <div class="setup-secondary">
+      <label>Session-Penalty (Tage/Std/Min)
+        <div class="penalty-triplet">
+          <input id="gm-session-penalty-days" type="number" min="0" max="365" value="{{ initial_setup.session_penalty_days }}" placeholder="T" title="Tage" />
+          <input id="gm-session-penalty-hours" type="number" min="0" max="23" value="{{ initial_setup.session_penalty_hours }}" placeholder="Std" title="Stunden" />
+          <input id="gm-session-penalty-minutes" type="number" min="0" max="59" value="{{ initial_setup.session_penalty_minutes }}" placeholder="Min" title="Minuten" />
+        </div>
+      </label>
+
+      <label class="volume-wrap">Beep-Lautstaerke
+        <input id="gm-beep-volume" type="range" min="0" max="100" step="5" value="35" />
+        <div class="volume-row">
+          <span id="gm-beep-volume-value" class="volume-value">35%</span>
+          <button id="gm-test-beep" type="button" class="ghost">Test-Beep</button>
+          <button id="gm-test-double-beep" type="button" class="ghost">Doppel-Beep</button>
+        </div>
+      </label>
+    </div>
+
+    <div class="setup-camera">
+      <div class="game-meta">Kamera-Vorschau (Pflicht vor Spielstart)</div>
+      <video id="gm-setup-video" class="camera-video" autoplay muted playsinline></video>
+      <button id="gm-cam-start" type="button">Kamera aktivieren</button>
+      <button id="gm-start-btn" type="button">Spiel starten</button>
+    </div>
+    <p id="gm-status" class="game-meta"></p>
+  </section>
+
+  <section id="gm-play-stage" class="play-stage hidden">
+    <article class="play-card">
+      <div class="phase-wrap">
+        <div id="gm-phase-label" class="phase-label">BEREIT</div>
+        <div id="gm-phase-countdown" class="phase-countdown">--</div>
+      </div>
+      <p id="gm-posture-name" class="compact">Noch nicht gestartet</p>
+      <p id="gm-posture-instruction" class="game-meta">-</p>
+      <img id="gm-posture-image" class="posture-image" alt="Posture" style="display:none;" />
+    </article>
+
+    <aside class="play-card">
+      <div class="top-row">
+        <div>
+          <p class="game-meta">Kamera-Feed</p>
+          <p class="game-meta">Status: <span id="gm-run-status">idle</span></p>
+        </div>
+        <div style="text-align:right;">
+          <p class="game-meta">Gesamtzeit</p>
+          <div id="gm-total-timer" class="game-timer">--:--</div>
+        </div>
+      </div>
+      <video id="gm-video" class="camera-video" autoplay muted playsinline></video>
+      <p id="gm-analysis" class="game-meta"></p>
+      <p class="game-meta">Misses: <span id="gm-miss-count">0</span> · Retry +Zeit: <span id="gm-retry-time">0s</span></p>
+    </aside>
+  </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const sessionId = {{ session_id }};
+const moduleKey = {{ module_key | tojson }};
+const initialDifficulty = {{ initial_setup.difficulty | tojson }};
+let runId = {{ latest_run_id if latest_run_id is not none else 'null' }};
+let activeRun = null;
+let cameraStream = null;
+let totalTimerHandle = null;
+let phaseTimerHandle = null;
+let sequenceToken = 0;
+let verifyInFlight = false;
+let audioCtx = null;
+let beepVolume = 0.35;
+let moduleSettings = {
+  easy_target_multiplier: 0.85,
+  hard_target_multiplier: 1.25,
+  target_randomization_percent: 10,
+};
+
+const statusEl = document.getElementById("gm-status");
+const setupSectionEl = document.getElementById("gm-setup-section");
+const playStageEl = document.getElementById("gm-play-stage");
+const phaseLabelEl = document.getElementById("gm-phase-label");
+const phaseCountdownEl = document.getElementById("gm-phase-countdown");
+const postureNameEl = document.getElementById("gm-posture-name");
+const postureInstructionEl = document.getElementById("gm-posture-instruction");
+const postureImageEl = document.getElementById("gm-posture-image");
+const runStatusEl = document.getElementById("gm-run-status");
+const totalTimerEl = document.getElementById("gm-total-timer");
+const missCountEl = document.getElementById("gm-miss-count");
+const retryTimeEl = document.getElementById("gm-retry-time");
+const analysisEl = document.getElementById("gm-analysis");
+const setupVideoEl = document.getElementById("gm-setup-video");
+const playVideoEl = document.getElementById("gm-video");
+const beepVolumeEl = document.getElementById("gm-beep-volume");
+const beepVolumeValueEl = document.getElementById("gm-beep-volume-value");
+const testBeepEl = document.getElementById("gm-test-beep");
+const testDoubleBeepEl = document.getElementById("gm-test-double-beep");
+
+function setStatus(msg, warn = false) {
+  statusEl.textContent = msg || "";
+  statusEl.className = warn ? "game-meta warn" : "game-meta";
+}
+
+function fmtSecs(total) {
+  const s = Math.max(0, Number(total || 0));
+  const m = Math.floor(s / 60).toString().padStart(2, "0");
+  const sec = Math.floor(s % 60).toString().padStart(2, "0");
+  return `${m}:${sec}`;
+}
+
+async function api(url, options = {}) {
+  const res = await fetch(url, options);
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.detail || res.statusText);
+  return payload;
+}
+
+function getAudioContext() {
+  if (!audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    audioCtx = new Ctx();
+  }
+  return audioCtx;
+}
+
+function beep() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.value = 920;
+  gain.gain.value = Math.max(0, Math.min(0.25, beepVolume * 0.25));
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.1);
+}
+
+function beepDouble() {
+  beep();
+  window.setTimeout(() => beep(), 180);
+}
+
+function applyBeepVolume(percentValue, persist = true) {
+  const safePercent = Math.max(0, Math.min(100, Number(percentValue || 0)));
+  beepVolume = safePercent / 100;
+  beepVolumeEl.value = String(safePercent);
+  beepVolumeValueEl.textContent = `${safePercent}%`;
+  if (persist) {
+    window.localStorage.setItem("game_beep_volume_percent", String(safePercent));
+  }
+}
+
+function initializeBeepVolume() {
+  const stored = window.localStorage.getItem("game_beep_volume_percent");
+  const initialPercent = stored !== null ? Number(stored) : Number(beepVolumeEl.value || 35);
+  applyBeepVolume(initialPercent, false);
+}
+
+function updatePhase(label, value) {
+  phaseLabelEl.textContent = label;
+  phaseCountdownEl.textContent = value;
+}
+
+function startTotalTimer(seconds, isActive) {
+  if (totalTimerHandle) clearInterval(totalTimerHandle);
+  let remaining = Math.max(0, Number(seconds || 0));
+  totalTimerEl.textContent = fmtSecs(remaining);
+  if (!isActive) return;
+
+  totalTimerHandle = setInterval(() => {
+    remaining = Math.max(0, remaining - 1);
+    totalTimerEl.textContent = fmtSecs(remaining);
+  }, 1000);
+}
+
+function renderRun(run) {
+  activeRun = run;
+  runStatusEl.textContent = run.status;
+  missCountEl.textContent = String(run.miss_count || 0);
+  retryTimeEl.textContent = `${run.retry_extension_seconds || 0}s`;
+  startTotalTimer(run.remaining_seconds, run.status === "active");
+
+  const step = run.current_step;
+  if (step) {
+    postureNameEl.textContent = step.posture_name;
+    postureInstructionEl.textContent = step.instruction || "";
+    if (step.posture_image_url) {
+      postureImageEl.src = step.posture_image_url;
+      postureImageEl.style.display = "";
+    } else {
+      postureImageEl.style.display = "none";
+    }
+  } else {
+    postureNameEl.textContent = run.status === "completed" ? "Spiel abgeschlossen" : "Keine offene Posture";
+    postureInstructionEl.textContent = "";
+    postureImageEl.style.display = "none";
+    updatePhase(run.status === "completed" ? "FERTIG" : "BEREIT", "--");
+  }
+
+  setupSectionEl.classList.toggle("hidden", run.status === "active");
+  playStageEl.classList.toggle("hidden", run.status !== "active");
+
+  if (run.status === "active" && run.current_step) {
+    startStepSequence(run.current_step, run.transition_seconds || 0);
+  } else {
+    stopStepSequence();
+  }
+
+  if (run.status === "active" && !cameraStream) {
+    startCamera().catch((err) => {
+      setStatus(`Kamera konnte nicht gestartet werden: ${err.message}`, true);
+    });
+  }
+}
+
+function stopStepSequence() {
+  sequenceToken += 1;
+  if (phaseTimerHandle) {
+    clearInterval(phaseTimerHandle);
+    phaseTimerHandle = null;
+  }
+}
+
+function countdownPhase({
+  token,
+  label,
+  startSeconds,
+  onFinished,
+}) {
+  if (phaseTimerHandle) clearInterval(phaseTimerHandle);
+  let seconds = Math.max(0, Number(startSeconds || 0));
+  updatePhase(label, String(seconds));
+
+  if (seconds <= 0) {
+    onFinished();
+    return;
+  }
+
+  phaseTimerHandle = setInterval(() => {
+    if (token !== sequenceToken) {
+      clearInterval(phaseTimerHandle);
+      phaseTimerHandle = null;
+      return;
+    }
+
+    seconds = Math.max(0, seconds - 1);
+    if (seconds > 0 && seconds <= 5) {
+      beep();
+    }
+    updatePhase(label, String(seconds));
+
+    if (seconds <= 0) {
+      clearInterval(phaseTimerHandle);
+      phaseTimerHandle = null;
+      onFinished();
+    }
+  }, 1000);
+}
+
+function startStepSequence(step, transitionSeconds) {
+  sequenceToken += 1;
+  const token = sequenceToken;
+
+  const beginHold = () => {
+    countdownPhase({
+      token,
+      label: "POSE HALTEN",
+      startSeconds: step.target_seconds || 0,
+      onFinished: () => verifyCurrentStep(token),
+    });
+  };
+
+  countdownPhase({
+    token,
+    label: "POSE EINNEHMEN",
+    startSeconds: transitionSeconds,
+    onFinished: beginHold,
+  });
+}
+
+async function loadModule() {
+  const data = await api(`/api/games/modules/${moduleKey}`);
+  const diffSel = document.getElementById("gm-difficulty");
+  diffSel.innerHTML = data.difficulties
+    .map((d) => `<option value="${d.key}">${d.label}</option>`)
+    .join("");
+  if ([...diffSel.options].some((opt) => opt.value === initialDifficulty)) {
+    diffSel.value = initialDifficulty;
+  }
+}
+
+async function loadModuleSettings() {
+  const data = await api(`/api/games/modules/${moduleKey}/settings`);
+  moduleSettings = {
+    easy_target_multiplier: Number(data.easy_target_multiplier || 0.85),
+    hard_target_multiplier: Number(data.hard_target_multiplier || 1.25),
+    target_randomization_percent: Number(data.target_randomization_percent || 10),
+  };
+}
+
+async function loadRun() {
+  if (!runId) return;
+  const run = await api(`/api/games/runs/${runId}`);
+  renderRun(run);
+}
+
+async function startCamera() {
+  if (cameraStream) return;
+  cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  setupVideoEl.srcObject = cameraStream;
+  playVideoEl.srcObject = cameraStream;
+}
+
+function stopCamera() {
+  if (!cameraStream) return;
+  for (const track of cameraStream.getTracks()) track.stop();
+  cameraStream = null;
+  setupVideoEl.srcObject = null;
+  playVideoEl.srcObject = null;
+}
+
+async function captureFrameBlob() {
+  if (!cameraStream) return null;
+  const track = cameraStream.getVideoTracks()[0];
+  if (!track) return null;
+
+  const imageCapture = new ImageCapture(track);
+  const photoBlob = await imageCapture.takePhoto().catch(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = playVideoEl.videoWidth || 640;
+    canvas.height = playVideoEl.videoHeight || 360;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(playVideoEl, 0, 0, canvas.width, canvas.height);
+    return await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.88));
+  });
+  return photoBlob || null;
+}
+
+async function verifyCurrentStep(token) {
+  if (token !== sequenceToken) return;
+  if (!activeRun || activeRun.status !== "active" || !activeRun.current_step) return;
+  if (verifyInFlight) return;
+  if (!cameraStream) {
+    setStatus("Kamera ist nicht aktiv. Bitte Seite neu laden und Kamera freigeben.", true);
+    return;
+  }
+
+  verifyInFlight = true;
+  updatePhase("PRUEFUNG", "...");
+
+  try {
+    const blob = await captureFrameBlob();
+    if (!blob) throw new Error("Kein Kamerabild verfuegbar");
+
+    const form = new FormData();
+    form.append("file", blob, "autocap.jpg");
+    form.append("observed_posture", activeRun.current_step.posture_name || "");
+
+    const result = await api(`/api/games/runs/${runId}/steps/${activeRun.current_step.id}/verify`, {
+      method: "POST",
+      body: form,
+    });
+
+    analysisEl.textContent = result.step.analysis || "Pruefung abgeschlossen.";
+    renderRun(result.run);
+    if (result.run.status === "completed") {
+      setStatus("Spiel abgeschlossen.", false);
+      updatePhase("FERTIG", "--");
+    }
+  } catch (err) {
+    analysisEl.textContent = `Pruefung fehlgeschlagen: ${err.message}`;
+    setStatus(`Verifikation fehlgeschlagen: ${err.message}`, true);
+    setTimeout(() => {
+      if (token === sequenceToken && activeRun && activeRun.status === "active") {
+        verifyCurrentStep(token).catch(() => {});
+      }
+    }, 2500);
+  } finally {
+    verifyInFlight = false;
+  }
+}
+
+async function startRun() {
+  if (!cameraStream) {
+    setStatus("Bitte zuerst die Kamera aktivieren.", true);
+    return;
+  }
+
+  const duration = Number(document.getElementById("gm-duration").value || 20);
+  const transitionSeconds = Number(document.getElementById("gm-transition-seconds").value || 8);
+  const difficulty = document.getElementById("gm-difficulty").value || "medium";
+  const maxMisses = Number(document.getElementById("gm-max-misses").value || 3);
+  const penaltyDays = Number(document.getElementById("gm-session-penalty-days").value || 0);
+  const penaltyHours = Number(document.getElementById("gm-session-penalty-hours").value || 0);
+  const penaltyMinutes = Number(document.getElementById("gm-session-penalty-minutes").value || 0);
+  const sessionPenalty = Math.max(0, (penaltyDays * 86400) + (penaltyHours * 3600) + (penaltyMinutes * 60));
+
+  try {
+    const run = await api(`/api/games/sessions/${sessionId}/runs/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        module_key: moduleKey,
+        difficulty,
+        duration_minutes: duration,
+        transition_seconds: transitionSeconds,
+        initiated_by: "player",
+        max_misses_before_penalty: maxMisses,
+        session_penalty_seconds: sessionPenalty,
+        easy_target_multiplier: moduleSettings.easy_target_multiplier,
+        hard_target_multiplier: moduleSettings.hard_target_multiplier,
+        target_randomization_percent: moduleSettings.target_randomization_percent,
+      }),
+    });
+    runId = run.id;
+    analysisEl.textContent = "";
+    setStatus("Spiel gestartet.", false);
+    renderRun(run);
+  } catch (err) {
+    setStatus(`Start fehlgeschlagen: ${err.message}`, true);
+  }
+}
+
+document.getElementById("gm-cam-start").addEventListener("click", async () => {
+  try {
+    await startCamera();
+    setStatus("Kamera aktiv.", false);
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === "suspended") {
+      await ctx.resume();
+    }
+  } catch (err) {
+    setStatus(`Kamera konnte nicht gestartet werden: ${err.message}`, true);
+  }
+});
+
+document.getElementById("gm-start-btn").addEventListener("click", startRun);
+beepVolumeEl.addEventListener("input", () => applyBeepVolume(beepVolumeEl.value));
+testBeepEl.addEventListener("click", async () => {
+  try {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === "suspended") {
+      await ctx.resume();
+    }
+    beep();
+    setStatus("Test-Beep abgespielt.", false);
+  } catch (err) {
+    setStatus(`Test-Beep fehlgeschlagen: ${err.message}`, true);
+  }
+});
+testDoubleBeepEl.addEventListener("click", async () => {
+  try {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === "suspended") {
+      await ctx.resume();
+    }
+    beepDouble();
+    setStatus("Doppel-Beep abgespielt.", false);
+  } catch (err) {
+    setStatus(`Doppel-Beep fehlgeschlagen: ${err.message}`, true);
+  }
+});
+
+window.addEventListener("beforeunload", () => {
+  stopCamera();
+  stopStepSequence();
+  if (totalTimerHandle) clearInterval(totalTimerHandle);
+});
+
+Promise.all([loadModule(), loadModuleSettings()])
+  .then(async () => {
+    initializeBeepVolume();
+    if (runId) {
+      await loadRun();
+    } else {
+      updatePhase("BEREIT", "--");
+    }
+  })
+  .catch((err) => setStatus(`Initialisierung fehlgeschlagen: ${err.message}`, true));
+</script>
+{% endblock %}

@@ -5,6 +5,25 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ---
 
+## [0.2.3] – 2026-03-14
+
+### Hinzugefügt
+
+- Modulares Spiele-Framework (Registry + Module-Definition) als Basis fuer weitere Spielmodule.
+- Erste Spiele-Erweiterung `posture_training` mit Schwierigkeitsgraden (`easy`, `medium`, `hard`).
+- Persistente Runtime-Tabellen fuer Spiele: `game_runs`, `game_run_steps`.
+- Games-API-Endpunkte fuer Module, Run-Start, Run-Status und Step-Verifikation mit Bild-Upload.
+- Retry-Mechanik: fehlgeschlagene Posture wird ans Spielende eingehaengt und erhoeht die Gesamtspielzeit variabel je nach Schwierigkeit.
+- Max-Miss-Regel mit konfigurierbarer Session-Penalty (Lock-End-Verlaengerung).
+- Abschlussbericht als `game_report`-Systemevent zur Bewertung weiterer Session-Penalties.
+- Neuer Game-UI-Screen `/game/{session_id}` mit Gesamt-Timer, Posture-Anzeige und Auto-Capture (Laptop-Cam via `getUserMedia`).
+
+### Geändert
+
+- Roadmap auf v0.2.3 aktualisiert und Spiele-Erweiterung als aktiv gestartet markiert.
+
+---
+
 ## [0.2.2] – 2026-03-14
 
 ### Geändert

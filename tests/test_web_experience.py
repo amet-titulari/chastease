@@ -209,3 +209,81 @@ def test_experience_and_profile_redirect_to_play_when_active_session_exists():
         assert profile.status_code == 200
         assert "Audio Gateway" in profile.text
         assert "Zur laufenden Session" in profile.text
+
+
+def test_games_page_renders_game_cards_and_current_session_entrypoint():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        created = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Game Persona",
+                "player_nickname": "Game Player",
+                "min_duration_seconds": 900,
+            },
+        )
+        assert created.status_code == 200
+
+        resp = client.get("/games")
+        assert resp.status_code == 200
+        html = resp.text
+        assert "Spiele" in html
+        assert "Aktuelle Session" in html
+        assert "Posture Training" in html
+        assert "Spiel oeffnen" in html
+        assert "Postures verwalten" in html
+        assert "/game/" in html
+
+
+def test_games_postures_management_page_renders():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        resp = client.get("/games/postures?module_key=posture_training")
+        assert resp.status_code == 200
+        html = resp.text
+        assert "Postures verwalten" in html
+        assert "ZIP importieren (ersetzt alle)" in html
+        assert "Alle Postures als ZIP exportieren" in html
+
+
+def test_game_page_prefills_setup_from_latest_run_values():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        created = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Game Persona",
+                "player_nickname": "Game Player",
+                "min_duration_seconds": 900,
+            },
+        )
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+
+        started = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "hard",
+                "duration_minutes": 17,
+                "transition_seconds": 11,
+                "max_misses_before_penalty": 4,
+                "session_penalty_seconds": 86400,
+            },
+        )
+        assert started.status_code == 200
+
+        resp = client.get(f"/game/{session_id}?module_key=posture_training")
+        assert resp.status_code == 200
+        html = resp.text
+
+        assert 'id="gm-duration" type="number" min="1" max="240" value="17"' in html
+        assert 'id="gm-transition-seconds" type="number" min="0" max="60" value="11"' in html
+        assert 'id="gm-max-misses" type="number" min="1" max="20" value="4"' in html
+        assert 'id="gm-session-penalty-days" type="number" min="0" max="365" value="1"' in html
+        assert 'id="gm-session-penalty-hours" type="number" min="0" max="23" value="0"' in html
+        assert 'id="gm-session-penalty-minutes" type="number" min="0" max="59" value="0"' in html
+        assert 'const initialDifficulty = "hard";' in html

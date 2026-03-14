@@ -2,7 +2,7 @@
 
 ## Entwicklungsphasen
 
-## Stand (v0.2.1, März 2026)
+## Stand (v0.2.3, März 2026)
 
 - FastAPI-Backend mit 14 Routern, 16 Services, 20 DB-Modellen
 - Alembic-Migrationen `0001`–`0014`, alle idempotent
@@ -11,6 +11,9 @@
 - Modularer System-Prompt (Persona, Wearer, Safety, Session, Style, Scenario)
 - Kontextfenster-Management mit Trunkierung und Zusammenfassung
 - Aufgabensystem: CRUD, Konsequenzen, Psychogramm-Multiplikatoren, Overdue-Sweep
+- Task-Actions: create_task, update_task, fail_task inkl. Audit-/System-Events
+- Deadline-Robustheit: explizites `deadline_minutes` (int/null), Zeitkontext (UTC + lokal + TZ) im KI-Kontext
+- Spiele-Erweiterung gestartet: API-Basis fuer Posture Training (Programm-Katalog + Session-Start erzeugt Aufgaben)
 - Bildverifikation: heuristische + Vision-API-basierte Plomben-Analyse
 - Hygiene-Öffnungen: Kontingente, Countdown, Overrun-Strafen
 - Sicherheitssystem: Ampel (G/Y/R), Safeword, Emergency Release, Safety-Override im Prompt
@@ -24,9 +27,10 @@
 - Browser Push Notifications (Web Push + VAPID)
 - Auth: Register/Login, bcrypt, httpOnly-Cookie, Multi-Device-Support
 - Audit-Logger (opt-in, JSON-Lines)
+- Testdaten-Hygiene: automatische DB-Bereinigung nach Testlauf (session-scope cleanup)
 - Docker-Deployment (Dockerfile + docker-compose)
 - Teststatus: 31 Testmodule (lokale automatisierte Tests)
-- Offen: Rollen-/Identity-Konzept, Rate-Limits, Aufgaben-Bibliothek, Gamification
+- Offen: Rollen-/Identity-Konzept, Rate-Limits, Gamification
 
 ---
 
@@ -52,16 +56,16 @@
 
 **Ziel**: Erste Konversation mit der Keyholderin ist möglich
 
-- [ ] `AIGateway`-Abstraktion implementieren
-- [ ] Grok-Provider implementieren (OpenAI SDK kompatibel)
-- [ ] Persona-Builder: System-Prompt aus Konfiguration generieren
-- [ ] Spieler-Psychogramm modellieren und Onboarding-Fragebogen definieren
-- [ ] Player-Profile in den Prompt-Kontext integrieren
+- [x] `AIGateway`-Abstraktion implementieren
+- [x] OpenAI-kompatibler Provider (xAI/Grok, OpenRouter) implementiert
+- [x] Persona-Builder: System-Prompt aus Konfiguration generieren
+- [x] Spieler-Psychogramm modellieren und Onboarding-Fragebogen definieren
+- [x] Player-Profile in den Prompt-Kontext integrieren
 - [x] Chat-Router & WebSocket-Verbindung
 - [x] Chat-Interface (Jinja2 + JS-Testkonsole inkl. WebSocket-Live-Feed)
-- [ ] Persona-Konfigurationsseite
-- [ ] Spielerprofil-Konfigurationsseite
-- [ ] KI-Konfigurationsseite (API-Key, Modell)
+- [x] Persona-Konfigurationsseite
+- [x] Spielerprofil-Konfigurationsseite
+- [x] KI-Konfigurationsseite (API-Key, Modell)
 - [ ] API-Key Verschlüsselung (Fernet)
 
 **Deliverable**: Gespräch mit konfigurierter Keyholderin möglich
@@ -94,6 +98,7 @@
 
 - [x] Task-Datenmodell & CRUD
 - [x] KI kann Tasks via Structured Output vergeben
+- [x] KI kann bestehende Tasks via `update_task` aktualisieren (Titel/Beschreibung/Deadline)
 - [x] Task-Anzeige im UI (Aufgabenliste)
 - [x] Task als erledigt markieren
 - [x] Automatische Konsequenzen bei Failure / Overdue (Lock-Verlaengerung)
@@ -160,19 +165,34 @@
 
 ## Backlog (Post-MVP)
 
-### v1.1 – Qualität & UX
-- [ ] Kontext-Window-Management (Session-Zusammenfassungen)
-- [ ] Aufgaben-Bibliothek (vordefinierte Tasks pro Persona)
-- [ ] Dark Mode
-- [x] Session-Export (als Text/PDF)
+### v0.1 – Qualität
+- [x] Kontext-Window-Management (Session-Zusammenfassungen)
+- [x] Aufgaben-Bibliothek (vordefinierte Tasks pro Persona, API + Chat-Inspirationskontext)
+  
+### v0.2 – UX
+- [ ] Session-Export (als Text/PDF)
+- [x] Persona-Verwaltung (CRUD, Import/Export)
+- [x] Inventar-Verwaltung (Items, Scenario-Links, Session-Items)
+- [x] Aufgaben-System (CRUD, Aktionskarten, Deadline-Handling)
 
-### v2.0 – Gamification
+### v0.3 Erweiterungen – Spiele
+- [x] Trainingsidee 1: Posture Training - API-Basis (Programm-Katalog + Run-Start)
+- [x] Gefuehrtes und ueberwachtes Training (Game-Screen mit Gesamt-Timer, aktueller Posture, Auto-Capture)
+- [x] Variable Retry-Zeit je Schwierigkeitsgrad (easy/medium/hard)
+- [x] Max-Misses-Regel mit Session-Penalty und Abschlussbericht
+
+### v0.4 – Erweiterungen - Schnittstellen
+- [ ] Lovense für Devices
+- [ ] Extensions TTLock für Tresor
+- [ ] Extensions Chaster für Session
+
+### v0.5 – Gamification
 - [ ] Achievements / Abzeichen
 - [ ] Streak-Tracking
 - [ ] Statistiken-Dashboard (Gesamtdauer, Aufgaben-Rate, etc.)
 - [ ] Punkte-System
 
-### v3.0 – Remote Keyholder
+### v0.6 – Remote Keyholder
 - [ ] Optionaler Sync-Mechanismus (verschlüsselt, opt-in)
 - [ ] Remote-Keyholder-Interface (separater Zugang)
 - [ ] Push-Benachrichtigungen für Remote-Keyholder
@@ -183,7 +203,7 @@
 ## Priorisierungsmatrix
 
 | Feature | Priorität | Aufwand | Phase |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Chat mit Keyholderin | MUSS | Mittel | 1 |
 | Spieler-Psychogramm | MUSS | Mittel | 1 |
 | Keuschheits-Vertrag | MUSS | Mittel | 2 |
@@ -193,5 +213,5 @@
 | Hygiene-Öffnungen | MUSS | Mittel | 5 |
 | Bildverifikation | MUSS | Mittel | 5 |
 | Benachrichtigungen | SOLL | Mittel | 5 |
-| Gamification | KANN | Hoch | v2.0 |
-| Remote-Keyholder | KANN | Sehr hoch | v3.0 |
+| Gamification | KANN | Hoch | v0.5 |
+| Remote-Keyholder | KANN | Sehr hoch | v0.6 |

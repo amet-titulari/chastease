@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+  .pm-shell { max-width: 1080px; margin: 0 auto; display: grid; gap: 0.9rem; }
+  .pm-note { margin: 0; color: #9db1c7; }
+  .pm-top-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+  .pm-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .pm-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.75rem;
+    display: grid;
+    gap: 0.5rem;
+    align-content: start;
+  }
+  .pm-view {
+    display: grid;
+    gap: 0.45rem;
+  }
+  .pm-edit {
+    display: none;
+    gap: 0.45rem;
+  }
+  .pm-card.is-editing .pm-view {
+    display: none;
+  }
+  .pm-card.is-editing .pm-edit {
+    display: grid;
+  }
+  .pm-title { margin: 0; font-size: 0.98rem; color: #e2f1ff; }
+  .pm-image {
+    width: 100%;
+    max-width: 240px;
+    aspect-ratio: 3/4;
+    object-fit: contain;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #05080c;
+  }
+  .pm-meta { margin: 0; color: #9db1c7; font-size: 0.82rem; }
+  .pm-form-grid { display: grid; gap: 0.45rem; grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+  .pm-form-grid .full { grid-column: 1 / -1; }
+  .pm-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+  .pm-status { margin: 0; color: #9db1c7; font-size: 0.82rem; }
+  .warn { color: #ffb4b4; }
+  .ok { color: #9de2bf; }
+  .pm-transfer { display: flex; gap: 0.55rem; align-items: center; flex-wrap: wrap; }
+  .pm-transfer input[type="file"] { max-width: 320px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="pm-shell">
+  <section class="card full" style="display:grid; gap:0.45rem;">
+    <div style="display:flex; justify-content:space-between; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+      <h2 style="margin:0;">Postures verwalten</h2>
+      <div class="pm-top-actions">
+        <a href="/games">Zur Spieleauswahl</a>
+      </div>
+    </div>
+    <p class="pm-note">{{ module_title }} · {{ module_summary }}</p>
+    <p class="pm-note">Hier kannst du Postures bearbeiten, loeschen, neu anlegen sowie als ZIP importieren/exportieren.</p>
+
+    <div class="pm-transfer">
+      <button type="button" id="pm-export">Alle Postures als ZIP exportieren</button>
+      <input id="pm-import-file" type="file" accept=".zip,application/zip" />
+      <button type="button" id="pm-import">ZIP importieren (ersetzt alle)</button>
+    </div>
+    <p id="pm-msg" class="pm-status"></p>
+  </section>
+
+  <section>
+    <div id="pm-grid" class="pm-grid"></div>
+  </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MODULE_KEY = {{ module_key | tojson }};
+let items = [];
+
+function setMsg(msg, warn = false) {
+  const el = document.getElementById("pm-msg");
+  el.textContent = msg || "";
+  el.className = warn ? "pm-status warn" : "pm-status";
+}
+
+function esc(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+async function api(url, options = {}) {
+  const res = await fetch(url, options);
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.detail || res.statusText || "Fehler");
+  return payload;
+}
+
+function cardHtml(item) {
+  return `
+    <article class="pm-card" data-id="${item.id}" data-image-url="${esc(item.image_url || "")}">
+      <div class="pm-view">
+        <h3 class="pm-title">${esc(item.title)}</h3>
+        ${item.image_url ? `<img class="pm-image" src="${esc(item.image_url)}" alt="Posture" />` : ""}
+        <p class="pm-meta">Key: ${esc(item.posture_key)} · Sort: ${item.sort_order} · Target: ${item.target_seconds}s · Aktiv: ${item.is_active ? "Ja" : "Nein"}</p>
+        <p class="pm-meta">Instruktion: ${esc(item.instruction || "-")}</p>
+        <div class="pm-actions">
+          <button type="button" class="ghost js-edit">Bearbeiten</button>
+          <button type="button" class="warn js-delete">Loeschen</button>
+        </div>
+      </div>
+
+      <div class="pm-edit">
+        <div class="pm-form-grid">
+          <label class="full">Titel
+            <input class="js-title" type="text" maxlength="200" value="${esc(item.title)}" />
+          </label>
+          <label>Posture-Key
+            <input class="js-key" type="text" maxlength="120" value="${esc(item.posture_key || "")}" />
+          </label>
+          <label>Sortierung
+            <input class="js-sort" type="number" min="0" max="10000" value="${item.sort_order}" />
+          </label>
+          <label>Target (Sek)
+            <input class="js-target" type="number" min="1" max="3600" value="${item.target_seconds}" />
+          </label>
+          <label>Aktiv
+            <select class="js-active">
+              <option value="true" ${item.is_active ? "selected" : ""}>Ja</option>
+              <option value="false" ${item.is_active ? "" : "selected"}>Nein</option>
+            </select>
+          </label>
+          <label class="full">Bild (Pflicht)
+            <div class="pm-actions">
+              <input class="js-image-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" />
+              <button type="button" class="ghost js-upload">Bild hochladen</button>
+            </div>
+          </label>
+          <label class="full">Instruktion
+            <textarea class="js-instruction" rows="3" maxlength="2000">${esc(item.instruction || "")}</textarea>
+          </label>
+        </div>
+        <div class="pm-actions">
+          <button type="button" class="js-save">Speichern</button>
+          <button type="button" class="ghost js-cancel">Abbrechen</button>
+        </div>
+      </div>
+      <p class="pm-status js-status"></p>
+    </article>
+  `;
+}
+
+function newCardHtml() {
+  return `
+    <article class="pm-card" data-id="new" data-image-url="">
+      <h3 class="pm-title">Neue Posture</h3>
+      <div class="pm-form-grid">
+        <label class="full">Titel
+          <input class="js-title" type="text" maxlength="200" placeholder="z.B. Wall" />
+        </label>
+        <label>Posture-Key
+          <input class="js-key" type="text" maxlength="120" placeholder="optional" />
+        </label>
+        <label>Sortierung
+          <input class="js-sort" type="number" min="0" max="10000" value="0" />
+        </label>
+        <label>Target (Sek)
+          <input class="js-target" type="number" min="1" max="3600" value="120" />
+        </label>
+        <label>Aktiv
+          <select class="js-active">
+            <option value="true">Ja</option>
+            <option value="false">Nein</option>
+          </select>
+        </label>
+        <label class="full">Bild (Pflicht)
+          <div class="pm-actions">
+            <input class="js-image-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" />
+            <button type="button" class="ghost js-upload">Bild hochladen</button>
+          </div>
+        </label>
+        <label class="full">Instruktion
+          <textarea class="js-instruction" rows="3" maxlength="2000" placeholder="Pose-Beschreibung"></textarea>
+        </label>
+      </div>
+      <div class="pm-actions">
+        <button type="button" class="js-save">Anlegen</button>
+      </div>
+      <p class="pm-status js-status"></p>
+    </article>
+  `;
+}
+
+function payloadFrom(card) {
+  return {
+    posture_key: card.querySelector(".js-key")?.value.trim() || null,
+    title: card.querySelector(".js-title")?.value.trim() || "",
+    image_url: (card.dataset.imageUrl || "").trim() || null,
+    instruction: card.querySelector(".js-instruction")?.value.trim() || null,
+    target_seconds: Number(card.querySelector(".js-target")?.value || 120),
+    sort_order: Number(card.querySelector(".js-sort")?.value || 0),
+    is_active: (card.querySelector(".js-active")?.value || "true") === "true",
+  };
+}
+
+function setEditVisible(card, visible) {
+  if (!card || card.dataset.id === "new") return;
+  if (visible) {
+    document.querySelectorAll("#pm-grid .pm-card.is-editing").forEach((node) => {
+      if (node !== card) node.classList.remove("is-editing");
+    });
+  }
+  card.classList.toggle("is-editing", visible);
+}
+
+function setCardStatus(card, msg, warn = false) {
+  const el = card.querySelector(".js-status");
+  if (!el) return;
+  el.textContent = msg || "";
+  el.className = warn ? "pm-status js-status warn" : "pm-status js-status ok";
+}
+
+function renderCards(list) {
+  items = Array.isArray(list) ? list : [];
+  const root = document.getElementById("pm-grid");
+  root.innerHTML = [...items.map((it) => cardHtml(it)), newCardHtml()].join("");
+}
+
+async function loadItems() {
+  try {
+    const data = await api(`/api/games/modules/${MODULE_KEY}/postures`);
+    renderCards(data.items || []);
+  } catch (err) {
+    setMsg(`Fehler beim Laden: ${err.message}`, true);
+  }
+}
+
+async function uploadForCard(card) {
+  const input = card.querySelector(".js-image-file");
+  const file = input?.files?.[0];
+  if (!file) {
+    setCardStatus(card, "Bitte Bild auswaehlen.", true);
+    return;
+  }
+  const form = new FormData();
+  form.append("file", file, file.name);
+  try {
+    const result = await api(`/api/games/modules/${MODULE_KEY}/postures/upload-image`, {
+      method: "POST",
+      body: form,
+    });
+    card.dataset.imageUrl = result.content_url;
+    setCardStatus(card, "Bild hochgeladen.");
+    await loadItems();
+  } catch (err) {
+    setCardStatus(card, `Bild-Upload fehlgeschlagen: ${err.message}`, true);
+  }
+}
+
+async function saveCard(card) {
+  const payload = payloadFrom(card);
+  if (!payload.title) {
+    setCardStatus(card, "Titel fehlt.", true);
+    return;
+  }
+  if (!payload.image_url) {
+    setCardStatus(card, "Bitte zuerst Bild hochladen.", true);
+    return;
+  }
+
+  const id = card.dataset.id;
+  const isNew = !id || id === "new";
+  try {
+    await api(
+      isNew ? `/api/games/modules/${MODULE_KEY}/postures` : `/api/games/modules/${MODULE_KEY}/postures/${id}`,
+      {
+        method: isNew ? "POST" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+    setMsg(isNew ? "Posture angelegt." : "Posture gespeichert.");
+    await loadItems();
+  } catch (err) {
+    setCardStatus(card, `Speichern fehlgeschlagen: ${err.message}`, true);
+  }
+}
+
+async function removeCard(card) {
+  const id = Number(card.dataset.id || 0);
+  if (!id) return;
+  if (!confirm("Posture wirklich loeschen?")) return;
+  try {
+    await api(`/api/games/modules/${MODULE_KEY}/postures/${id}`, { method: "DELETE" });
+    setMsg("Posture geloescht.");
+    await loadItems();
+  } catch (err) {
+    setCardStatus(card, `Loeschen fehlgeschlagen: ${err.message}`, true);
+  }
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportZip() {
+  try {
+    const res = await fetch(`/api/games/modules/${MODULE_KEY}/postures/export`);
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      throw new Error(payload.detail || res.statusText || "Export fehlgeschlagen");
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get("content-disposition") || "";
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    triggerDownload(blob, match?.[1] || `postures_${MODULE_KEY}.zip`);
+    setMsg("ZIP exportiert.");
+  } catch (err) {
+    setMsg(`Export fehlgeschlagen: ${err.message}`, true);
+  }
+}
+
+async function importZip() {
+  const input = document.getElementById("pm-import-file");
+  const file = input?.files?.[0];
+  if (!file) {
+    setMsg("Bitte ZIP-Datei auswaehlen.", true);
+    return;
+  }
+  if (!confirm("ZIP importieren und alle Postures ersetzen?")) return;
+
+  const form = new FormData();
+  form.append("file", file, file.name);
+  try {
+    const result = await api(`/api/games/modules/${MODULE_KEY}/postures/import-zip`, {
+      method: "POST",
+      body: form,
+    });
+    setMsg(`Import erfolgreich: ${result.imported || 0} Postures.`);
+    input.value = "";
+    await loadItems();
+  } catch (err) {
+    setMsg(`Import fehlgeschlagen: ${err.message}`, true);
+  }
+}
+
+document.getElementById("pm-grid")?.addEventListener("click", async (event) => {
+  const btn = event.target.closest("button");
+  if (!btn) return;
+  const card = event.target.closest(".pm-card");
+  if (!card) return;
+
+  if (btn.classList.contains("js-edit")) {
+    setEditVisible(card, true);
+    return;
+  }
+  if (btn.classList.contains("js-cancel")) {
+    setEditVisible(card, false);
+    return;
+  }
+
+  if (btn.classList.contains("js-upload")) {
+    await uploadForCard(card);
+    return;
+  }
+  if (btn.classList.contains("js-save")) {
+    await saveCard(card);
+    return;
+  }
+  if (btn.classList.contains("js-delete")) {
+    await removeCard(card);
+  }
+});
+
+document.getElementById("pm-export")?.addEventListener("click", exportZip);
+document.getElementById("pm-import")?.addEventListener("click", importZip);
+
+loadItems();
+</script>
+{% endblock %}

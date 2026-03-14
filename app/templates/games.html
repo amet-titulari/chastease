@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+  .games-shell {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    gap: 0.9rem;
+  }
+  .games-note {
+    margin: 0;
+    color: #9db1c7;
+  }
+  .games-grid {
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .game-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    background: linear-gradient(165deg, rgba(16, 36, 56, 0.9), rgba(11, 18, 28, 0.8));
+    padding: 0.95rem;
+    display: grid;
+    gap: 0.65rem;
+    align-content: start;
+  }
+  .game-title {
+    margin: 0;
+    font-size: 1.08rem;
+    color: #e0efff;
+  }
+  .game-meta {
+    margin: 0;
+    color: #9db1c7;
+    font-size: 0.85rem;
+  }
+  .tag-row {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .tag {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.72rem;
+    color: #cfe1f4;
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .cta {
+    text-decoration: none;
+    text-align: center;
+    padding: 0.62rem 0.8rem;
+    border-radius: 10px;
+    border: 1px solid rgba(152, 198, 242, 0.42);
+    background: rgba(77, 130, 181, 0.35);
+    color: #eff7ff;
+    font-weight: 700;
+  }
+  .cta:hover {
+    background: rgba(95, 148, 198, 0.5);
+  }
+  .cta.secondary {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.06);
+    font-weight: 600;
+  }
+  .cta.secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .cta.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+  }
+  .warn {
+    color: #ffb4b4;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="games-shell">
+  <section class="card full" style="display:grid; gap:0.45rem;">
+    <h2 style="margin:0;">Spiele</h2>
+    <p class="games-note">Waehle ein Spiel als Card. Danach oeffnet sich das Spiel-Setup fuer die aktuelle Session.</p>
+    {% if current_session %}
+      <p class="games-note">Aktuelle Session: #{{ current_session.id }} · {{ current_session.status }} · Persona: {{ current_session.persona_name }} · Player: {{ current_session.player_nickname }}</p>
+    {% else %}
+      <p class="games-note warn">Keine Session gefunden. Bitte zuerst in Experience eine Session erstellen.</p>
+      <a class="cta" href="/experience" style="max-width:320px;">Session erstellen</a>
+    {% endif %}
+  </section>
+
+  <section class="games-grid">
+    {% for module in modules %}
+      <article class="game-card">
+        <h3 class="game-title">{{ module.title }}</h3>
+        <p class="game-meta">{{ module.summary }}</p>
+        <div class="tag-row">
+          <span class="tag">{{ module.difficulties|length }} Schwierigkeitsgrade</span>
+          {% if module.uses_custom_steps %}
+            <span class="tag">{{ module.configured_steps_count }} konfigurierte Postures</span>
+          {% else %}
+            <span class="tag">{{ module.steps|length }} Basis-Postures</span>
+          {% endif %}
+          {% if module.supports_auto_capture %}
+            <span class="tag">Auto-Capture</span>
+          {% endif %}
+        </div>
+        {% if current_session %}
+          <a class="cta" href="/game/{{ current_session.id }}?module_key={{ module.key }}">Spiel oeffnen</a>
+          <a class="cta secondary" href="/games/postures?module_key={{ module.key }}">Postures verwalten</a>
+        {% else %}
+          <a class="cta disabled" href="#">Spiel oeffnen</a>
+          <a class="cta secondary disabled" href="#">Postures verwalten</a>
+        {% endif %}
+      </article>
+    {% endfor %}
+  </section>
+</section>
+{% endblock %}

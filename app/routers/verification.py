@@ -31,6 +31,23 @@ def _load_session(db: Session, session_id: int) -> SessionModel:
     return session_obj
 
 
+def _timestamp_slug(value: datetime | None = None) -> str:
+    dt = value or datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    dt = dt.astimezone(timezone.utc)
+    return dt.strftime("%Y%m%d_%H%M%S_%f")
+
+
+def _safe_suffix(filename: str | None) -> str:
+    suffix = Path(filename or "upload.jpg").suffix.lower()
+    if not suffix:
+        return ".jpg"
+    if len(suffix) > 10 or any(ch in suffix for ch in ("/", "\\", " ")):
+        return ".jpg"
+    return suffix
+
+
 @router.post("/{session_id}/verifications/request")
 def request_verification(session_id: int, payload: VerificationRequest, db: Session = Depends(get_db)) -> dict:
     _load_session(db, session_id)
@@ -64,10 +81,11 @@ async def upload_verification(
     if not record:
         raise HTTPException(status_code=404, detail="Verification not found")
 
-    target_dir = Path(settings.media_dir) / "verifications"
+    target_dir = Path(settings.media_dir) / "verifications" / "chat" / str(session_id)
     target_dir.mkdir(parents=True, exist_ok=True)
-    suffix = Path(file.filename or "upload.jpg").suffix or ".jpg"
-    target_path = target_dir / f"{uuid4().hex}{suffix}"
+    suffix = _safe_suffix(file.filename)
+    capture_stamp = _timestamp_slug()
+    target_path = target_dir / f"{capture_stamp}-{uuid4().hex}{suffix}"
 
     data = await file.read()
     target_path.write_bytes(data)

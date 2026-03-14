@@ -8,13 +8,15 @@ from fastapi import APIRouter, Depends, Form, Query, Request
 from pydantic import BaseModel, Field
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
 from app.models.auth_user import AuthUser
 from app.models.contract import Contract
+from app.models.game_posture_template import GamePostureTemplate
+from app.models.game_run import GameRun
 from app.models.hygiene_opening import HygieneOpening
 from app.models.llm_profile import LlmProfile
 from app.models.persona import Persona
@@ -22,6 +24,7 @@ from app.models.player_profile import PlayerProfile
 from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
 from app.models.task import Task
+from app.services.games import as_public_module_payload, get_module, list_modules
 
 router = APIRouter(tags=["web"])
 templates = Jinja2Templates(directory="app/templates")
@@ -1354,6 +1357,149 @@ def play_page(session_id: int, request: Request, db: Session = Depends(get_db)):
             "player_nickname": player.nickname if player else user.username,
             "lock_end": session_obj.lock_end.isoformat() if session_obj.lock_end else None,
             "ws_debug_enabled": settings.play_ws_debug_enabled,
+        },
+    )
+
+
+@router.get("/game/{session_id}", response_class=HTMLResponse)
+def game_page(
+    session_id: int,
+    request: Request,
+    module_key: str = Query(default="posture_training", max_length=120),
+    db: Session = Depends(get_db),
+):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if session_obj is None:
+        return RedirectResponse(url="/experience", status_code=303)
+
+    module = get_module(module_key)
+    if module is None:
+        return RedirectResponse(url="/games", status_code=303)
+
+    latest_run = (
+        db.query(GameRun)
+        .filter(GameRun.session_id == session_id, GameRun.module_key == module_key)
+        .order_by(GameRun.id.desc())
+        .first()
+    )
+
+    initial_setup = {
+        "duration_minutes": 20,
+        "transition_seconds": 8,
+        "difficulty": "medium",
+        "max_misses_before_penalty": 3,
+        "session_penalty_days": 0,
+        "session_penalty_hours": 0,
+        "session_penalty_minutes": 5,
+    }
+    if latest_run is not None:
+        base_duration_seconds = max(60, int(latest_run.total_duration_seconds or 0) - int(latest_run.retry_extension_seconds or 0))
+        penalty_total = max(0, int(latest_run.session_penalty_seconds or 0))
+        initial_setup = {
+            "duration_minutes": max(1, int(round(base_duration_seconds / 60))),
+            "transition_seconds": max(0, min(60, int(latest_run.transition_seconds or 8))),
+            "difficulty": latest_run.difficulty_key or "medium",
+            "max_misses_before_penalty": max(1, int(latest_run.max_misses_before_penalty or 3)),
+            "session_penalty_days": penalty_total // 86400,
+            "session_penalty_hours": (penalty_total % 86400) // 3600,
+            "session_penalty_minutes": (penalty_total % 3600) // 60,
+        }
+
+    return templates.TemplateResponse(
+        request=request,
+        name="game_posture.html",
+        context={
+            "title": f"Game Mode - {settings.app_name}",
+            "current_user": user,
+            "session_id": session_id,
+            "module_key": module.key,
+            "module_title": module.title,
+            "module_summary": module.summary,
+            "latest_run_id": latest_run.id if latest_run else None,
+            "initial_setup": initial_setup,
+        },
+    )
+
+
+@router.get("/games", response_class=HTMLResponse)
+def games_page(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+
+    current_session = None
+    if user.active_session_id:
+        current_session = db.query(SessionModel).filter(SessionModel.id == user.active_session_id).first()
+    if current_session is None:
+        current_session = db.query(SessionModel).order_by(SessionModel.id.desc()).first()
+
+    current_session_payload = None
+    if current_session is not None:
+        persona = db.query(Persona).filter(Persona.id == current_session.persona_id).first()
+        player = db.query(PlayerProfile).filter(PlayerProfile.id == current_session.player_profile_id).first()
+        current_session_payload = {
+            "id": current_session.id,
+            "status": current_session.status,
+            "persona_name": persona.name if persona else "-",
+            "player_nickname": player.nickname if player else "-",
+        }
+
+    modules = [as_public_module_payload(module) for module in list_modules()]
+
+    configured_counts = {
+        module_key: int(count)
+        for module_key, count in db.query(
+            GamePostureTemplate.module_key,
+            func.count(GamePostureTemplate.id),
+        )
+        .filter(GamePostureTemplate.is_active == True)  # noqa: E712
+        .group_by(GamePostureTemplate.module_key)
+        .all()
+    }
+
+    for module in modules:
+        configured = int(configured_counts.get(module["key"], 0))
+        module["configured_steps_count"] = configured
+        module["uses_custom_steps"] = configured > 0
+
+    return templates.TemplateResponse(
+        request=request,
+        name="games.html",
+        context={
+            "title": f"{settings.app_name} - Games",
+            "current_user": user,
+            "modules": modules,
+            "current_session": current_session_payload,
+        },
+    )
+
+
+@router.get("/games/postures", response_class=HTMLResponse)
+def games_postures_page(
+    request: Request,
+    module_key: str = Query(default="posture_training", max_length=120),
+    db: Session = Depends(get_db),
+):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+
+    module = get_module(module_key)
+    if module is None:
+        return RedirectResponse(url="/games", status_code=303)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="game_posture_manage.html",
+        context={
+            "title": f"{settings.app_name} - Postures",
+            "current_user": user,
+            "module_key": module.key,
+            "module_title": module.title,
+            "module_summary": module.summary,
         },
     )
 

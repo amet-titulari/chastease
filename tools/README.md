@@ -25,7 +25,7 @@ Default behavior:
 
 ```bash
 python tools/fetch_remote_volume.py \
-  --host 65.108.149.214 \
+  --host 10.0.5.30 \
   --user root \
   --remote-path /var/lib/docker/volumes/chastease_chastease_data \
   --remote-data-subdir _data \

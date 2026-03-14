@@ -100,6 +100,109 @@
     border: 1px solid rgba(255,255,255,0.2);
     background: rgba(255,255,255,0.08);
   }
+  .tpl-panel {
+    margin-top: 1rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    background: rgba(255,255,255,0.02);
+  }
+  .tpl-panel h3 {
+    margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+    color: #d8e8f8;
+  }
+  .tpl-subline {
+    margin: 0 0 0.7rem;
+    font-size: 0.8rem;
+    color: var(--color-text-muted, #8899aa);
+  }
+  .tpl-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.7rem;
+  }
+  .tpl-item {
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 0.55rem 0.65rem;
+    background: rgba(255,255,255,0.03);
+    display: flex;
+    gap: 0.6rem;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .tpl-item-main {
+    flex: 1;
+    min-width: 0;
+  }
+  .tpl-item-title {
+    margin: 0;
+    font-size: 0.84rem;
+    color: #d8e8f8;
+    font-weight: 600;
+  }
+  .tpl-item-meta {
+    margin: 0.12rem 0 0;
+    font-size: 0.74rem;
+    color: var(--color-text-muted, #8899aa);
+  }
+  .tpl-item-actions {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+  .tpl-item-actions button {
+    font-size: 0.74rem;
+    padding: 0.2rem 0.55rem;
+  }
+  .tpl-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.6rem;
+  }
+  .tpl-form label {
+    font-size: 0.78rem;
+  }
+  .tpl-form .full {
+    grid-column: 1 / -1;
+  }
+  .tpl-form input,
+  .tpl-form textarea,
+  .tpl-form select {
+    font-size: 0.82rem;
+  }
+  .tpl-form-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+  .tpl-toolbar {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    margin: 0.45rem 0 0.7rem;
+  }
+  .tpl-toolbar button {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.6rem;
+  }
+  .tpl-chip {
+    display: inline-block;
+    font-size: 0.68rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 999px;
+    background: rgba(140,190,255,0.18);
+    color: #d8ecff;
+    margin-right: 0.25rem;
+  }
+  @media (max-width: 860px) {
+    .tpl-form {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -202,6 +305,69 @@
           <button type="button" id="pm-cancel-btn" class="ghost" style="display:none;">Abbrechen</button>
         </div>
       </form>
+
+      <div class="tpl-panel" id="pm-task-lib-panel" style="display:none;">
+        <h3>Aufgaben-Bibliothek der Persona</h3>
+        <p class="tpl-subline">Vorlagen als Inspiration für die KI. Sie darf weiterhin frei neue Aufgaben erstellen.</p>
+
+        <div class="tpl-toolbar">
+          <button type="button" id="pm-tpl-export-btn" class="ghost">&#8659; Bibliothek exportieren</button>
+          <button type="button" id="pm-tpl-import-append-btn" class="ghost">&#8657; Import (hinzuf&uuml;gen)</button>
+          <button type="button" id="pm-tpl-import-replace-btn" class="warn">&#8657; Import (ersetzen)</button>
+          <input id="pm-tpl-import-file" type="file" accept=".json,application/json" style="display:none;" />
+        </div>
+
+        <div id="pm-tpl-list" class="tpl-list">
+          <div class="empty-hint" style="padding:0.6rem 0;">Keine Vorlagen vorhanden.</div>
+        </div>
+
+        <form id="pm-tpl-form" class="tpl-form" autocomplete="off">
+          <input type="hidden" id="pm-tpl-id" value="" />
+
+          <label class="full">Titel
+            <input id="pm-tpl-title" type="text" maxlength="200" required placeholder="z.B. Morgen-Checkin" />
+          </label>
+
+          <label class="full">Beschreibung
+            <textarea id="pm-tpl-description" rows="2" maxlength="2000" placeholder="Was soll gemacht werden?"></textarea>
+          </label>
+
+          <label>Deadline (Minuten, optional)
+            <input id="pm-tpl-deadline" type="number" min="1" max="43200" step="1" placeholder="z.B. 120" />
+          </label>
+
+          <label>Kategorie
+            <input id="pm-tpl-category" type="text" maxlength="80" placeholder="z.B. daily" />
+          </label>
+
+          <label class="full">Tags (kommagetrennt)
+            <input id="pm-tpl-tags" type="text" maxlength="500" placeholder="morning, report, tease" />
+          </label>
+
+          <label>Fotoverifikation
+            <select id="pm-tpl-verification">
+              <option value="false">Nein</option>
+              <option value="true">Ja</option>
+            </select>
+          </label>
+
+          <label>Aktiv
+            <select id="pm-tpl-active">
+              <option value="true">Ja</option>
+              <option value="false">Nein</option>
+            </select>
+          </label>
+
+          <label class="full">Verifikationskriterien (optional)
+            <input id="pm-tpl-criteria" type="text" maxlength="500" placeholder="Was auf dem Foto sichtbar sein muss" />
+          </label>
+
+          <div class="tpl-form-actions">
+            <button type="submit" id="pm-tpl-save-btn">Vorlage speichern</button>
+            <button type="button" id="pm-tpl-reset-btn" class="ghost">Zurücksetzen</button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <div class="action-row" style="margin-top:1rem;">
@@ -216,6 +382,9 @@
 <script>
 const STRICTNESS_LABELS = ["", "Sehr sanft", "Sanft", "Ausgewogen", "Streng", "Sehr streng"];
 let pmAvatarMediaId = null;
+let pmCurrentPersonaId = null;
+let pmCurrentTemplates = [];
+let pmTplImportReplaceMode = false;
 
 function pmUpdateAvatarUi(url) {
   const img = document.getElementById("pm-avatar-preview");
@@ -309,6 +478,107 @@ function pmRenderList(items) {
   `).join("");
 }
 
+function pmBoolBadge(label, val) {
+  return `<span class="tpl-chip">${escHtml(label)}: ${val ? "Ja" : "Nein"}</span>`;
+}
+
+function pmTplTags(tags) {
+  if (!Array.isArray(tags) || !tags.length) return "";
+  return tags.slice(0, 6).map((tag) => `<span class="tpl-chip">${escHtml(tag)}</span>`).join("");
+}
+
+function pmRenderTemplates(items) {
+  pmCurrentTemplates = Array.isArray(items) ? items : [];
+  const container = document.getElementById("pm-tpl-list");
+  if (!pmCurrentPersonaId) {
+    container.innerHTML = `<div class="empty-hint" style="padding:0.6rem 0;">Bitte zuerst eine Persona bearbeiten.</div>`;
+    return;
+  }
+  if (!pmCurrentTemplates.length) {
+    container.innerHTML = `<div class="empty-hint" style="padding:0.6rem 0;">Keine Vorlagen vorhanden.</div>`;
+    return;
+  }
+  container.innerHTML = pmCurrentTemplates.map((tpl) => {
+    const meta = [
+      tpl.category ? `Kategorie: ${tpl.category}` : null,
+      tpl.deadline_minutes ? `Deadline: ${tpl.deadline_minutes} min` : "Deadline: keine",
+      tpl.is_active ? "Aktiv" : "Inaktiv",
+    ].filter(Boolean).join(" · ");
+    return `
+      <div class="tpl-item">
+        <div class="tpl-item-main">
+          <p class="tpl-item-title">${escHtml(tpl.title)}</p>
+          <p class="tpl-item-meta">${escHtml(meta)}</p>
+          ${tpl.description ? `<p class="tpl-item-meta">${escHtml(tpl.description)}</p>` : ""}
+          <div class="tpl-item-meta">
+            ${pmBoolBadge("Fotoverifikation", !!tpl.requires_verification)}
+            ${tpl.verification_criteria ? `<span class="tpl-chip">Kriterium: ${escHtml(tpl.verification_criteria)}</span>` : ""}
+            ${pmTplTags(tpl.tags)}
+          </div>
+        </div>
+        <div class="tpl-item-actions">
+          <button type="button" class="ghost" onclick="pmTplStartEdit(${tpl.id})">Bearbeiten</button>
+          <button type="button" class="warn" onclick="pmTplDelete(${tpl.id}, '${escHtml(tpl.title)}')">L&ouml;schen</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function pmTplLoad() {
+  if (!pmCurrentPersonaId) {
+    pmRenderTemplates([]);
+    return;
+  }
+  try {
+    const data = await pmFetch(`/api/personas/${pmCurrentPersonaId}/task-templates`);
+    pmRenderTemplates(data.items || []);
+  } catch (e) {
+    document.getElementById("pm-tpl-list").innerHTML = `<div class="empty-hint" style="padding:0.6rem 0;">Fehler: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function pmTplResetForm() {
+  document.getElementById("pm-tpl-id").value = "";
+  document.getElementById("pm-tpl-title").value = "";
+  document.getElementById("pm-tpl-description").value = "";
+  document.getElementById("pm-tpl-deadline").value = "";
+  document.getElementById("pm-tpl-category").value = "";
+  document.getElementById("pm-tpl-tags").value = "";
+  document.getElementById("pm-tpl-verification").value = "false";
+  document.getElementById("pm-tpl-active").value = "true";
+  document.getElementById("pm-tpl-criteria").value = "";
+  document.getElementById("pm-tpl-save-btn").textContent = "Vorlage speichern";
+}
+
+function pmTplStartEdit(templateId) {
+  const tpl = pmCurrentTemplates.find((item) => item.id === templateId);
+  if (!tpl) return;
+  document.getElementById("pm-tpl-id").value = String(tpl.id);
+  document.getElementById("pm-tpl-title").value = tpl.title || "";
+  document.getElementById("pm-tpl-description").value = tpl.description || "";
+  document.getElementById("pm-tpl-deadline").value = tpl.deadline_minutes || "";
+  document.getElementById("pm-tpl-category").value = tpl.category || "";
+  document.getElementById("pm-tpl-tags").value = Array.isArray(tpl.tags) ? tpl.tags.join(", ") : "";
+  document.getElementById("pm-tpl-verification").value = tpl.requires_verification ? "true" : "false";
+  document.getElementById("pm-tpl-active").value = tpl.is_active ? "true" : "false";
+  document.getElementById("pm-tpl-criteria").value = tpl.verification_criteria || "";
+  document.getElementById("pm-tpl-save-btn").textContent = "Vorlage aktualisieren";
+}
+
+async function pmTplDelete(templateId, title) {
+  if (!pmCurrentPersonaId) return;
+  if (!confirm(`Vorlage "${title}" wirklich löschen?`)) return;
+  try {
+    await pmFetch(`/api/personas/${pmCurrentPersonaId}/task-templates/${templateId}`, { method: "DELETE" });
+    pmStatus(`Vorlage "${title}" gelöscht.`);
+    pmTplResetForm();
+    await pmTplLoad();
+  } catch (e) {
+    pmStatus("Fehler beim Löschen der Vorlage: " + e.message, true);
+  }
+}
+
 // ── Load list ──
 async function pmLoadList() {
   try {
@@ -369,6 +639,10 @@ async function pmStartEdit(id) {
     document.getElementById("pm-form-title").textContent = `Persona bearbeiten: ${p.name}`;
     document.getElementById("pm-save-btn").textContent = "Änderungen speichern";
     document.getElementById("pm-cancel-btn").style.display = "inline-flex";
+    pmCurrentPersonaId = p.id;
+    document.getElementById("pm-task-lib-panel").style.display = "";
+    pmTplResetForm();
+    await pmTplLoad();
     document.getElementById("pm-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
     pmStatus("Fehler: " + e.message, true);
@@ -436,6 +710,11 @@ function pmResetForm() {
   document.getElementById("pm-form-title").textContent = "Neue Persona erstellen";
   document.getElementById("pm-save-btn").textContent = "Persona speichern";
   document.getElementById("pm-cancel-btn").style.display = "none";
+  pmCurrentPersonaId = null;
+  pmCurrentTemplates = [];
+  document.getElementById("pm-task-lib-panel").style.display = "none";
+  pmTplResetForm();
+  pmRenderTemplates([]);
 }
 
 function escHtml(s) {
@@ -530,6 +809,136 @@ document.getElementById("pm-avatar-clear")?.addEventListener("click", () => {
   document.getElementById("pm-avatar-media-id").value = "";
   document.getElementById("pm-avatar-file").value = "";
   pmUpdateAvatarUi(null);
+});
+
+document.getElementById("pm-tpl-reset-btn")?.addEventListener("click", pmTplResetForm);
+
+document.getElementById("pm-tpl-export-btn")?.addEventListener("click", () => {
+  if (!pmCurrentPersonaId) {
+    pmStatus("Bitte zuerst eine Persona bearbeiten.", true);
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = `/api/personas/${pmCurrentPersonaId}/task-templates/export`;
+  a.download = `persona-${pmCurrentPersonaId}-task-library.json`;
+  a.click();
+});
+
+document.getElementById("pm-tpl-import-append-btn")?.addEventListener("click", () => {
+  if (!pmCurrentPersonaId) {
+    pmStatus("Bitte zuerst eine Persona bearbeiten.", true);
+    return;
+  }
+  pmTplImportReplaceMode = false;
+  document.getElementById("pm-tpl-import-file")?.click();
+});
+
+document.getElementById("pm-tpl-import-replace-btn")?.addEventListener("click", () => {
+  if (!pmCurrentPersonaId) {
+    pmStatus("Bitte zuerst eine Persona bearbeiten.", true);
+    return;
+  }
+  pmTplImportReplaceMode = true;
+  document.getElementById("pm-tpl-import-file")?.click();
+});
+
+document.getElementById("pm-tpl-import-file")?.addEventListener("change", async (e) => {
+  if (!pmCurrentPersonaId) {
+    pmStatus("Bitte zuerst eine Persona bearbeiten.", true);
+    return;
+  }
+
+  const input = e.target;
+  const file = input?.files?.[0];
+  input.value = "";
+  if (!file) return;
+
+  let library;
+  try {
+    library = JSON.parse(await file.text());
+  } catch (_) {
+    pmStatus("Ungültige JSON-Datei für Task-Bibliothek.", true);
+    return;
+  }
+
+  if (pmTplImportReplaceMode) {
+    const proceed = confirm("Bestehende Vorlagen dieser Persona ersetzen?");
+    if (!proceed) return;
+  }
+
+  try {
+    const result = await pmFetch(`/api/personas/${pmCurrentPersonaId}/task-templates/import`, {
+      method: "POST",
+      body: JSON.stringify({
+        library,
+        replace_existing: pmTplImportReplaceMode,
+      }),
+    });
+    pmStatus(`Import abgeschlossen: ${result.imported} Vorlage(n).`);
+    pmTplResetForm();
+    await pmTplLoad();
+  } catch (err) {
+    pmStatus("Fehler beim Import der Bibliothek: " + err.message, true);
+  }
+});
+
+document.getElementById("pm-tpl-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!pmCurrentPersonaId) {
+    pmStatus("Bitte zuerst eine Persona bearbeiten.", true);
+    return;
+  }
+
+  const tplId = document.getElementById("pm-tpl-id").value;
+  const title = document.getElementById("pm-tpl-title").value.trim();
+  if (!title) {
+    pmStatus("Titel der Vorlage ist erforderlich.", true);
+    return;
+  }
+
+  const deadlineRaw = document.getElementById("pm-tpl-deadline").value.trim();
+  const deadline = deadlineRaw ? parseInt(deadlineRaw, 10) : null;
+  const tags = document.getElementById("pm-tpl-tags").value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+
+  const payload = {
+    title,
+    description: document.getElementById("pm-tpl-description").value.trim() || null,
+    deadline_minutes: Number.isInteger(deadline) && deadline > 0 ? deadline : null,
+    requires_verification: document.getElementById("pm-tpl-verification").value === "true",
+    verification_criteria: document.getElementById("pm-tpl-criteria").value.trim() || null,
+    category: document.getElementById("pm-tpl-category").value.trim() || null,
+    tags,
+    is_active: document.getElementById("pm-tpl-active").value === "true",
+  };
+
+  try {
+    if (tplId) {
+      const updatePayload = {
+        ...payload,
+        clear_deadline: payload.deadline_minutes === null,
+      };
+      await pmFetch(`/api/personas/${pmCurrentPersonaId}/task-templates/${tplId}`, {
+        method: "PUT",
+        body: JSON.stringify(updatePayload),
+      });
+      pmStatus("Vorlage aktualisiert.");
+    } else {
+      await pmFetch(`/api/personas/${pmCurrentPersonaId}/task-templates`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      pmStatus("Vorlage erstellt.");
+    }
+
+    pmTplResetForm();
+    await pmTplLoad();
+  } catch (err) {
+    pmStatus("Fehler beim Speichern der Vorlage: " + err.message, true);
+  }
 });
 
 // ── Init ──

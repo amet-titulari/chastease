@@ -31,6 +31,7 @@ Diese Anleitung erklärt Schritt für Schritt, wie du Chastease einrichtest und 
   - [12. Session History \& Export](#12-session-history--export)
   - [13. Verträge](#13-verträge)
   - [14. Multi-Device-Nutzung](#14-multi-device-nutzung)
+  - [15. Posture-Import/Export (ZIP)](#15-posture-importexport-zip)
   - [Datenschutz \& Sicherheit](#datenschutz--sicherheit)
 
 ---
@@ -253,6 +254,24 @@ Unter `/contracts` findest du alle unterzeichneten Verträge.
 Du kannst dich auf mehreren Geräten (z.B. Handy + Tablet) gleichzeitig einloggen. Beide Geräte nutzen dasselbe Session-Token und bleiben verbunden – ein neues Login meldet dich **nicht** auf anderen Geräten aus.
 
 **Empfehlung:** Nutze denselben Browser-Tab nicht auf zwei Geräten gleichzeitig, da der WebSocket-Stream pro Tab verwaltet wird.
+
+---
+
+## 15. Posture-Import/Export (ZIP)
+
+Du kannst alle Postures des Moduls gemeinsam als ZIP sichern und wieder einspielen.
+
+Pfad: `/games` → Bereich **Postures verwalten**
+
+- **Export**: Klicke auf „Alle Postures als ZIP exportieren".
+- **Import**: Wähle eine ZIP-Datei und klicke „ZIP importieren (ersetzt alle)".
+
+Wichtig:
+- Der Import ersetzt immer den kompletten Posture-Bestand des Moduls.
+- Bilder werden mit exportiert, sofern sie als lokale Upload-Bilder im System gespeichert sind.
+- Beim Import werden Bilder erneut validiert (Format, Größe, Mindestauflösung) und normalisiert.
+- Die ZIP enthält eine `manifest.json` und optional einen `images/`-Ordner.
+- Ein einzelner Import kann nicht teilweise zurückgenommen werden.
 
 ---
 

@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+import json
 
 from app.database import get_db
 from app.models.media_asset import MediaAsset
 from app.models.persona import Persona
+from app.models.persona_task_template import PersonaTaskTemplate
 from app.services.persona_card_mapper import map_external_persona_card
 
 router = APIRouter(prefix="/api/personas", tags=["personas"])
@@ -139,6 +141,34 @@ class PersonaUpdateRequest(BaseModel):
     avatar_media_id: int | None = Field(default=None, ge=1)
 
 
+class PersonaTaskTemplateCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    deadline_minutes: int | None = Field(default=None, ge=1, le=60 * 24 * 30)
+    requires_verification: bool = False
+    verification_criteria: str | None = Field(default=None, max_length=500)
+    category: str | None = Field(default=None, max_length=80)
+    tags: list[str] = Field(default_factory=list)
+    is_active: bool = True
+
+
+class PersonaTaskTemplateUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    deadline_minutes: int | None = Field(default=None, ge=1, le=60 * 24 * 30)
+    clear_deadline: bool = False
+    requires_verification: bool | None = None
+    verification_criteria: str | None = Field(default=None, max_length=500)
+    category: str | None = Field(default=None, max_length=80)
+    tags: list[str] | None = None
+    is_active: bool | None = None
+
+
+class PersonaTaskLibraryImportRequest(BaseModel):
+    library: dict
+    replace_existing: bool = False
+
+
 def _ensure_avatar_exists(db: Session, avatar_media_id: int | None) -> None:
     if avatar_media_id is None:
         return
@@ -162,6 +192,38 @@ def _persona_to_dict(p: Persona) -> dict:
         "avatar_url": f"/api/media/{p.avatar_media_id}/content" if p.avatar_media_id else None,
         "created_at": p.created_at.isoformat() if p.created_at else None,
     }
+
+
+def _template_to_dict(template: PersonaTaskTemplate) -> dict:
+    try:
+        tags = json.loads(template.tags_json or "[]")
+        if not isinstance(tags, list):
+            tags = []
+    except Exception:
+        tags = []
+    return {
+        "id": template.id,
+        "persona_id": template.persona_id,
+        "title": template.title,
+        "description": template.description,
+        "deadline_minutes": template.deadline_minutes,
+        "requires_verification": bool(template.requires_verification),
+        "verification_criteria": template.verification_criteria,
+        "category": template.category,
+        "tags": [str(tag) for tag in tags],
+        "is_active": bool(template.is_active),
+        "created_at": template.created_at.isoformat() if template.created_at else None,
+        "updated_at": template.updated_at.isoformat() if template.updated_at else None,
+    }
+
+
+def _template_export_payload(template: PersonaTaskTemplate) -> dict:
+    payload = _template_to_dict(template)
+    payload.pop("id", None)
+    payload.pop("persona_id", None)
+    payload.pop("created_at", None)
+    payload.pop("updated_at", None)
+    return payload
 
 
 @router.get("")
@@ -194,6 +256,204 @@ def get_persona(persona_id: int, db: Session = Depends(get_db)) -> dict:
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
     return _persona_to_dict(persona)
+
+
+@router.get("/{persona_id}/task-templates")
+def list_persona_task_templates(persona_id: int, db: Session = Depends(get_db)) -> dict:
+    persona = db.query(Persona).filter(Persona.id == persona_id).first()
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona not found")
+    rows = (
+        db.query(PersonaTaskTemplate)
+        .filter(PersonaTaskTemplate.persona_id == persona_id)
+        .order_by(PersonaTaskTemplate.is_active.desc(), PersonaTaskTemplate.id.asc())
+        .all()
+    )
+    return {"items": [_template_to_dict(item) for item in rows]}
+
+
+@router.post("/{persona_id}/task-templates")
+def create_persona_task_template(
+    persona_id: int,
+    payload: PersonaTaskTemplateCreateRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    persona = db.query(Persona).filter(Persona.id == persona_id).first()
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona not found")
+
+    template = PersonaTaskTemplate(
+        persona_id=persona_id,
+        title=payload.title.strip(),
+        description=payload.description.strip() if payload.description else None,
+        deadline_minutes=payload.deadline_minutes,
+        requires_verification=payload.requires_verification,
+        verification_criteria=payload.verification_criteria.strip() if payload.verification_criteria else None,
+        category=payload.category.strip() if payload.category else None,
+        tags_json=json.dumps([str(tag).strip() for tag in payload.tags if str(tag).strip()], ensure_ascii=True),
+        is_active=payload.is_active,
+    )
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    return _template_to_dict(template)
+
+
+@router.put("/{persona_id}/task-templates/{template_id}")
+def update_persona_task_template(
+    persona_id: int,
+    template_id: int,
+    payload: PersonaTaskTemplateUpdateRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    template = (
+        db.query(PersonaTaskTemplate)
+        .filter(PersonaTaskTemplate.id == template_id, PersonaTaskTemplate.persona_id == persona_id)
+        .first()
+    )
+    if not template:
+        raise HTTPException(status_code=404, detail="Task template not found")
+
+    if payload.title is not None:
+        template.title = payload.title.strip()
+    if payload.description is not None:
+        template.description = payload.description.strip() or None
+    if payload.deadline_minutes is not None:
+        template.deadline_minutes = payload.deadline_minutes
+    if payload.clear_deadline:
+        template.deadline_minutes = None
+    if payload.requires_verification is not None:
+        template.requires_verification = payload.requires_verification
+    if payload.verification_criteria is not None:
+        template.verification_criteria = payload.verification_criteria.strip() or None
+    if payload.category is not None:
+        template.category = payload.category.strip() or None
+    if payload.tags is not None:
+        template.tags_json = json.dumps([str(tag).strip() for tag in payload.tags if str(tag).strip()], ensure_ascii=True)
+    if payload.is_active is not None:
+        template.is_active = payload.is_active
+
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    return _template_to_dict(template)
+
+
+@router.delete("/{persona_id}/task-templates/{template_id}")
+def delete_persona_task_template(persona_id: int, template_id: int, db: Session = Depends(get_db)) -> dict:
+    template = (
+        db.query(PersonaTaskTemplate)
+        .filter(PersonaTaskTemplate.id == template_id, PersonaTaskTemplate.persona_id == persona_id)
+        .first()
+    )
+    if not template:
+        raise HTTPException(status_code=404, detail="Task template not found")
+    db.delete(template)
+    db.commit()
+    return {"deleted": template_id}
+
+
+@router.get("/{persona_id}/task-templates/export")
+def export_persona_task_templates(persona_id: int, db: Session = Depends(get_db)) -> JSONResponse:
+    persona = db.query(Persona).filter(Persona.id == persona_id).first()
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona not found")
+
+    rows = (
+        db.query(PersonaTaskTemplate)
+        .filter(PersonaTaskTemplate.persona_id == persona_id)
+        .order_by(PersonaTaskTemplate.id.asc())
+        .all()
+    )
+    content = {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "persona_task_library",
+        "source_persona": {
+            "id": persona.id,
+            "name": persona.name,
+        },
+        "templates": [_template_export_payload(item) for item in rows],
+    }
+    return JSONResponse(
+        content=content,
+        headers={"Content-Disposition": f'attachment; filename="persona-{persona_id}-task-library.json"'},
+    )
+
+
+@router.post("/{persona_id}/task-templates/import")
+def import_persona_task_templates(
+    persona_id: int,
+    payload: PersonaTaskLibraryImportRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    persona = db.query(Persona).filter(Persona.id == persona_id).first()
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona not found")
+
+    library = payload.library
+    if not isinstance(library, dict):
+        raise HTTPException(status_code=422, detail="library must be a JSON object")
+    templates = library.get("templates")
+    if not isinstance(templates, list):
+        raise HTTPException(status_code=422, detail="library.templates must be a list")
+
+    if payload.replace_existing:
+        (
+            db.query(PersonaTaskTemplate)
+            .filter(PersonaTaskTemplate.persona_id == persona_id)
+            .delete(synchronize_session=False)
+        )
+
+    imported = 0
+    for item in templates:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()[:200]
+        if not title:
+            continue
+
+        description = str(item.get("description") or "").strip()[:2000] or None
+
+        deadline_minutes = item.get("deadline_minutes")
+        try:
+            deadline_minutes = int(deadline_minutes) if deadline_minutes is not None else None
+            if deadline_minutes is not None and deadline_minutes <= 0:
+                deadline_minutes = None
+        except (TypeError, ValueError):
+            deadline_minutes = None
+
+        requires_verification = bool(item.get("requires_verification", False))
+        verification_criteria = str(item.get("verification_criteria") or "").strip()[:500] or None
+        category = str(item.get("category") or "").strip()[:80] or None
+
+        raw_tags = item.get("tags")
+        tags = []
+        if isinstance(raw_tags, list):
+            tags = [str(tag).strip() for tag in raw_tags if str(tag).strip()]
+
+        is_active = bool(item.get("is_active", True))
+
+        db.add(
+            PersonaTaskTemplate(
+                persona_id=persona_id,
+                title=title,
+                description=description,
+                deadline_minutes=deadline_minutes,
+                requires_verification=requires_verification,
+                verification_criteria=verification_criteria,
+                category=category,
+                tags_json=json.dumps(tags, ensure_ascii=True),
+                is_active=is_active,
+            )
+        )
+        imported += 1
+
+    db.commit()
+    return {
+        "imported": imported,
+        "replace_existing": payload.replace_existing,
+        "target_persona_id": persona_id,
+    }
 
 
 @router.put("/{persona_id}")
