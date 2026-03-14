@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
@@ -23,6 +24,8 @@ from app.services.context_window import build_context_window
 from app.services.prompt_builder import build_prompt_modules
 from app.services.task_service import TaskService
 from app.services.transcription_service import transcribe_audio
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/sessions", tags=["chat"])
 
@@ -247,6 +250,7 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
         )
 
     created_task_ids: list[int] = []
+    created_task_details: list[str] = []
     if reply_text == structured.message:
         for action in structured.actions:
             if not isinstance(action, dict):
@@ -299,6 +303,9 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
             deadline_at = None
             if isinstance(deadline_minutes, int) and deadline_minutes > 0:
                 deadline_at = datetime.now(timezone.utc) + timedelta(minutes=deadline_minutes)
+                logger.info("Task '%s': deadline_minutes=%d → deadline_at=%s", title, deadline_minutes, deadline_at.isoformat())
+            else:
+                logger.info("Task '%s': keine Deadline (deadline_minutes=%s)", title, deadline_minutes)
 
             consequence_type = action.get("consequence_type")
             if consequence_type is not None:
@@ -325,6 +332,9 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
             db.add(task)
             db.flush()
             created_task_ids.append(task.id)
+            created_task_details.append(
+                f"#{task.id} '{title}' (Deadline: {deadline_at.isoformat() if deadline_at else 'keine'})"
+            )
 
     user_msg = Message(session_id=session_id, role="user", content=user_text, message_type="chat")
     assistant_msg = Message(
@@ -335,7 +345,7 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
     )
 
     if created_task_ids:
-        summary = ", ".join(str(item) for item in created_task_ids)
+        summary = "; ".join(created_task_details)
         db.add(
             Message(
                 session_id=session_id,

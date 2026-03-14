@@ -37,16 +37,16 @@ def _normalize_create_task_action(raw: dict) -> dict | None:
             normalized["description"] = description_text[:2000]
 
     deadline_minutes = raw.get("deadline_minutes")
-    if isinstance(deadline_minutes, int):
-        if deadline_minutes > 0:
-            normalized["deadline_minutes"] = deadline_minutes
+    if deadline_minutes is None:
+        normalized["deadline_minutes"] = None
+    elif isinstance(deadline_minutes, int):
+        normalized["deadline_minutes"] = deadline_minutes if deadline_minutes > 0 else None
     else:
         try:
             coerced = int(deadline_minutes)
-            if coerced > 0:
-                normalized["deadline_minutes"] = coerced
+            normalized["deadline_minutes"] = coerced if coerced > 0 else None
         except Exception:
-            pass
+            normalized["deadline_minutes"] = None
 
     consequence_type = raw.get("consequence_type")
     if isinstance(consequence_type, str) and consequence_type.strip() in {"lock_extension_seconds"}:
@@ -280,7 +280,8 @@ class OllamaGateway(AIGateway):
             "WICHTIG: Jede Aufgabe/Anweisung MUSS als create_task eingetragen werden. "
             "Wenn der Wearer eine Aufgabe absichtlich nicht erfuellt oder du sie als fehlgeschlagen wertest, "
             "gib { \"type\": \"fail_task\", \"task_id\": <id> } in actions an. "
-            "Schema create_task: type,title,description(optional),deadline_minutes(optional),"
+            "Schema create_task: type,title,description(optional),"
+            "deadline_minutes(PFLICHT: <int> fuer Minuten bis Frist, oder null wenn keine Deadline gewuenscht),"
             "consequence_type(optional),consequence_value(optional),"
             "requires_verification(true wenn Foto-Nachweis noetig),verification_criteria(was auf dem Foto sichtbar sein muss).\n"
             f"{image_note}"
@@ -409,7 +410,7 @@ class CustomOpenAIGateway(AIGateway):
             "trage { \"type\": \"fail_task\", \"task_id\": <id> } in 'actions' ein. "
             "Schema create_task:\n"
             "{ \"type\": \"create_task\", \"title\": \"...\", \"description\": \"...\", "
-            "\"deadline_minutes\": <int oder null>, "
+            "\"deadline_minutes\": <PFLICHT: int fuer Minuten bis Frist, oder null wenn keine Deadline>, "
             "\"consequence_type\": \"lock_extension_seconds\", \"consequence_value\": <int>,\n"
             "  \"requires_verification\": <true wenn der Wearer ein Foto als Nachweis schicken soll, sonst false>,\n"
             "  \"verification_criteria\": \"<was auf dem Foto erkennbar sein muss, nur wenn requires_verification=true>\" }\n"

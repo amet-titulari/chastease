@@ -15,7 +15,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# defaultMode = "all"
+#defaultMode = "all"
 defaultMode = "db-only"
 
 
