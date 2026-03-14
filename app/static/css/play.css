@@ -410,6 +410,22 @@ body:has(.play-shell) main.container {
   white-space: pre-wrap;
 }
 
+.bubble-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.bubble-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid rgba(124, 180, 224, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .bubble-meta {
   font-size: 0.68rem;
   color: var(--muted);
@@ -847,9 +863,31 @@ body:has(.play-shell) main.container {
 
 .ac-header {
   display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.ac-header-row {
+  display: flex;
   align-items: baseline;
-  gap: 0.55rem;
-  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.ac-deadline {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ac-deadline--soon {
+  color: #e0a05a;
+}
+
+.ac-deadline--overdue {
+  color: #e05a6a;
 }
 
 .ac-label {
@@ -864,6 +902,22 @@ body:has(.play-shell) main.container {
 
 .action-card--verify .ac-label {
   color: #7cb4e0;
+}
+
+.ac-num {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.task-num {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+  opacity: 0.7;
 }
 
 .ac-title {
@@ -1302,7 +1356,7 @@ body:has(.play-shell) main.container {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  width: 280px;
+  width: 360px;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 10px;

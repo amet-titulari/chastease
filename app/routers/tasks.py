@@ -13,6 +13,16 @@ from app.services.task_service import TaskService
 router = APIRouter(prefix="/api/sessions", tags=["tasks"])
 
 
+def _fmt_dt(dt: datetime | None) -> str | None:
+    """Serialize a datetime as ISO-8601 with explicit UTC offset.
+    SQLite drops tzinfo on read-back, so we re-attach UTC when missing."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
+
 class CreateTaskRequest(BaseModel):
     title: str = Field(min_length=3, max_length=200)
     description: str | None = None
@@ -59,7 +69,7 @@ def create_task(session_id: int, payload: CreateTaskRequest, db: Session = Depen
         "task_id": task.id,
         "status": task.status,
         "title": task.title,
-        "deadline_at": str(task.deadline_at) if task.deadline_at else None,
+        "deadline_at": _fmt_dt(task.deadline_at),
     }
 
 
@@ -75,7 +85,7 @@ def list_tasks(session_id: int, db: Session = Depends(get_db)) -> dict:
                 "id": row.id,
                 "title": row.title,
                 "status": row.status,
-                "deadline_at": str(row.deadline_at) if row.deadline_at else None,
+                "deadline_at": _fmt_dt(row.deadline_at),
                 "consequence_type": row.consequence_type,
                 "consequence_value": row.consequence_value,
                 "consequence_applied_seconds": row.consequence_applied_seconds,

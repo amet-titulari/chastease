@@ -9,6 +9,7 @@ const LOCK_END = _shell?.dataset.lockEnd || "";
 
 let plSocket = null;
 let plVoiceSocket = null;
+let _personaAvatarUrl = null;
 let plVoiceAudioCtx = null;
 let plVoiceMicStream = null;
 let plVoiceProcessor = null;
@@ -418,9 +419,15 @@ function plRenderChat(items) {
         const ids = (item.content || "").match(/\d+/g) || [];
         taskAttr = ` data-msg-type="task_assigned" data-task-ids="${ids.join(",")}"`;
       }
+      const avatarHtml = (cssRole === "from-ai" && _personaAvatarUrl)
+        ? `<img class="bubble-avatar" src="${_personaAvatarUrl}" alt="" aria-hidden="true" />`
+        : "";
+      const bodyRow = avatarHtml
+        ? `<div class="bubble-row">${avatarHtml}<div class="bubble-body">${content}</div></div>`
+        : `<div class="bubble-body">${content}</div>`;
       return `
         <div class="chat-bubble ${cssRole}"${taskAttr}>
-          <div class="bubble-body">${content}</div>
+          ${bodyRow}
           <div class="bubble-meta">${role}${ts ? " &middot; " + ts : ""}</div>
         </div>`;
     })
@@ -476,12 +483,29 @@ function plBuildTaskCards(items) {
     .map((item) => {
       const title = String(item.title || "").replace(/</g, "&lt;");
       const icon = item.requires_verification ? "&#128247;" : "&#128203;";
-      return `<div class="task-card"><div class="task-card-title">${icon} ${title}</div></div>`;
+      return `<div class="task-card"><div class="task-card-title">${icon} <span class="task-num">#${item.id}</span> ${title}</div></div>`;
     })
     .join("");
 }
 
 // Build a single action card HTML string
+function plFmtDeadline(deadlineAt) {
+  if (!deadlineAt) return "";
+  try {
+    const d = new Date(deadlineAt);
+    const now = new Date();
+    const diffMs = d - now;
+    if (diffMs < 0) return `<span class="ac-deadline ac-deadline--overdue">&#9201; &uuml;berf&auml;llig</span>`;
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 60) return `<span class="ac-deadline ac-deadline--soon">&#9201; noch ${diffMin}&nbsp;Min</span>`;
+    const sameDay = d.toDateString() === now.toDateString();
+    const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    if (sameDay) return `<span class="ac-deadline">&#9201; heute ${time}</span>`;
+    const date = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+    return `<span class="ac-deadline">&#9201; ${date}&nbsp;${time}</span>`;
+  } catch (_) { return ""; }
+}
+
 function plBuildSingleActionCard(item) {
   const title = String(item.title || "").replace(/</g, "&lt;");
   const criteria = String(item.verification_criteria || "").replace(/"/g, "&quot;");
@@ -491,9 +515,9 @@ function plBuildSingleActionCard(item) {
       ? `<p class="ac-hint">&#128203; ${String(item.verification_criteria).replace(/</g, "&lt;")}</p>`
       : "";
   const actions = isVerify
-    ? `<button class="ac-btn ac-btn--photo" data-action="verify">&#128247; Foto senden</button>
+    ? `<button class="ac-btn ac-btn--photo" data-action="verify">&#128247; Fotoverifikation</button>
        <button class="ac-btn ac-btn--fail" data-action="fail">&#10007; Fail</button>`
-    : `<button class="ac-btn ac-btn--done" data-action="complete">&#10003; Erledigt</button>
+    : `<button class="ac-btn ac-btn--done" data-action="complete">&#10003; Best&auml;tigung</button>
        <button class="ac-btn ac-btn--fail" data-action="fail">&#10007; Fail</button>`;
   const uploadArea = isVerify
     ? `<div class="ac-upload is-hidden">
@@ -511,8 +535,12 @@ function plBuildSingleActionCard(item) {
          data-requires-verification="${isVerify ? "1" : ""}"
          data-verification-criteria="${criteria}">
       <div class="ac-header">
-        <span class="ac-label">${isVerify ? "&#128247; Verifikation" : "&#128203; Task"}</span>
-        <span class="ac-title">${title}</span>
+        <div class="ac-header-row">
+          <span class="ac-label">${isVerify ? "&#128247; Verifikation" : "&#128203; Task"}</span>
+          <span class="ac-num">#${item.id}</span>
+          ${plFmtDeadline(item.deadline_at)}
+        </div>
+        <div class="ac-title">${title}</div>
       </div>
       ${criteriaHtml}
       <div class="ac-actions">${actions}</div>
@@ -644,9 +672,14 @@ function plRenderTasks(items) {
   // Re-install inline task cards in the current chat DOM
   plInstallInlineTaskCards();
 
-  // Header dropdown (read-only overview)
+  // Header dropdown – interactive action cards
   if (taskDropBoard) {
-    taskDropBoard.innerHTML = plBuildTaskCards(items);
+    if (pending.length) {
+      taskDropBoard.innerHTML = pending.map(plBuildSingleActionCard).join("");
+      plAttachActionCardHandlers(taskDropBoard);
+    } else {
+      taskDropBoard.innerHTML = "<p>Keine offenen Tasks.</p>";
+    }
   }
 
   // Update badge/button
@@ -1121,6 +1154,11 @@ document.getElementById("play-verify-submit")?.addEventListener("click", async (
 document.addEventListener("DOMContentLoaded", async () => {
   if (!SESSION_ID) return;
   await plInitVoiceAvailability();
+  // Pre-load persona avatar for chat rendering
+  try {
+    const summary = await plGet(`/api/settings/summary?session_id=${SESSION_ID}`);
+    _personaAvatarUrl = summary?.session?.persona_avatar_url || null;
+  } catch (_) {}
   await plLoadChat();
   await plListTasks();
   await plLoadVerifications();
