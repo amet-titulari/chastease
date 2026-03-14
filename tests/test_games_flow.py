@@ -97,7 +97,7 @@ def test_verify_step_with_photo_advances_or_retries():
         assert payload["step"]["status"] in {"passed", "failed"}
 
 
-def test_game_verification_capture_is_saved_under_session_and_run_timestamp_folder():
+def test_game_verification_capture_is_saved_under_session_with_run_start_prefix():
     with TestClient(app) as client:
         session_id = _create_and_sign(client)
         start = client.post(
@@ -124,8 +124,10 @@ def test_game_verification_capture_is_saved_under_session_and_run_timestamp_fold
         payload = verify.json()
         capture_path = (payload.get("step") or {}).get("capture_path") or ""
         assert capture_path.startswith(f"verifications/games/{session_id}/")
-        run_segment = capture_path.split("/")[3]
-        assert run_segment.startswith(f"{run_id}-")
+        path_parts = capture_path.split("/")
+        assert len(path_parts) == 4
+        filename = path_parts[3]
+        assert filename.startswith(f"{run_id}-")
 
         full_path = Path(settings.media_dir) / capture_path
         assert full_path.is_file()

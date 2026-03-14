@@ -264,8 +264,8 @@ def _store_game_verification_capture(run: GameRun, image_bytes: bytes, filename:
     suffix = _safe_capture_suffix(filename)
 
     rel_path = (
-        f"verifications/games/{run.session_id}/{run.id}-{run_stamp}/"
-        f"{capture_stamp}-{uuid4().hex}{suffix}"
+        f"verifications/games/{run.session_id}/"
+        f"{run.id}-{run_stamp}_{capture_stamp}-{uuid4().hex}{suffix}"
     )
     target = _resolve_media_path(rel_path)
     target.parent.mkdir(parents=True, exist_ok=True)
