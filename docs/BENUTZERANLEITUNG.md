@@ -108,6 +108,7 @@ Die Play-Ansicht (`/play`) ist die Hauptoberfläche während einer aktiven Sessi
 - **Tasks-Badge**: Zeigt die Anzahl offener Aufgaben. Rotes Badge = dringende Aufgaben vorhanden.
 - **Zahnrad ⚙**: Öffnet den Einstellungen-Drawer.
 - **Chat-Timeline**: Alle Nachrichten chronologisch; Aktionskarten erscheinen am Ende.
+- **Persona-Avatar**: Neben jeder KI-Nachricht wird das Avatar-Bild der aktuellen Persona angezeigt (sofern vorhanden).
 
 ---
 
@@ -140,21 +141,25 @@ Für jede offene Aufgabe erscheint am Ende der Chat-Timeline eine **Aktionskarte
 
 ```
 ┌──────────────────────────────────────┐
-│ 📋 Aufgaben-Titel                    │
+│ 📋 #3          ⏰ noch 12 Min        │
+│ Aufgaben-Titel                       │
 │ Beschreibung der Aufgabe…            │
 │                                      │
-│ [✓ Erledigt] [✗ Fehlgeschlagen]      │
-│ oder: [📷 Verifizieren]              │
+│ [✓ Bestätigung] [✗ Fail]             │
+│ oder: [📷 Fotoverifikation] [✗ Fail] │
 └──────────────────────────────────────┘
 ```
 
+- **Task-Nummer** (`#3`): Jede Karte zeigt die eindeutige Task-ID.
+- **Deadline** (rechts): Verbleibende Zeit bis zur Frist. Farbcodiert: normal (weiß), bald fällig (gelb, < 10 Min), überfällig (rot).
+
 | Button | Aktion |
 |---|---|
-| **Erledigt** | Markiert den Task als abgeschlossen; Belohnung (z.B. Zeitabzug) wird angewendet. |
-| **Fehlgeschlagen** | Markiert den Task als nicht erfüllt; Strafe (z.B. Zeitverlängerung) wird angewendet. |
-| **Verifizieren** | Öffnet die Foto-Verifikation (nur wenn der Task Verifikation erfordert). |
+| **Bestätigung** | Markiert den Task als abgeschlossen; Belohnung (z.B. Zeitabzug) wird angewendet. |
+| **Fail** | Markiert den Task als nicht erfüllt; Strafe (z.B. Zeitverlängerung) wird angewendet. |
+| **Fotoverifikation** | Öffnet die Foto-Verifikation (nur wenn der Task Verifikation erfordert). |
 
-Das **Tasks-Dropdown** im Header (über das Badge erreichbar) zeigt alle Aufgaben in einer read-only Übersicht.
+Das **Tasks-Dropdown** im Header (über das Badge erreichbar) zeigt alle offenen Aufgaben als **interaktive Aktionskarten** – du kannst Tasks direkt aus dem Dropdown heraus bestätigen, als fehlgeschlagen markieren oder zur Fotoverifikation öffnen.
 
 ### Konsequenzen
 Konsequenzen werden automatisch als Session-Event protokolliert und im Chat als Systemmeldung angezeigt. Beispiele:

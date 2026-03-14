@@ -5,6 +5,35 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ---
 
+## [0.2.2] – 2026-03-14
+
+### Geändert
+
+- Dokumentation vollständig mit aktuellem Systemstand synchronisiert (ARCHITECTURE, CHANGELOG, ROADMAP, BENUTZERANLEITUNG, SECURITY).
+
+---
+
+## [0.2.1] – 2026-03-14
+
+### Hinzugefügt
+
+- Task-Nummer (#ID) in allen Action Cards und im Tasks-Dropdown sichtbar.
+- Deadline-Anzeige rechtsbündig in der Card-Titelzeile (mit Farbcodierung: normal/bald/überfällig).
+- Tasks-Dropdown zeigt jetzt interaktive Action Cards statt read-only Liste.
+- Persona-Avatar neben KI-Nachrichten im Chat (wenn Avatar in Persona hinterlegt).
+
+### Geändert
+
+- Dropdown-Breite auf 360 px erhöht für bessere Lesbarkeit der Action Cards.
+- Buttons kontextabhängig: Bestätigung + Fail (ohne Verifikation) oder Fotoverifikation + Fail (mit Verifikation).
+
+### Behoben
+
+- UTC-Fix: SQLite-naive Datetimes werden vor Serialisierung explizit als UTC markiert – Deadline-Zeiten werden im Browser korrekt in Lokalzeit angezeigt.
+- `deadline_at`-Serialisierung auf `.isoformat()` umgestellt (statt `str()`) für zuverlässiges Browser-Parsing.
+
+---
+
 ## [0.2.0] – 2026-03-13
 
 ### Geändert

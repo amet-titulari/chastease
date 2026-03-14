@@ -2,31 +2,31 @@
 
 ## Entwicklungsphasen
 
-## Stand (Alpha)
+## Stand (v0.2.1, März 2026)
 
-- Implementiert: FastAPI-Grundgeruest, SQLAlchemy-Modelle, Alembic-Migrationen `0001`-`0006`, Session/Contract/Hygiene/Safety/Verification/Chat/Tasks APIs
-- Implementiert: APScheduler-Jobs fuer Task-Overdue-Sweep und proaktive Keyholderin-Reminder
-- Implementiert: WebSocket-Live-Streaming fuer neue Assistant-Nachrichten inkl. proaktiver Reminder
-- Implementiert: Interaktive Web Test Console im Dashboard fuer manuelle End-to-End-Tests
-- Implementiert: Basis-Absicherung fuer Chat-WebSocket per persistentem Session-Token
-- Implementiert: WS-Token-Rotation mit serverseitiger Invalidierung bestehender Verbindungen
-- Implementiert: Optionales Admin-Secret (`X-Admin-Secret`) fuer geschuetzte WS-Token-Rotationsaktionen
-- Implementiert: Optionales Admin-Secret auch fuer sensible Safety-Steueraktionen (Traffic-Light, Emergency-Release)
-- Implementiert: Optionale Admin-Secret-Absicherung fuer Verification-Uploads und zentrale Security-Policy (`docs/SECURITY.md`)
-- Implementiert: Session-Timer-APIs fuer Status/Add/Remove/Freeze/Unfreeze inkl. Dashboard-Testkonsole
-- Implementiert: Timer-Anzeige im Dashboard ueber WebSocket-`timer_tick`-Events
-- Implementiert: Background-Timer-Sweeper (APScheduler) fuer automatisches Session-Ende bei Ablauf
-- Implementiert: Aggregierter Session-Verlauf/Event-Log (`GET /api/sessions/{id}/events`) inkl. Dashboard-Abruf
-- Implementiert: Session-History-Seite (`/history`) mit Filtern und Export (`/events/export`)
-- Implementiert: Vertragsansicht inkl. Addenda und Export (`/contracts`, `/contract/export`)
-- Implementiert: Einheitliches API-Fehlerformat + verbessertes UI-Fehlerfeedback (Dashboard/History/Contracts)
-- Implementiert: Responsive Mobile-Optimierung fuer Dashboard/History/Contracts (Layout + Controls + Breakpoints)
-- Implementiert: Landingpage mit Registrierung/Anmeldung und gefuehrtem Setup-Wizard
-- Implementiert: Profilseite fuer Setup-Verwaltung inkl. "Setup neu starten"
-- Implementiert (v0.1.2): Persona/Scenario-Card-Schema-Endpoints, Prompt-Module, Context-Budgeting, Scenario-Preset im Experience-Setup und Chat-Regenerate
-- Implementiert (v0.1.3): Play Mode als eigenstaendige `/play/{session_id}`-Seite – nach Vertrags-Signatur Weiterleitung, Login mit aktiver Session leitet direkt in Play Mode; experience.html auf reine Onboarding-Flow vereinfacht
-- Teststatus: `71 passed` (lokale automatisierte Tests)
-- Offen: echte KI-Provider-Anbindung, weitergehende Chat-Auth/Identity-Hardening, Browser Push, produktionsnahe UX
+- FastAPI-Backend mit 14 Routern, 16 Services, 20 DB-Modellen
+- Alembic-Migrationen `0001`–`0014`, alle idempotent
+- Session-Lifecycle: Erstellen, Vertrag, Timer, Events, Export (PDF/JSON)
+- KI-Provider: xAI/Grok, OpenRouter, Ollama, Stub – inkl. Action-Normalisierung
+- Modularer System-Prompt (Persona, Wearer, Safety, Session, Style, Scenario)
+- Kontextfenster-Management mit Trunkierung und Zusammenfassung
+- Aufgabensystem: CRUD, Konsequenzen, Psychogramm-Multiplikatoren, Overdue-Sweep
+- Bildverifikation: heuristische + Vision-API-basierte Plomben-Analyse
+- Hygiene-Öffnungen: Kontingente, Countdown, Overrun-Strafen
+- Sicherheitssystem: Ampel (G/Y/R), Safeword, Emergency Release, Safety-Override im Prompt
+- WebSocket: Chat-Stream, proaktive Reminder, Timer-Ticks
+- Voice: OpenAI-Realtime-Audio + TTS
+- Web-UI: Landing, Setup-Wizard, Experience-Onboarding, Play-Modus, Profil, History, Contracts, Personas, Scenarios, Inventory
+- Play-Modus: inline Action Cards (mit Task-Nr., Deadline, kontextabhängige Buttons), Tasks-Dropdown mit interaktiven Cards, Persona-Avatar im Chat
+- Persona-/Scenario-Verwaltung: CRUD, Presets, SillyTavern-Import/Export
+- Inventar: Items, Scenario-Links, Session-Items
+- Media: Avatar-Upload, Content-Serving
+- Browser Push Notifications (Web Push + VAPID)
+- Auth: Register/Login, bcrypt, httpOnly-Cookie, Multi-Device-Support
+- Audit-Logger (opt-in, JSON-Lines)
+- Docker-Deployment (Dockerfile + docker-compose)
+- Teststatus: 31 Testmodule (lokale automatisierte Tests)
+- Offen: Rollen-/Identity-Konzept, Rate-Limits, Aufgaben-Bibliothek, Gamification
 
 ---
 
