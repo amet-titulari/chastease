@@ -74,6 +74,57 @@ def _normalize_create_task_action(raw: dict) -> dict | None:
     return normalized
 
 
+def _normalize_update_task_action(raw: dict) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+
+    try:
+        task_id = int(raw.get("task_id"))
+    except (TypeError, ValueError):
+        return None
+    if task_id <= 0:
+        return None
+
+    normalized: dict = {
+        "type": "update_task",
+        "task_id": task_id,
+    }
+
+    title = raw.get("title")
+    if title is not None:
+        title_text = str(title).strip()
+        if title_text:
+            normalized["title"] = title_text[:200]
+
+    description = raw.get("description")
+    if description is not None:
+        description_text = str(description).strip()
+        if description_text:
+            normalized["description"] = description_text[:2000]
+
+    deadline_minutes = raw.get("deadline_minutes")
+    if deadline_minutes is None:
+        normalized["deadline_minutes"] = None
+    elif isinstance(deadline_minutes, int):
+        normalized["deadline_minutes"] = deadline_minutes if deadline_minutes > 0 else None
+    else:
+        try:
+            coerced = int(deadline_minutes)
+            normalized["deadline_minutes"] = coerced if coerced > 0 else None
+        except Exception:
+            normalized["deadline_minutes"] = None
+
+    # Avoid no-op updates: require at least one mutable field.
+    if (
+        "title" not in normalized
+        and "description" not in normalized
+        and "deadline_minutes" not in normalized
+    ):
+        return None
+
+    return normalized
+
+
 def normalize_actions(raw_actions) -> list[dict]:
     if not isinstance(raw_actions, list):
         return []
@@ -84,6 +135,10 @@ def normalize_actions(raw_actions) -> list[dict]:
             continue
         if item.get("type") == "create_task":
             parsed = _normalize_create_task_action(item)
+            if parsed is not None:
+                normalized.append(parsed)
+        elif item.get("type") == "update_task":
+            parsed = _normalize_update_task_action(item)
             if parsed is not None:
                 normalized.append(parsed)
         elif item.get("type") == "fail_task":
@@ -276,14 +331,18 @@ class OllamaGateway(AIGateway):
         prompt = (
             "Antworte als Keyholderin auf Deutsch und nutze strukturiertes JSON mit den Feldern "
             "message, actions, mood, intensity. "
-            "actions ist eine Liste und darf Action-Objekte vom Typ create_task oder fail_task enthalten. "
+            "actions ist eine Liste und darf Action-Objekte vom Typ create_task, update_task oder fail_task enthalten. "
             "WICHTIG: Jede Aufgabe/Anweisung MUSS als create_task eingetragen werden. "
+            "Wenn der Wearer explizit eine bestehende Aufgabe aendern will (z.B. Deadline/Title), "
+            "musst du update_task verwenden und task_id angeben. "
             "Wenn der Wearer eine Aufgabe absichtlich nicht erfuellt oder du sie als fehlgeschlagen wertest, "
             "gib { \"type\": \"fail_task\", \"task_id\": <id> } in actions an. "
             "Schema create_task: type,title,description(optional),"
             "deadline_minutes(PFLICHT: <int> fuer Minuten bis Frist, oder null wenn keine Deadline gewuenscht),"
             "consequence_type(optional),consequence_value(optional),"
             "requires_verification(true wenn Foto-Nachweis noetig),verification_criteria(was auf dem Foto sichtbar sein muss).\n"
+            "Schema update_task: type=update_task,task_id(PFLICHT),title(optional),description(optional),"
+            "deadline_minutes(PFLICHT: <int> fuer Minuten bis Frist, oder null um Deadline zu entfernen).\n"
             f"{image_note}"
             f"persona_name={persona_name}\n"
             f"user_text={user_text}\n"
@@ -406,6 +465,8 @@ class CustomOpenAIGateway(AIGateway):
             "WICHTIG: Jedes Mal wenn du dem Wearer eine Aufgabe, Anweisung oder Übung gibst, "
             "MUSST du diese zwingend als create_task-Action in 'actions' eintragen. "
             "Verlass dich nicht darauf, dass der Wearer danach fragt. "
+            "Wenn der Wearer eine bestehende Aufgabe aendern will (Deadline, Titel, Beschreibung), "
+            "musst du update_task verwenden (niemals nur im Fliesstext behaupten). "
             "Wenn du eine bestehende Aufgabe als fehlgeschlagen wertest (intentional fail), "
             "trage { \"type\": \"fail_task\", \"task_id\": <id> } in 'actions' ein. "
             "Schema create_task:\n"
@@ -414,6 +475,9 @@ class CustomOpenAIGateway(AIGateway):
             "\"consequence_type\": \"lock_extension_seconds\", \"consequence_value\": <int>,\n"
             "  \"requires_verification\": <true wenn der Wearer ein Foto als Nachweis schicken soll, sonst false>,\n"
             "  \"verification_criteria\": \"<was auf dem Foto erkennbar sein muss, nur wenn requires_verification=true>\" }\n"
+            "Schema update_task:\n"
+            "{ \"type\": \"update_task\", \"task_id\": <id>, \"title\": \"...\", \"description\": \"...\", "
+            "\"deadline_minutes\": <PFLICHT: int fuer Minuten bis Frist, oder null zum Entfernen> }\n"
             "Kein Text ausserhalb des JSON-Objekts."
         )
         system_content = (prompt_modules or f"Du bist {persona_name}. Antworte auf Deutsch.") + json_instruction

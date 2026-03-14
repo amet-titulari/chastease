@@ -83,6 +83,25 @@ def _assistant_reply(persona_name: str, user_text: str, safety_mode: str | None,
     return f"{persona_name}: Ich habe dich gehoert. Du sagtest: '{user_text}'. Bleib diszipliniert."
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _fmt_deadline_for_context(value: datetime | None) -> str:
+    utc_value = _as_utc(value)
+    if utc_value is None:
+        return "keine"
+    local_value = utc_value.astimezone()
+    return (
+        f"utc={utc_value.isoformat(timespec='seconds')}; "
+        f"local={local_value.isoformat(timespec='seconds')}"
+    )
+
+
 def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes: bytes | None = None, image_filename: str | None = None) -> Message:
     session_obj = _load_session(db, session_id)
     persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
@@ -150,6 +169,16 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
     )
     context_items, context_summary = build_context_window(context_rows, max_messages=12)
 
+    now_utc = datetime.now(timezone.utc)
+    now_local = now_utc.astimezone()
+    time_context = (
+        "Aktuelle Zeit fuer Deadlines: "
+        f"utc={now_utc.isoformat(timespec='seconds')}; "
+        f"local={now_local.isoformat(timespec='seconds')}; "
+        f"tz_name={now_local.tzname() or 'unknown'}"
+    )
+    context_items = [{"role": "system", "content": time_context, "message_type": "time_context"}] + (context_items or [])
+
     # Inject pending tasks into context so the AI knows IDs for fail_task
     pending_tasks = (
         db.query(Task)
@@ -160,6 +189,7 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
     if pending_tasks:
         tasks_summary = "Offene Tasks: " + "; ".join(
             f"id={t.id} '{t.title}'"
+            + f" (Deadline: {_fmt_deadline_for_context(t.deadline_at)})"
             + (f" (Verifizierung noetig)" if t.requires_verification else "")
             for t in pending_tasks
         )
@@ -251,6 +281,7 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
 
     created_task_ids: list[int] = []
     created_task_details: list[str] = []
+    updated_task_details: list[str] = []
     if reply_text == structured.message:
         for action in structured.actions:
             if not isinstance(action, dict):
@@ -281,6 +312,51 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
                             content=f"Task '{fail_task.title}' als fehlgeschlagen markiert (KI-Entscheidung).",
                             message_type="task_failed",
                         ))
+                continue
+
+            if action.get("type") == "update_task":
+                task_id = action.get("task_id")
+                if not isinstance(task_id, int) or task_id <= 0:
+                    continue
+
+                target_task = db.query(Task).filter(
+                    Task.id == task_id,
+                    Task.session_id == session_id,
+                    Task.status.notin_(["completed", "failed"]),
+                ).first()
+                if not target_task:
+                    continue
+
+                changed_fields: list[str] = []
+
+                if action.get("title") is not None:
+                    next_title = str(action.get("title") or "").strip()[:200]
+                    if next_title and next_title != target_task.title:
+                        target_task.title = next_title
+                        changed_fields.append("title")
+
+                if action.get("description") is not None:
+                    raw_description = str(action.get("description") or "").strip()
+                    next_description = raw_description[:2000] if raw_description else None
+                    if next_description != target_task.description:
+                        target_task.description = next_description
+                        changed_fields.append("description")
+
+                if "deadline_minutes" in action:
+                    deadline_minutes = action.get("deadline_minutes")
+                    if isinstance(deadline_minutes, int) and deadline_minutes > 0:
+                        target_task.deadline_at = datetime.now(timezone.utc) + timedelta(minutes=deadline_minutes)
+                        changed_fields.append(f"deadline(+{deadline_minutes}m)")
+                    else:
+                        target_task.deadline_at = None
+                        changed_fields.append("deadline(null)")
+
+                if changed_fields:
+                    db.add(target_task)
+                    updated_task_details.append(
+                        f"#{target_task.id} '{target_task.title}' ({', '.join(changed_fields)}; "
+                        f"Deadline: {_fmt_deadline_for_context(target_task.deadline_at)})"
+                    )
                 continue
 
             if action.get("type") != "create_task":
@@ -352,6 +428,16 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
                 role="system",
                 content=f"Tasks erstellt: {summary}",
                 message_type="task_assigned",
+            )
+        )
+
+    if updated_task_details:
+        db.add(
+            Message(
+                session_id=session_id,
+                role="system",
+                content=f"Tasks aktualisiert: {'; '.join(updated_task_details)}",
+                message_type="task_updated",
             )
         )
 

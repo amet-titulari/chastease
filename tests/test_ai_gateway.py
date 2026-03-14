@@ -182,3 +182,59 @@ def test_ollama_chat_response_drops_unknown_or_invalid_actions(monkeypatch):
     assert response.actions[0]["title"] == "Task A"
     assert response.actions[0]["deadline_minutes"] == 15
     assert response.intensity == 5
+
+
+def test_ollama_chat_response_normalizes_update_task(monkeypatch):
+    class DummyResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "response": json.dumps(
+                    {
+                        "message": "Task angepasst.",
+                        "actions": [
+                            {
+                                "type": "update_task",
+                                "task_id": "125",
+                                "deadline_minutes": "270",
+                                "title": "Task 125 neu",
+                            }
+                        ],
+                        "mood": "strict",
+                        "intensity": 3,
+                    }
+                )
+            }
+
+    class DummyClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, json):
+            return DummyResponse()
+
+    monkeypatch.setattr(httpx, "Client", DummyClient)
+
+    gateway = OllamaGateway(
+        base_url="http://127.0.0.1:11434",
+        model="llama3.1",
+        timeout_seconds=5,
+    )
+    response = gateway.generate_chat_response(
+        persona_name="Persona",
+        user_text="Bitte passe Task 125 auf 270 Minuten an",
+    )
+    assert len(response.actions) == 1
+    action = response.actions[0]
+    assert action["type"] == "update_task"
+    assert action["task_id"] == 125
+    assert action["deadline_minutes"] == 270
+    assert action["title"] == "Task 125 neu"

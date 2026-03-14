@@ -1,7 +1,10 @@
 from fastapi.testclient import TestClient
 
 from app.config import settings
+from app.database import SessionLocal
 from app.main import app
+from app.models.message import Message
+from app.models.task import Task
 from app.services.transcription_service import TranscriptionResult
 
 
@@ -161,3 +164,69 @@ def test_chat_media_message_with_audio_transcription(monkeypatch):
         assert payload["message_type"] == "chat_audio"
         assert payload["transcription_status"] == "ok"
         assert payload["transcript"] == "Das ist ein Testtranskript."
+
+
+def test_chat_update_task_action_updates_deadline(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            return AIResponse(
+                message="Deadline wurde angepasst.",
+                actions=[{"type": "update_task", "task_id": 0, "deadline_minutes": 270}],
+                mood="strict",
+                intensity=3,
+            )
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        create_task_resp = client.post(
+            f"/api/sessions/{session_id}/tasks",
+            json={
+                "title": "Task fuer Deadline-Update",
+                "description": "Test",
+                "deadline_minutes": 30,
+            },
+        )
+        assert create_task_resp.status_code == 200
+        task_id = create_task_resp.json()["task_id"]
+
+        def _fake_get_ai_gateway(session_obj):
+            _ = session_obj
+            ai = _DummyAI()
+            ai_response = ai.generate_chat_response
+
+            def _wrapped_generate_chat_response(**kwargs):
+                result = ai_response(**kwargs)
+                result.actions[0]["task_id"] = task_id
+                return result
+
+            ai.generate_chat_response = _wrapped_generate_chat_response
+            return ai
+
+        monkeypatch.setattr("app.routers.chat.get_ai_gateway", _fake_get_ai_gateway)
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Setze bitte die Deadline auf 09:00."},
+        )
+        assert send_resp.status_code == 200
+
+        db = SessionLocal()
+        try:
+            task = db.query(Task).filter(Task.id == task_id).first()
+            assert task is not None
+            assert task.deadline_at is not None
+
+            task_updated_msg = (
+                db.query(Message)
+                .filter(Message.session_id == session_id, Message.message_type == "task_updated")
+                .order_by(Message.id.desc())
+                .first()
+            )
+            assert task_updated_msg is not None
+            assert f"#{task_id}" in task_updated_msg.content
+            assert "deadline(+270m)" in task_updated_msg.content
+        finally:
+            db.close()
