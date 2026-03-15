@@ -400,7 +400,6 @@ const transitionWrapEl = document.getElementById("gm-transition-wrap");
 const maxMissesWrapEl = document.getElementById("gm-max-misses-wrap");
 const sessionPenaltyLabelTextEl = document.getElementById("gm-session-penalty-label-text");
 const cameraGuidanceEl = document.getElementById("gm-camera-guidance");
-const beepControlsWrapEl = document.querySelector("label.volume-wrap");
 
 function setStatus(msg, warn = false) {
   statusEl.textContent = msg || "";
@@ -431,7 +430,6 @@ function getAudioContext() {
 }
 
 function beep() {
-  if (isSinglePoseModule) return;
   const ctx = getAudioContext();
   if (!ctx) return;
   if (ctx.state === "suspended") {
@@ -449,7 +447,6 @@ function beep() {
 }
 
 function beepDouble() {
-  if (isSinglePoseModule) return;
   beep();
   window.setTimeout(() => beep(), 180);
 }
@@ -465,13 +462,6 @@ function applyBeepVolume(percentValue, persist = true) {
 }
 
 function initializeBeepVolume() {
-  if (isSinglePoseModule) {
-    beepVolume = 0;
-    if (beepControlsWrapEl) {
-      beepControlsWrapEl.classList.add("hidden");
-    }
-    return;
-  }
   const stored = window.localStorage.getItem("game_beep_volume_percent");
   const initialPercent = stored !== null ? Number(stored) : Number(beepVolumeEl.value || 35);
   applyBeepVolume(initialPercent, false);
@@ -685,7 +675,7 @@ function countdownPhase({
     if (onTick) {
       onTick(seconds);
     }
-    if (!isSinglePoseModule && seconds > 0 && seconds <= 5) {
+    if (seconds > 0 && seconds <= 5) {
       beep();
     }
     updatePhase(label, String(seconds));
@@ -703,7 +693,8 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
   const token = sequenceToken;
   sequenceStepId = step.id;
   const budget = Math.max(0, Number(runRemainingSeconds || 0));
-  const transition = Math.max(0, Math.min(Number(transitionSeconds || 0), budget));
+  const configuredTransition = Math.max(0, Math.min(Number(transitionSeconds || 0), budget));
+  const transition = isSinglePoseModule ? Math.min(5, budget) : configuredTransition;
   const holdBudget = Math.max(0, budget - transition);
   const holdSeconds = Math.max(0, Math.min(Number(step.target_seconds || 0), holdBudget));
   const sampleWindowStart = 2;
