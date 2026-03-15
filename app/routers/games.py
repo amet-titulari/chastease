@@ -93,6 +93,15 @@ class PostureTemplateUpdateRequest(BaseModel):
     allowed_module_keys: list[str] | None = None
 
 
+class PostureMatrixItemUpdateRequest(BaseModel):
+    posture_id: int = Field(ge=1)
+    allowed_module_keys: list[str] = Field(default_factory=list)
+
+
+class PostureMatrixBulkUpdateRequest(BaseModel):
+    items: list[PostureMatrixItemUpdateRequest] = Field(default_factory=list)
+
+
 def _load_session(db: Session, session_id: int) -> SessionModel:
     session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session_obj:
@@ -714,6 +723,55 @@ def list_module_postures(module_key: str, db: Session = Depends(get_db)) -> dict
         )
         items.append(_template_payload(row, allowed_module_keys=allowed))
     return {"items": items}
+
+
+@router.get("/postures/matrix")
+def list_posture_matrix(db: Session = Depends(get_db)) -> dict:
+    modules = [as_public_module_payload(module) for module in list_modules()]
+    rows = (
+        db.query(GamePostureTemplate)
+        .order_by(GamePostureTemplate.module_key.asc(), GamePostureTemplate.sort_order.asc(), GamePostureTemplate.id.asc())
+        .all()
+    )
+    allowed_map = _load_allowed_module_map(db, [int(row.id) for row in rows])
+    items = []
+    for row in rows:
+        allowed = sorted(
+            allowed_map.get(int(row.id))
+            or _default_allowed_module_keys_for_pool(_posture_pool_module_key(row.module_key))
+        )
+        items.append(_template_payload(row, allowed_module_keys=allowed))
+    return {"modules": modules, "items": items}
+
+
+@router.put("/postures/matrix")
+def update_posture_matrix(payload: PostureMatrixBulkUpdateRequest, db: Session = Depends(get_db)) -> dict:
+    if not payload.items:
+        return {"updated": 0, "requested": 0, "skipped": 0}
+
+    posture_ids = sorted({int(item.posture_id) for item in payload.items})
+    templates = (
+        db.query(GamePostureTemplate)
+        .filter(GamePostureTemplate.id.in_(posture_ids))
+        .all()
+    )
+    template_by_id = {int(item.id): item for item in templates}
+
+    updated = 0
+    skipped = 0
+    for item in payload.items:
+        template = template_by_id.get(int(item.posture_id))
+        if template is None:
+            skipped += 1
+            continue
+
+        pool_key = _posture_pool_module_key(template.module_key)
+        allowed = _normalize_allowed_module_keys(item.allowed_module_keys, pool_key)
+        _set_allowed_module_keys(db, int(template.id), allowed)
+        updated += 1
+
+    db.commit()
+    return {"updated": updated, "requested": len(payload.items), "skipped": skipped}
 
 
 @router.post("/modules/{module_key}/postures/upload-image")

@@ -8,6 +8,7 @@ def test_history_page_and_script_are_served():
         page = client.get("/history")
         assert page.status_code == 200
         assert "Session History" in page.text
+        assert "Admin Navigation" in page.text
         assert "history-load-btn" in page.text
 
         script = client.get("/static/js/history.js")

@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+  .mx-shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    gap: 0.9rem;
+  }
+  .mx-head {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    padding: 0.85rem;
+    background: linear-gradient(150deg, rgba(15, 37, 62, 0.82), rgba(8, 12, 24, 0.82));
+    display: grid;
+    gap: 0.45rem;
+  }
+  .mx-head h2 { margin: 0; color: #ecf5ff; }
+  .mx-note { margin: 0; color: #a8bfd7; }
+  .mx-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+  .mx-table-wrap {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    overflow: auto;
+    background: rgba(9, 16, 29, 0.82);
+  }
+  table.mx-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 760px;
+  }
+  .mx-table th,
+  .mx-table td {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.5rem 0.55rem;
+    text-align: left;
+    vertical-align: middle;
+  }
+  .mx-table th {
+    background: rgba(24, 50, 79, 0.45);
+    color: #dff0ff;
+    font-size: 0.82rem;
+    letter-spacing: 0.03em;
+  }
+  .mx-table td {
+    color: #c7dbef;
+    font-size: 0.84rem;
+  }
+  .mx-key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; color: #9db7d2; }
+  .mx-title { color: #eff7ff; font-weight: 700; }
+  .mx-active { color: #9fe0bd; }
+  .mx-inactive { color: #ffb8b8; }
+  .mx-check {
+    width: 18px;
+    height: 18px;
+    accent-color: #57b1ff;
+  }
+  .mx-status { margin: 0; color: #a5bfd7; font-size: 0.84rem; }
+  .warn { color: #ffb3b3; }
+  .ok { color: #9ce2bb; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set admin_section = "posture_matrix" %}
+{% include "_admin_subnav.html" %}
+<section class="mx-shell">
+  <section class="mx-head">
+    <h2>Posture Matrix</h2>
+    <p class="mx-note">Zentrale Zuordnung: Welche Posture ist in welchem Spielmodul verfuegbar.</p>
+    <div class="mx-actions">
+      <a href="/admin">Zurueck zum Admin Center</a>
+      <a href="/games/postures?module_key=posture_training">Posture Library Details</a>
+      <button type="button" id="mx-save">Matrix speichern</button>
+      <button type="button" id="mx-reload" class="ghost">Neu laden</button>
+    </div>
+    <p id="mx-status" class="mx-status"></p>
+  </section>
+
+  <section class="mx-table-wrap">
+    <table class="mx-table" id="mx-table">
+      <thead id="mx-head-row"></thead>
+      <tbody id="mx-body"></tbody>
+    </table>
+  </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let modules = [];
+let items = [];
+
+const statusEl = document.getElementById("mx-status");
+const headEl = document.getElementById("mx-head-row");
+const bodyEl = document.getElementById("mx-body");
+
+function setStatus(msg, warn = false) {
+  statusEl.textContent = msg || "";
+  statusEl.className = warn ? "mx-status warn" : "mx-status";
+}
+
+function esc(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+async function api(url, options = {}) {
+  const res = await fetch(url, options);
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.detail || res.statusText || "Fehler");
+  return payload;
+}
+
+function renderTable() {
+  const headerCells = ["<tr><th>Titel</th><th>Key</th><th>Aktiv</th>"];
+  for (const mod of modules) {
+    headerCells.push(`<th>${esc(mod.title || mod.key)}</th>`);
+  }
+  headerCells.push("</tr>");
+  headEl.innerHTML = headerCells.join("");
+
+  bodyEl.innerHTML = items.map((item) => {
+    const allowed = new Set(Array.isArray(item.allowed_module_keys) ? item.allowed_module_keys : []);
+    const checks = modules.map((mod) => {
+      const checked = allowed.has(mod.key) ? "checked" : "";
+      return `<td><input class=\"mx-check\" type=\"checkbox\" data-posture-id=\"${item.id}\" data-module-key=\"${esc(mod.key)}\" ${checked} /></td>`;
+    }).join("");
+
+    return `
+      <tr data-posture-id="${item.id}">
+        <td><span class="mx-title">${esc(item.title)}</span></td>
+        <td><span class="mx-key">${esc(item.posture_key)}</span></td>
+        <td><span class="${item.is_active ? "mx-active" : "mx-inactive"}">${item.is_active ? "Ja" : "Nein"}</span></td>
+        ${checks}
+      </tr>
+    `;
+  }).join("");
+}
+
+async function loadMatrix() {
+  setStatus("Matrix wird geladen...");
+  const data = await api("/api/games/postures/matrix");
+  modules = Array.isArray(data.modules) ? data.modules : [];
+  items = Array.isArray(data.items) ? data.items : [];
+  renderTable();
+  setStatus(`Matrix geladen: ${items.length} Postures, ${modules.length} Module.`);
+}
+
+function collectPayload() {
+  const result = [];
+  for (const row of bodyEl.querySelectorAll("tr[data-posture-id]")) {
+    const postureId = Number(row.dataset.postureId || 0);
+    if (!postureId) continue;
+    const allowed = [...row.querySelectorAll(".mx-check:checked")].map((el) => el.dataset.moduleKey).filter(Boolean);
+    result.push({ posture_id: postureId, allowed_module_keys: allowed });
+  }
+  return result;
+}
+
+async function saveMatrix() {
+  const payload = { items: collectPayload() };
+  try {
+    const result = await api("/api/games/postures/matrix", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    setStatus(`Gespeichert: ${result.updated || 0} aktualisiert, ${result.skipped || 0} uebersprungen.`);
+  } catch (err) {
+    setStatus(`Speichern fehlgeschlagen: ${err.message}`, true);
+  }
+}
+
+document.getElementById("mx-save").addEventListener("click", saveMatrix);
+document.getElementById("mx-reload").addEventListener("click", () => {
+  loadMatrix().catch((err) => setStatus(`Laden fehlgeschlagen: ${err.message}`, true));
+});
+
+loadMatrix().catch((err) => setStatus(`Laden fehlgeschlagen: ${err.message}`, true));
+</script>
+{% endblock %}

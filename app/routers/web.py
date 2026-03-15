@@ -15,12 +15,14 @@ from app.config import settings
 from app.database import get_db
 from app.models.auth_user import AuthUser
 from app.models.contract import Contract
+from app.models.item import Item
 from app.models.game_posture_template import GamePostureTemplate
 from app.models.game_run import GameRun
 from app.models.hygiene_opening import HygieneOpening
 from app.models.llm_profile import LlmProfile
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
+from app.models.scenario import Scenario
 from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
 from app.models.task import Task
@@ -1473,6 +1475,106 @@ def games_page(request: Request, db: Session = Depends(get_db)):
             "current_user": user,
             "modules": modules,
             "current_session": current_session_payload,
+        },
+    )
+
+
+@router.get("/admin", response_class=HTMLResponse)
+def admin_page(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+
+    modules = [as_public_module_payload(module) for module in list_modules()]
+
+    current_session = None
+    if user.active_session_id:
+        current_session = db.query(SessionModel).filter(SessionModel.id == user.active_session_id).first()
+
+    counts = {
+        "personas": int(db.query(func.count(Persona.id)).scalar() or 0),
+        "scenarios": int(db.query(func.count(Scenario.id)).scalar() or 0),
+        "inventory_items": int(db.query(func.count(Item.id)).scalar() or 0),
+        "postures": int(db.query(func.count(GamePostureTemplate.id)).scalar() or 0),
+        "game_modules": len(modules),
+        "game_runs": int(db.query(func.count(GameRun.id)).scalar() or 0),
+        "active_sessions": int(db.query(func.count(SessionModel.id)).filter(SessionModel.status == "active").scalar() or 0),
+    }
+
+    admin_sections = [
+        {
+            "title": "Personas",
+            "summary": "Charaktere, Sprachstil und Verhalten zentral pflegen.",
+            "href": "/personas",
+            "count": counts["personas"],
+            "count_label": "Eintraege",
+        },
+        {
+            "title": "Scenarios",
+            "summary": "Szenarien, Phasen und Lorebook-Inhalte verwalten.",
+            "href": "/scenarios",
+            "count": counts["scenarios"],
+            "count_label": "Eintraege",
+        },
+        {
+            "title": "Inventar",
+            "summary": "Items, Kategorien und Verfuegbarkeit steuern.",
+            "href": "/inventory",
+            "count": counts["inventory_items"],
+            "count_label": "Items",
+        },
+        {
+            "title": "Games",
+            "summary": "Spielmodule, Konfigurationen und Run-Flow ueberblicken.",
+            "href": "/games",
+            "count": counts["game_modules"],
+            "count_label": "Module",
+        },
+        {
+            "title": "Posture Library",
+            "summary": "Gemeinsamer Pool fuer alle Spiele inkl. Modul-Freigaben.",
+            "href": "/games/postures?module_key=posture_training",
+            "secondary_href": "/admin/postures/matrix",
+            "secondary_label": "Matrix",
+            "count": counts["postures"],
+            "count_label": "Postures",
+        },
+        {
+            "title": "Vertraege & Historie",
+            "summary": "Vertragsansicht, Addenda und Session-Historie.",
+            "href": "/contracts",
+            "secondary_href": "/history",
+            "secondary_label": "Historie",
+            "count": counts["active_sessions"],
+            "count_label": "Aktive Sessions",
+        },
+    ]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin.html",
+        context={
+            "title": f"{settings.app_name} - Admin",
+            "current_user": user,
+            "sections": admin_sections,
+            "counts": counts,
+            "current_session": current_session,
+        },
+    )
+
+
+@router.get("/admin/postures/matrix", response_class=HTMLResponse)
+def admin_posture_matrix_page(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_posture_matrix.html",
+        context={
+            "title": f"{settings.app_name} - Posture Matrix",
+            "current_user": user,
         },
     )
 

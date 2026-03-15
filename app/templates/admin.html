@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+  .admin-shell {
+    max-width: 1120px;
+    margin: 0 auto;
+    display: grid;
+    gap: 0.95rem;
+  }
+  .admin-hero {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 16px;
+    padding: 1rem;
+    background:
+      radial-gradient(circle at 12% 15%, rgba(88, 180, 255, 0.2), transparent 45%),
+      linear-gradient(140deg, rgba(7, 26, 48, 0.86), rgba(8, 12, 22, 0.86));
+    display: grid;
+    gap: 0.5rem;
+  }
+  .admin-hero h2 {
+    margin: 0;
+    font-size: 1.6rem;
+    color: #eef6ff;
+    letter-spacing: 0.01em;
+  }
+  .admin-note {
+    margin: 0;
+    color: #b2c4d8;
+    font-size: 0.95rem;
+  }
+  .admin-metrics {
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  }
+  .metric {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 0.55rem 0.65rem;
+    background: rgba(255, 255, 255, 0.04);
+    display: grid;
+    gap: 0.1rem;
+  }
+  .metric strong {
+    color: #e8f2ff;
+    font-size: 1.15rem;
+    line-height: 1.1;
+  }
+  .metric span {
+    color: #9db5cb;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .admin-grid {
+    display: grid;
+    gap: 0.8rem;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+  .admin-card {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    padding: 0.85rem;
+    background: linear-gradient(155deg, rgba(19, 38, 62, 0.72), rgba(9, 15, 27, 0.7));
+    display: grid;
+    gap: 0.55rem;
+    align-content: start;
+  }
+  .admin-card h3 {
+    margin: 0;
+    color: #e8f2ff;
+    font-size: 1.06rem;
+  }
+  .admin-card p {
+    margin: 0;
+    color: #aac0d7;
+    font-size: 0.88rem;
+  }
+  .admin-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    border: 1px solid rgba(148, 205, 255, 0.45);
+    background: rgba(92, 156, 218, 0.2);
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    color: #e7f3ff;
+    font-size: 0.74rem;
+    letter-spacing: 0.04em;
+  }
+  .admin-actions {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+  .admin-link {
+    text-decoration: none;
+    border: 1px solid rgba(156, 204, 255, 0.45);
+    background: rgba(78, 132, 186, 0.35);
+    color: #f1f8ff;
+    padding: 0.45rem 0.7rem;
+    border-radius: 9px;
+    font-weight: 700;
+    font-size: 0.82rem;
+  }
+  .admin-link.secondary {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.06);
+  }
+  @media (max-width: 760px) {
+    .admin-hero h2 { font-size: 1.35rem; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set admin_section = "overview" %}
+{% include "_admin_subnav.html" %}
+<section class="admin-shell">
+  <section class="admin-hero">
+    <h2>Admin Center</h2>
+    <p class="admin-note">Zentrale Verwaltung fuer Personas, Scenarios, Inventar, Games und die gemeinsame Posture Library.</p>
+    {% if current_session %}
+      <p class="admin-note">Aktive Session: #{{ current_session.id }} · {{ current_session.status }}</p>
+    {% endif %}
+    <div class="admin-metrics">
+      <div class="metric"><strong>{{ counts.personas }}</strong><span>Personas</span></div>
+      <div class="metric"><strong>{{ counts.scenarios }}</strong><span>Scenarios</span></div>
+      <div class="metric"><strong>{{ counts.inventory_items }}</strong><span>Inventar</span></div>
+      <div class="metric"><strong>{{ counts.postures }}</strong><span>Postures</span></div>
+      <div class="metric"><strong>{{ counts.game_modules }}</strong><span>Module</span></div>
+      <div class="metric"><strong>{{ counts.active_sessions }}</strong><span>Aktiv</span></div>
+    </div>
+  </section>
+
+  <section class="admin-grid">
+    {% for section in sections %}
+      <article class="admin-card">
+        <h3>{{ section.title }}</h3>
+        <p>{{ section.summary }}</p>
+        <span class="admin-badge">{{ section.count }} {{ section.count_label }}</span>
+        <div class="admin-actions">
+          <a class="admin-link" href="{{ section.href }}">Oeffnen</a>
+          {% if section.secondary_href %}
+            <a class="admin-link secondary" href="{{ section.secondary_href }}">{{ section.secondary_label }}</a>
+          {% endif %}
+        </div>
+      </article>
+    {% endfor %}
+  </section>
+</section>
+{% endblock %}

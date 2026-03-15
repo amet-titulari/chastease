@@ -233,6 +233,7 @@ def test_games_page_renders_game_cards_and_current_session_entrypoint():
         assert "Posture Training" in html
         assert "Spiel oeffnen" in html
         assert "Postures verwalten" in html
+        assert "Admin Navigation" in html
         assert "/game/" in html
 
 
@@ -246,6 +247,35 @@ def test_games_postures_management_page_renders():
         assert "Postures verwalten" in html
         assert "ZIP importieren (ersetzt alle)" in html
         assert "Alle Postures als ZIP exportieren" in html
+
+
+def test_admin_center_page_renders():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        resp = client.get("/admin")
+        assert resp.status_code == 200
+        html = resp.text
+        assert "Admin Center" in html
+        assert "Admin Navigation" in html
+        assert "Posture Library" in html
+        assert "/admin/postures/matrix" in html
+        assert "Personas" in html
+        assert "Scenarios" in html
+        assert "Inventar" in html
+
+
+def test_admin_posture_matrix_page_renders():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        resp = client.get("/admin/postures/matrix")
+        assert resp.status_code == 200
+        html = resp.text
+        assert "Posture Matrix" in html
+        assert "Admin Navigation" in html
+        assert "Matrix speichern" in html
+        assert "/api/games/postures/matrix" in html
 
 
 def test_game_page_prefills_setup_from_latest_run_values():

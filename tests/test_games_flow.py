@@ -104,6 +104,47 @@ def test_posture_allowed_module_keys_roundtrip():
         assert updated["allowed_module_keys"] == ["dont_move"]
 
 
+def test_posture_matrix_bulk_update_endpoint():
+    with TestClient(app) as client:
+        posture_key = f"test_matrix_bulk_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "Matrix Bulk",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "Matrix update.",
+                "target_seconds": 80,
+                "sort_order": 4,
+                "is_active": True,
+                "allowed_module_keys": ["posture_training"],
+            },
+        )
+        assert create_resp.status_code == 200
+        posture_id = int(create_resp.json()["id"])
+
+        update_resp = client.put(
+            "/api/games/postures/matrix",
+            json={
+                "items": [
+                    {
+                        "posture_id": posture_id,
+                        "allowed_module_keys": ["posture_training", "dont_move"],
+                    }
+                ]
+            },
+        )
+        assert update_resp.status_code == 200
+        assert int(update_resp.json().get("updated", 0)) >= 1
+
+        matrix_resp = client.get("/api/games/postures/matrix")
+        assert matrix_resp.status_code == 200
+        matrix_items = matrix_resp.json().get("items") or []
+        target = next((item for item in matrix_items if int(item.get("id", 0)) == posture_id), None)
+        assert target is not None
+        assert sorted(target.get("allowed_module_keys") or []) == ["dont_move", "posture_training"]
+
+
 def test_dont_move_rejects_posture_not_allowed_for_module():
     with TestClient(app) as client:
         posture_key = f"test_pt_only_pose_{uuid4().hex[:8]}"
