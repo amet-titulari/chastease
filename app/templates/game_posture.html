@@ -159,6 +159,17 @@
     background: rgba(255, 255, 255, 0.03);
     min-height: 82px;
   }
+  .camera-feed-wrap {
+    position: relative;
+    width: 100%;
+  }
+  .motion-overlay-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
   .verify-thumb {
     width: 108px;
     height: 72px;
@@ -330,7 +341,10 @@
           <div id="gm-total-timer" class="game-timer">--:--</div>
         </div>
       </div>
-      <video id="gm-video" class="camera-video" autoplay muted playsinline></video>
+      <div id="gm-feed-wrap" class="camera-feed-wrap">
+        <video id="gm-video" class="camera-video" autoplay muted playsinline></video>
+        <canvas id="gm-motion-overlay" class="motion-overlay-canvas"></canvas>
+      </div>
       <div class="verify-preview">
         <img id="gm-verify-thumb" class="verify-thumb" alt="Letztes Pruefungsbild" style="display:none;" />
       </div>
@@ -344,6 +358,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.js"></script>
 <script>
 const sessionId = {{ session_id }};
 const moduleKey = {{ module_key | tojson }};
@@ -359,6 +374,18 @@ let totalTimerHandle = null;
 let phaseTimerHandle = null;
 let runPollHandle = null;
 let dontMoveMonitorHandle = null;
+let movementPose = null;
+let movementFileset = null;
+let movementPoseReady = false;
+let movementPoseBusy = false;
+let movementLatestPoseLandmarks = null;
+let movementLatestWorldLandmarks = null;
+let movementLastWorldLandmarks = null;
+let movementTargetWorldLandmarks = null;
+let movementStrikeCount = 0;
+let movementCooldownUntil = 0;
+let movementRedFlashUntil = 0;
+let movementEventInFlight = false;
 let sequenceToken = 0;
 let sequenceStepId = null;
 let verifyInFlight = false;
@@ -389,6 +416,8 @@ const captureGalleryEl = document.getElementById("gm-capture-gallery");
 const finalReportEl = document.getElementById("gm-final-report");
 const setupVideoEl = document.getElementById("gm-setup-video");
 const playVideoEl = document.getElementById("gm-video");
+const feedWrapEl = document.getElementById("gm-feed-wrap");
+const motionOverlayEl = document.getElementById("gm-motion-overlay");
 const beepVolumeEl = document.getElementById("gm-beep-volume");
 const beepVolumeValueEl = document.getElementById("gm-beep-volume-value");
 const testBeepEl = document.getElementById("gm-test-beep");
@@ -400,6 +429,21 @@ const transitionWrapEl = document.getElementById("gm-transition-wrap");
 const maxMissesWrapEl = document.getElementById("gm-max-misses-wrap");
 const sessionPenaltyLabelTextEl = document.getElementById("gm-session-penalty-label-text");
 const cameraGuidanceEl = document.getElementById("gm-camera-guidance");
+
+const movementWatchIndices = [27, 28, 29, 30, 31, 32, 25, 26];
+const movementPoseCompareIndices = [11, 12, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+const movementDefaults = {
+  dont_move: {
+    easy: { poseDeviation: 0.16, stillness: 0.008 },
+    medium: { poseDeviation: 0.13, stillness: 0.006 },
+    hard: { poseDeviation: 0.10, stillness: 0.004 },
+  },
+  tiptoeing: {
+    easy: { poseDeviation: 0.14, stillness: 0.007 },
+    medium: { poseDeviation: 0.11, stillness: 0.005 },
+    hard: { poseDeviation: 0.08, stillness: 0.0035 },
+  },
+};
 
 function setStatus(msg, warn = false) {
   statusEl.textContent = msg || "";
@@ -465,6 +509,327 @@ function initializeBeepVolume() {
   const stored = window.localStorage.getItem("game_beep_volume_percent");
   const initialPercent = stored !== null ? Number(stored) : Number(beepVolumeEl.value || 35);
   applyBeepVolume(initialPercent, false);
+}
+
+function syncMotionOverlaySize() {
+  if (!motionOverlayEl || !feedWrapEl) return;
+  const rect = feedWrapEl.getBoundingClientRect();
+  motionOverlayEl.width = Math.max(1, Math.floor(rect.width));
+  motionOverlayEl.height = Math.max(1, Math.floor(rect.height));
+}
+
+function drawMotionOverlay(marker = null, forceAlert = false) {
+  if (!motionOverlayEl || !isSinglePoseModule) return;
+  const ctx = motionOverlayEl.getContext("2d");
+  if (!ctx) return;
+  const w = motionOverlayEl.width;
+  const h = motionOverlayEl.height;
+  if (!w || !h) return;
+
+  ctx.clearRect(0, 0, w, h);
+  const isAlert = forceAlert || Date.now() < movementRedFlashUntil;
+  const stroke = isAlert ? "rgba(255, 72, 72, 0.96)" : "rgba(56, 221, 112, 0.96)";
+  const fill = isAlert ? "rgba(255, 72, 72, 0.08)" : "rgba(56, 221, 112, 0.06)";
+
+  ctx.lineWidth = Math.max(4, Math.floor(Math.min(w, h) * 0.012));
+  ctx.strokeStyle = stroke;
+  ctx.fillStyle = fill;
+  ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth);
+  ctx.fillRect(ctx.lineWidth, ctx.lineWidth, w - (2 * ctx.lineWidth), h - (2 * ctx.lineWidth));
+
+  if (marker && Number.isFinite(marker.x) && Number.isFinite(marker.y)) {
+    const mx = Math.max(0, Math.min(w, marker.x * w));
+    const my = Math.max(0, Math.min(h, marker.y * h));
+    const r = Math.max(10, Math.floor(Math.min(w, h) * 0.03));
+    ctx.beginPath();
+    ctx.arc(mx, my, r, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255, 64, 64, 0.98)";
+    ctx.lineWidth = Math.max(3, Math.floor(Math.min(w, h) * 0.006));
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(mx - r - 8, my);
+    ctx.lineTo(mx + r + 8, my);
+    ctx.moveTo(mx, my - r - 8);
+    ctx.lineTo(mx, my + r + 8);
+    ctx.stroke();
+  }
+}
+
+function activeDifficultyKey() {
+  return String((activeRun && activeRun.difficulty) || document.getElementById("gm-difficulty").value || "medium");
+}
+
+function movementProfile() {
+  const moduleProfile = movementDefaults[moduleKey] || movementDefaults.dont_move;
+  const diff = activeDifficultyKey();
+  return moduleProfile[diff] || moduleProfile.medium;
+}
+
+function copyLandmarks(landmarks) {
+  if (!Array.isArray(landmarks)) return null;
+  return landmarks.map((item) => ({
+    x: Number(item?.x || 0),
+    y: Number(item?.y || 0),
+    z: Number(item?.z || 0),
+    visibility: Number(item?.visibility ?? 1),
+  }));
+}
+
+function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
+  if (!Array.isArray(worldLandmarks) || worldLandmarks.length === 0) return null;
+  if (!movementTargetWorldLandmarks) {
+    movementTargetWorldLandmarks = copyLandmarks(worldLandmarks);
+  }
+  if (!movementLastWorldLandmarks) {
+    movementLastWorldLandmarks = copyLandmarks(worldLandmarks);
+    return null;
+  }
+
+  const profile = movementProfile();
+  let maxMovement = 0;
+  let poseDeviation = 0;
+  let poseVisiblePoints = 0;
+  let marker = null;
+
+  for (const idx of movementWatchIndices) {
+    const cur = worldLandmarks[idx];
+    const prev = movementLastWorldLandmarks[idx];
+    if (!cur || !prev) continue;
+    if (Number(cur.visibility || 0) < 0.45 || Number(prev.visibility || 0) < 0.45) continue;
+
+    const dx = Number(cur.x || 0) - Number(prev.x || 0);
+    const dy = Number(cur.y || 0) - Number(prev.y || 0);
+    const dz = Number(cur.z || 0) - Number(prev.z || 0);
+    const weight = (idx === 29 || idx === 30) ? 1.35 : 1.0;
+    const delta = Math.hypot(dx, dy, dz) * weight;
+    if (delta > maxMovement) {
+      maxMovement = delta;
+      const markerSource = Array.isArray(poseLandmarks) ? poseLandmarks[idx] : null;
+      if (markerSource) {
+        marker = { x: Number(markerSource.x || 0), y: Number(markerSource.y || 0) };
+      }
+    }
+  }
+
+  for (const idx of movementPoseCompareIndices) {
+    const cur = worldLandmarks[idx];
+    const target = movementTargetWorldLandmarks[idx];
+    if (!cur || !target) continue;
+    if (Number(cur.visibility || 0) < 0.55 || Number(target.visibility || 0) < 0.55) continue;
+    const dx = Number(cur.x || 0) - Number(target.x || 0);
+    const dy = Number(cur.y || 0) - Number(target.y || 0);
+    const dz = Number(cur.z || 0) - Number(target.z || 0);
+    poseDeviation += Math.hypot(dx, dy, dz);
+    poseVisiblePoints += 1;
+  }
+
+  const avgPoseDeviation = poseVisiblePoints > 0 ? (poseDeviation / poseVisiblePoints) : 999;
+  const poseOk = avgPoseDeviation < Number(profile.poseDeviation);
+  const stillOk = maxMovement < Number(profile.stillness);
+
+  if (!poseOk || !stillOk) {
+    movementStrikeCount += 1;
+  } else {
+    movementStrikeCount = Math.max(0, movementStrikeCount - 1);
+  }
+
+  movementLastWorldLandmarks = copyLandmarks(worldLandmarks);
+  const now = Date.now();
+  const violation = movementStrikeCount >= 3 && now >= movementCooldownUntil;
+  if (violation) {
+    movementStrikeCount = 0;
+    movementCooldownUntil = now + 2200;
+  }
+  return {
+    violation,
+    marker,
+    movementScore: maxMovement,
+    poseScore: avgPoseDeviation,
+    poseOk,
+    stillOk,
+  };
+}
+
+async function initMovementPose() {
+  if (!isSinglePoseModule || movementPoseReady) return;
+  if (typeof vision === "undefined") {
+    throw new Error("MediaPipe Tasks Vision konnte nicht geladen werden");
+  }
+
+  const { FilesetResolver, PoseLandmarker, RunningMode } = vision;
+
+  if (!movementFileset) {
+    movementFileset = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+  }
+
+  movementPose = await PoseLandmarker.createFromOptions(movementFileset, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
+    },
+    runningMode: RunningMode.VIDEO,
+    numPoses: 1,
+    minPoseDetectionConfidence: 0.6,
+    minPosePresenceConfidence: 0.6,
+    minTrackingConfidence: 0.6,
+  });
+  movementPoseReady = true;
+}
+
+function describeMovementReason(verdict) {
+  const profile = movementProfile();
+  const movePart = `movement=${Number(verdict?.movementScore || 0).toFixed(4)}/${Number(profile.stillness).toFixed(4)}`;
+  const posePart = `pose=${Number(verdict?.poseScore || 0).toFixed(4)}/${Number(profile.poseDeviation).toFixed(4)}`;
+  return `Lokale Bewegung erkannt (${movePart}, ${posePart})`;
+}
+
+async function captureViolationFrameBlob(marker = null) {
+  if (!cameraStream) return null;
+  const canvas = document.createElement("canvas");
+  const w = Math.max(640, Number(playVideoEl.videoWidth || 0));
+  const h = Math.max(360, Number(playVideoEl.videoHeight || 0));
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.drawImage(playVideoEl, 0, 0, w, h);
+  const border = Math.max(8, Math.floor(Math.min(w, h) * 0.018));
+  ctx.strokeStyle = "rgba(255, 48, 48, 0.98)";
+  ctx.lineWidth = border;
+  ctx.strokeRect(border / 2, border / 2, w - border, h - border);
+
+  if (marker && Number.isFinite(marker.x) && Number.isFinite(marker.y)) {
+    const mx = Math.max(0, Math.min(w, marker.x * w));
+    const my = Math.max(0, Math.min(h, marker.y * h));
+    const radius = Math.max(14, Math.floor(Math.min(w, h) * 0.04));
+    ctx.beginPath();
+    ctx.arc(mx, my, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255, 36, 36, 1)";
+    ctx.lineWidth = Math.max(5, Math.floor(Math.min(w, h) * 0.01));
+    ctx.stroke();
+  }
+
+  return await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+}
+
+async function submitMovementViolation(token, marker, verdict) {
+  if (token !== sequenceToken) return;
+  if (!activeRun || !activeRun.current_step || movementEventInFlight) return;
+  movementEventInFlight = true;
+
+  try {
+    const blob = await captureViolationFrameBlob(marker);
+    if (!blob) throw new Error("Kontrollbild fuer Bewegung konnte nicht erzeugt werden");
+
+    const form = new FormData();
+    form.append("file", blob, "movement_violation.jpg");
+    if (marker && Number.isFinite(marker.x) && Number.isFinite(marker.y)) {
+      form.append("marker_x", String(marker.x));
+      form.append("marker_y", String(marker.y));
+    }
+    form.append("reason", describeMovementReason(verdict));
+
+    const result = await api(`/api/games/runs/${runId}/steps/${activeRun.current_step.id}/movement-event`, {
+      method: "POST",
+      body: form,
+    });
+
+    updateVerificationPreview(result.step, true);
+    appendCaptureThumbnail(result.step);
+    analysisEl.textContent = `Bewegung erkannt: ${result.step.analysis || "Verstoss registriert."}`;
+    renderRun(result.run);
+  } catch (err) {
+    setStatus(`Lokale Bewegungserfassung fehlgeschlagen: ${err.message}`, true);
+  } finally {
+    movementEventInFlight = false;
+  }
+}
+
+async function startMovementMonitor(token) {
+  if (!isSinglePoseModule) return;
+  if (dontMoveMonitorHandle) {
+    clearInterval(dontMoveMonitorHandle);
+    dontMoveMonitorHandle = null;
+  }
+
+  try {
+    await initMovementPose();
+  } catch (err) {
+    setStatus(`${err.message} - Fallback auf periodische Stichprobe.`, true);
+    dontMoveMonitorHandle = setInterval(() => {
+      if (token !== sequenceToken) {
+        clearInterval(dontMoveMonitorHandle);
+        dontMoveMonitorHandle = null;
+        return;
+      }
+      verifyCurrentStepWithMode(token, { sampleOnly: true }).catch(() => {});
+    }, 2500);
+    return;
+  }
+
+  movementLastWorldLandmarks = null;
+  movementLatestPoseLandmarks = null;
+  movementLatestWorldLandmarks = null;
+  movementTargetWorldLandmarks = null;
+  movementStrikeCount = 0;
+  movementCooldownUntil = 0;
+  movementRedFlashUntil = 0;
+  drawMotionOverlay();
+
+  dontMoveMonitorHandle = setInterval(async () => {
+    if (token !== sequenceToken) {
+      clearInterval(dontMoveMonitorHandle);
+      dontMoveMonitorHandle = null;
+      return;
+    }
+    if (!movementPose || movementPoseBusy || !cameraStream) return;
+
+    movementPoseBusy = true;
+    try {
+      const result = movementPose.detectForVideo(playVideoEl, performance.now());
+      movementLatestPoseLandmarks = copyLandmarks(result?.landmarks?.[0] || []);
+      movementLatestWorldLandmarks = copyLandmarks(result?.worldLandmarks?.[0] || []);
+
+      const verdict = evaluatePoseMovement(movementLatestWorldLandmarks, movementLatestPoseLandmarks);
+      if (!verdict) {
+        drawMotionOverlay();
+        return;
+      }
+
+      if (verdict.violation) {
+        movementRedFlashUntil = Date.now() + 900;
+        drawMotionOverlay(verdict.marker, true);
+        submitMovementViolation(token, verdict.marker, verdict).catch(() => {});
+      } else {
+        drawMotionOverlay();
+      }
+    } finally {
+      movementPoseBusy = false;
+    }
+  }, 120);
+}
+
+function stopMovementMonitor() {
+  if (dontMoveMonitorHandle) {
+    clearInterval(dontMoveMonitorHandle);
+    dontMoveMonitorHandle = null;
+  }
+  movementLastWorldLandmarks = null;
+  movementLatestPoseLandmarks = null;
+  movementLatestWorldLandmarks = null;
+  movementTargetWorldLandmarks = null;
+  movementStrikeCount = 0;
+  movementCooldownUntil = 0;
+  movementRedFlashUntil = 0;
+  if (motionOverlayEl) {
+    const ctx = motionOverlayEl.getContext("2d");
+    if (ctx) {
+      ctx.clearRect(0, 0, motionOverlayEl.width, motionOverlayEl.height);
+    }
+  }
 }
 
 function updatePhase(label, value) {
@@ -638,10 +1003,7 @@ function renderRun(run) {
 function stopStepSequence() {
   sequenceToken += 1;
   sequenceStepId = null;
-    if (dontMoveMonitorHandle) {
-      clearInterval(dontMoveMonitorHandle);
-      dontMoveMonitorHandle = null;
-    }
+  stopMovementMonitor();
   if (phaseTimerHandle) {
     clearInterval(phaseTimerHandle);
     phaseTimerHandle = null;
@@ -710,18 +1072,8 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
       return;
     }
     if (isSinglePoseModule) {
-      if (dontMoveMonitorHandle) {
-        clearInterval(dontMoveMonitorHandle);
-      }
-      // Strict monitoring cadence for "Don't move": recurring checks during the hold phase.
-      dontMoveMonitorHandle = setInterval(() => {
-        if (token !== sequenceToken) {
-          clearInterval(dontMoveMonitorHandle);
-          dontMoveMonitorHandle = null;
-          return;
-        }
-        verifyCurrentStepWithMode(token, { sampleOnly: true }).catch(() => {});
-      }, 2500);
+      // Strict modules use frame-based movement detection on the live stream.
+      startMovementMonitor(token).catch(() => {});
     }
     countdownPhase({
       token,
@@ -738,10 +1090,7 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
         }
       },
       onFinished: () => {
-        if (dontMoveMonitorHandle) {
-          clearInterval(dontMoveMonitorHandle);
-          dontMoveMonitorHandle = null;
-        }
+        stopMovementMonitor();
         verifyCurrentStepWithMode(token, { sampleOnly: false });
       },
     });
@@ -858,6 +1207,12 @@ async function startCamera() {
   cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
   setupVideoEl.srcObject = cameraStream;
   playVideoEl.srcObject = cameraStream;
+  window.setTimeout(() => {
+    syncMotionOverlaySize();
+    if (isSinglePoseModule) {
+      drawMotionOverlay();
+    }
+  }, 120);
 }
 
 function stopCamera() {
@@ -866,6 +1221,7 @@ function stopCamera() {
   cameraStream = null;
   setupVideoEl.srcObject = null;
   playVideoEl.srcObject = null;
+  stopMovementMonitor();
 }
 
 async function captureFrameBlob() {
@@ -1061,6 +1417,20 @@ testDoubleBeepEl.addEventListener("click", async () => {
     setStatus("Doppel-Beep abgespielt.", false);
   } catch (err) {
     setStatus(`Doppel-Beep fehlgeschlagen: ${err.message}`, true);
+  }
+});
+
+playVideoEl.addEventListener("loadedmetadata", () => {
+  syncMotionOverlaySize();
+  if (isSinglePoseModule) {
+    drawMotionOverlay();
+  }
+});
+
+window.addEventListener("resize", () => {
+  syncMotionOverlaySize();
+  if (isSinglePoseModule) {
+    drawMotionOverlay();
   }
 });
 

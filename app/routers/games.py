@@ -1611,3 +1611,113 @@ async def verify_game_step(
             "finalized": step.status != "pending",
         },
     }
+
+
+@router.post("/runs/{run_id}/steps/{step_id}/movement-event")
+async def register_movement_event(
+    run_id: int,
+    step_id: int,
+    file: UploadFile = File(...),
+    marker_x: float | None = Form(default=None),
+    marker_y: float | None = Form(default=None),
+    reason: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    run = db.query(GameRun).filter(GameRun.id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Game run not found")
+    if run.status != "active":
+        raise HTTPException(status_code=409, detail="Game run is not active")
+    if not _is_single_pose_strict_module(run.module_key):
+        raise HTTPException(status_code=409, detail="Movement events are only supported for strict single-pose modules")
+
+    step = (
+        db.query(GameRunStep)
+        .filter(GameRunStep.id == step_id, GameRunStep.run_id == run_id)
+        .first()
+    )
+    if not step:
+        raise HTTPException(status_code=404, detail="Game step not found")
+    if step.status != "pending":
+        raise HTTPException(status_code=409, detail="Game step is not pending")
+
+    data = await file.read()
+    capture_rel_path = _store_game_verification_capture(run, data, file.filename)
+    now = datetime.now(timezone.utc)
+
+    marker_note = ""
+    if marker_x is not None and marker_y is not None:
+        marker_note = f" | marker=({marker_x:.3f},{marker_y:.3f})"
+    analysis = (reason or "Lokale Bewegungserkennung hat eine Abweichung erkannt.").strip() + marker_note
+
+    step.verification_count += 1
+    step.last_analysis = analysis
+    run.miss_count += 1
+
+    if run.session_penalty_seconds > 0:
+        session_obj = _load_session(db, run.session_id)
+        current_lock_end = _as_utc(session_obj.lock_end) or now
+        session_obj.lock_end = current_lock_end + timedelta(seconds=run.session_penalty_seconds)
+        run.session_penalty_applied = True
+        db.add(session_obj)
+        db.add(
+            Message(
+                session_id=run.session_id,
+                role="system",
+                message_type="game_penalty",
+                content=(
+                    "Session-Penalty pro Verfehlung ausgeloest: "
+                    f"+{run.session_penalty_seconds}s (Verfehlung #{run.miss_count})."
+                ),
+            )
+        )
+
+    db.add(
+        Message(
+            session_id=run.session_id,
+            role="system",
+            message_type="game_step_fail",
+            content=(
+                f"Bewegungsverstoss erkannt: {step.posture_name}. "
+                f"Verstoesse gesamt: {run.miss_count}."
+            ),
+        )
+    )
+    db.add(
+        Message(
+            session_id=run.session_id,
+            role="system",
+            message_type="game_step_sample_fail",
+            content=f"Bewegungsverstoss in Echtzeit erkannt: {step.posture_name}",
+        )
+    )
+
+    _append_run_check_entry(
+        run,
+        step=step,
+        verification_status="suspicious",
+        analysis=analysis,
+        capture_rel_path=capture_rel_path,
+        sample_only=True,
+    )
+
+    db.add(step)
+    db.add(run)
+    _finish_run_if_done(db, run)
+    db.commit()
+    db.refresh(run)
+    db.refresh(step)
+    return {
+        "run": _run_payload(db, run),
+        "step": {
+            "id": step.id,
+            "status": step.status,
+            "verification_count": step.verification_count,
+            "verification_status": "suspicious",
+            "analysis": step.last_analysis,
+            "capture_path": capture_rel_path,
+            "capture_url": f"/media/{capture_rel_path}",
+            "sample_only": True,
+            "finalized": step.status != "pending",
+        },
+    }

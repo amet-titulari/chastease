@@ -16,9 +16,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-defaultMode = "rebuild"
+# defaultMode = "rebuild"
 # defaultMode = "all"
-# defaultMode = "db-only"
+defaultMode = "db-only"
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -413,6 +413,61 @@ def test_dont_move_counts_each_violation_and_applies_penalty_per_violation():
             db.close()
 
 
+def test_dont_move_movement_event_endpoint_registers_violation_and_capture():
+    with TestClient(app) as client:
+        _register_admin(client)
+        posture_key = f"test_dm_motion_event_pose_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "DM Motion Event Pose",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "No movement.",
+                "target_seconds": 120,
+                "sort_order": 4,
+                "is_active": True,
+                "allowed_module_keys": ["dont_move"],
+            },
+        )
+        assert create_resp.status_code == 200
+
+        session_id = _create_and_sign(client)
+        start_resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "dont_move",
+                "difficulty": "medium",
+                "duration_minutes": 5,
+                "selected_posture_key": posture_key,
+                "session_penalty_seconds": 0,
+            },
+        )
+        assert start_resp.status_code == 200
+        run = start_resp.json()
+        run_id = int(run["id"])
+        step_id = int(run["current_step"]["id"])
+
+        movement_resp = client.post(
+            f"/api/games/runs/{run_id}/steps/{step_id}/movement-event",
+            files={"file": ("movement.jpg", b"fakejpegbytes", "image/jpeg")},
+            data={
+                "marker_x": "0.52",
+                "marker_y": "0.74",
+                "reason": "Lokale Bewegung erkannt",
+            },
+        )
+        assert movement_resp.status_code == 200
+
+        payload = movement_resp.json()
+        assert payload["step"]["verification_status"] == "suspicious"
+        assert payload["step"]["sample_only"] is True
+        assert payload["step"]["finalized"] is False
+        assert payload["step"]["status"] == "pending"
+        assert int(payload["run"]["miss_count"]) == 1
+        assert str(payload["step"]["capture_url"]).startswith("/media/verifications/games/")
+
+
 def test_start_game_run_and_fetch_state():
     with TestClient(app) as client:
         _register_admin(client)
