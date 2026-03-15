@@ -50,6 +50,7 @@ MAX_POSTURE_ZIP_BYTES = 64 * 1024 * 1024
 MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN = 2
 MEDIA_CONTENT_URL_RE = re.compile(r"^/api/media/(?P<media_id>\d+)/content/?$")
 SHARED_POSTURE_POOL_MODULE_KEYS = {"posture_training", "dont_move"}
+EMPTY_ALLOWED_MODULE_SENTINEL = "__none__"
 
 
 class StartGameRunRequest(BaseModel):
@@ -138,7 +139,10 @@ def _slug_posture_key(value: str) -> str:
 
 def _template_payload(template: GamePostureTemplate, allowed_module_keys: list[str] | None = None) -> dict:
     pool_key = _posture_pool_module_key(template.module_key)
-    effective_allowed = allowed_module_keys or _default_allowed_module_keys_for_pool(pool_key)
+    if allowed_module_keys is None:
+        effective_allowed = _default_allowed_module_keys_for_pool(pool_key)
+    else:
+        effective_allowed = allowed_module_keys
     return {
         "id": template.id,
         "module_key": template.module_key,
@@ -167,8 +171,13 @@ def _default_allowed_module_keys_for_pool(module_key: str) -> list[str]:
     return [module_key]
 
 
-def _normalize_allowed_module_keys(module_keys: list[str] | None, pool_key: str) -> list[str]:
-    if not module_keys:
+def _normalize_allowed_module_keys(
+    module_keys: list[str] | None,
+    pool_key: str,
+    *,
+    allow_empty: bool = False,
+) -> list[str]:
+    if module_keys is None:
         return _default_allowed_module_keys_for_pool(pool_key)
 
     known_module_keys = {module.key for module in list_modules()}
@@ -180,6 +189,8 @@ def _normalize_allowed_module_keys(module_keys: list[str] | None, pool_key: str)
         normalized.append(key)
 
     if not normalized:
+        if allow_empty:
+            return []
         return _default_allowed_module_keys_for_pool(pool_key)
     return normalized
 
@@ -196,8 +207,23 @@ def _load_allowed_module_map(db: Session, posture_ids: list[int]) -> dict[int, s
 
     payload: dict[int, set[str]] = {}
     for row in rows:
-        payload.setdefault(int(row.posture_template_id), set()).add(str(row.module_key))
+        posture_id = int(row.posture_template_id)
+        payload.setdefault(posture_id, set())
+        module_key = str(row.module_key)
+        if module_key == EMPTY_ALLOWED_MODULE_SENTINEL:
+            continue
+        payload[posture_id].add(module_key)
     return payload
+
+
+def _resolved_allowed_module_keys(
+    template: GamePostureTemplate,
+    allowed_map: dict[int, set[str]],
+) -> list[str]:
+    allowed = allowed_map.get(int(template.id))
+    if allowed is None:
+        return _default_allowed_module_keys_for_pool(_posture_pool_module_key(template.module_key))
+    return sorted(allowed)
 
 
 def _set_allowed_module_keys(db: Session, posture_template_id: int, module_keys: list[str]) -> None:
@@ -206,6 +232,14 @@ def _set_allowed_module_keys(db: Session, posture_template_id: int, module_keys:
         .filter(GamePostureModuleAssignment.posture_template_id == posture_template_id)
         .delete(synchronize_session=False)
     )
+    if not module_keys:
+        db.add(
+            GamePostureModuleAssignment(
+                posture_template_id=posture_template_id,
+                module_key=EMPTY_ALLOWED_MODULE_SENTINEL,
+            )
+        )
+        return
     for key in module_keys:
         db.add(
             GamePostureModuleAssignment(
@@ -363,7 +397,7 @@ def _steps_for_run(db: Session, module_key: str) -> list[dict]:
         scoped_rows: list[GamePostureTemplate] = []
         for row in rows:
             allowed = allowed_map.get(int(row.id))
-            if not allowed:
+            if allowed is None:
                 pool_key = _posture_pool_module_key(row.module_key)
                 allowed = set(_default_allowed_module_keys_for_pool(pool_key))
             if module_key in allowed:
@@ -731,10 +765,24 @@ def list_module_postures(module_key: str, request: Request, db: Session = Depend
     allowed_map = _load_allowed_module_map(db, [int(row.id) for row in rows])
     items = []
     for row in rows:
-        allowed = sorted(
-            allowed_map.get(int(row.id))
-            or _default_allowed_module_keys_for_pool(_posture_pool_module_key(row.module_key))
-        )
+        allowed = _resolved_allowed_module_keys(row, allowed_map)
+        items.append(_template_payload(row, allowed_module_keys=allowed))
+    return {"items": items}
+
+
+@router.get("/modules/{module_key}/postures/available")
+def list_available_module_postures(module_key: str, db: Session = Depends(get_db)) -> dict:
+    module = get_module(module_key)
+    if not module:
+        raise HTTPException(status_code=404, detail="Game module not found")
+
+    rows = _module_postures(db, module_key, active_only=True)
+    allowed_map = _load_allowed_module_map(db, [int(row.id) for row in rows])
+    items = []
+    for row in rows:
+        allowed = _resolved_allowed_module_keys(row, allowed_map)
+        if module_key not in allowed:
+            continue
         items.append(_template_payload(row, allowed_module_keys=allowed))
     return {"items": items}
 
@@ -751,10 +799,7 @@ def list_posture_matrix(request: Request, db: Session = Depends(get_db)) -> dict
     allowed_map = _load_allowed_module_map(db, [int(row.id) for row in rows])
     items = []
     for row in rows:
-        allowed = sorted(
-            allowed_map.get(int(row.id))
-            or _default_allowed_module_keys_for_pool(_posture_pool_module_key(row.module_key))
-        )
+        allowed = _resolved_allowed_module_keys(row, allowed_map)
         items.append(_template_payload(row, allowed_module_keys=allowed))
     return {"modules": modules, "items": items}
 
@@ -782,7 +827,7 @@ def update_posture_matrix(payload: PostureMatrixBulkUpdateRequest, request: Requ
             continue
 
         pool_key = _posture_pool_module_key(template.module_key)
-        allowed = _normalize_allowed_module_keys(item.allowed_module_keys, pool_key)
+        allowed = _normalize_allowed_module_keys(item.allowed_module_keys, pool_key, allow_empty=True)
         _set_allowed_module_keys(db, int(template.id), allowed)
         updated += 1
 
@@ -839,10 +884,7 @@ def export_module_postures_zip(module_key: str, request: Request, db: Session = 
                 "target_seconds": posture.target_seconds,
                 "sort_order": posture.sort_order,
                 "is_active": bool(posture.is_active),
-                "allowed_module_keys": sorted(
-                    allowed_map.get(int(posture.id))
-                    or _default_allowed_module_keys_for_pool(_posture_pool_module_key(posture.module_key))
-                ),
+                "allowed_module_keys": _resolved_allowed_module_keys(posture, allowed_map),
             }
 
             asset = _media_asset_from_content_url(db, posture.image_url)
@@ -988,7 +1030,11 @@ async def import_module_postures_zip(
             posture_key = str(item.get("posture_key") or "").strip() or _slug_posture_key(title)
             instruction = str(item.get("instruction") or "").strip() or None
             is_active = bool(item.get("is_active", True))
-            allowed_module_keys = _normalize_allowed_module_keys(item.get("allowed_module_keys"), pool_key)
+            allowed_module_keys = _normalize_allowed_module_keys(
+                item.get("allowed_module_keys"),
+                pool_key,
+                allow_empty=True,
+            )
 
             template = GamePostureTemplate(
                 module_key=pool_key,
@@ -1054,7 +1100,7 @@ def create_module_posture(
     )
     db.add(template)
     db.flush()
-    allowed_module_keys = _normalize_allowed_module_keys(payload.allowed_module_keys, pool_key)
+    allowed_module_keys = _normalize_allowed_module_keys(payload.allowed_module_keys, pool_key, allow_empty=True)
     _set_allowed_module_keys(db, int(template.id), allowed_module_keys)
     db.commit()
     db.refresh(template)
@@ -1111,14 +1157,13 @@ def update_module_posture(
 
     existing_allowed = _load_allowed_module_map(db, [int(template.id)]).get(int(template.id))
     if payload.allowed_module_keys is not None:
-        next_allowed = _normalize_allowed_module_keys(payload.allowed_module_keys, pool_key)
+        next_allowed = _normalize_allowed_module_keys(payload.allowed_module_keys, pool_key, allow_empty=True)
         _set_allowed_module_keys(db, int(template.id), next_allowed)
     else:
-        next_allowed = sorted(
-            existing_allowed
-            if existing_allowed
-            else _default_allowed_module_keys_for_pool(pool_key)
-        )
+        if existing_allowed is None:
+            next_allowed = _default_allowed_module_keys_for_pool(pool_key)
+        else:
+            next_allowed = sorted(existing_allowed)
 
     if not template.image_url:
         raise HTTPException(status_code=422, detail="image_url is required")

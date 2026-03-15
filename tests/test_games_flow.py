@@ -167,6 +167,77 @@ def test_posture_matrix_bulk_update_endpoint():
         assert sorted(target.get("allowed_module_keys") or []) == ["dont_move", "posture_training"]
 
 
+def test_available_postures_endpoint_respects_module_assignment_matrix():
+    with TestClient(app) as client:
+        _register_admin(client)
+        posture_key = f"test_available_filter_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "Available Filter",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "Filter endpoint.",
+                "target_seconds": 75,
+                "sort_order": 5,
+                "is_active": True,
+                "allowed_module_keys": ["posture_training"],
+            },
+        )
+        assert create_resp.status_code == 200
+
+        allowed_dm = client.get("/api/games/modules/dont_move/postures/available")
+        assert allowed_dm.status_code == 200
+        dm_keys = {str(item.get("posture_key") or "") for item in (allowed_dm.json().get("items") or [])}
+        assert posture_key not in dm_keys
+
+        allowed_pt = client.get("/api/games/modules/posture_training/postures/available")
+        assert allowed_pt.status_code == 200
+        pt_keys = {str(item.get("posture_key") or "") for item in (allowed_pt.json().get("items") or [])}
+        assert posture_key in pt_keys
+
+
+def test_posture_matrix_can_persist_empty_allowed_module_keys():
+    with TestClient(app) as client:
+        _register_admin(client)
+        posture_key = f"test_empty_allowed_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "Empty Allowed",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "No module assignment.",
+                "target_seconds": 65,
+                "sort_order": 6,
+                "is_active": True,
+                "allowed_module_keys": ["posture_training", "dont_move"],
+            },
+        )
+        assert create_resp.status_code == 200
+        posture_id = int(create_resp.json()["id"])
+
+        update_resp = client.put(
+            "/api/games/postures/matrix",
+            json={
+                "items": [
+                    {
+                        "posture_id": posture_id,
+                        "allowed_module_keys": [],
+                    }
+                ]
+            },
+        )
+        assert update_resp.status_code == 200
+
+        matrix_resp = client.get("/api/games/postures/matrix")
+        assert matrix_resp.status_code == 200
+        matrix_items = matrix_resp.json().get("items") or []
+        target = next((item for item in matrix_items if int(item.get("id", 0)) == posture_id), None)
+        assert target is not None
+        assert target.get("allowed_module_keys") == []
+
+
 def test_dont_move_rejects_posture_not_allowed_for_module():
     with TestClient(app) as client:
         _register_admin(client)

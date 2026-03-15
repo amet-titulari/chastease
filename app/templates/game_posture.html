@@ -772,11 +772,8 @@ async function loadModule() {
     document.getElementById("gm-transition-seconds").value = "0";
     document.getElementById("gm-max-misses").value = "1";
 
-    const postureData = await api(`/api/games/modules/${moduleKey}/postures`);
-    const usable = (postureData.items || []).filter((item) => {
-      const allowed = Array.isArray(item.allowed_module_keys) ? item.allowed_module_keys : [];
-      return allowed.includes(moduleKey);
-    });
+    const postureData = await api(`/api/games/modules/${moduleKey}/postures/available`);
+    const usable = postureData.items || [];
     dontMovePostureEl.innerHTML = "";
     for (const item of usable) {
       const option = document.createElement("option");
