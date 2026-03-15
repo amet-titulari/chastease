@@ -61,36 +61,36 @@
 
     <div class="gms-grid">
       <label>Easy-Multiplikator
-        <input id="gms-set-easy-mult" type="number" min="0.1" max="3" step="0.01" value="0.85" />
+        <input id="gms-set-easy-mult" type="number" min="0.1" max="3" step="0.01" value="0.75" />
       </label>
       <label>Hard-Multiplikator
-        <input id="gms-set-hard-mult" type="number" min="0.1" max="3" step="0.01" value="1.25" />
+        <input id="gms-set-hard-mult" type="number" min="0.1" max="3" step="0.01" value="1.50" />
       </label>
       <label>Ziel-Randomisierung (%)
         <input id="gms-set-random" type="number" min="0" max="60" step="1" value="10" />
       </label>
 
       <label>Easy Pose-Deviation
-        <input id="gms-move-easy-pose" type="number" min="0.01" max="1" step="0.001" value="0.24" />
+        <input id="gms-move-easy-pose" type="number" min="0.01" max="1" step="0.001" value="0.40" />
       </label>
       <label>Easy Stillness
-        <input id="gms-move-easy-still" type="number" min="0.0005" max="0.1" step="0.0001" value="0.013" />
+        <input id="gms-move-easy-still" type="number" min="0.0005" max="0.1" step="0.0001" value="0.040" />
       </label>
       <span></span>
 
       <label>Medium Pose-Deviation
-        <input id="gms-move-medium-pose" type="number" min="0.01" max="1" step="0.001" value="0.21" />
+        <input id="gms-move-medium-pose" type="number" min="0.01" max="1" step="0.001" value="0.35" />
       </label>
       <label>Medium Stillness
-        <input id="gms-move-medium-still" type="number" min="0.0005" max="0.1" step="0.0001" value="0.010" />
+        <input id="gms-move-medium-still" type="number" min="0.0005" max="0.1" step="0.0001" value="0.030" />
       </label>
       <span></span>
 
       <label>Hard Pose-Deviation
-        <input id="gms-move-hard-pose" type="number" min="0.01" max="1" step="0.001" value="0.17" />
+        <input id="gms-move-hard-pose" type="number" min="0.01" max="1" step="0.001" value="0.225" />
       </label>
       <label>Hard Stillness
-        <input id="gms-move-hard-still" type="number" min="0.0005" max="0.1" step="0.0001" value="0.008" />
+        <input id="gms-move-hard-still" type="number" min="0.0005" max="0.1" step="0.0001" value="0.020" />
       </label>
       <div class="gms-actions">
         <button type="button" id="gms-save-settings">Schwellwerte speichern</button>
@@ -129,19 +129,19 @@ function numberInputValue(id, fallback = 0) {
 const MOVEMENT_PRESETS = {
   dont_move: {
     tolerant: {
-      easy: { pose: 0.19, still: 0.0100 },
-      medium: { pose: 0.16, still: 0.0080 },
-      hard: { pose: 0.13, still: 0.0060 },
+      easy: { pose: 0.50, still: 0.0500 },
+      medium: { pose: 0.4375, still: 0.0375 },
+      hard: { pose: 0.28125, still: 0.0250 },
     },
     balanced: {
-      easy: { pose: 0.32, still: 0.0200 },
-      medium: { pose: 0.28, still: 0.0150 },
-      hard: { pose: 0.25, still: 0.0100 },
+      easy: { pose: 0.40, still: 0.0400 },
+      medium: { pose: 0.35, still: 0.0300 },
+      hard: { pose: 0.225, still: 0.0200 },
     },
     strict: {
-      easy: { pose: 0.14, still: 0.0055 },
-      medium: { pose: 0.11, still: 0.0038 },
-      hard: { pose: 0.085, still: 0.0028 },
+      easy: { pose: 0.30, still: 0.0300 },
+      medium: { pose: 0.2625, still: 0.0225 },
+      hard: { pose: 0.16875, still: 0.0150 },
     },
   },
   tiptoeing: {
@@ -190,16 +190,16 @@ function applyMovementPreset(level) {
 }
 
 function applyModuleSettings(data) {
-  document.getElementById("gms-set-easy-mult").value = String(Number(data.easy_target_multiplier ?? 0.85));
-  document.getElementById("gms-set-hard-mult").value = String(Number(data.hard_target_multiplier ?? 1.25));
+  document.getElementById("gms-set-easy-mult").value = String(Number(data.easy_target_multiplier ?? 0.75));
+  document.getElementById("gms-set-hard-mult").value = String(Number(data.hard_target_multiplier ?? 1.5));
   document.getElementById("gms-set-random").value = String(Number(data.target_randomization_percent ?? 10));
 
-  document.getElementById("gms-move-easy-pose").value = String(Number(data.movement_easy_pose_deviation ?? 0.24));
-  document.getElementById("gms-move-easy-still").value = String(Number(data.movement_easy_stillness ?? 0.013));
-  document.getElementById("gms-move-medium-pose").value = String(Number(data.movement_medium_pose_deviation ?? 0.21));
-  document.getElementById("gms-move-medium-still").value = String(Number(data.movement_medium_stillness ?? 0.010));
-  document.getElementById("gms-move-hard-pose").value = String(Number(data.movement_hard_pose_deviation ?? 0.17));
-  document.getElementById("gms-move-hard-still").value = String(Number(data.movement_hard_stillness ?? 0.008));
+  document.getElementById("gms-move-easy-pose").value = String(Number(data.movement_easy_pose_deviation ?? 0.40));
+  document.getElementById("gms-move-easy-still").value = String(Number(data.movement_easy_stillness ?? 0.040));
+  document.getElementById("gms-move-medium-pose").value = String(Number(data.movement_medium_pose_deviation ?? 0.35));
+  document.getElementById("gms-move-medium-still").value = String(Number(data.movement_medium_stillness ?? 0.030));
+  document.getElementById("gms-move-hard-pose").value = String(Number(data.movement_hard_pose_deviation ?? 0.225));
+  document.getElementById("gms-move-hard-still").value = String(Number(data.movement_hard_stillness ?? 0.020));
 }
 
 async function loadModuleSettings() {
@@ -209,15 +209,15 @@ async function loadModuleSettings() {
 
 async function saveModuleSettings() {
   const payload = {
-    easy_target_multiplier: numberInputValue("gms-set-easy-mult", 0.85),
-    hard_target_multiplier: numberInputValue("gms-set-hard-mult", 1.25),
+    easy_target_multiplier: numberInputValue("gms-set-easy-mult", 0.75),
+    hard_target_multiplier: numberInputValue("gms-set-hard-mult", 1.5),
     target_randomization_percent: Math.round(numberInputValue("gms-set-random", 10)),
-    movement_easy_pose_deviation: numberInputValue("gms-move-easy-pose", 0.24),
-    movement_easy_stillness: numberInputValue("gms-move-easy-still", 0.013),
-    movement_medium_pose_deviation: numberInputValue("gms-move-medium-pose", 0.21),
-    movement_medium_stillness: numberInputValue("gms-move-medium-still", 0.010),
-    movement_hard_pose_deviation: numberInputValue("gms-move-hard-pose", 0.17),
-    movement_hard_stillness: numberInputValue("gms-move-hard-still", 0.008),
+    movement_easy_pose_deviation: numberInputValue("gms-move-easy-pose", 0.40),
+    movement_easy_stillness: numberInputValue("gms-move-easy-still", 0.040),
+    movement_medium_pose_deviation: numberInputValue("gms-move-medium-pose", 0.35),
+    movement_medium_stillness: numberInputValue("gms-move-medium-still", 0.030),
+    movement_hard_pose_deviation: numberInputValue("gms-move-hard-pose", 0.225),
+    movement_hard_stillness: numberInputValue("gms-move-hard-still", 0.020),
   };
   const saved = await api(`/api/games/modules/${moduleKey}/settings`, {
     method: "PUT",

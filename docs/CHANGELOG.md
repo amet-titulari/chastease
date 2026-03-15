@@ -5,6 +5,17 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ---
 
+## [0.2.7] - 2026-03-16
+
+### Geaendert
+
+- Spiel-Schwellwerte fuer `dont_move` neu kalibriert: Balanced als neuer Default mit hoeheren Toleranzgrenzen.
+- Preset-Logik fuer Schwellwerte auf feste Vorschlagwerte pro Button (`Tolerant`, `Balanced`, `Strict`) zurueckgestellt.
+- Preset-Abstufung fuer `dont_move` vereinheitlicht: `Tolerant` = 25% einfacher als Balanced, `Strict` = 25% schwieriger als Balanced.
+- Standard-Multiplikatoren fuer neue Moduleinstellungen angepasst (`easy` 0.75, `hard` 1.50).
+
+---
+
 ## [0.2.5] - 2026-03-15
 
 ### Hinzugefuegt
