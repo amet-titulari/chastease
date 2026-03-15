@@ -16,6 +16,7 @@ from app.models import (  # noqa: F401
     auth_user,
     contract,
     game_module_setting,
+    game_posture_module_assignment,
     game_posture_template,
     game_run,
     game_run_step,

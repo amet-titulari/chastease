@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
+from uuid import uuid4
 import zipfile
 
 from fastapi.testclient import TestClient
@@ -62,6 +63,75 @@ def test_start_game_run_with_dont_move_module():
         assert payload["module_key"] == "dont_move"
         assert payload["status"] == "active"
         assert payload["current_step"] is not None
+
+
+def test_posture_allowed_module_keys_roundtrip():
+    with TestClient(app) as client:
+        posture_key = f"test_roundtrip_allowed_modules_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "Roundtrip Allowed Modules",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "Keep position.",
+                "target_seconds": 90,
+                "sort_order": 1,
+                "is_active": True,
+                "allowed_module_keys": ["posture_training", "dont_move"],
+            },
+        )
+        assert create_resp.status_code == 200
+        created = create_resp.json()
+        posture_id = int(created["id"])
+        assert sorted(created["allowed_module_keys"]) == ["dont_move", "posture_training"]
+
+        update_resp = client.put(
+            f"/api/games/modules/posture_training/postures/{posture_id}",
+            json={"allowed_module_keys": ["dont_move"]},
+        )
+        assert update_resp.status_code == 200
+        assert update_resp.json()["allowed_module_keys"] == ["dont_move"]
+
+        list_resp = client.get("/api/games/modules/posture_training/postures")
+        assert list_resp.status_code == 200
+        updated = next((item for item in list_resp.json()["items"] if int(item["id"]) == posture_id), None)
+        assert updated is not None
+        assert updated["allowed_module_keys"] == ["dont_move"]
+
+
+def test_dont_move_rejects_posture_not_allowed_for_module():
+    with TestClient(app) as client:
+        posture_key = f"test_pt_only_pose_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "PT Only Pose",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "Stand still.",
+                "target_seconds": 100,
+                "sort_order": 2,
+                "is_active": True,
+                "allowed_module_keys": ["posture_training"],
+            },
+        )
+        assert create_resp.status_code == 200
+        posture_key = create_resp.json()["posture_key"]
+
+        session_id = _create_and_sign(client)
+        start_resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "dont_move",
+                "difficulty": "medium",
+                "duration_minutes": 5,
+                "selected_posture_key": posture_key,
+                "hold_seconds": 60,
+            },
+        )
+        assert start_resp.status_code == 422
+        assert "Selected posture" in start_resp.json()["detail"]
 
 
 def test_start_game_run_and_fetch_state():

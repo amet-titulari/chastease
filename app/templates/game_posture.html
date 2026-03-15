@@ -273,6 +273,15 @@
       </label>
     </div>
 
+    <div id="gm-dont-move-options" class="setup-grid hidden" style="margin-top:0.45rem;">
+      <label>Pose aus Pool
+        <select id="gm-dont-move-posture"></select>
+      </label>
+      <label>Haltezeit (Sek)
+        <input id="gm-dont-move-hold" type="number" min="5" max="7200" value="120" />
+      </label>
+    </div>
+
     <div class="setup-secondary">
       <label>Session-Penalty (Tage/Std/Min)
         <div class="penalty-triplet">
@@ -340,6 +349,7 @@
 <script>
 const sessionId = {{ session_id }};
 const moduleKey = {{ module_key | tojson }};
+const isDontMoveModule = moduleKey === "dont_move";
 const initialDifficulty = {{ initial_setup.difficulty | tojson }};
 let runId = {{ latest_run_id if latest_run_id is not none else 'null' }};
 let activeRun = null;
@@ -347,6 +357,7 @@ let cameraStream = null;
 let totalTimerHandle = null;
 let phaseTimerHandle = null;
 let runPollHandle = null;
+let dontMoveMonitorHandle = null;
 let sequenceToken = 0;
 let sequenceStepId = null;
 let verifyInFlight = false;
@@ -381,6 +392,9 @@ const beepVolumeEl = document.getElementById("gm-beep-volume");
 const beepVolumeValueEl = document.getElementById("gm-beep-volume-value");
 const testBeepEl = document.getElementById("gm-test-beep");
 const testDoubleBeepEl = document.getElementById("gm-test-double-beep");
+const dontMoveOptionsEl = document.getElementById("gm-dont-move-options");
+const dontMovePostureEl = document.getElementById("gm-dont-move-posture");
+const dontMoveHoldEl = document.getElementById("gm-dont-move-hold");
 
 function setStatus(msg, warn = false) {
   statusEl.textContent = msg || "";
@@ -619,6 +633,10 @@ function renderRun(run) {
 function stopStepSequence() {
   sequenceToken += 1;
   sequenceStepId = null;
+    if (dontMoveMonitorHandle) {
+      clearInterval(dontMoveMonitorHandle);
+      dontMoveMonitorHandle = null;
+    }
   if (phaseTimerHandle) {
     clearInterval(phaseTimerHandle);
     phaseTimerHandle = null;
@@ -675,7 +693,7 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
   const holdSeconds = Math.max(0, Math.min(Number(step.target_seconds || 0), holdBudget));
   const sampleWindowStart = 2;
   const sampleWindowEnd = Math.max(sampleWindowStart, holdSeconds - 6);
-  const sampleSecond = holdSeconds >= 8
+  const sampleSecond = (!isDontMoveModule && holdSeconds >= 8)
     ? (sampleWindowStart + Math.floor(Math.random() * (sampleWindowEnd - sampleWindowStart + 1)))
     : null;
   let sampleTriggered = false;
@@ -684,6 +702,20 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
     if (holdSeconds <= 0) {
       loadRun().catch(() => {});
       return;
+    }
+    if (isDontMoveModule) {
+      if (dontMoveMonitorHandle) {
+        clearInterval(dontMoveMonitorHandle);
+      }
+      // Strict monitoring cadence for "Don't move": recurring checks during the hold phase.
+      dontMoveMonitorHandle = setInterval(() => {
+        if (token !== sequenceToken) {
+          clearInterval(dontMoveMonitorHandle);
+          dontMoveMonitorHandle = null;
+          return;
+        }
+        verifyCurrentStepWithMode(token, { sampleOnly: true }).catch(() => {});
+      }, 2500);
     }
     countdownPhase({
       token,
@@ -699,7 +731,13 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
           verifyCurrentStepWithMode(token, { sampleOnly: true }).catch(() => {});
         }
       },
-      onFinished: () => verifyCurrentStepWithMode(token, { sampleOnly: false }),
+      onFinished: () => {
+        if (dontMoveMonitorHandle) {
+          clearInterval(dontMoveMonitorHandle);
+          dontMoveMonitorHandle = null;
+        }
+        verifyCurrentStepWithMode(token, { sampleOnly: false });
+      },
     });
   };
 
@@ -719,6 +757,27 @@ async function loadModule() {
     .join("");
   if ([...diffSel.options].some((opt) => opt.value === initialDifficulty)) {
     diffSel.value = initialDifficulty;
+  }
+
+  if (isDontMoveModule) {
+    dontMoveOptionsEl.classList.remove("hidden");
+    const postureData = await api(`/api/games/modules/${moduleKey}/postures`);
+    const usable = (postureData.items || []).filter((item) => {
+      const allowed = Array.isArray(item.allowed_module_keys) ? item.allowed_module_keys : [];
+      return allowed.includes(moduleKey);
+    });
+    dontMovePostureEl.innerHTML = "";
+    for (const item of usable) {
+      const option = document.createElement("option");
+      option.value = String(item.posture_key || "");
+      option.textContent = String(item.title || item.posture_key || "Pose");
+      dontMovePostureEl.appendChild(option);
+    }
+    if (usable.length === 0) {
+      throw new Error("Keine freigegebenen Postures fuer dieses Modul vorhanden");
+    }
+    const fallbackHold = Number(usable[0]?.target_seconds || 120);
+    dontMoveHoldEl.value = String(Math.max(5, Math.min(7200, fallbackHold)));
   }
 }
 
@@ -878,6 +937,19 @@ async function startRun() {
   const penaltyMinutes = Number(document.getElementById("gm-session-penalty-minutes").value || 0);
   const sessionPenalty = Math.max(0, (penaltyDays * 86400) + (penaltyHours * 3600) + (penaltyMinutes * 60));
 
+  let dontMovePostureKey = null;
+  let dontMoveHoldSeconds = null;
+  let effectiveDuration = duration;
+  if (isDontMoveModule) {
+    dontMovePostureKey = String(dontMovePostureEl.value || "").trim();
+    dontMoveHoldSeconds = Math.max(5, Math.min(7200, Number(dontMoveHoldEl.value || 120)));
+    if (!dontMovePostureKey) {
+      setStatus("Bitte eine Pose fuer Don't move auswaehlen.", true);
+      return;
+    }
+    effectiveDuration = Math.max(1, Math.ceil((dontMoveHoldSeconds + transitionSeconds + 15) / 60));
+  }
+
   try {
     const run = await api(`/api/games/sessions/${sessionId}/runs/start`, {
       method: "POST",
@@ -885,7 +957,7 @@ async function startRun() {
       body: JSON.stringify({
         module_key: moduleKey,
         difficulty,
-        duration_minutes: duration,
+        duration_minutes: effectiveDuration,
         transition_seconds: transitionSeconds,
         initiated_by: "player",
         max_misses_before_penalty: maxMisses,
@@ -893,6 +965,8 @@ async function startRun() {
         easy_target_multiplier: moduleSettings.easy_target_multiplier,
         hard_target_multiplier: moduleSettings.hard_target_multiplier,
         target_randomization_percent: moduleSettings.target_randomization_percent,
+        selected_posture_key: dontMovePostureKey,
+        hold_seconds: dontMoveHoldSeconds,
       }),
     });
     runId = run.id;

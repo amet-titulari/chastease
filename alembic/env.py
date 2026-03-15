@@ -8,6 +8,7 @@ from app.database import Base
 from app.models import (  # noqa: F401
     auth_user,
     contract,
+    game_posture_module_assignment,
     hygiene_opening,
     item,
     media_asset,

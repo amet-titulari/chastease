@@ -1,6 +1,7 @@
 from app.models.auth_user import AuthUser
 from app.models.contract import Contract, ContractAddendum
 from app.models.game_module_setting import GameModuleSetting
+from app.models.game_posture_module_assignment import GamePostureModuleAssignment
 from app.models.game_posture_template import GamePostureTemplate
 from app.models.game_run import GameRun
 from app.models.game_run_step import GameRunStep
@@ -26,6 +27,7 @@ __all__ = [
     "Contract",
     "ContractAddendum",
     "GameModuleSetting",
+    "GamePostureModuleAssignment",
     "GamePostureTemplate",
     "GameRun",
     "GameRunStep",

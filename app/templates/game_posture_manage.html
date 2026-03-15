@@ -81,6 +81,7 @@
 <script>
 const MODULE_KEY = {{ module_key | tojson }};
 let items = [];
+let availableModules = [];
 
 function setMsg(msg, warn = false) {
   const el = document.getElementById("pm-msg");
@@ -102,6 +103,19 @@ async function api(url, options = {}) {
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(payload.detail || res.statusText || "Fehler");
   return payload;
+}
+
+function moduleCheckboxesHtml(selectedKeys) {
+  const selected = new Set(Array.isArray(selectedKeys) ? selectedKeys : []);
+  if (!availableModules.length) {
+    return '<p class="pm-meta">Module werden geladen...</p>';
+  }
+  return availableModules
+    .map((mod) => {
+      const checked = selected.has(mod.key) ? "checked" : "";
+      return `<label style="display:flex; gap:0.35rem; align-items:center;"><input class="js-module-check" type="checkbox" value="${esc(mod.key)}" ${checked} />${esc(mod.title)}</label>`;
+    })
+    .join("");
 }
 
 function cardHtml(item) {
@@ -147,6 +161,9 @@ function cardHtml(item) {
           <label class="full">Instruktion
             <textarea class="js-instruction" rows="3" maxlength="2000">${esc(item.instruction || "")}</textarea>
           </label>
+          <label class="full">Verwendbar in Modulen
+            <div class="pm-actions" style="align-items:center;">${moduleCheckboxesHtml(item.allowed_module_keys || [])}</div>
+          </label>
         </div>
         <div class="pm-actions">
           <button type="button" class="js-save">Speichern</button>
@@ -190,6 +207,9 @@ function newCardHtml() {
         <label class="full">Instruktion
           <textarea class="js-instruction" rows="3" maxlength="2000" placeholder="Pose-Beschreibung"></textarea>
         </label>
+        <label class="full">Verwendbar in Modulen
+          <div class="pm-actions" style="align-items:center;">${moduleCheckboxesHtml([MODULE_KEY])}</div>
+        </label>
       </div>
       <div class="pm-actions">
         <button type="button" class="js-save">Anlegen</button>
@@ -208,6 +228,7 @@ function payloadFrom(card) {
     target_seconds: Number(card.querySelector(".js-target")?.value || 120),
     sort_order: Number(card.querySelector(".js-sort")?.value || 0),
     is_active: (card.querySelector(".js-active")?.value || "true") === "true",
+    allowed_module_keys: [...card.querySelectorAll(".js-module-check:checked")].map((el) => el.value),
   };
 }
 
@@ -243,6 +264,11 @@ async function loadItems() {
   }
 }
 
+async function loadModules() {
+  const data = await api("/api/games/modules");
+  availableModules = Array.isArray(data.items) ? data.items : [];
+}
+
 async function uploadForCard(card) {
   const input = card.querySelector(".js-image-file");
   const file = input?.files?.[0];
@@ -273,6 +299,10 @@ async function saveCard(card) {
   }
   if (!payload.image_url) {
     setCardStatus(card, "Bitte zuerst Bild hochladen.", true);
+    return;
+  }
+  if (!Array.isArray(payload.allowed_module_keys) || payload.allowed_module_keys.length === 0) {
+    setCardStatus(card, "Bitte mindestens ein Modul auswaehlen.", true);
     return;
   }
 
@@ -390,6 +420,8 @@ document.getElementById("pm-grid")?.addEventListener("click", async (event) => {
 document.getElementById("pm-export")?.addEventListener("click", exportZip);
 document.getElementById("pm-import")?.addEventListener("click", importZip);
 
-loadItems();
+loadModules()
+  .then(() => loadItems())
+  .catch((err) => setMsg(`Initialisierung fehlgeschlagen: ${err.message}`, true));
 </script>
 {% endblock %}
