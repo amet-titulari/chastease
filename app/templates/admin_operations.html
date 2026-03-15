@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+  .ops-shell {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    gap: 0.9rem;
+  }
+  .ops-hero {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    padding: 0.9rem;
+    background: linear-gradient(145deg, rgba(20, 45, 74, 0.75), rgba(7, 12, 22, 0.82));
+    display: grid;
+    gap: 0.45rem;
+  }
+  .ops-hero h2 { margin: 0; color: #ecf5ff; }
+  .ops-note { margin: 0; color: #abc2d9; }
+  .ops-metrics {
+    display: grid;
+    gap: 0.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+  .ops-metric {
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+    padding: 0.5rem 0.6rem;
+    display: grid;
+    gap: 0.1rem;
+  }
+  .ops-metric strong { color: #eff7ff; font-size: 1.1rem; }
+  .ops-metric span { color: #9db5cb; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .ops-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+  .ops-card {
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 12px;
+    background: rgba(255,255,255,0.03);
+    padding: 0.75rem;
+    display: grid;
+    gap: 0.45rem;
+  }
+  .ops-card h3 { margin: 0; color: #e5f3ff; font-size: 1rem; }
+  .ops-card p { margin: 0; color: #aac0d7; font-size: 0.86rem; }
+  .ops-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+  .ops-actions a {
+    text-decoration: none;
+    padding: 0.4rem 0.65rem;
+    border-radius: 9px;
+    border: 1px solid rgba(160,209,255,0.45);
+    background: rgba(72,126,180,0.34);
+    color: #eef7ff;
+    font-weight: 700;
+    font-size: 0.8rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set admin_section = "operations" %}
+{% include "_admin_subnav.html" %}
+<section class="ops-shell">
+  <section class="ops-hero">
+    <h2>Operations</h2>
+    <p class="ops-note">Operative Werkzeuge fuer Monitoring, Diagnose und manuelle Eingriffe.</p>
+    <div class="ops-metrics">
+      <div class="ops-metric"><strong>{{ counts.active_sessions }}</strong><span>Aktive Sessions</span></div>
+      <div class="ops-metric"><strong>{{ counts.game_runs }}</strong><span>Game Runs</span></div>
+      <div class="ops-metric"><strong>{{ counts.contracts }}</strong><span>Vertraege</span></div>
+    </div>
+  </section>
+
+  <section class="ops-grid">
+    <article class="ops-card">
+      <h3>Testkonsole</h3>
+      <p>Technische Konsole fuer Endpunkte, Live-Events und Fehlerdiagnose.</p>
+      <div class="ops-actions">
+        <a href="/testconsole">Oeffnen</a>
+      </div>
+    </article>
+
+    <article class="ops-card">
+      <h3>Session-Historie</h3>
+      <p>Ereignisse, Exporte und zeitliche Nachverfolgung von Sessions.</p>
+      <div class="ops-actions">
+        <a href="/history">Historie</a>
+      </div>
+    </article>
+
+    <article class="ops-card">
+      <h3>Vertragspruefung</h3>
+      <p>Vertraege laden und als Text/JSON fuer Audits exportieren.</p>
+      <div class="ops-actions">
+        <a href="/contracts">Vertraege</a>
+      </div>
+    </article>
+  </section>
+</section>
+{% endblock %}

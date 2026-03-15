@@ -85,6 +85,24 @@ def _set_auth_cookie(response: RedirectResponse, token: str) -> None:
     )
 
 
+def _admin_bootstrap_emails() -> set[str]:
+    raw = settings.admin_bootstrap_emails or ""
+    return {item.strip().lower() for item in raw.split(",") if item.strip()}
+
+
+def _is_admin_user(user: AuthUser | None) -> bool:
+    return bool(user and bool(getattr(user, "is_admin", False)))
+
+
+def _require_admin_user(request: Request, db: Session) -> AuthUser | RedirectResponse:
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    if not _is_admin_user(user):
+        return RedirectResponse(url="/experience", status_code=303)
+    return user
+
+
 # Session statuses that should keep the user in the current play context.
 _PLAY_REDIRECT_STATUSES = {
     "pending_contract",
@@ -355,12 +373,17 @@ def register(
         )
 
     salt = secrets.token_hex(16)
+    bootstrap_emails = _admin_bootstrap_emails()
+    existing_admin = db.query(AuthUser.id).filter(AuthUser.is_admin == True).first()  # noqa: E712
+    should_be_admin = existing_admin is None or normalized_email in bootstrap_emails
+
     user = AuthUser(
         username=normalized_username,
         email=normalized_email,
         password_salt=salt,
         password_hash=_hash_password(password, salt),
         session_token=secrets.token_urlsafe(32),
+        is_admin=should_be_admin,
         setup_completed=False,
     )
     db.add(user)
@@ -821,29 +844,38 @@ def restart_setup(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/testconsole", response_class=HTMLResponse)
-def dashboard(request: Request):
+def dashboard(request: Request, db: Session = Depends(get_db)):
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
-        context={"title": settings.app_name},
+        context={"title": settings.app_name, "current_user": user},
     )
 
 
 @router.get("/history", response_class=HTMLResponse)
-def history_page(request: Request):
+def history_page(request: Request, db: Session = Depends(get_db)):
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
     return templates.TemplateResponse(
         request=request,
         name="history.html",
-        context={"title": f"{settings.app_name} History"},
+        context={"title": f"{settings.app_name} History", "current_user": user},
     )
 
 
 @router.get("/contracts", response_class=HTMLResponse)
-def contracts_page(request: Request):
+def contracts_page(request: Request, db: Session = Depends(get_db)):
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
     return templates.TemplateResponse(
         request=request,
         name="contracts.html",
-        context={"title": f"{settings.app_name} Contracts"},
+        context={"title": f"{settings.app_name} Contracts", "current_user": user},
     )
 
 
@@ -877,37 +909,37 @@ def contract_view(session_id: int, request: Request, db: Session = Depends(get_d
 
 @router.get("/personas", response_class=HTMLResponse)
 def personas_page(request: Request, db: Session = Depends(get_db)):
-    user = _get_current_user(request, db)
-    if user is None:
-        return RedirectResponse(url="/", status_code=303)
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
     return templates.TemplateResponse(
         request=request,
         name="personas.html",
-        context={"title": f"{settings.app_name} – Personas"},
+        context={"title": f"{settings.app_name} – Personas", "current_user": user},
     )
 
 
 @router.get("/scenarios", response_class=HTMLResponse)
 def scenarios_page(request: Request, db: Session = Depends(get_db)):
-    user = _get_current_user(request, db)
-    if user is None:
-        return RedirectResponse(url="/", status_code=303)
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
     return templates.TemplateResponse(
         request=request,
         name="scenarios.html",
-        context={"title": f"{settings.app_name} – Scenarios"},
+        context={"title": f"{settings.app_name} – Scenarios", "current_user": user},
     )
 
 
 @router.get("/inventory", response_class=HTMLResponse)
 def inventory_page(request: Request, db: Session = Depends(get_db)):
-    user = _get_current_user(request, db)
-    if user is None:
-        return RedirectResponse(url="/", status_code=303)
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
     return templates.TemplateResponse(
         request=request,
         name="inventory.html",
-        context={"title": f"{settings.app_name} – Inventory"},
+        context={"title": f"{settings.app_name} – Inventory", "current_user": user},
     )
 
 
@@ -1481,9 +1513,9 @@ def games_page(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request, db: Session = Depends(get_db)):
-    user = _get_current_user(request, db)
-    if user is None:
-        return RedirectResponse(url="/", status_code=303)
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
 
     modules = [as_public_module_payload(module) for module in list_modules()]
 
@@ -1548,6 +1580,15 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
             "count": counts["active_sessions"],
             "count_label": "Aktive Sessions",
         },
+        {
+            "title": "Operations",
+            "summary": "Wartung, Testkonsole und operative Uebersicht.",
+            "href": "/admin/operations",
+            "secondary_href": "/testconsole",
+            "secondary_label": "Testkonsole",
+            "count": counts["game_runs"],
+            "count_label": "Runs",
+        },
     ]
 
     return templates.TemplateResponse(
@@ -1565,9 +1606,9 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/admin/postures/matrix", response_class=HTMLResponse)
 def admin_posture_matrix_page(request: Request, db: Session = Depends(get_db)):
-    user = _get_current_user(request, db)
-    if user is None:
-        return RedirectResponse(url="/", status_code=303)
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
 
     return templates.TemplateResponse(
         request=request,
@@ -1579,15 +1620,38 @@ def admin_posture_matrix_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/admin/operations", response_class=HTMLResponse)
+def admin_operations_page(request: Request, db: Session = Depends(get_db)):
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    counts = {
+        "active_sessions": int(db.query(func.count(SessionModel.id)).filter(SessionModel.status == "active").scalar() or 0),
+        "game_runs": int(db.query(func.count(GameRun.id)).scalar() or 0),
+        "contracts": int(db.query(func.count(Contract.id)).scalar() or 0),
+    }
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_operations.html",
+        context={
+            "title": f"{settings.app_name} - Operations",
+            "current_user": user,
+            "counts": counts,
+        },
+    )
+
+
 @router.get("/games/postures", response_class=HTMLResponse)
 def games_postures_page(
     request: Request,
     module_key: str = Query(default="posture_training", max_length=120),
     db: Session = Depends(get_db),
 ):
-    user = _get_current_user(request, db)
-    if user is None:
-        return RedirectResponse(url="/", status_code=303)
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
 
     module = get_module(module_key)
     if module is None:

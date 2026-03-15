@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     session_timer_sweeper_enabled: bool = True
     session_timer_sweeper_interval_seconds: int = 30
     admin_secret: str | None = None
+    admin_bootstrap_emails: str = ""
     ai_provider: str = "stub"
     ai_ollama_base_url: str = "http://127.0.0.1:11434"
     ai_ollama_model: str = "llama3.1"

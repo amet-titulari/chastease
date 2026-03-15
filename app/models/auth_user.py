@@ -12,6 +12,7 @@ class AuthUser(Base):
     password_hash = Column(String(64), nullable=False)
     password_salt = Column(String(32), nullable=False)
     session_token = Column(String(128), nullable=True, unique=True, index=True)
+    is_admin = Column(Boolean, nullable=False, default=False)
     setup_completed = Column(Boolean, nullable=False, default=False)
     default_player_profile_id = Column(Integer, ForeignKey("player_profiles.id", ondelete="SET NULL"), nullable=True)
     active_session_id = Column(Integer, ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)

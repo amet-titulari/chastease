@@ -19,6 +19,27 @@
   .mx-head h2 { margin: 0; color: #ecf5ff; }
   .mx-note { margin: 0; color: #a8bfd7; }
   .mx-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+  .mx-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.55rem;
+    align-items: end;
+  }
+  .mx-filters label {
+    display: grid;
+    gap: 0.2rem;
+    color: #b7cce0;
+    font-size: 0.82rem;
+  }
+  .mx-filters input,
+  .mx-filters select {
+    width: 100%;
+  }
+  .mx-bulk {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
   .mx-table-wrap {
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 14px;
@@ -75,6 +96,25 @@
       <button type="button" id="mx-save">Matrix speichern</button>
       <button type="button" id="mx-reload" class="ghost">Neu laden</button>
     </div>
+    <div class="mx-filters">
+      <label>Suche
+        <input id="mx-search" type="text" placeholder="Titel oder Key" />
+      </label>
+      <label>Modul-Fokus
+        <select id="mx-module-filter"></select>
+      </label>
+      <label>Aktive anzeigen
+        <select id="mx-active-only">
+          <option value="all">Alle</option>
+          <option value="active">Nur aktive</option>
+          <option value="inactive">Nur inaktive</option>
+        </select>
+      </label>
+    </div>
+    <div class="mx-bulk">
+      <button type="button" id="mx-bulk-enable">Sichtbare im Modul aktivieren</button>
+      <button type="button" id="mx-bulk-disable" class="ghost">Sichtbare im Modul deaktivieren</button>
+    </div>
     <p id="mx-status" class="mx-status"></p>
   </section>
 
@@ -95,6 +135,9 @@ let items = [];
 const statusEl = document.getElementById("mx-status");
 const headEl = document.getElementById("mx-head-row");
 const bodyEl = document.getElementById("mx-body");
+const searchEl = document.getElementById("mx-search");
+const moduleFilterEl = document.getElementById("mx-module-filter");
+const activeOnlyEl = document.getElementById("mx-active-only");
 
 function setStatus(msg, warn = false) {
   statusEl.textContent = msg || "";
@@ -125,7 +168,8 @@ function renderTable() {
   headerCells.push("</tr>");
   headEl.innerHTML = headerCells.join("");
 
-  bodyEl.innerHTML = items.map((item) => {
+  const visibleItems = getFilteredItems();
+  bodyEl.innerHTML = visibleItems.map((item) => {
     const allowed = new Set(Array.isArray(item.allowed_module_keys) ? item.allowed_module_keys : []);
     const checks = modules.map((mod) => {
       const checked = allowed.has(mod.key) ? "checked" : "";
@@ -141,6 +185,35 @@ function renderTable() {
       </tr>
     `;
   }).join("");
+
+  setStatus(`Ansicht: ${visibleItems.length}/${items.length} Postures sichtbar.`);
+}
+
+function getFilteredItems() {
+  const q = (searchEl.value || "").trim().toLowerCase();
+  const moduleKey = moduleFilterEl.value || "all";
+  const activeMode = activeOnlyEl.value || "all";
+
+  return items.filter((item) => {
+    const title = String(item.title || "").toLowerCase();
+    const key = String(item.posture_key || "").toLowerCase();
+    if (q && !title.includes(q) && !key.includes(q)) return false;
+
+    if (activeMode === "active" && !item.is_active) return false;
+    if (activeMode === "inactive" && item.is_active) return false;
+
+    if (moduleKey !== "all") {
+      const allowed = Array.isArray(item.allowed_module_keys) ? item.allowed_module_keys : [];
+      if (!allowed.includes(moduleKey)) return false;
+    }
+    return true;
+  });
+}
+
+function populateModuleFilter() {
+  moduleFilterEl.innerHTML = '<option value="all">Alle Module</option>' + modules
+    .map((mod) => `<option value="${esc(mod.key)}">${esc(mod.title || mod.key)}</option>`)
+    .join("");
 }
 
 async function loadMatrix() {
@@ -148,19 +221,53 @@ async function loadMatrix() {
   const data = await api("/api/games/postures/matrix");
   modules = Array.isArray(data.modules) ? data.modules : [];
   items = Array.isArray(data.items) ? data.items : [];
+  populateModuleFilter();
   renderTable();
   setStatus(`Matrix geladen: ${items.length} Postures, ${modules.length} Module.`);
 }
 
 function collectPayload() {
-  const result = [];
-  for (const row of bodyEl.querySelectorAll("tr[data-posture-id]")) {
-    const postureId = Number(row.dataset.postureId || 0);
-    if (!postureId) continue;
-    const allowed = [...row.querySelectorAll(".mx-check:checked")].map((el) => el.dataset.moduleKey).filter(Boolean);
-    result.push({ posture_id: postureId, allowed_module_keys: allowed });
+  return items.map((item) => ({
+    posture_id: Number(item.id),
+    allowed_module_keys: Array.isArray(item.allowed_module_keys) ? item.allowed_module_keys : [],
+  }));
+}
+
+function syncItemFromCheckbox(checkbox) {
+  const postureId = Number(checkbox.dataset.postureId || 0);
+  const moduleKey = String(checkbox.dataset.moduleKey || "");
+  if (!postureId || !moduleKey) return;
+
+  const item = items.find((x) => Number(x.id) === postureId);
+  if (!item) return;
+  const allowed = new Set(Array.isArray(item.allowed_module_keys) ? item.allowed_module_keys : []);
+  if (checkbox.checked) {
+    allowed.add(moduleKey);
+  } else {
+    allowed.delete(moduleKey);
   }
-  return result;
+  item.allowed_module_keys = [...allowed];
+}
+
+function applyBulkForVisible(checked) {
+  const moduleKey = moduleFilterEl.value || "all";
+  if (moduleKey === "all") {
+    setStatus("Bitte zuerst im Modul-Fokus ein konkretes Modul waehlen.", true);
+    return;
+  }
+
+  const visibleIds = new Set(getFilteredItems().map((item) => Number(item.id)));
+  for (const item of items) {
+    if (!visibleIds.has(Number(item.id))) continue;
+    const allowed = new Set(Array.isArray(item.allowed_module_keys) ? item.allowed_module_keys : []);
+    if (checked) {
+      allowed.add(moduleKey);
+    } else {
+      allowed.delete(moduleKey);
+    }
+    item.allowed_module_keys = [...allowed];
+  }
+  renderTable();
 }
 
 async function saveMatrix() {
@@ -180,6 +287,17 @@ async function saveMatrix() {
 document.getElementById("mx-save").addEventListener("click", saveMatrix);
 document.getElementById("mx-reload").addEventListener("click", () => {
   loadMatrix().catch((err) => setStatus(`Laden fehlgeschlagen: ${err.message}`, true));
+});
+document.getElementById("mx-bulk-enable").addEventListener("click", () => applyBulkForVisible(true));
+document.getElementById("mx-bulk-disable").addEventListener("click", () => applyBulkForVisible(false));
+searchEl.addEventListener("input", renderTable);
+moduleFilterEl.addEventListener("change", renderTable);
+activeOnlyEl.addEventListener("change", renderTable);
+bodyEl.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (!target.classList.contains("mx-check")) return;
+  syncItemFromCheckbox(target);
 });
 
 loadMatrix().catch((err) => setStatus(`Laden fehlgeschlagen: ${err.message}`, true));

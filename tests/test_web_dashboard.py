@@ -1,6 +1,25 @@
 from fastapi.testclient import TestClient
+from uuid import uuid4
 
+from app.config import settings
 from app.main import app
+
+
+def _register_admin(client: TestClient):
+    email = f"dash-{uuid4().hex[:8]}@example.com"
+    existing_bootstrap = settings.admin_bootstrap_emails or ""
+    settings.admin_bootstrap_emails = ",".join([entry for entry in [existing_bootstrap, email] if entry])
+    resp = client.post(
+        "/auth/register",
+        data={
+            "username": f"dash-{uuid4().hex[:8]}",
+            "email": email,
+            "password": "verysecure1",
+            "password_confirm": "verysecure1",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
 
 
 def test_landing_page_renders_auth_ui():
@@ -15,6 +34,7 @@ def test_landing_page_renders_auth_ui():
 
 def test_dashboard_renders():
     with TestClient(app) as client:
+        _register_admin(client)
         resp = client.get("/testconsole")
         assert resp.status_code == 200
         html = resp.text
@@ -57,5 +77,6 @@ def test_stylesheet_contains_responsive_rules():
 
 def test_history_route_exists():
     with TestClient(app) as client:
+        _register_admin(client)
         resp = client.get("/history")
         assert resp.status_code == 200

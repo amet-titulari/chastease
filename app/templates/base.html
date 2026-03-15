@@ -19,7 +19,9 @@
         <a href="/scenarios">Scenarios</a>
         <a href="/inventory">Inventar</a>
         <a href="/games">Games</a>
-        <a href="/admin">Admin</a>
+        {% if current_user and current_user.is_admin %}
+          <a href="/admin">Admin</a>
+        {% endif %}
         <a href="/profile">Profil</a>
       </nav>
     </div>

@@ -1,12 +1,15 @@
 from fastapi.testclient import TestClient
 from uuid import uuid4
 
+from app.config import settings
 from app.main import app
 
 
 def _register_and_finish_setup(client: TestClient, email: str = "xp-user@example.com"):
     username = f"xp-{uuid4().hex[:8]}"
     unique_email = email if email != "xp-user@example.com" else f"xp-{uuid4().hex[:8]}@example.com"
+    existing_bootstrap = settings.admin_bootstrap_emails or ""
+    settings.admin_bootstrap_emails = ",".join([entry for entry in [existing_bootstrap, unique_email] if entry])
 
     register_resp = client.post(
         "/auth/register",
@@ -260,6 +263,7 @@ def test_admin_center_page_renders():
         assert "Admin Navigation" in html
         assert "Posture Library" in html
         assert "/admin/postures/matrix" in html
+        assert "/admin/operations" in html
         assert "Personas" in html
         assert "Scenarios" in html
         assert "Inventar" in html
@@ -275,7 +279,22 @@ def test_admin_posture_matrix_page_renders():
         assert "Posture Matrix" in html
         assert "Admin Navigation" in html
         assert "Matrix speichern" in html
+        assert "Sichtbare im Modul aktivieren" in html
+        assert "Suche" in html
         assert "/api/games/postures/matrix" in html
+
+
+def test_admin_operations_page_renders():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        resp = client.get("/admin/operations")
+        assert resp.status_code == 200
+        html = resp.text
+        assert "Operations" in html
+        assert "Admin Navigation" in html
+        assert "Testkonsole" in html
+        assert "Session-Historie" in html
 
 
 def test_game_page_prefills_setup_from_latest_run_values():
