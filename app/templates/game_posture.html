@@ -262,13 +262,13 @@
       <label>Dauer (Min)
         <input id="gm-duration" type="number" min="1" max="240" value="{{ initial_setup.duration_minutes }}" />
       </label>
-      <label>Wechseldauer (Sek)
+      <label id="gm-transition-wrap">Wechseldauer (Sek)
         <input id="gm-transition-seconds" type="number" min="0" max="60" value="{{ initial_setup.transition_seconds }}" />
       </label>
       <label>Schwierigkeit
         <select id="gm-difficulty"></select>
       </label>
-      <label>Max Verfehlungen
+      <label id="gm-max-misses-wrap">Max Verfehlungen
         <input id="gm-max-misses" type="number" min="1" max="20" value="{{ initial_setup.max_misses_before_penalty }}" />
       </label>
     </div>
@@ -283,7 +283,7 @@
     </div>
 
     <div class="setup-secondary">
-      <label>Session-Penalty (Tage/Std/Min)
+      <label id="gm-session-penalty-label"><span id="gm-session-penalty-label-text">Session-Penalty (Tage/Std/Min)</span>
         <div class="penalty-triplet">
           <input id="gm-session-penalty-days" type="number" min="0" max="365" value="{{ initial_setup.session_penalty_days }}" placeholder="T" title="Tage" />
           <input id="gm-session-penalty-hours" type="number" min="0" max="23" value="{{ initial_setup.session_penalty_hours }}" placeholder="Std" title="Stunden" />
@@ -337,7 +337,7 @@
         <img id="gm-verify-thumb" class="verify-thumb" alt="Letztes Pruefungsbild" style="display:none;" />
       </div>
       <p id="gm-analysis" class="game-meta"></p>
-      <p class="game-meta">Misses: <span id="gm-miss-count">0</span> · Retry +Zeit: <span id="gm-retry-time">0s</span></p>
+      <p class="game-meta"><span id="gm-miss-label">Misses</span>: <span id="gm-miss-count">0</span> · Retry +Zeit: <span id="gm-retry-time">0s</span></p>
       <div id="gm-capture-gallery" class="capture-gallery"></div>
       <div id="gm-final-report" class="final-report"></div>
     </aside>
@@ -395,6 +395,10 @@ const testDoubleBeepEl = document.getElementById("gm-test-double-beep");
 const dontMoveOptionsEl = document.getElementById("gm-dont-move-options");
 const dontMovePostureEl = document.getElementById("gm-dont-move-posture");
 const dontMoveHoldEl = document.getElementById("gm-dont-move-hold");
+const missLabelEl = document.getElementById("gm-miss-label");
+const transitionWrapEl = document.getElementById("gm-transition-wrap");
+const maxMissesWrapEl = document.getElementById("gm-max-misses-wrap");
+const sessionPenaltyLabelTextEl = document.getElementById("gm-session-penalty-label-text");
 
 function setStatus(msg, warn = false) {
   statusEl.textContent = msg || "";
@@ -574,7 +578,7 @@ function renderRun(run) {
   activeRun = run;
   runStatusEl.textContent = run.status;
   missCountEl.textContent = String(run.miss_count || 0);
-  retryTimeEl.textContent = `${run.retry_extension_seconds || 0}s`;
+  retryTimeEl.textContent = isDontMoveModule ? "0s" : `${run.retry_extension_seconds || 0}s`;
   startTotalTimer(run.remaining_seconds, run.status === "active");
 
   const step = run.current_step;
@@ -761,6 +765,17 @@ async function loadModule() {
 
   if (isDontMoveModule) {
     dontMoveOptionsEl.classList.remove("hidden");
+    if (transitionWrapEl) transitionWrapEl.classList.add("hidden");
+    if (maxMissesWrapEl) maxMissesWrapEl.classList.add("hidden");
+    if (sessionPenaltyLabelTextEl) {
+      sessionPenaltyLabelTextEl.textContent = "Penalty pro Verfehlung (Tage/Std/Min)";
+    }
+    if (missLabelEl) {
+      missLabelEl.textContent = "Verstoesse";
+    }
+    document.getElementById("gm-transition-seconds").value = "0";
+    document.getElementById("gm-max-misses").value = "1";
+
     const postureData = await api(`/api/games/modules/${moduleKey}/postures`);
     const usable = (postureData.items || []).filter((item) => {
       const allowed = Array.isArray(item.allowed_module_keys) ? item.allowed_module_keys : [];
@@ -929,9 +944,9 @@ async function startRun() {
   }
 
   const duration = Number(document.getElementById("gm-duration").value || 20);
-  const transitionSeconds = Number(document.getElementById("gm-transition-seconds").value || 8);
+  const transitionSecondsInput = Number(document.getElementById("gm-transition-seconds").value || 8);
   const difficulty = document.getElementById("gm-difficulty").value || "medium";
-  const maxMisses = Number(document.getElementById("gm-max-misses").value || 3);
+  const maxMissesInput = Number(document.getElementById("gm-max-misses").value || 3);
   const penaltyDays = Number(document.getElementById("gm-session-penalty-days").value || 0);
   const penaltyHours = Number(document.getElementById("gm-session-penalty-hours").value || 0);
   const penaltyMinutes = Number(document.getElementById("gm-session-penalty-minutes").value || 0);
@@ -939,15 +954,19 @@ async function startRun() {
 
   let dontMovePostureKey = null;
   let dontMoveHoldSeconds = null;
+  let effectiveTransitionSeconds = transitionSecondsInput;
+  let effectiveMaxMisses = maxMissesInput;
   let effectiveDuration = duration;
   if (isDontMoveModule) {
     dontMovePostureKey = String(dontMovePostureEl.value || "").trim();
     dontMoveHoldSeconds = Math.max(5, Math.min(7200, Number(dontMoveHoldEl.value || 120)));
+    effectiveTransitionSeconds = 0;
+    effectiveMaxMisses = 1;
     if (!dontMovePostureKey) {
       setStatus("Bitte eine Pose fuer Don't move auswaehlen.", true);
       return;
     }
-    effectiveDuration = Math.max(1, Math.ceil((dontMoveHoldSeconds + transitionSeconds + 15) / 60));
+    effectiveDuration = Math.max(1, Math.ceil((dontMoveHoldSeconds + 15) / 60));
   }
 
   try {
@@ -958,9 +977,9 @@ async function startRun() {
         module_key: moduleKey,
         difficulty,
         duration_minutes: effectiveDuration,
-        transition_seconds: transitionSeconds,
+        transition_seconds: effectiveTransitionSeconds,
         initiated_by: "player",
-        max_misses_before_penalty: maxMisses,
+        max_misses_before_penalty: effectiveMaxMisses,
         session_penalty_seconds: sessionPenalty,
         easy_target_multiplier: moduleSettings.easy_target_multiplier,
         hard_target_multiplier: moduleSettings.hard_target_multiplier,

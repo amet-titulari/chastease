@@ -12,6 +12,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.main import app
 from app.models.game_run import GameRun
+from app.models.session import Session as SessionModel
 
 
 def _ppm_bytes(width: int, height: int, rgb: tuple[int, int, int] = (128, 128, 128)) -> bytes:
@@ -62,6 +63,8 @@ def test_start_game_run_with_dont_move_module():
         payload = resp.json()
         assert payload["module_key"] == "dont_move"
         assert payload["status"] == "active"
+        assert payload["transition_seconds"] == 0
+        assert payload["max_misses_before_penalty"] == 1
         assert payload["current_step"] is not None
 
 
@@ -132,6 +135,86 @@ def test_dont_move_rejects_posture_not_allowed_for_module():
         )
         assert start_resp.status_code == 422
         assert "Selected posture" in start_resp.json()["detail"]
+
+
+def test_dont_move_counts_each_violation_and_applies_penalty_per_violation():
+    with TestClient(app) as client:
+        posture_key = f"test_dm_penalty_pose_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "DM Penalty Pose",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "No movement.",
+                "target_seconds": 120,
+                "sort_order": 3,
+                "is_active": True,
+                "allowed_module_keys": ["dont_move"],
+            },
+        )
+        assert create_resp.status_code == 200
+
+        session_id = _create_and_sign(client)
+
+        db = SessionLocal()
+        try:
+            baseline_session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            assert baseline_session is not None
+            baseline_lock_end = baseline_session.lock_end
+        finally:
+            db.close()
+
+        start_resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "dont_move",
+                "difficulty": "medium",
+                "duration_minutes": 5,
+                "selected_posture_key": posture_key,
+                "hold_seconds": 60,
+                "session_penalty_seconds": 3600,
+                "transition_seconds": 12,
+                "max_misses_before_penalty": 7,
+            },
+        )
+        assert start_resp.status_code == 200
+        run = start_resp.json()
+        run_id = int(run["id"])
+        step_id = int(run["current_step"]["id"])
+
+        with patch("app.routers.games.analyze_verification", return_value=("suspicious", "AI movement detected")):
+            first = client.post(
+                f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+                files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                data={"observed_posture": run["current_step"]["posture_name"], "sample_only": "true"},
+            )
+            second = client.post(
+                f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+                files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                data={"observed_posture": run["current_step"]["posture_name"], "sample_only": "true"},
+            )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+
+        first_payload = first.json()
+        second_payload = second.json()
+        assert first_payload["step"]["status"] == "pending"
+        assert first_payload["step"]["finalized"] is False
+        assert second_payload["step"]["status"] == "pending"
+        assert second_payload["step"]["finalized"] is False
+        assert int(second_payload["run"]["miss_count"]) == 2
+
+        db = SessionLocal()
+        try:
+            updated_session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            assert updated_session is not None
+            assert baseline_lock_end is not None and updated_session.lock_end is not None
+            delta_seconds = int((updated_session.lock_end - baseline_lock_end).total_seconds())
+            assert delta_seconds >= 7200
+        finally:
+            db.close()
 
 
 def test_start_game_run_and_fetch_state():

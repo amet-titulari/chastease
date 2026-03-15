@@ -1058,6 +1058,13 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
     if not difficulty:
         raise HTTPException(status_code=409, detail="Difficulty not supported for this module")
 
+    effective_transition_seconds = int(payload.transition_seconds)
+    effective_max_misses_before_penalty = int(payload.max_misses_before_penalty)
+    if module.key == "dont_move":
+        effective_transition_seconds = 0
+        # Dont move applies penalty per violation, threshold is intentionally neutralized.
+        effective_max_misses_before_penalty = 1
+
     run = GameRun(
         session_id=session_id,
         module_key=module.key,
@@ -1066,8 +1073,8 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
         status="active",
         total_duration_seconds=payload.duration_minutes * 60,
         retry_extension_seconds=0,
-        transition_seconds=payload.transition_seconds,
-        max_misses_before_penalty=payload.max_misses_before_penalty,
+        transition_seconds=effective_transition_seconds,
+        max_misses_before_penalty=effective_max_misses_before_penalty,
         miss_count=0,
         session_penalty_seconds=payload.session_penalty_seconds,
         session_penalty_applied=False,
@@ -1133,9 +1140,17 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
             role="system",
             message_type="game_started",
             content=(
-                f"Spiel gestartet: {module.title} | difficulty={difficulty.label} | "
-                f"duration_minutes={payload.duration_minutes} | max_misses={payload.max_misses_before_penalty} | "
-                f"target_multiplier={target_multiplier} | target_randomization_percent={randomization_percent}"
+                (
+                    f"Spiel gestartet: {module.title} | difficulty={difficulty.label} | "
+                    f"duration_minutes={payload.duration_minutes} | "
+                    f"session_penalty_per_violation_seconds={payload.session_penalty_seconds}"
+                )
+                if module.key == "dont_move"
+                else (
+                    f"Spiel gestartet: {module.title} | difficulty={difficulty.label} | "
+                    f"duration_minutes={payload.duration_minutes} | max_misses={effective_max_misses_before_penalty} | "
+                    f"target_multiplier={target_multiplier} | target_randomization_percent={randomization_percent}"
+                )
             ),
         )
     )
@@ -1233,6 +1248,39 @@ async def verify_game_step(
 
         run.miss_count += 1
         disable_retry_for_module = run.module_key == "dont_move"
+
+        if disable_retry_for_module:
+            if run.session_penalty_seconds > 0:
+                session_obj = _load_session(db, run.session_id)
+                current_lock_end = _as_utc(session_obj.lock_end) or now
+                session_obj.lock_end = current_lock_end + timedelta(seconds=run.session_penalty_seconds)
+                run.session_penalty_applied = True
+                db.add(session_obj)
+                db.add(
+                    Message(
+                        session_id=run.session_id,
+                        role="system",
+                        message_type="game_penalty",
+                        content=(
+                            "Session-Penalty pro Verfehlung ausgeloest: "
+                            f"+{run.session_penalty_seconds}s (Verfehlung #{run.miss_count})."
+                        ),
+                    )
+                )
+
+            db.add(
+                Message(
+                    session_id=run.session_id,
+                    role="system",
+                    message_type="game_step_fail",
+                    content=(
+                        f"Bewegungsverstoss erkannt: {step.posture_name}. "
+                        f"Verstoesse gesamt: {run.miss_count}."
+                    ),
+                )
+            )
+            return
+
         retry_depth = _retry_depth_for_step(db, run.id, step)
         can_append_retry = (not disable_retry_for_module) and (retry_depth < MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN)
 
@@ -1319,16 +1367,21 @@ async def verify_game_step(
                 )
             )
         else:
-            step.status = "failed"
-            step.completed_at = now
             _handle_failed_step_with_retry_policy()
+            if run.module_key != "dont_move":
+                step.status = "failed"
+                step.completed_at = now
 
             db.add(
                 Message(
                     session_id=run.session_id,
                     role="system",
                     message_type="game_step_sample_fail",
-                    content=f"Stichprobe fehlgeschlagen: {step.posture_name}",
+                    content=(
+                        f"Stichprobe fehlgeschlagen: {step.posture_name}"
+                        if run.module_key != "dont_move"
+                        else f"Bewegungsverstoss in Stichprobe erkannt: {step.posture_name}"
+                    ),
                 )
             )
     elif status == "confirmed":
