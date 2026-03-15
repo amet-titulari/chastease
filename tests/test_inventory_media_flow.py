@@ -2,16 +2,20 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
 
 
 def _register(client: TestClient):
     unique = uuid4().hex[:8]
+    email = f"inv-{unique}@example.com"
+    existing = settings.admin_bootstrap_emails or ""
+    settings.admin_bootstrap_emails = ",".join([item for item in [existing, email] if item])
     return client.post(
         "/auth/register",
         data={
             "username": f"inv-{unique}",
-            "email": f"inv-{unique}@example.com",
+            "email": email,
             "password": "verysecure1",
             "password_confirm": "verysecure1",
         },

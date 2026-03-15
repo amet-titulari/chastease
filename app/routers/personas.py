@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -8,6 +8,8 @@ from app.database import get_db
 from app.models.media_asset import MediaAsset
 from app.models.persona import Persona
 from app.models.persona_task_template import PersonaTaskTemplate
+from app.security import require_admin_session_user
+from app.services.audit_logger import audit_log
 from app.services.persona_card_mapper import map_external_persona_card
 
 router = APIRouter(prefix="/api/personas", tags=["personas"])
@@ -227,13 +229,15 @@ def _template_export_payload(template: PersonaTaskTemplate) -> dict:
 
 
 @router.get("")
-def list_personas(db: Session = Depends(get_db)) -> dict:
+def list_personas(request: Request, db: Session = Depends(get_db)) -> dict:
+    require_admin_session_user(request, db)
     rows = db.query(Persona).order_by(Persona.id.asc()).all()
     return {"items": [_persona_to_dict(p) for p in rows]}
 
 
 @router.post("")
-def create_persona(payload: PersonaCreateRequest, db: Session = Depends(get_db)) -> dict:
+def create_persona(payload: PersonaCreateRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_admin_session_user(request, db)
     _ensure_avatar_exists(db, payload.avatar_media_id)
     persona = Persona(
         name=payload.name.strip(),
@@ -247,11 +251,13 @@ def create_persona(payload: PersonaCreateRequest, db: Session = Depends(get_db))
     db.add(persona)
     db.commit()
     db.refresh(persona)
+    audit_log("admin_persona_created", actor_user_id=user.id, persona_id=persona.id, persona_name=persona.name)
     return _persona_to_dict(persona)
 
 
 @router.get("/{persona_id}")
-def get_persona(persona_id: int, db: Session = Depends(get_db)) -> dict:
+def get_persona(persona_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    require_admin_session_user(request, db)
     persona = db.query(Persona).filter(Persona.id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
@@ -259,7 +265,8 @@ def get_persona(persona_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/{persona_id}/task-templates")
-def list_persona_task_templates(persona_id: int, db: Session = Depends(get_db)) -> dict:
+def list_persona_task_templates(persona_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    require_admin_session_user(request, db)
     persona = db.query(Persona).filter(Persona.id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
@@ -276,8 +283,10 @@ def list_persona_task_templates(persona_id: int, db: Session = Depends(get_db)) 
 def create_persona_task_template(
     persona_id: int,
     payload: PersonaTaskTemplateCreateRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
+    user = require_admin_session_user(request, db)
     persona = db.query(Persona).filter(Persona.id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
@@ -296,6 +305,12 @@ def create_persona_task_template(
     db.add(template)
     db.commit()
     db.refresh(template)
+    audit_log(
+        "admin_persona_task_template_created",
+        actor_user_id=user.id,
+        persona_id=persona_id,
+        template_id=template.id,
+    )
     return _template_to_dict(template)
 
 
@@ -304,8 +319,10 @@ def update_persona_task_template(
     persona_id: int,
     template_id: int,
     payload: PersonaTaskTemplateUpdateRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
+    user = require_admin_session_user(request, db)
     template = (
         db.query(PersonaTaskTemplate)
         .filter(PersonaTaskTemplate.id == template_id, PersonaTaskTemplate.persona_id == persona_id)
@@ -336,11 +353,18 @@ def update_persona_task_template(
     db.add(template)
     db.commit()
     db.refresh(template)
+    audit_log(
+        "admin_persona_task_template_updated",
+        actor_user_id=user.id,
+        persona_id=persona_id,
+        template_id=template.id,
+    )
     return _template_to_dict(template)
 
 
 @router.delete("/{persona_id}/task-templates/{template_id}")
-def delete_persona_task_template(persona_id: int, template_id: int, db: Session = Depends(get_db)) -> dict:
+def delete_persona_task_template(persona_id: int, template_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_admin_session_user(request, db)
     template = (
         db.query(PersonaTaskTemplate)
         .filter(PersonaTaskTemplate.id == template_id, PersonaTaskTemplate.persona_id == persona_id)
@@ -348,13 +372,21 @@ def delete_persona_task_template(persona_id: int, template_id: int, db: Session 
     )
     if not template:
         raise HTTPException(status_code=404, detail="Task template not found")
+    deleted_id = int(template.id)
     db.delete(template)
     db.commit()
+    audit_log(
+        "admin_persona_task_template_deleted",
+        actor_user_id=user.id,
+        persona_id=persona_id,
+        template_id=deleted_id,
+    )
     return {"deleted": template_id}
 
 
 @router.get("/{persona_id}/task-templates/export")
-def export_persona_task_templates(persona_id: int, db: Session = Depends(get_db)) -> JSONResponse:
+def export_persona_task_templates(persona_id: int, request: Request, db: Session = Depends(get_db)) -> JSONResponse:
+    require_admin_session_user(request, db)
     persona = db.query(Persona).filter(Persona.id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
@@ -384,8 +416,10 @@ def export_persona_task_templates(persona_id: int, db: Session = Depends(get_db)
 def import_persona_task_templates(
     persona_id: int,
     payload: PersonaTaskLibraryImportRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
+    user = require_admin_session_user(request, db)
     persona = db.query(Persona).filter(Persona.id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
@@ -449,6 +483,13 @@ def import_persona_task_templates(
         imported += 1
 
     db.commit()
+    audit_log(
+        "admin_persona_task_templates_imported",
+        actor_user_id=user.id,
+        persona_id=persona_id,
+        imported=imported,
+        replace_existing=bool(payload.replace_existing),
+    )
     return {
         "imported": imported,
         "replace_existing": payload.replace_existing,
@@ -457,7 +498,8 @@ def import_persona_task_templates(
 
 
 @router.put("/{persona_id}")
-def update_persona(persona_id: int, payload: PersonaUpdateRequest, db: Session = Depends(get_db)) -> dict:
+def update_persona(persona_id: int, payload: PersonaUpdateRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_admin_session_user(request, db)
     persona = db.query(Persona).filter(Persona.id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
@@ -479,16 +521,20 @@ def update_persona(persona_id: int, payload: PersonaUpdateRequest, db: Session =
     db.add(persona)
     db.commit()
     db.refresh(persona)
+    audit_log("admin_persona_updated", actor_user_id=user.id, persona_id=persona.id, persona_name=persona.name)
     return _persona_to_dict(persona)
 
 
 @router.delete("/{persona_id}")
-def delete_persona(persona_id: int, db: Session = Depends(get_db)) -> dict:
+def delete_persona(persona_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_admin_session_user(request, db)
     persona = db.query(Persona).filter(Persona.id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
+    deleted_name = persona.name
     db.delete(persona)
     db.commit()
+    audit_log("admin_persona_deleted", actor_user_id=user.id, persona_id=persona_id, persona_name=deleted_name)
     return {"deleted": persona_id}
 
 
@@ -519,7 +565,8 @@ def _persona_to_card(p: Persona) -> dict:
 
 
 @router.get("/{persona_id}/export")
-def export_persona(persona_id: int, db: Session = Depends(get_db)) -> JSONResponse:
+def export_persona(persona_id: int, request: Request, db: Session = Depends(get_db)) -> JSONResponse:
+    require_admin_session_user(request, db)
     persona = db.query(Persona).filter(Persona.id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
@@ -532,7 +579,8 @@ def export_persona(persona_id: int, db: Session = Depends(get_db)) -> JSONRespon
 
 
 @router.get("/export")
-def export_all_personas(db: Session = Depends(get_db)) -> JSONResponse:
+def export_all_personas(request: Request, db: Session = Depends(get_db)) -> JSONResponse:
+    require_admin_session_user(request, db)
     rows = db.query(Persona).order_by(Persona.id.asc()).all()
     return JSONResponse(
         content={"schema_version": SCHEMA_VERSION, "kind": "persona_collection", "personas": [_persona_to_card(p) for p in rows]},
@@ -545,8 +593,9 @@ class PersonaImportRequest(BaseModel):
 
 
 @router.post("/import")
-def import_persona(payload: PersonaImportRequest, db: Session = Depends(get_db)) -> dict:
+def import_persona(payload: PersonaImportRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     """Accept a single character_card dict and create a Persona."""
+    user = require_admin_session_user(request, db)
     card = payload.card
     if not isinstance(card, dict):
         raise HTTPException(status_code=422, detail="card must be a JSON object")
@@ -601,4 +650,5 @@ def import_persona(payload: PersonaImportRequest, db: Session = Depends(get_db))
     db.add(persona)
     db.commit()
     db.refresh(persona)
+    audit_log("admin_persona_imported", actor_user_id=user.id, persona_id=persona.id, persona_name=persona.name)
     return _persona_to_dict(persona)

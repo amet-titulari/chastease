@@ -21,6 +21,24 @@ def _ppm_bytes(width: int, height: int, rgb: tuple[int, int, int] = (128, 128, 1
     return header + (pixel * (width * height))
 
 
+def _register_admin(client: TestClient) -> None:
+    unique = uuid4().hex[:8]
+    email = f"games-admin-{unique}@example.com"
+    existing = settings.admin_bootstrap_emails or ""
+    settings.admin_bootstrap_emails = ",".join([item for item in [existing, email] if item])
+    resp = client.post(
+        "/auth/register",
+        data={
+            "username": f"games-admin-{unique}",
+            "email": email,
+            "password": "verysecure1",
+            "password_confirm": "verysecure1",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+
 def _create_and_sign(client: TestClient) -> int:
     create_resp = client.post(
         "/api/sessions",
@@ -38,6 +56,7 @@ def _create_and_sign(client: TestClient) -> int:
 
 def test_list_game_modules_contains_posture_training():
     with TestClient(app) as client:
+        _register_admin(client)
         resp = client.get("/api/games/modules")
         assert resp.status_code == 200
         items = resp.json()["items"]
@@ -47,6 +66,7 @@ def test_list_game_modules_contains_posture_training():
 
 def test_start_game_run_with_dont_move_module():
     with TestClient(app) as client:
+        _register_admin(client)
         session_id = _create_and_sign(client)
 
         resp = client.post(
@@ -71,6 +91,7 @@ def test_start_game_run_with_dont_move_module():
 
 def test_posture_allowed_module_keys_roundtrip():
     with TestClient(app) as client:
+        _register_admin(client)
         posture_key = f"test_roundtrip_allowed_modules_{uuid4().hex[:8]}"
         create_resp = client.post(
             "/api/games/modules/posture_training/postures",
@@ -106,6 +127,7 @@ def test_posture_allowed_module_keys_roundtrip():
 
 def test_posture_matrix_bulk_update_endpoint():
     with TestClient(app) as client:
+        _register_admin(client)
         posture_key = f"test_matrix_bulk_{uuid4().hex[:8]}"
         create_resp = client.post(
             "/api/games/modules/posture_training/postures",
@@ -147,6 +169,7 @@ def test_posture_matrix_bulk_update_endpoint():
 
 def test_dont_move_rejects_posture_not_allowed_for_module():
     with TestClient(app) as client:
+        _register_admin(client)
         posture_key = f"test_pt_only_pose_{uuid4().hex[:8]}"
         create_resp = client.post(
             "/api/games/modules/posture_training/postures",
@@ -181,6 +204,7 @@ def test_dont_move_rejects_posture_not_allowed_for_module():
 
 def test_dont_move_counts_each_violation_and_applies_penalty_per_violation():
     with TestClient(app) as client:
+        _register_admin(client)
         posture_key = f"test_dm_penalty_pose_{uuid4().hex[:8]}"
         create_resp = client.post(
             "/api/games/modules/posture_training/postures",
@@ -261,6 +285,7 @@ def test_dont_move_counts_each_violation_and_applies_penalty_per_violation():
 
 def test_start_game_run_and_fetch_state():
     with TestClient(app) as client:
+        _register_admin(client)
         session_id = _create_and_sign(client)
 
         resp = client.post(
@@ -291,6 +316,7 @@ def test_start_game_run_and_fetch_state():
 
 def test_verify_step_with_photo_advances_or_retries():
     with TestClient(app) as client:
+        _register_admin(client)
         session_id = _create_and_sign(client)
         start = client.post(
             f"/api/games/sessions/{session_id}/runs/start",
@@ -321,6 +347,7 @@ def test_verify_step_with_photo_advances_or_retries():
 
 def test_sample_only_verification_keeps_step_pending_when_confirmed():
     with TestClient(app) as client:
+        _register_admin(client)
         session_id = _create_and_sign(client)
         start = client.post(
             f"/api/games/sessions/{session_id}/runs/start",
@@ -360,6 +387,7 @@ def test_sample_only_verification_keeps_step_pending_when_confirmed():
 
 def test_failed_step_chain_appends_max_two_retries():
     with TestClient(app) as client:
+        _register_admin(client)
         session_id = _create_and_sign(client)
         start = client.post(
             f"/api/games/sessions/{session_id}/runs/start",
@@ -403,6 +431,7 @@ def test_failed_step_chain_appends_max_two_retries():
 
 def test_game_verification_capture_is_saved_under_session_with_run_start_prefix():
     with TestClient(app) as client:
+        _register_admin(client)
         session_id = _create_and_sign(client)
         start = client.post(
             f"/api/games/sessions/{session_id}/runs/start",
@@ -439,6 +468,7 @@ def test_game_verification_capture_is_saved_under_session_with_run_start_prefix(
 
 def test_start_game_run_accepts_custom_transition_seconds():
     with TestClient(app) as client:
+        _register_admin(client)
         session_id = _create_and_sign(client)
 
         resp = client.post(
@@ -458,6 +488,7 @@ def test_start_game_run_accepts_custom_transition_seconds():
 
 def test_game_run_auto_completes_when_total_time_elapsed_with_summary():
     with TestClient(app) as client:
+        _register_admin(client)
         session_id = _create_and_sign(client)
         start = client.post(
             f"/api/games/sessions/{session_id}/runs/start",
@@ -497,6 +528,7 @@ def test_game_run_auto_completes_when_total_time_elapsed_with_summary():
 
 def test_final_summary_contains_detailed_check_entries():
     with TestClient(app) as client:
+        _register_admin(client)
         session_id = _create_and_sign(client)
         start = client.post(
             f"/api/games/sessions/{session_id}/runs/start",
@@ -547,6 +579,7 @@ def test_final_summary_contains_detailed_check_entries():
 
 def test_current_step_target_seconds_is_capped_by_remaining_budget():
     with TestClient(app) as client:
+        _register_admin(client)
         session_id = _create_and_sign(client)
         start = client.post(
             f"/api/games/sessions/{session_id}/runs/start",
@@ -587,6 +620,7 @@ def test_current_step_target_seconds_is_capped_by_remaining_budget():
 
 def test_posture_management_crud_and_run_uses_managed_postures():
     with TestClient(app) as client:
+        _register_admin(client)
         created = client.post(
             "/api/games/modules/posture_training/postures",
             json={
@@ -643,6 +677,7 @@ def test_posture_management_crud_and_run_uses_managed_postures():
 
 def test_run_step_order_prioritizes_positive_sort_and_places_zero_at_end():
     with TestClient(app) as client:
+        _register_admin(client)
         existing = client.get("/api/games/modules/posture_training/postures")
         assert existing.status_code == 200
         for row in existing.json().get("items") or []:
@@ -714,6 +749,7 @@ def test_run_step_order_prioritizes_positive_sort_and_places_zero_at_end():
 
 def test_run_step_order_randomizes_equal_positive_sort_bucket():
     with TestClient(app) as client:
+        _register_admin(client)
         existing = client.get("/api/games/modules/posture_training/postures")
         assert existing.status_code == 200
         for row in existing.json().get("items") or []:
@@ -786,6 +822,7 @@ def test_run_step_order_randomizes_equal_positive_sort_bucket():
 
 def test_upload_posture_image_returns_content_url():
     with TestClient(app) as client:
+        _register_admin(client)
         img = _ppm_bytes(768, 1024)
         uploaded = client.post(
             "/api/games/modules/posture_training/postures/upload-image",
@@ -799,6 +836,7 @@ def test_upload_posture_image_returns_content_url():
 
 def test_upload_posture_image_rejects_too_small_resolution():
     with TestClient(app) as client:
+        _register_admin(client)
         small = _ppm_bytes(320, 480)
         uploaded = client.post(
             "/api/games/modules/posture_training/postures/upload-image",
@@ -810,6 +848,7 @@ def test_upload_posture_image_rejects_too_small_resolution():
 
 def test_uploaded_posture_image_url_can_be_persisted_on_posture():
     with TestClient(app) as client:
+        _register_admin(client)
         created = client.post(
             "/api/games/modules/posture_training/postures",
             json={
@@ -842,6 +881,7 @@ def test_uploaded_posture_image_url_can_be_persisted_on_posture():
 
 def test_posture_zip_export_and_import_roundtrip_with_images():
     with TestClient(app) as client:
+        _register_admin(client)
         existing = client.get("/api/games/modules/posture_training/postures")
         assert existing.status_code == 200
         for row in existing.json().get("items") or []:
@@ -930,6 +970,7 @@ def test_posture_zip_export_and_import_roundtrip_with_images():
 
 def test_posture_zip_import_rejects_missing_local_image_file_reference():
     with TestClient(app) as client:
+        _register_admin(client)
         manifest = {
             "format": "chastease-postures-v1",
             "module_key": "posture_training",
@@ -960,6 +1001,7 @@ def test_posture_zip_import_rejects_missing_local_image_file_reference():
 
 def test_difficulty_uses_medium_baseline_target_with_multipliers():
     with TestClient(app) as client:
+        _register_admin(client)
         session_id = _create_and_sign(client)
 
         medium_run = client.post(
@@ -1010,6 +1052,7 @@ def test_difficulty_uses_medium_baseline_target_with_multipliers():
 
 def test_target_randomization_applies_within_expected_bounds():
     with TestClient(app) as client:
+        _register_admin(client)
         session_id = _create_and_sign(client)
 
         baseline_run = client.post(
@@ -1043,6 +1086,7 @@ def test_target_randomization_applies_within_expected_bounds():
 
 def test_sort_order_zero_is_allowed_and_used_for_run_steps():
     with TestClient(app) as client:
+        _register_admin(client)
         created_a = client.post(
             "/api/games/modules/posture_training/postures",
             json={
@@ -1088,6 +1132,7 @@ def test_sort_order_zero_is_allowed_and_used_for_run_steps():
 
 def test_module_settings_can_be_saved_and_used_for_run_start_defaults():
     with TestClient(app) as client:
+        _register_admin(client)
         saved = client.put(
             "/api/games/modules/posture_training/settings",
             json={

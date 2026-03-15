@@ -8,7 +8,7 @@ import re
 import zipfile
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
@@ -24,7 +24,9 @@ from app.models.game_run_step import GameRunStep
 from app.models.media_asset import MediaAsset
 from app.models.message import Message
 from app.models.session import Session as SessionModel
+from app.security import require_admin_session_user
 from app.services.games import as_public_module_payload, get_module, list_modules
+from app.services.audit_logger import audit_log
 from app.services.verification_analysis import analyze_verification
 
 router = APIRouter(prefix="/api/games", tags=["games"])
@@ -679,7 +681,8 @@ def get_game_module(module_key: str) -> dict:
 
 
 @router.get("/modules/{module_key}/settings")
-def get_module_settings(module_key: str, db: Session = Depends(get_db)) -> dict:
+def get_module_settings(module_key: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    require_admin_session_user(request, db)
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -691,8 +694,10 @@ def get_module_settings(module_key: str, db: Session = Depends(get_db)) -> dict:
 def update_module_settings(
     module_key: str,
     payload: ModuleSettingsUpdateRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
+    user = require_admin_session_user(request, db)
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -705,11 +710,20 @@ def update_module_settings(
     db.add(item)
     db.commit()
     db.refresh(item)
+    audit_log(
+        "admin_game_module_settings_updated",
+        actor_user_id=user.id,
+        module_key=module_key,
+        easy_target_multiplier=item.easy_target_multiplier,
+        hard_target_multiplier=item.hard_target_multiplier,
+        target_randomization_percent=item.target_randomization_percent,
+    )
     return _module_settings_payload(item)
 
 
 @router.get("/modules/{module_key}/postures")
-def list_module_postures(module_key: str, db: Session = Depends(get_db)) -> dict:
+def list_module_postures(module_key: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    require_admin_session_user(request, db)
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -726,7 +740,8 @@ def list_module_postures(module_key: str, db: Session = Depends(get_db)) -> dict
 
 
 @router.get("/postures/matrix")
-def list_posture_matrix(db: Session = Depends(get_db)) -> dict:
+def list_posture_matrix(request: Request, db: Session = Depends(get_db)) -> dict:
+    require_admin_session_user(request, db)
     modules = [as_public_module_payload(module) for module in list_modules()]
     rows = (
         db.query(GamePostureTemplate)
@@ -745,7 +760,8 @@ def list_posture_matrix(db: Session = Depends(get_db)) -> dict:
 
 
 @router.put("/postures/matrix")
-def update_posture_matrix(payload: PostureMatrixBulkUpdateRequest, db: Session = Depends(get_db)) -> dict:
+def update_posture_matrix(payload: PostureMatrixBulkUpdateRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_admin_session_user(request, db)
     if not payload.items:
         return {"updated": 0, "requested": 0, "skipped": 0}
 
@@ -771,15 +787,24 @@ def update_posture_matrix(payload: PostureMatrixBulkUpdateRequest, db: Session =
         updated += 1
 
     db.commit()
+    audit_log(
+        "admin_game_posture_matrix_updated",
+        actor_user_id=user.id,
+        requested=len(payload.items),
+        updated=updated,
+        skipped=skipped,
+    )
     return {"updated": updated, "requested": len(payload.items), "skipped": skipped}
 
 
 @router.post("/modules/{module_key}/postures/upload-image")
 async def upload_module_posture_image(
     module_key: str,
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> dict:
+    user = require_admin_session_user(request, db)
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -789,11 +814,13 @@ async def upload_module_posture_image(
     asset = _store_posture_media(db, module_key, processed, original_filename)
     db.commit()
     db.refresh(asset)
+    audit_log("admin_game_posture_image_uploaded", actor_user_id=user.id, module_key=module_key, media_id=asset.id)
     return _media_payload(asset)
 
 
 @router.get("/modules/{module_key}/postures/export")
-def export_module_postures_zip(module_key: str, db: Session = Depends(get_db)):
+def export_module_postures_zip(module_key: str, request: Request, db: Session = Depends(get_db)):
+    require_admin_session_user(request, db)
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -854,9 +881,11 @@ def export_module_postures_zip(module_key: str, db: Session = Depends(get_db)):
 @router.post("/modules/{module_key}/postures/import-zip")
 async def import_module_postures_zip(
     module_key: str,
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> dict:
+    user = require_admin_session_user(request, db)
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -984,6 +1013,13 @@ async def import_module_postures_zip(
         db.rollback()
         raise HTTPException(status_code=422, detail="ZIP contains invalid numeric posture fields")
 
+    audit_log(
+        "admin_game_postures_imported",
+        actor_user_id=user.id,
+        module_key=module_key,
+        imported=imported,
+        replaced=replaced,
+    )
     return {"imported": imported, "replaced": replaced}
 
 
@@ -991,8 +1027,10 @@ async def import_module_postures_zip(
 def create_module_posture(
     module_key: str,
     payload: PostureTemplateCreateRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
+    user = require_admin_session_user(request, db)
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -1020,6 +1058,13 @@ def create_module_posture(
     _set_allowed_module_keys(db, int(template.id), allowed_module_keys)
     db.commit()
     db.refresh(template)
+    audit_log(
+        "admin_game_posture_created",
+        actor_user_id=user.id,
+        module_key=module_key,
+        posture_id=template.id,
+        posture_key=template.posture_key,
+    )
     return _template_payload(template, allowed_module_keys=allowed_module_keys)
 
 
@@ -1028,8 +1073,10 @@ def update_module_posture(
     module_key: str,
     posture_id: int,
     payload: PostureTemplateUpdateRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
+    user = require_admin_session_user(request, db)
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -1079,11 +1126,19 @@ def update_module_posture(
     db.add(template)
     db.commit()
     db.refresh(template)
+    audit_log(
+        "admin_game_posture_updated",
+        actor_user_id=user.id,
+        module_key=module_key,
+        posture_id=template.id,
+        posture_key=template.posture_key,
+    )
     return _template_payload(template, allowed_module_keys=next_allowed)
 
 
 @router.delete("/modules/{module_key}/postures/{posture_id}")
-def delete_module_posture(module_key: str, posture_id: int, db: Session = Depends(get_db)) -> dict:
+def delete_module_posture(module_key: str, posture_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_admin_session_user(request, db)
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -1103,6 +1158,12 @@ def delete_module_posture(module_key: str, posture_id: int, db: Session = Depend
     )
     db.delete(template)
     db.commit()
+    audit_log(
+        "admin_game_posture_deleted",
+        actor_user_id=user.id,
+        module_key=module_key,
+        posture_id=posture_id,
+    )
     return {"deleted": posture_id}
 
 

@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.scenario import Scenario
+from app.security import require_admin_session_user
+from app.services.audit_logger import audit_log
 
 router = APIRouter(prefix="/api/scenarios", tags=["scenarios"])
 
@@ -185,13 +187,15 @@ def list_scenario_presets() -> dict:
 
 
 @router.get("")
-def list_scenarios(db: Session = Depends(get_db)) -> dict:
+def list_scenarios(request: Request, db: Session = Depends(get_db)) -> dict:
+    require_admin_session_user(request, db)
     rows = db.query(Scenario).order_by(Scenario.id.asc()).all()
     return {"items": [_scenario_to_dict(s) for s in rows]}
 
 
 @router.post("")
-def create_scenario(payload: ScenarioCreateRequest, db: Session = Depends(get_db)) -> dict:
+def create_scenario(payload: ScenarioCreateRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_admin_session_user(request, db)
     key = payload.key.strip()
     if db.query(Scenario).filter(Scenario.key == key).first():
         raise HTTPException(status_code=409, detail=f"Scenario key '{key}' already exists")
@@ -206,11 +210,13 @@ def create_scenario(payload: ScenarioCreateRequest, db: Session = Depends(get_db
     db.add(scenario)
     db.commit()
     db.refresh(scenario)
+    audit_log("admin_scenario_created", actor_user_id=user.id, scenario_id=scenario.id, scenario_key=scenario.key)
     return _scenario_to_dict(scenario)
 
 
 @router.get("/{scenario_id}")
-def get_scenario(scenario_id: int, db: Session = Depends(get_db)) -> dict:
+def get_scenario(scenario_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    require_admin_session_user(request, db)
     s = db.query(Scenario).filter(Scenario.id == scenario_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Scenario not found")
@@ -218,7 +224,13 @@ def get_scenario(scenario_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.put("/{scenario_id}")
-def update_scenario(scenario_id: int, payload: ScenarioUpdateRequest, db: Session = Depends(get_db)) -> dict:
+def update_scenario(
+    scenario_id: int,
+    payload: ScenarioUpdateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    user = require_admin_session_user(request, db)
     s = db.query(Scenario).filter(Scenario.id == scenario_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Scenario not found")
@@ -241,21 +253,26 @@ def update_scenario(scenario_id: int, payload: ScenarioUpdateRequest, db: Sessio
     db.add(s)
     db.commit()
     db.refresh(s)
+    audit_log("admin_scenario_updated", actor_user_id=user.id, scenario_id=s.id, scenario_key=s.key)
     return _scenario_to_dict(s)
 
 
 @router.delete("/{scenario_id}")
-def delete_scenario(scenario_id: int, db: Session = Depends(get_db)) -> dict:
+def delete_scenario(scenario_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_admin_session_user(request, db)
     s = db.query(Scenario).filter(Scenario.id == scenario_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Scenario not found")
+    deleted_key = s.key
     db.delete(s)
     db.commit()
+    audit_log("admin_scenario_deleted", actor_user_id=user.id, scenario_id=scenario_id, scenario_key=deleted_key)
     return {"deleted": scenario_id}
 
 
 @router.get("/{scenario_id}/export")
-def export_scenario(scenario_id: int, db: Session = Depends(get_db)) -> JSONResponse:
+def export_scenario(scenario_id: int, request: Request, db: Session = Depends(get_db)) -> JSONResponse:
+    require_admin_session_user(request, db)
     s = db.query(Scenario).filter(Scenario.id == scenario_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Scenario not found")
@@ -278,6 +295,7 @@ def export_scenario(scenario_id: int, db: Session = Depends(get_db)) -> JSONResp
 
 @router.post("/import")
 async def import_scenario(request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_admin_session_user(request, db)
     body = await request.json()
     title = str(body.get("title", "")).strip()
     if not title:
@@ -301,4 +319,5 @@ async def import_scenario(request: Request, db: Session = Depends(get_db)) -> di
     db.add(s)
     db.commit()
     db.refresh(s)
+    audit_log("admin_scenario_imported", actor_user_id=user.id, scenario_id=s.id, scenario_key=s.key)
     return _scenario_to_dict(s)

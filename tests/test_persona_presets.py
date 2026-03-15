@@ -1,10 +1,31 @@
 from fastapi.testclient import TestClient
+from uuid import uuid4
 
+from app.config import settings
 from app.main import app
+
+
+def _register_admin(client: TestClient) -> None:
+    unique = uuid4().hex[:8]
+    email = f"persona-admin-{unique}@example.com"
+    existing = settings.admin_bootstrap_emails or ""
+    settings.admin_bootstrap_emails = ",".join([item for item in [existing, email] if item])
+    resp = client.post(
+        "/auth/register",
+        data={
+            "username": f"persona-admin-{unique}",
+            "email": email,
+            "password": "verysecure1",
+            "password_confirm": "verysecure1",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
 
 
 def test_persona_presets_include_core_personas():
     with TestClient(app) as client:
+        _register_admin(client)
         resp = client.get("/api/personas/presets")
         assert resp.status_code == 200
         data = resp.json()
@@ -19,6 +40,7 @@ def test_persona_presets_include_core_personas():
 
 def test_scenario_presets_and_card_schema_exist():
     with TestClient(app) as client:
+        _register_admin(client)
         scenarios = client.get("/api/personas/scenario-presets")
         assert scenarios.status_code == 200
         scenario_items = scenarios.json()["items"]
@@ -66,6 +88,7 @@ def test_map_external_card_payload():
     }
 
     with TestClient(app) as client:
+        _register_admin(client)
         resp = client.post("/api/personas/map-card", json={"card": sample_card})
         assert resp.status_code == 200
         data = resp.json()
@@ -78,12 +101,14 @@ def test_map_external_card_payload():
 
 def test_map_card_requires_character_entry():
     with TestClient(app) as client:
+        _register_admin(client)
         resp = client.post("/api/personas/map-card", json={"card": {"characters": []}})
         assert resp.status_code == 400
 
 
 def test_persona_task_template_crud_flow():
     with TestClient(app) as client:
+        _register_admin(client)
         create_persona = client.post(
             "/api/personas",
             json={
@@ -135,6 +160,7 @@ def test_persona_task_template_crud_flow():
 
 def test_persona_task_library_export_and_cross_import():
     with TestClient(app) as client:
+        _register_admin(client)
         source_persona = client.post(
             "/api/personas",
             json={

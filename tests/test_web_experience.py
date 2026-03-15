@@ -236,7 +236,7 @@ def test_games_page_renders_game_cards_and_current_session_entrypoint():
         assert "Posture Training" in html
         assert "Spiel oeffnen" in html
         assert "Postures verwalten" in html
-        assert "Admin Navigation" in html
+        assert 'id="admin-menu"' in html
         assert "/game/" in html
 
 
@@ -260,7 +260,7 @@ def test_admin_center_page_renders():
         assert resp.status_code == 200
         html = resp.text
         assert "Admin Center" in html
-        assert "Admin Navigation" in html
+        assert 'id="admin-menu"' in html
         assert "Posture Library" in html
         assert "/admin/postures/matrix" in html
         assert "/admin/operations" in html
@@ -277,7 +277,7 @@ def test_admin_posture_matrix_page_renders():
         assert resp.status_code == 200
         html = resp.text
         assert "Posture Matrix" in html
-        assert "Admin Navigation" in html
+        assert 'id="admin-menu"' in html
         assert "Matrix speichern" in html
         assert "Sichtbare im Modul aktivieren" in html
         assert "Suche" in html
@@ -292,7 +292,7 @@ def test_admin_operations_page_renders():
         assert resp.status_code == 200
         html = resp.text
         assert "Operations" in html
-        assert "Admin Navigation" in html
+        assert 'id="admin-menu"' in html
         assert "Testkonsole" in html
         assert "Session-Historie" in html
 

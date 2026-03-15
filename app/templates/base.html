@@ -6,6 +6,54 @@
   <title>{{ title }}</title>
   <link rel="stylesheet" href="/static/css/theme.css" />
   <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    .topnav {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+    }
+    .topnav details.admin-menu {
+      position: relative;
+    }
+    .topnav details.admin-menu > summary {
+      list-style: none;
+      cursor: pointer;
+      font-weight: 700;
+      color: #cfe4fa;
+      padding: 0.35rem 0.65rem;
+      border: 1px solid rgba(152, 209, 255, 0.45);
+      border-radius: 9px;
+      background: rgba(78, 130, 182, 0.25);
+      user-select: none;
+    }
+    .topnav details.admin-menu > summary::-webkit-details-marker {
+      display: none;
+    }
+    .topnav .admin-menu-panel {
+      position: absolute;
+      top: calc(100% + 0.45rem);
+      right: 0;
+      min-width: 260px;
+      padding: 0.5rem;
+      border-radius: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: linear-gradient(160deg, rgba(13, 33, 56, 0.95), rgba(7, 14, 28, 0.95));
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      display: grid;
+      gap: 0.35rem;
+      z-index: 30;
+    }
+    .topnav .admin-menu-panel a {
+      text-decoration: none;
+      color: #e7f3ff;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 8px;
+      padding: 0.38rem 0.55rem;
+      font-size: 0.88rem;
+    }
+  </style>
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -15,12 +63,23 @@
       <nav class="topnav">
         <a href="/">Start</a>
         <a href="/experience">Experience</a>
-        <a href="/personas">Personas</a>
-        <a href="/scenarios">Scenarios</a>
-        <a href="/inventory">Inventar</a>
-        <a href="/games">Games</a>
         {% if current_user and current_user.is_admin %}
-          <a href="/admin">Admin</a>
+          <details class="admin-menu" id="admin-menu">
+            <summary>Admin</summary>
+            <div class="admin-menu-panel">
+              <a href="/admin">Uebersicht</a>
+              <a href="/personas">Personas</a>
+              <a href="/scenarios">Scenarios</a>
+              <a href="/inventory">Inventar</a>
+              <a href="/games">Games</a>
+              <a href="/games/postures?module_key=posture_training">Posture Library</a>
+              <a href="/admin/postures/matrix">Posture Matrix</a>
+              <a href="/admin/operations">Operations</a>
+              <a href="/contracts">Vertraege</a>
+              <a href="/history">Historie</a>
+              <a href="/testconsole">Testkonsole</a>
+            </div>
+          </details>
         {% endif %}
         <a href="/profile">Profil</a>
       </nav>
