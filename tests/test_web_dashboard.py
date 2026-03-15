@@ -35,36 +35,20 @@ def test_landing_page_renders_auth_ui():
 def test_dashboard_renders():
     with TestClient(app) as client:
         _register_admin(client)
-        resp = client.get("/testconsole")
+        resp = client.get("/admin/operations")
         assert resp.status_code == 200
         html = resp.text
-        assert "Chastease" in html
-        assert "create-session-form" in html
-        assert "timer-remaining" in html
-        assert "session-events-btn" in html
-        assert "timer-status-btn" in html
-        assert "timer-freeze-btn" in html
-        assert "chat-send-btn" in html
-        assert "admin-secret" in html
-        assert "chat-ws-connect-btn" in html
-        assert "chat-ws-rotate-token-btn" in html
-        assert "task-create-btn" in html
-        assert "task-evaluate-overdue-btn" in html
-        assert "task-fail-btn" in html
-        assert "persona-preset-select" in html
-        assert "apply-persona-preset-btn" in html
-        assert "push-subscribe-btn" in html
-        assert "push-list-btn" in html
-        assert "push-test-btn" in html
-        assert "hygiene-quota-btn" in html
-        assert "hygiene_limit_daily" in html
+        assert "Operations" in html
+        assert "Session-Historie" in html
+        assert "Vertragspruefung" in html
+        assert 'id="admin-menu"' in html
 
 
-def test_dashboard_script_is_served():
+def test_landing_has_no_testconsole_shortcut():
     with TestClient(app) as client:
-        resp = client.get("/static/js/dashboard.js")
+        resp = client.get("/")
         assert resp.status_code == 200
-        assert "Session erstellt" in resp.text
+        assert "/testconsole" not in resp.text
 
 
 def test_stylesheet_contains_responsive_rules():

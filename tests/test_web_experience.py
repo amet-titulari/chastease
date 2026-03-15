@@ -293,8 +293,8 @@ def test_admin_operations_page_renders():
         html = resp.text
         assert "Operations" in html
         assert 'id="admin-menu"' in html
-        assert "Testkonsole" in html
         assert "Session-Historie" in html
+        assert "Vertragspruefung" in html
 
 
 def test_game_page_prefills_setup_from_latest_run_values():

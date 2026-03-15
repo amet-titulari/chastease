@@ -68,8 +68,127 @@
     color: #c7dbef;
     font-size: 0.84rem;
   }
-  .mx-key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; color: #9db7d2; }
   .mx-title { color: #eff7ff; font-weight: 700; }
+  .mx-preview-cell {
+    position: relative;
+    min-width: 132px;
+  }
+  .mx-preview-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid rgba(160, 209, 255, 0.45);
+    background: rgba(73, 126, 180, 0.26);
+    color: #e6f3ff;
+    border-radius: 7px;
+    padding: 0.2rem 0.45rem;
+    font-size: 0.74rem;
+    cursor: pointer;
+  }
+  .mx-preview-thumb {
+    display: block;
+    width: 44px;
+    height: 58px;
+    object-fit: cover;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+  }
+  .mx-preview-empty {
+    color: #8fa8c2;
+    font-size: 0.78rem;
+  }
+  .mx-preview-popover {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 0.35rem);
+    display: none;
+    width: 170px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(7, 13, 23, 0.96);
+    border-radius: 10px;
+    padding: 0.35rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.38);
+    z-index: 5;
+  }
+  .mx-preview-popover img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .mx-preview-key {
+    display: block;
+    margin-top: 0.28rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.7rem;
+    color: #93acc6;
+  }
+  .mx-preview-cell:hover .mx-preview-popover,
+  .mx-preview-cell:focus-within .mx-preview-popover,
+  .mx-preview-cell.is-open .mx-preview-popover {
+    display: block;
+  }
+  .mx-preview-open-modal {
+    margin-top: 0.4rem;
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #d9ebff;
+    padding: 0.24rem 0.4rem;
+    font-size: 0.74rem;
+  }
+  .mx-preview-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 8, 16, 0.82);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 120;
+  }
+  .mx-preview-modal.is-open {
+    display: flex;
+  }
+  .mx-preview-modal-card {
+    width: min(420px, 92vw);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 12px;
+    background: rgba(7, 13, 24, 0.98);
+    padding: 0.65rem;
+    display: grid;
+    gap: 0.45rem;
+  }
+  .mx-preview-modal-card img {
+    width: 100%;
+    max-height: 78vh;
+    object-fit: contain;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .mx-preview-modal-meta {
+    display: grid;
+    gap: 0.2rem;
+    color: #bdd3ea;
+    font-size: 0.84rem;
+  }
+  .mx-preview-modal-hint {
+    color: #92acc7;
+    font-size: 0.76rem;
+  }
+  .mx-preview-modal-close {
+    justify-self: end;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #e8f3ff;
+    padding: 0.28rem 0.55rem;
+    font-size: 0.8rem;
+  }
   .mx-active { color: #9fe0bd; }
   .mx-inactive { color: #ffb8b8; }
   .mx-check {
@@ -122,6 +241,18 @@
       <tbody id="mx-body"></tbody>
     </table>
   </section>
+
+  <section class="mx-preview-modal" id="mx-preview-modal" aria-hidden="true">
+    <div class="mx-preview-modal-card" role="dialog" aria-modal="true" aria-label="Posture Vorschau">
+      <button type="button" class="mx-preview-modal-close" id="mx-preview-modal-close">Schliessen</button>
+      <img id="mx-preview-modal-image" src="" alt="Posture Vorschau" />
+      <div class="mx-preview-modal-meta">
+        <strong id="mx-preview-modal-title"></strong>
+        <span id="mx-preview-modal-key"></span>
+        <span class="mx-preview-modal-hint">Navigation: Pfeil links/rechts</span>
+      </div>
+    </div>
+  </section>
 </section>
 {% endblock %}
 
@@ -136,6 +267,13 @@ const bodyEl = document.getElementById("mx-body");
 const searchEl = document.getElementById("mx-search");
 const moduleFilterEl = document.getElementById("mx-module-filter");
 const activeOnlyEl = document.getElementById("mx-active-only");
+const previewModalEl = document.getElementById("mx-preview-modal");
+const previewModalImageEl = document.getElementById("mx-preview-modal-image");
+const previewModalTitleEl = document.getElementById("mx-preview-modal-title");
+const previewModalKeyEl = document.getElementById("mx-preview-modal-key");
+const previewModalCloseEl = document.getElementById("mx-preview-modal-close");
+let modalSequence = [];
+let modalIndex = -1;
 
 function setStatus(msg, warn = false) {
   statusEl.textContent = msg || "";
@@ -159,7 +297,7 @@ async function api(url, options = {}) {
 }
 
 function renderTable() {
-  const headerCells = ["<tr><th>Titel</th><th>Key</th><th>Aktiv</th>"];
+  const headerCells = ["<tr><th>Titel</th><th>Vorschau</th><th>Aktiv</th>"];
   for (const mod of modules) {
     headerCells.push(`<th>${esc(mod.title || mod.key)}</th>`);
   }
@@ -174,10 +312,42 @@ function renderTable() {
       return `<td><input class=\"mx-check\" type=\"checkbox\" data-posture-id=\"${item.id}\" data-module-key=\"${esc(mod.key)}\" ${checked} /></td>`;
     }).join("");
 
+    const previewCell = item.image_url
+      ? `
+        <td class="mx-preview-cell">
+          <button
+            type="button"
+            class="mx-preview-trigger"
+            data-posture-id="${item.id}"
+            data-posture-image="${esc(item.image_url)}"
+            data-posture-title="${esc(item.title)}"
+            data-posture-key="${esc(item.posture_key)}"
+          >
+            <img class="mx-preview-thumb" src="${esc(item.image_url)}" alt="Preview ${esc(item.title)}" loading="lazy" />
+            <span>Hover</span>
+          </button>
+          <span class="mx-preview-popover">
+            <img src="${esc(item.image_url)}" alt="Posture ${esc(item.title)}" loading="lazy" />
+            <span class="mx-preview-key">${esc(item.posture_key)}</span>
+            <button
+              type="button"
+              class="mx-preview-open-modal"
+              data-posture-id="${item.id}"
+              data-posture-image="${esc(item.image_url)}"
+              data-posture-title="${esc(item.title)}"
+              data-posture-key="${esc(item.posture_key)}"
+            >
+              Grossansicht
+            </button>
+          </span>
+        </td>
+      `
+      : `<td class="mx-preview-cell"><span class="mx-preview-empty">Kein Bild</span></td>`;
+
     return `
       <tr data-posture-id="${item.id}">
         <td><span class="mx-title">${esc(item.title)}</span></td>
-        <td><span class="mx-key">${esc(item.posture_key)}</span></td>
+        ${previewCell}
         <td><span class="${item.is_active ? "mx-active" : "mx-inactive"}">${item.is_active ? "Ja" : "Nein"}</span></td>
         ${checks}
       </tr>
@@ -268,6 +438,67 @@ function applyBulkForVisible(checked) {
   renderTable();
 }
 
+function isTouchLikeInput() {
+  return window.matchMedia("(hover: none), (pointer: coarse)").matches;
+}
+
+function closeAllInlinePreviews() {
+  for (const cell of bodyEl.querySelectorAll(".mx-preview-cell.is-open")) {
+    cell.classList.remove("is-open");
+  }
+}
+
+function visiblePreviewSequence() {
+  return getFilteredItems()
+    .filter((item) => Boolean(item.image_url))
+    .map((item) => ({
+      postureId: Number(item.id),
+      imageUrl: String(item.image_url || ""),
+      title: String(item.title || "Posture"),
+      key: String(item.posture_key || ""),
+    }));
+}
+
+function renderPreviewModalEntry(entry) {
+  previewModalImageEl.src = entry.imageUrl;
+  previewModalImageEl.alt = `Posture ${entry.title}`;
+  previewModalTitleEl.textContent = entry.title;
+  previewModalKeyEl.textContent = entry.key ? `Key: ${entry.key}` : "";
+}
+
+function openPreviewModalForPosture(postureId, fallbackImage, fallbackTitle, fallbackKey) {
+  modalSequence = visiblePreviewSequence();
+  modalIndex = modalSequence.findIndex((item) => item.postureId === postureId);
+  if (modalIndex < 0) {
+    modalSequence = [{
+      postureId,
+      imageUrl: String(fallbackImage || ""),
+      title: String(fallbackTitle || "Posture"),
+      key: String(fallbackKey || ""),
+    }];
+    modalIndex = 0;
+  }
+
+  renderPreviewModalEntry(modalSequence[modalIndex]);
+  previewModalEl.classList.add("is-open");
+  previewModalEl.setAttribute("aria-hidden", "false");
+}
+
+function stepPreviewModal(delta) {
+  if (!previewModalEl.classList.contains("is-open")) return;
+  if (!Array.isArray(modalSequence) || modalSequence.length <= 1) return;
+  modalIndex = (modalIndex + delta + modalSequence.length) % modalSequence.length;
+  renderPreviewModalEntry(modalSequence[modalIndex]);
+}
+
+function closePreviewModal() {
+  previewModalEl.classList.remove("is-open");
+  previewModalEl.setAttribute("aria-hidden", "true");
+  previewModalImageEl.src = "";
+  modalSequence = [];
+  modalIndex = -1;
+}
+
 async function saveMatrix() {
   const payload = { items: collectPayload() };
   try {
@@ -296,6 +527,64 @@ bodyEl.addEventListener("change", (event) => {
   if (!(target instanceof HTMLInputElement)) return;
   if (!target.classList.contains("mx-check")) return;
   syncItemFromCheckbox(target);
+});
+bodyEl.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  const modalButton = target.closest(".mx-preview-open-modal");
+  if (modalButton instanceof HTMLButtonElement) {
+    openPreviewModalForPosture(
+      Number(modalButton.dataset.postureId || 0),
+      String(modalButton.dataset.postureImage || ""),
+      String(modalButton.dataset.postureTitle || "Posture"),
+      String(modalButton.dataset.postureKey || ""),
+    );
+    return;
+  }
+
+  const previewTrigger = target.closest(".mx-preview-trigger");
+  if (!(previewTrigger instanceof HTMLButtonElement)) return;
+
+  if (isTouchLikeInput()) {
+    const cell = previewTrigger.closest(".mx-preview-cell");
+    if (!(cell instanceof HTMLElement)) return;
+    const nextOpen = !cell.classList.contains("is-open");
+    closeAllInlinePreviews();
+    if (nextOpen) {
+      cell.classList.add("is-open");
+    }
+    event.preventDefault();
+  }
+});
+previewModalCloseEl.addEventListener("click", closePreviewModal);
+previewModalEl.addEventListener("click", (event) => {
+  if (event.target === previewModalEl) {
+    closePreviewModal();
+  }
+});
+document.addEventListener("click", (event) => {
+  if (!isTouchLikeInput()) return;
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (target.closest(".mx-preview-cell")) return;
+  closeAllInlinePreviews();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closePreviewModal();
+    closeAllInlinePreviews();
+    return;
+  }
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    stepPreviewModal(1);
+    return;
+  }
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    stepPreviewModal(-1);
+  }
 });
 
 loadMatrix().catch((err) => setStatus(`Laden fehlgeschlagen: ${err.message}`, true));

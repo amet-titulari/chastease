@@ -843,18 +843,6 @@ def restart_setup(request: Request, db: Session = Depends(get_db)):
     return RedirectResponse(url="/experience", status_code=303)
 
 
-@router.get("/testconsole", response_class=HTMLResponse)
-def dashboard(request: Request, db: Session = Depends(get_db)):
-    user = _require_admin_user(request, db)
-    if isinstance(user, RedirectResponse):
-        return user
-    return templates.TemplateResponse(
-        request=request,
-        name="dashboard.html",
-        context={"title": settings.app_name, "current_user": user},
-    )
-
-
 @router.get("/history", response_class=HTMLResponse)
 def history_page(request: Request, db: Session = Depends(get_db)):
     user = _require_admin_user(request, db)
@@ -1582,10 +1570,8 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
         },
         {
             "title": "Operations",
-            "summary": "Wartung, Testkonsole und operative Uebersicht.",
+            "summary": "Wartung und operative Uebersicht.",
             "href": "/admin/operations",
-            "secondary_href": "/testconsole",
-            "secondary_label": "Testkonsole",
             "count": counts["game_runs"],
             "count_label": "Runs",
         },
