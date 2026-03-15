@@ -129,6 +129,11 @@ def get_media_content(media_id: int, db: Session = Depends(get_db)):
         path=target,
         media_type=asset.mime_type,
         filename=asset.original_filename or target.name,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
     )
 
 

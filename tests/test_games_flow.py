@@ -2,6 +2,7 @@ import io
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 import zipfile
 
 from fastapi.testclient import TestClient
@@ -97,6 +98,7 @@ def test_verify_step_with_photo_advances_or_retries():
         assert verify.status_code == 200
         payload = verify.json()
         assert payload["run"]["id"] == run_id
+        assert payload["step"]["verification_status"] in {"confirmed", "suspicious"}
         assert payload["step"]["status"] in {"passed", "failed"}
 
 
@@ -118,14 +120,15 @@ def test_sample_only_verification_keeps_step_pending_when_confirmed():
         run_id = run["id"]
         step_id = run["current_step"]["id"]
 
-        verify = client.post(
-            f"/api/games/runs/{run_id}/steps/{step_id}/verify",
-            files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
-            data={
-                "observed_posture": run["current_step"]["posture_name"],
-                "sample_only": "true",
-            },
-        )
+        with patch("app.routers.games.analyze_verification", return_value=("confirmed", "AI mock confirmed")):
+            verify = client.post(
+                f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+                files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                data={
+                    "observed_posture": run["current_step"]["posture_name"],
+                    "sample_only": "true",
+                },
+            )
         assert verify.status_code == 200
         payload = verify.json()
         assert payload["step"]["sample_only"] is True
@@ -136,6 +139,49 @@ def test_sample_only_verification_keeps_step_pending_when_confirmed():
         assert run_after["status"] == "active"
         assert run_after["current_step"] is not None
         assert run_after["current_step"]["id"] == step_id
+
+
+def test_failed_step_chain_appends_max_two_retries():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 10,
+                "max_misses_before_penalty": 5,
+                "session_penalty_seconds": 0,
+            },
+        )
+        assert start.status_code == 200
+        run = start.json()
+        run_id = run["id"]
+        initial_step_id = run["current_step"]["id"]
+
+        def _verify_fail(step_id: int) -> None:
+            with patch("app.routers.games.analyze_verification", return_value=("suspicious", "AI mock fail")):
+                resp = client.post(
+                    f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+                    files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                    data={"observed_posture": run["current_step"]["posture_name"]},
+                )
+            assert resp.status_code == 200
+
+        _verify_fail(initial_step_id)
+        detail_1 = client.get(f"/api/games/runs/{run_id}").json()
+        retry_1 = next((s for s in detail_1["steps"] if s.get("retry_of_step_id") == initial_step_id), None)
+        assert retry_1 is not None
+
+        _verify_fail(int(retry_1["id"]))
+        detail_2 = client.get(f"/api/games/runs/{run_id}").json()
+        retry_2 = next((s for s in detail_2["steps"] if s.get("retry_of_step_id") == int(retry_1["id"])), None)
+        assert retry_2 is not None
+
+        _verify_fail(int(retry_2["id"]))
+        detail_3 = client.get(f"/api/games/runs/{run_id}").json()
+        retry_3 = next((s for s in detail_3["steps"] if s.get("retry_of_step_id") == int(retry_2["id"])), None)
+        assert retry_3 is None
 
 
 def test_game_verification_capture_is_saved_under_session_with_run_start_prefix():
@@ -326,6 +372,149 @@ def test_posture_management_crud_and_run_uses_managed_postures():
         deleted = client.delete(f"/api/games/modules/posture_training/postures/{posture_id}")
         assert deleted.status_code == 200
         assert deleted.json()["deleted"] == posture_id
+
+
+def test_run_step_order_prioritizes_positive_sort_and_places_zero_at_end():
+    with TestClient(app) as client:
+        existing = client.get("/api/games/modules/posture_training/postures")
+        assert existing.status_code == 200
+        for row in existing.json().get("items") or []:
+            removed = client.delete(f"/api/games/modules/posture_training/postures/{row['id']}")
+            assert removed.status_code == 200
+
+        create_data = [
+            {
+                "title": "Zero A",
+                "posture_key": "zero_a",
+                "image_url": "/static/img/postures/zero-a.jpg",
+                "instruction": "fallback random",
+                "target_seconds": 30,
+                "sort_order": 0,
+                "is_active": True,
+            },
+            {
+                "title": "One",
+                "posture_key": "one",
+                "image_url": "/static/img/postures/one.jpg",
+                "instruction": "prio 1",
+                "target_seconds": 30,
+                "sort_order": 1,
+                "is_active": True,
+            },
+            {
+                "title": "Zero B",
+                "posture_key": "zero_b",
+                "image_url": "/static/img/postures/zero-b.jpg",
+                "instruction": "fallback random",
+                "target_seconds": 30,
+                "sort_order": 0,
+                "is_active": True,
+            },
+            {
+                "title": "Two",
+                "posture_key": "two",
+                "image_url": "/static/img/postures/two.jpg",
+                "instruction": "prio 2",
+                "target_seconds": 30,
+                "sort_order": 2,
+                "is_active": True,
+            },
+        ]
+        for payload in create_data:
+            created = client.post("/api/games/modules/posture_training/postures", json=payload)
+            assert created.status_code == 200
+
+        session_id = _create_and_sign(client)
+        started = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 5,
+                "max_misses_before_penalty": 2,
+                "session_penalty_seconds": 60,
+            },
+        )
+        assert started.status_code == 200
+        run_id = started.json()["id"]
+        detail = client.get(f"/api/games/runs/{run_id}")
+        assert detail.status_code == 200
+        names = [step["posture_name"] for step in detail.json()["steps"]]
+
+        assert names[:2] == ["One", "Two"]
+        assert set(names[2:]) == {"Zero A", "Zero B"}
+
+
+def test_run_step_order_randomizes_equal_positive_sort_bucket():
+    with TestClient(app) as client:
+        existing = client.get("/api/games/modules/posture_training/postures")
+        assert existing.status_code == 200
+        for row in existing.json().get("items") or []:
+            removed = client.delete(f"/api/games/modules/posture_training/postures/{row['id']}")
+            assert removed.status_code == 200
+
+        create_data = [
+            {
+                "title": "One A",
+                "posture_key": "one_a",
+                "image_url": "/static/img/postures/one-a.jpg",
+                "instruction": "prio 1",
+                "target_seconds": 30,
+                "sort_order": 1,
+                "is_active": True,
+            },
+            {
+                "title": "One B",
+                "posture_key": "one_b",
+                "image_url": "/static/img/postures/one-b.jpg",
+                "instruction": "prio 1",
+                "target_seconds": 30,
+                "sort_order": 1,
+                "is_active": True,
+            },
+            {
+                "title": "Two A",
+                "posture_key": "two_a",
+                "image_url": "/static/img/postures/two-a.jpg",
+                "instruction": "prio 2",
+                "target_seconds": 30,
+                "sort_order": 2,
+                "is_active": True,
+            },
+            {
+                "title": "Zero A",
+                "posture_key": "zero_a2",
+                "image_url": "/static/img/postures/zero-a2.jpg",
+                "instruction": "fallback random",
+                "target_seconds": 30,
+                "sort_order": 0,
+                "is_active": True,
+            },
+        ]
+        for payload in create_data:
+            created = client.post("/api/games/modules/posture_training/postures", json=payload)
+            assert created.status_code == 200
+
+        session_id = _create_and_sign(client)
+        started = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 5,
+                "max_misses_before_penalty": 2,
+                "session_penalty_seconds": 60,
+            },
+        )
+        assert started.status_code == 200
+        run_id = started.json()["id"]
+        detail = client.get(f"/api/games/runs/{run_id}")
+        assert detail.status_code == 200
+        names = [step["posture_name"] for step in detail.json()["steps"]]
+
+        assert set(names[:2]) == {"One A", "One B"}
+        assert names[2] == "Two A"
+        assert names[3] == "Zero A"
 
 
 def test_upload_posture_image_returns_content_url():

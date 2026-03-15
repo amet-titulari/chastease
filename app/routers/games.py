@@ -44,6 +44,7 @@ DEFAULT_EASY_TARGET_MULTIPLIER = 0.85
 DEFAULT_HARD_TARGET_MULTIPLIER = 1.25
 DEFAULT_TARGET_RANDOMIZATION_PERCENT = 10
 MAX_POSTURE_ZIP_BYTES = 64 * 1024 * 1024
+MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN = 2
 MEDIA_CONTENT_URL_RE = re.compile(r"^/api/media/(?P<media_id>\d+)/content/?$")
 
 
@@ -276,8 +277,22 @@ def _store_game_verification_capture(run: GameRun, image_bytes: bytes, filename:
 def _steps_for_run(db: Session, module_key: str) -> list[dict]:
     rows = _module_postures(db, module_key, active_only=True)
     if rows:
-        if all((row.sort_order or 0) == 0 for row in rows):
-            random.shuffle(rows)
+        prioritized_buckets: dict[int, list[GamePostureTemplate]] = {}
+        for row in rows:
+            order = int(row.sort_order or 0)
+            if order <= 0:
+                continue
+            prioritized_buckets.setdefault(order, []).append(row)
+
+        prioritized: list[GamePostureTemplate] = []
+        for order in sorted(prioritized_buckets.keys()):
+            bucket = prioritized_buckets[order]
+            random.shuffle(bucket)
+            prioritized.extend(bucket)
+
+        fallback_random = [row for row in rows if int(row.sort_order or 0) <= 0]
+        random.shuffle(fallback_random)
+        rows = prioritized + fallback_random
         return [
             {
                 "posture_key": row.posture_key,
@@ -369,6 +384,22 @@ def _active_step(db: Session, run_id: int) -> GameRunStep | None:
         .order_by(GameRunStep.order_index.asc(), GameRunStep.id.asc())
         .first()
     )
+
+
+def _retry_depth_for_step(db: Session, run_id: int, step: GameRunStep) -> int:
+    depth = 0
+    parent_id = step.retry_of_step_id
+    while parent_id is not None:
+        depth += 1
+        parent = (
+            db.query(GameRunStep)
+            .filter(GameRunStep.id == parent_id, GameRunStep.run_id == run_id)
+            .first()
+        )
+        if parent is None:
+            break
+        parent_id = parent.retry_of_step_id
+    return depth
 
 
 def _remaining_seconds_for_run(run: GameRun, now: datetime | None = None) -> int:
@@ -970,54 +1001,77 @@ async def verify_game_step(
         observed_seal_number=observed_posture,
         verification_criteria=(
             (
-                f"Pruefe, ob die Haltung '{step.posture_name}' klar erkennbar und korrekt ausgefuehrt ist. "
-                f"Soll-Kriterien: {(step.instruction or 'Keine Zusatzkriterien hinterlegt.').strip()}"
+                "Aufgabe: strenge Bildpruefung fuer eine konkrete Pose. "
+                f"Soll-Pose: '{step.posture_name}'. "
+                f"Soll-Kriterien: {(step.instruction or 'Keine Zusatzkriterien hinterlegt.').strip()} "
+                "Bewerte 'confirmed' NUR wenn die Pose klar sichtbar ist und mit Soll-Pose plus Kriterien uebereinstimmt. "
+                "Wenn Koerperhaltung, Ausrichtung, Kamerawinkel oder Bildqualitaet keine sichere Zuordnung erlauben: 'suspicious'. "
+                "Bei Teiltreffern oder Unsicherheit niemals 'confirmed'."
             )
         ),
+        allow_heuristic_fallback=False,
     )
 
     step.verification_count += 1
     step.last_analysis = analysis
     now = datetime.now(timezone.utc)
 
-    def _append_retry_step_for_failed_current_step() -> None:
+    def _handle_failed_step_with_retry_policy() -> None:
         nonlocal run, step
+
         run.miss_count += 1
-        run.retry_extension_seconds += difficulty.retry_extension_seconds
-        run.total_duration_seconds += difficulty.retry_extension_seconds
+        retry_depth = _retry_depth_for_step(db, run.id, step)
+        can_append_retry = retry_depth < MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN
 
-        last_order = (
-            db.query(GameRunStep)
-            .filter(GameRunStep.run_id == run.id)
-            .order_by(GameRunStep.order_index.desc())
-            .first()
-        )
-        next_order = (last_order.order_index if last_order else 0) + 1
-        db.add(
-            GameRunStep(
-                run_id=run.id,
-                order_index=next_order,
-                posture_key=step.posture_key,
-                posture_name=step.posture_name,
-                posture_image_url=step.posture_image_url,
-                instruction=step.instruction,
-                target_seconds=step.target_seconds,
-                status="pending",
-                retry_of_step_id=step.id,
-            )
-        )
+        if can_append_retry:
+            run.retry_extension_seconds += difficulty.retry_extension_seconds
+            run.total_duration_seconds += difficulty.retry_extension_seconds
 
-        db.add(
-            Message(
-                session_id=run.session_id,
-                role="system",
-                message_type="game_step_fail",
-                content=(
-                    f"Posture nicht bestaetigt: {step.posture_name}. "
-                    f"Retry angehaengt, Gesamtzeit +{difficulty.retry_extension_seconds}s."
-                ),
+            last_order = (
+                db.query(GameRunStep)
+                .filter(GameRunStep.run_id == run.id)
+                .order_by(GameRunStep.order_index.desc())
+                .first()
             )
-        )
+            next_order = (last_order.order_index if last_order else 0) + 1
+            db.add(
+                GameRunStep(
+                    run_id=run.id,
+                    order_index=next_order,
+                    posture_key=step.posture_key,
+                    posture_name=step.posture_name,
+                    posture_image_url=step.posture_image_url,
+                    instruction=step.instruction,
+                    target_seconds=step.target_seconds,
+                    status="pending",
+                    retry_of_step_id=step.id,
+                )
+            )
+
+            db.add(
+                Message(
+                    session_id=run.session_id,
+                    role="system",
+                    message_type="game_step_fail",
+                    content=(
+                        f"Posture nicht bestaetigt: {step.posture_name}. "
+                        f"Retry angehaengt ({retry_depth + 1}/{MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN}), "
+                        f"Gesamtzeit +{difficulty.retry_extension_seconds}s."
+                    ),
+                )
+            )
+        else:
+            db.add(
+                Message(
+                    session_id=run.session_id,
+                    role="system",
+                    message_type="game_step_fail",
+                    content=(
+                        f"Posture nicht bestaetigt: {step.posture_name}. "
+                        f"Retry-Limit erreicht ({MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN}), kein weiterer Versuch angehaengt."
+                    ),
+                )
+            )
 
         if (
             run.session_penalty_seconds > 0
@@ -1054,7 +1108,7 @@ async def verify_game_step(
         else:
             step.status = "failed"
             step.completed_at = now
-            _append_retry_step_for_failed_current_step()
+            _handle_failed_step_with_retry_policy()
 
             db.add(
                 Message(
@@ -1078,7 +1132,7 @@ async def verify_game_step(
     else:
         step.status = "failed"
         step.completed_at = now
-        _append_retry_step_for_failed_current_step()
+        _handle_failed_step_with_retry_policy()
 
     db.add(step)
     db.add(run)
@@ -1092,6 +1146,7 @@ async def verify_game_step(
             "id": step.id,
             "status": step.status,
             "verification_count": step.verification_count,
+            "verification_status": status,
             "analysis": step.last_analysis,
             "capture_path": capture_rel_path,
             "capture_url": f"/media/{capture_rel_path}",

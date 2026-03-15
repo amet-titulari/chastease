@@ -149,10 +149,65 @@
     font-size: 0.78rem;
     color: #9db3c9;
   }
+  .verify-preview {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0.45rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.03);
+    min-height: 82px;
+  }
+  .verify-thumb {
+    width: 108px;
+    height: 72px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.24);
+    background: #091019;
+  }
+  .verify-thumb.ok {
+    border-color: #2fdc8a;
+    box-shadow: 0 0 0 1px rgba(47, 220, 138, 0.35) inset;
+  }
+  .verify-thumb.fail {
+    border-color: #ff6b6b;
+    box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.35) inset;
+  }
+  .capture-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+    gap: 0.4rem;
+    align-content: start;
+    min-height: 220px;
+    padding: 0.35rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .capture-thumb {
+    width: 100%;
+    aspect-ratio: 4/3;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 2px solid rgba(255, 255, 255, 0.22);
+    background: #091019;
+  }
+  .capture-thumb.ok {
+    border-color: #2fdc8a;
+    box-shadow: 0 0 0 1px rgba(47, 220, 138, 0.35) inset;
+  }
+  .capture-thumb.fail {
+    border-color: #ff6b6b;
+    box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.35) inset;
+  }
   @media (max-width: 980px) {
     .setup-grid { grid-template-columns: 1fr; }
     .setup-secondary { grid-template-columns: 1fr; }
     .play-stage { grid-template-columns: 1fr; }
+    .verify-preview { min-height: 70px; }
+    .verify-thumb { width: 88px; height: 60px; }
   }
 </style>
 {% endblock %}
@@ -219,8 +274,8 @@
         <div id="gm-phase-label" class="phase-label">BEREIT</div>
         <div id="gm-phase-countdown" class="phase-countdown">--</div>
       </div>
-      <p id="gm-posture-name" class="compact">Noch nicht gestartet</p>
-      <p id="gm-posture-instruction" class="game-meta">-</p>
+      <p id="gm-posture-name" class="compact" style="display:none;">Noch nicht gestartet</p>
+      <p id="gm-posture-instruction" class="game-meta" style="display:none;">-</p>
       <img id="gm-posture-image" class="posture-image" alt="Posture" style="display:none;" />
     </article>
 
@@ -236,8 +291,12 @@
         </div>
       </div>
       <video id="gm-video" class="camera-video" autoplay muted playsinline></video>
+      <div class="verify-preview">
+        <img id="gm-verify-thumb" class="verify-thumb" alt="Letztes Pruefungsbild" style="display:none;" />
+      </div>
       <p id="gm-analysis" class="game-meta"></p>
       <p class="game-meta">Misses: <span id="gm-miss-count">0</span> · Retry +Zeit: <span id="gm-retry-time">0s</span></p>
+      <div id="gm-capture-gallery" class="capture-gallery"></div>
     </aside>
   </section>
 </section>
@@ -279,6 +338,8 @@ const totalTimerEl = document.getElementById("gm-total-timer");
 const missCountEl = document.getElementById("gm-miss-count");
 const retryTimeEl = document.getElementById("gm-retry-time");
 const analysisEl = document.getElementById("gm-analysis");
+const verifyThumbEl = document.getElementById("gm-verify-thumb");
+const captureGalleryEl = document.getElementById("gm-capture-gallery");
 const setupVideoEl = document.getElementById("gm-setup-video");
 const playVideoEl = document.getElementById("gm-video");
 const beepVolumeEl = document.getElementById("gm-beep-volume");
@@ -355,6 +416,52 @@ function initializeBeepVolume() {
 function updatePhase(label, value) {
   phaseLabelEl.textContent = label;
   phaseCountdownEl.textContent = value;
+}
+
+function updateVerificationPreview(stepResult, sampleOnly) {
+  if (!stepResult) return;
+
+  const imageUrl = stepResult.capture_url || "";
+  if (imageUrl) {
+    verifyThumbEl.src = imageUrl;
+    verifyThumbEl.style.display = "";
+  }
+
+  const status = String(stepResult.verification_status || "").toLowerCase();
+  verifyThumbEl.classList.remove("ok", "fail");
+
+  if (status === "confirmed") {
+    verifyThumbEl.classList.add("ok");
+    return;
+  }
+
+  if (status === "suspicious") {
+    verifyThumbEl.classList.add("fail");
+    return;
+  }
+}
+
+function appendCaptureThumbnail(stepResult) {
+  if (!stepResult) return;
+  const imageUrl = stepResult.capture_url || "";
+  if (!imageUrl) return;
+
+  const status = String(stepResult.verification_status || "").toLowerCase();
+  const img = document.createElement("img");
+  img.src = imageUrl;
+  img.alt = "Pruefungsbild";
+  img.className = "capture-thumb";
+  if (status === "confirmed") {
+    img.classList.add("ok");
+  } else if (status === "suspicious") {
+    img.classList.add("fail");
+  }
+  captureGalleryEl.prepend(img);
+
+  // Keep the gallery compact and responsive.
+  while (captureGalleryEl.children.length > 60) {
+    captureGalleryEl.removeChild(captureGalleryEl.lastElementChild);
+  }
 }
 
 function startTotalTimer(seconds, isActive) {
@@ -648,6 +755,9 @@ async function verifyCurrentStepWithMode(token, options = {}) {
       body: form,
     });
 
+    updateVerificationPreview(result.step, sampleOnly);
+    appendCaptureThumbnail(result.step);
+
     if (sampleOnly) {
       if (result.step && result.step.finalized) {
         analysisEl.textContent = `Stichprobe fehlgeschlagen: ${result.step.analysis || "Pose nicht bestaetigt."}`;
@@ -709,6 +819,10 @@ async function startRun() {
     });
     runId = run.id;
     analysisEl.textContent = "";
+    verifyThumbEl.style.display = "none";
+    verifyThumbEl.removeAttribute("src");
+    verifyThumbEl.classList.remove("ok", "fail");
+    captureGalleryEl.innerHTML = "";
     setStatus("Spiel gestartet.", false);
     renderRun(run);
   } catch (err) {

@@ -52,21 +52,43 @@ def _openai_vision_analysis(
         {"type": "text", "text": prompt},
     ]}]
 
+    def _extract_status_and_analysis(text: str) -> tuple[str, str] | None:
+        candidate = (text or "").strip()
+        if not candidate:
+            return None
+
+        # If the model wrapped JSON in markdown code fences, unwrap first.
+        if "```" in candidate:
+            parts = candidate.split("```")
+            if len(parts) >= 2:
+                candidate = parts[1].strip()
+                if candidate.lower().startswith("json"):
+                    candidate = candidate[4:].strip()
+
+        # Try strict JSON first.
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                status = str(parsed.get("status", "")).strip().lower()
+                analysis = str(parsed.get("analysis", "")).strip()
+                if status in {"confirmed", "suspicious"}:
+                    return status, (analysis or "KI-Analyse abgeschlossen.")
+        except Exception:
+            pass
+
+        # Fallback: infer status from plain text output.
+        plain = candidate.strip()
+        lowered = plain.lower()
+        if "suspicious" in lowered or "verdaechtig" in lowered or "verdachtig" in lowered:
+            return "suspicious", (plain or "KI-Analyse abgeschlossen.")
+        return "confirmed", (plain or "KI-Analyse abgeschlossen.")
+
     try:
         with httpx.Client(timeout=timeout) as client:
             resp = client.post(api_url, headers=headers, json={"model": model, "messages": messages})
             resp.raise_for_status()
             text = resp.json()["choices"][0]["message"]["content"].strip()
-
-        # Parse JSON from response (handle markdown code blocks)
-        if "```" in text:
-            text = text.split("```")[1].lstrip("json").strip()
-        parsed = json.loads(text)
-        status = str(parsed.get("status", "")).strip().lower()
-        analysis = str(parsed.get("analysis", "")).strip()
-        if status not in {"confirmed", "suspicious"}:
-            return None
-        return status, analysis or "KI-Analyse abgeschlossen."
+        return _extract_status_and_analysis(text)
     except Exception:
         return None
 
@@ -134,6 +156,7 @@ def analyze_verification(
     requested_seal_number: str | None,
     observed_seal_number: str | None,
     verification_criteria: str | None = None,
+    allow_heuristic_fallback: bool = True,
 ) -> tuple[str, str]:
     provider = settings.verification_ai_provider.strip().lower()
 
@@ -193,7 +216,13 @@ def analyze_verification(
         except Exception:
             pass
 
-    return _heuristic_analysis(
-        requested_seal_number=requested_seal_number,
-        observed_seal_number=observed_seal_number,
+    if allow_heuristic_fallback:
+        return _heuristic_analysis(
+            requested_seal_number=requested_seal_number,
+            observed_seal_number=observed_seal_number,
+        )
+
+    return (
+        "suspicious",
+        "AI-Pruefung nicht verfuegbar. Bitte Vision-Provider konfigurieren und erneut pruefen.",
     )
