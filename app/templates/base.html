@@ -34,7 +34,7 @@
       position: absolute;
       top: calc(100% + 0.45rem);
       right: 0;
-      min-width: 260px;
+      min-width: 280px;
       padding: 0.5rem;
       border-radius: 11px;
       border: 1px solid rgba(255, 255, 255, 0.16);
@@ -43,6 +43,24 @@
       display: grid;
       gap: 0.35rem;
       z-index: 30;
+    }
+    .topnav .admin-menu-group {
+      display: grid;
+      gap: 0.3rem;
+    }
+    .topnav .admin-menu-label {
+      margin: 0.2rem 0 0.05rem;
+      color: #9eb5cb;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+    .topnav .admin-menu-divider {
+      height: 1px;
+      border: none;
+      margin: 0.2rem 0;
+      background: rgba(255, 255, 255, 0.14);
     }
     .topnav .admin-menu-panel a {
       text-decoration: none;
@@ -67,17 +85,28 @@
           <details class="admin-menu" id="admin-menu">
             <summary>Admin</summary>
             <div class="admin-menu-panel">
-              <a href="/admin">Uebersicht</a>
-              <a href="/personas">Personas</a>
-              <a href="/scenarios">Scenarios</a>
-              <a href="/inventory">Inventar</a>
-              <a href="/games">Games</a>
-              <a href="/games/postures?module_key=posture_training">Posture Library</a>
-              <a href="/admin/postures/matrix">Posture Matrix</a>
-              <a href="/admin/operations">Operations</a>
-              <a href="/contracts">Vertraege</a>
-              <a href="/history">Historie</a>
-              <a href="/testconsole">Testkonsole</a>
+              <div class="admin-menu-group">
+                <p class="admin-menu-label">Uebersicht</p>
+                <a href="/admin">Admin Center</a>
+              </div>
+              <hr class="admin-menu-divider" />
+              <div class="admin-menu-group">
+                <p class="admin-menu-label">Verwaltung</p>
+                <a href="/personas">Personas</a>
+                <a href="/scenarios">Scenarios</a>
+                <a href="/inventory">Inventar</a>
+                <a href="/games">Games</a>
+                <a href="/games/postures?module_key=posture_training">Posture Library</a>
+                <a href="/admin/postures/matrix">Posture Matrix</a>
+              </div>
+              <hr class="admin-menu-divider" />
+              <div class="admin-menu-group">
+                <p class="admin-menu-label">Operations</p>
+                <a href="/admin/operations">Operations Hub</a>
+                <a href="/contracts">Vertraege</a>
+                <a href="/history">Historie</a>
+                <a href="/testconsole">Testkonsole</a>
+              </div>
             </div>
           </details>
         {% endif %}
