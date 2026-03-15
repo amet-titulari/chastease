@@ -277,9 +277,6 @@
       <label>Pose aus Pool
         <select id="gm-dont-move-posture"></select>
       </label>
-      <label>Haltezeit (Sek)
-        <input id="gm-dont-move-hold" type="number" min="5" max="7200" value="120" />
-      </label>
     </div>
 
     <div class="setup-secondary">
@@ -394,7 +391,6 @@ const testBeepEl = document.getElementById("gm-test-beep");
 const testDoubleBeepEl = document.getElementById("gm-test-double-beep");
 const dontMoveOptionsEl = document.getElementById("gm-dont-move-options");
 const dontMovePostureEl = document.getElementById("gm-dont-move-posture");
-const dontMoveHoldEl = document.getElementById("gm-dont-move-hold");
 const missLabelEl = document.getElementById("gm-miss-label");
 const transitionWrapEl = document.getElementById("gm-transition-wrap");
 const maxMissesWrapEl = document.getElementById("gm-max-misses-wrap");
@@ -791,8 +787,6 @@ async function loadModule() {
     if (usable.length === 0) {
       throw new Error("Keine freigegebenen Postures fuer dieses Modul vorhanden");
     }
-    const fallbackHold = Number(usable[0]?.target_seconds || 120);
-    dontMoveHoldEl.value = String(Math.max(5, Math.min(7200, fallbackHold)));
   }
 }
 
@@ -953,20 +947,18 @@ async function startRun() {
   const sessionPenalty = Math.max(0, (penaltyDays * 86400) + (penaltyHours * 3600) + (penaltyMinutes * 60));
 
   let dontMovePostureKey = null;
-  let dontMoveHoldSeconds = null;
   let effectiveTransitionSeconds = transitionSecondsInput;
   let effectiveMaxMisses = maxMissesInput;
   let effectiveDuration = duration;
   if (isDontMoveModule) {
     dontMovePostureKey = String(dontMovePostureEl.value || "").trim();
-    dontMoveHoldSeconds = Math.max(5, Math.min(7200, Number(dontMoveHoldEl.value || 120)));
     effectiveTransitionSeconds = 0;
     effectiveMaxMisses = 1;
     if (!dontMovePostureKey) {
       setStatus("Bitte eine Pose fuer Don't move auswaehlen.", true);
       return;
     }
-    effectiveDuration = Math.max(1, Math.ceil((dontMoveHoldSeconds + 15) / 60));
+    effectiveDuration = Math.max(1, duration);
   }
 
   try {
@@ -985,7 +977,6 @@ async function startRun() {
         hard_target_multiplier: moduleSettings.hard_target_multiplier,
         target_randomization_percent: moduleSettings.target_randomization_percent,
         selected_posture_key: dontMovePostureKey,
-        hold_seconds: dontMoveHoldSeconds,
       }),
     });
     runId = run.id;

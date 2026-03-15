@@ -1099,12 +1099,9 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
         else:
             selected_steps = [available_steps[0]]
 
-        if payload.hold_seconds is not None:
-            chosen = dict(selected_steps[0])
-            chosen["target_seconds"] = int(payload.hold_seconds)
-            selected_steps = [chosen]
-        else:
-            selected_steps = [selected_steps[0]]
+        chosen = dict(selected_steps[0])
+        chosen["target_seconds"] = max(5, int(payload.duration_minutes) * 60)
+        selected_steps = [chosen]
 
     easy_multiplier, hard_multiplier, randomization_percent = _resolve_effective_settings(db, payload)
     target_multiplier = _difficulty_target_multiplier(payload.difficulty, easy_multiplier, hard_multiplier)

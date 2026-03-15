@@ -66,6 +66,7 @@ def test_start_game_run_with_dont_move_module():
         assert payload["transition_seconds"] == 0
         assert payload["max_misses_before_penalty"] == 1
         assert payload["current_step"] is not None
+        assert int(payload["current_step"]["raw_target_seconds"]) == 8 * 60
 
 
 def test_posture_allowed_module_keys_roundtrip():
