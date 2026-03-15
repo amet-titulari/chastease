@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,7 @@ from app.models.message import Message
 from app.models.session import Session as SessionModel
 from app.security import require_admin_session_user
 from app.services.games import as_public_module_payload, get_module, list_modules
+from app.services.image_stamp import stamp_verification_timestamp
 from app.services.audit_logger import audit_log
 from app.services.verification_analysis import analyze_verification
 
@@ -46,6 +47,18 @@ POSTURE_TARGET_SIZE = (768, 1024)
 DEFAULT_EASY_TARGET_MULTIPLIER = 0.85
 DEFAULT_HARD_TARGET_MULTIPLIER = 1.25
 DEFAULT_TARGET_RANDOMIZATION_PERCENT = 10
+DEFAULT_MOVEMENT_THRESHOLDS_BY_MODULE = {
+    "dont_move": {
+        "easy": {"pose_deviation": 0.16, "stillness": 0.0080},
+        "medium": {"pose_deviation": 0.13, "stillness": 0.0060},
+        "hard": {"pose_deviation": 0.10, "stillness": 0.0040},
+    },
+    "tiptoeing": {
+        "easy": {"pose_deviation": 0.15, "stillness": 0.0070},
+        "medium": {"pose_deviation": 0.12, "stillness": 0.0050},
+        "hard": {"pose_deviation": 0.09, "stillness": 0.0036},
+    },
+}
 MAX_POSTURE_ZIP_BYTES = 64 * 1024 * 1024
 MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN = 2
 MEDIA_CONTENT_URL_RE = re.compile(r"^/api/media/(?P<media_id>\d+)/content/?$")
@@ -77,6 +90,12 @@ class ModuleSettingsUpdateRequest(BaseModel):
     easy_target_multiplier: float = Field(default=DEFAULT_EASY_TARGET_MULTIPLIER, gt=0.1, le=3.0)
     hard_target_multiplier: float = Field(default=DEFAULT_HARD_TARGET_MULTIPLIER, gt=0.1, le=3.0)
     target_randomization_percent: int = Field(default=DEFAULT_TARGET_RANDOMIZATION_PERCENT, ge=0, le=60)
+    movement_easy_pose_deviation: float = Field(default=0.16, ge=0.01, le=1.0)
+    movement_easy_stillness: float = Field(default=0.008, ge=0.0005, le=0.1)
+    movement_medium_pose_deviation: float = Field(default=0.13, ge=0.01, le=1.0)
+    movement_medium_stillness: float = Field(default=0.006, ge=0.0005, le=0.1)
+    movement_hard_pose_deviation: float = Field(default=0.10, ge=0.01, le=1.0)
+    movement_hard_stillness: float = Field(default=0.004, ge=0.0005, le=0.1)
 
 
 class PostureTemplateCreateRequest(BaseModel):
@@ -391,8 +410,56 @@ def _store_game_verification_capture(run: GameRun, image_bytes: bytes, filename:
     )
     target = _resolve_media_path(rel_path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(image_bytes)
+    target.write_bytes(stamp_verification_timestamp(image_bytes))
     return rel_path
+
+
+def _annotate_movement_capture(
+    image_bytes: bytes,
+    *,
+    marker_x: float | None,
+    marker_y: float | None,
+    marker_label: str | None = None,
+    marker_strength: float | None = None,
+) -> bytes:
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as raw_img:
+            image = ImageOps.exif_transpose(raw_img).convert("RGB")
+    except Exception:
+        return image_bytes
+
+    width, height = image.size
+    if width <= 0 or height <= 0:
+        return image_bytes
+
+    mx = 0.5 if marker_x is None else max(0.0, min(1.0, float(marker_x)))
+    my = 0.72 if marker_y is None else max(0.0, min(1.0, float(marker_y)))
+    px = int(round(mx * width))
+    py = int(round(my * height))
+
+    draw = ImageDraw.Draw(image, "RGBA")
+    strength = max(0.0, float(marker_strength or 0.0))
+    normalized = min(2.5, strength / 0.004)
+    radius = max(16, int(min(width, height) * (0.035 + (0.01 * normalized))))
+    cross = max(26, int(radius * 1.4))
+    line = max(4, int(min(width, height) * 0.008))
+
+    draw.ellipse((px - radius, py - radius, px + radius, py + radius), fill=(255, 24, 24, 70))
+    draw.ellipse((px - radius, py - radius, px + radius, py + radius), outline=(255, 36, 36, 255), width=line)
+    draw.line((px - cross, py, px + cross, py), fill=(255, 36, 36, 255), width=max(3, line - 1))
+    draw.line((px, py - cross, px, py + cross), fill=(255, 36, 36, 255), width=max(3, line - 1))
+
+    label = (str(marker_label or "").strip() or "Bewegung")[:32]
+    text_w = int(len(label) * max(10, int(min(width, height) * 0.02)))
+    box_x = max(8, min(width - text_w - 26, px + radius + 10))
+    box_y = max(8, py - radius - 40)
+    box_h = 30
+    draw.rectangle((box_x, box_y, box_x + text_w + 18, box_y + box_h), fill=(0, 0, 0, 170))
+    draw.text((box_x + 9, box_y + 6), label, fill=(255, 90, 90, 255))
+
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=90)
+    return out.getvalue()
 
 
 def _steps_for_run(db: Session, module_key: str) -> list[dict]:
@@ -453,17 +520,73 @@ def _steps_for_run(db: Session, module_key: str) -> list[dict]:
     ]
 
 
-def _module_settings_payload(item: GameModuleSetting | None) -> dict:
+def _default_movement_thresholds_for_module(module_key: str) -> dict:
+    module_defaults = DEFAULT_MOVEMENT_THRESHOLDS_BY_MODULE.get(module_key)
+    if module_defaults:
+        return module_defaults
+    return DEFAULT_MOVEMENT_THRESHOLDS_BY_MODULE["dont_move"]
+
+
+def _module_settings_payload(item: GameModuleSetting | None, module_key: str) -> dict:
+    defaults = _default_movement_thresholds_for_module(module_key)
     if item is None:
         return {
             "easy_target_multiplier": DEFAULT_EASY_TARGET_MULTIPLIER,
             "hard_target_multiplier": DEFAULT_HARD_TARGET_MULTIPLIER,
             "target_randomization_percent": DEFAULT_TARGET_RANDOMIZATION_PERCENT,
+            "movement_easy_pose_deviation": float(defaults["easy"]["pose_deviation"]),
+            "movement_easy_stillness": float(defaults["easy"]["stillness"]),
+            "movement_medium_pose_deviation": float(defaults["medium"]["pose_deviation"]),
+            "movement_medium_stillness": float(defaults["medium"]["stillness"]),
+            "movement_hard_pose_deviation": float(defaults["hard"]["pose_deviation"]),
+            "movement_hard_stillness": float(defaults["hard"]["stillness"]),
+            "movement_thresholds": {
+                "easy": {
+                    "pose_deviation": float(defaults["easy"]["pose_deviation"]),
+                    "stillness": float(defaults["easy"]["stillness"]),
+                },
+                "medium": {
+                    "pose_deviation": float(defaults["medium"]["pose_deviation"]),
+                    "stillness": float(defaults["medium"]["stillness"]),
+                },
+                "hard": {
+                    "pose_deviation": float(defaults["hard"]["pose_deviation"]),
+                    "stillness": float(defaults["hard"]["stillness"]),
+                },
+            },
         }
+
+    easy_pose = float(item.movement_easy_pose_deviation) if item.movement_easy_pose_deviation is not None else float(defaults["easy"]["pose_deviation"])
+    easy_still = float(item.movement_easy_stillness) if item.movement_easy_stillness is not None else float(defaults["easy"]["stillness"])
+    medium_pose = float(item.movement_medium_pose_deviation) if item.movement_medium_pose_deviation is not None else float(defaults["medium"]["pose_deviation"])
+    medium_still = float(item.movement_medium_stillness) if item.movement_medium_stillness is not None else float(defaults["medium"]["stillness"])
+    hard_pose = float(item.movement_hard_pose_deviation) if item.movement_hard_pose_deviation is not None else float(defaults["hard"]["pose_deviation"])
+    hard_still = float(item.movement_hard_stillness) if item.movement_hard_stillness is not None else float(defaults["hard"]["stillness"])
+
     return {
         "easy_target_multiplier": item.easy_target_multiplier,
         "hard_target_multiplier": item.hard_target_multiplier,
         "target_randomization_percent": item.target_randomization_percent,
+        "movement_easy_pose_deviation": easy_pose,
+        "movement_easy_stillness": easy_still,
+        "movement_medium_pose_deviation": medium_pose,
+        "movement_medium_stillness": medium_still,
+        "movement_hard_pose_deviation": hard_pose,
+        "movement_hard_stillness": hard_still,
+        "movement_thresholds": {
+            "easy": {
+                "pose_deviation": easy_pose,
+                "stillness": easy_still,
+            },
+            "medium": {
+                "pose_deviation": medium_pose,
+                "stillness": medium_still,
+            },
+            "hard": {
+                "pose_deviation": hard_pose,
+                "stillness": hard_still,
+            },
+        },
     }
 
 
@@ -498,7 +621,7 @@ def _load_module_settings(db: Session, module_key: str) -> GameModuleSetting | N
 
 def _resolve_effective_settings(db: Session, payload: StartGameRunRequest) -> tuple[float, float, int]:
     configured = _load_module_settings(db, payload.module_key)
-    default_payload = _module_settings_payload(configured)
+    default_payload = _module_settings_payload(configured, payload.module_key)
     easy = (
         payload.easy_target_multiplier
         if payload.easy_target_multiplier is not None
@@ -584,7 +707,7 @@ def _append_run_check_entry(
     step: GameRunStep,
     verification_status: str,
     analysis: str,
-    capture_rel_path: str,
+    capture_rel_path: str | None,
     sample_only: bool,
 ) -> None:
     meta = _load_run_summary_meta(run)
@@ -604,7 +727,7 @@ def _append_run_check_entry(
             "violation_reason": analysis if verification_status != "confirmed" else None,
             "sample_only": bool(sample_only),
             "capture_path": capture_rel_path,
-            "capture_url": f"/media/{capture_rel_path}",
+            "capture_url": (f"/media/{capture_rel_path}" if capture_rel_path else None),
         }
     )
 
@@ -751,7 +874,7 @@ def get_module_settings(module_key: str, request: Request, db: Session = Depends
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
     item = _load_module_settings(db, module_key)
-    return _module_settings_payload(item)
+    return _module_settings_payload(item, module_key)
 
 
 @router.put("/modules/{module_key}/settings")
@@ -771,6 +894,12 @@ def update_module_settings(
     item.easy_target_multiplier = payload.easy_target_multiplier
     item.hard_target_multiplier = payload.hard_target_multiplier
     item.target_randomization_percent = payload.target_randomization_percent
+    item.movement_easy_pose_deviation = payload.movement_easy_pose_deviation
+    item.movement_easy_stillness = payload.movement_easy_stillness
+    item.movement_medium_pose_deviation = payload.movement_medium_pose_deviation
+    item.movement_medium_stillness = payload.movement_medium_stillness
+    item.movement_hard_pose_deviation = payload.movement_hard_pose_deviation
+    item.movement_hard_stillness = payload.movement_hard_stillness
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -781,8 +910,14 @@ def update_module_settings(
         easy_target_multiplier=item.easy_target_multiplier,
         hard_target_multiplier=item.hard_target_multiplier,
         target_randomization_percent=item.target_randomization_percent,
+        movement_easy_pose_deviation=item.movement_easy_pose_deviation,
+        movement_easy_stillness=item.movement_easy_stillness,
+        movement_medium_pose_deviation=item.movement_medium_pose_deviation,
+        movement_medium_stillness=item.movement_medium_stillness,
+        movement_hard_pose_deviation=item.movement_hard_pose_deviation,
+        movement_hard_stillness=item.movement_hard_stillness,
     )
-    return _module_settings_payload(item)
+    return _module_settings_payload(item, module_key)
 
 
 @router.get("/modules/{module_key}/postures")
@@ -1388,6 +1523,8 @@ async def verify_game_step(
     file: UploadFile = File(...),
     observed_posture: str | None = Form(default=None),
     sample_only: bool = Form(default=False),
+    marker_x: float | None = Form(default=None),
+    marker_y: float | None = Form(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
     run = db.query(GameRun).filter(GameRun.id == run_id).first()
@@ -1407,7 +1544,10 @@ async def verify_game_step(
         raise HTTPException(status_code=409, detail="Game step is not pending")
 
     data = await file.read()
-    capture_rel_path = _store_game_verification_capture(run, data, file.filename)
+    capture_bytes = data
+    if marker_x is not None or marker_y is not None:
+        capture_bytes = _annotate_movement_capture(data, marker_x=marker_x, marker_y=marker_y)
+    capture_rel_path = _store_game_verification_capture(run, capture_bytes, file.filename)
     difficulty = _difficulty_for(run.module_key, run.difficulty_key)
     if difficulty is None:
         raise HTTPException(status_code=409, detail="Difficulty profile missing")
@@ -1620,6 +1760,8 @@ async def register_movement_event(
     file: UploadFile = File(...),
     marker_x: float | None = Form(default=None),
     marker_y: float | None = Form(default=None),
+    marker_label: str | None = Form(default=None),
+    marker_strength: float | None = Form(default=None),
     reason: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -1642,12 +1784,21 @@ async def register_movement_event(
         raise HTTPException(status_code=409, detail="Game step is not pending")
 
     data = await file.read()
-    capture_rel_path = _store_game_verification_capture(run, data, file.filename)
+    annotated = _annotate_movement_capture(
+        data,
+        marker_x=marker_x,
+        marker_y=marker_y,
+        marker_label=marker_label,
+        marker_strength=marker_strength,
+    )
+    capture_rel_path = _store_game_verification_capture(run, annotated, file.filename)
     now = datetime.now(timezone.utc)
 
     marker_note = ""
     if marker_x is not None and marker_y is not None:
         marker_note = f" | marker=({marker_x:.3f},{marker_y:.3f})"
+    if marker_label:
+        marker_note += f" | region={marker_label[:32]}"
     analysis = (reason or "Lokale Bewegungserkennung hat eine Abweichung erkannt.").strip() + marker_note
 
     step.verification_count += 1
@@ -1718,6 +1869,66 @@ async def register_movement_event(
             "capture_path": capture_rel_path,
             "capture_url": f"/media/{capture_rel_path}",
             "sample_only": True,
+            "finalized": step.status != "pending",
+        },
+    }
+
+
+@router.post("/runs/{run_id}/steps/{step_id}/complete")
+def complete_strict_game_step(
+    run_id: int,
+    step_id: int,
+    db: Session = Depends(get_db),
+) -> dict:
+    run = db.query(GameRun).filter(GameRun.id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Game run not found")
+    if run.status != "active":
+        raise HTTPException(status_code=409, detail="Game run is not active")
+    if not _is_single_pose_strict_module(run.module_key):
+        raise HTTPException(status_code=409, detail="Complete endpoint is only supported for strict single-pose modules")
+
+    step = (
+        db.query(GameRunStep)
+        .filter(GameRunStep.id == step_id, GameRunStep.run_id == run_id)
+        .first()
+    )
+    if not step:
+        raise HTTPException(status_code=404, detail="Game step not found")
+    if step.status != "pending":
+        raise HTTPException(status_code=409, detail="Game step is not pending")
+
+    now = datetime.now(timezone.utc)
+    step.status = "passed"
+    step.completed_at = now
+    step.last_analysis = "Haltephase ohne erkannte Bewegung abgeschlossen."
+
+    db.add(
+        Message(
+            session_id=run.session_id,
+            role="system",
+            message_type="game_step_pass",
+            content=f"Posture ohne Bewegungsverstoss abgeschlossen: {step.posture_name}",
+        )
+    )
+
+    db.add(step)
+    db.add(run)
+    _finish_run_if_done(db, run)
+    db.commit()
+    db.refresh(run)
+    db.refresh(step)
+    return {
+        "run": _run_payload(db, run),
+        "step": {
+            "id": step.id,
+            "status": step.status,
+            "verification_count": step.verification_count,
+            "verification_status": "confirmed",
+            "analysis": step.last_analysis,
+            "capture_path": None,
+            "capture_url": None,
+            "sample_only": False,
             "finalized": step.status != "pending",
         },
     }

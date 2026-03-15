@@ -1,13 +1,29 @@
 """
 Shared pytest fixtures for the chastease test suite.
 
-The persistent SQLite DB (data/) is reused across runs. Without cleanup,
-test-created rows would remain and can be confused with real usage data.
+Tests run against a dedicated SQLite database file and media directory to
+avoid mutating local runtime data.
 
 This conftest snapshots existing IDs before the test session and removes
 all newly created rows afterwards in a FK-safe deletion order.
 """
+import os
+import shutil
+from pathlib import Path
+
 import pytest
+
+# Must be configured before importing app modules that build SQLAlchemy engine.
+TEST_DB_PATH = Path("data/chastease-test.db")
+PROD_DB_PATH = Path("data/chastease.db")
+TEST_MEDIA_DIR = Path("data/media-test")
+
+os.environ.setdefault("CHASTEASE_DATABASE_URL", f"sqlite:///./{TEST_DB_PATH.as_posix()}")
+os.environ.setdefault("CHASTEASE_MEDIA_DIR", f"./{TEST_MEDIA_DIR.as_posix()}")
+
+if PROD_DB_PATH.exists() and not TEST_DB_PATH.exists():
+    TEST_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(PROD_DB_PATH, TEST_DB_PATH)
 
 from app.database import SessionLocal
 from app.models.auth_user import AuthUser

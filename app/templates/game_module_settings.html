@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+  .gms-shell { max-width: 1080px; margin: 0 auto; display: grid; gap: 0.9rem; }
+  .gms-note { margin: 0; color: #9db1c7; }
+  .gms-grid {
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+    align-items: end;
+  }
+  .gms-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+  .gms-preset-row {
+    display: flex;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .gms-preset-row .ghost {
+    min-width: 120px;
+  }
+  .gms-status { margin: 0; color: #9db1c7; font-size: 0.85rem; }
+  .warn { color: #ffb4b4; }
+  .ok { color: #9de2bf; }
+  @media (max-width: 980px) {
+    .gms-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="gms-shell" data-module-key="{{ module_key }}">
+  <section class="card full" style="display:grid; gap:0.55rem;">
+    <div style="display:flex; justify-content:space-between; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+      <h2 style="margin:0;">Spiel-Presets</h2>
+      <div class="gms-actions">
+        <a href="/games">Zur Spieleauswahl</a>
+        <a href="/admin/postures/matrix">Posture-Matrix</a>
+      </div>
+    </div>
+
+    <p class="gms-note">{{ module_title }} · {{ module_summary }}</p>
+    <p class="gms-note">Hier konfigurierst du Multiplikatoren und Bewegungs-Schwellen pro Modul. Die Werte gelten direkt fuer Don’t Move und Tiptoeing zur Laufzeit.</p>
+
+    <label>Modul
+      <select id="gms-module-select">
+        {% for mod in modules %}
+          <option value="{{ mod.key }}" {% if mod.key == module_key %}selected{% endif %}>{{ mod.title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <div class="gms-preset-row">
+      <span class="gms-note">Schnell-Presets:</span>
+      <button type="button" id="gms-preset-tolerant" class="ghost">Tolerant</button>
+      <button type="button" id="gms-preset-balanced" class="ghost">Balanced</button>
+      <button type="button" id="gms-preset-strict" class="ghost">Strict</button>
+    </div>
+    <p id="gms-reco" class="gms-note"></p>
+
+    <div class="gms-grid">
+      <label>Easy-Multiplikator
+        <input id="gms-set-easy-mult" type="number" min="0.1" max="3" step="0.01" value="0.85" />
+      </label>
+      <label>Hard-Multiplikator
+        <input id="gms-set-hard-mult" type="number" min="0.1" max="3" step="0.01" value="1.25" />
+      </label>
+      <label>Ziel-Randomisierung (%)
+        <input id="gms-set-random" type="number" min="0" max="60" step="1" value="10" />
+      </label>
+
+      <label>Easy Pose-Deviation
+        <input id="gms-move-easy-pose" type="number" min="0.01" max="1" step="0.001" value="0.16" />
+      </label>
+      <label>Easy Stillness
+        <input id="gms-move-easy-still" type="number" min="0.0005" max="0.1" step="0.0001" value="0.008" />
+      </label>
+      <span></span>
+
+      <label>Medium Pose-Deviation
+        <input id="gms-move-medium-pose" type="number" min="0.01" max="1" step="0.001" value="0.13" />
+      </label>
+      <label>Medium Stillness
+        <input id="gms-move-medium-still" type="number" min="0.0005" max="0.1" step="0.0001" value="0.006" />
+      </label>
+      <span></span>
+
+      <label>Hard Pose-Deviation
+        <input id="gms-move-hard-pose" type="number" min="0.01" max="1" step="0.001" value="0.10" />
+      </label>
+      <label>Hard Stillness
+        <input id="gms-move-hard-still" type="number" min="0.0005" max="0.1" step="0.0001" value="0.004" />
+      </label>
+      <div class="gms-actions">
+        <button type="button" id="gms-save-settings">Preset speichern</button>
+      </div>
+    </div>
+
+    <p id="gms-msg" class="gms-status"></p>
+  </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let moduleKey = document.querySelector(".gms-shell")?.dataset.moduleKey || "dont_move";
+
+function setMsg(msg, warn = false) {
+  const el = document.getElementById("gms-msg");
+  el.textContent = msg || "";
+  el.className = warn ? "gms-status warn" : "gms-status ok";
+}
+
+async function api(url, options = {}) {
+  const res = await fetch(url, options);
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.detail || res.statusText || "Fehler");
+  return payload;
+}
+
+function numberInputValue(id, fallback = 0) {
+  const val = Number(document.getElementById(id)?.value ?? fallback);
+  return Number.isFinite(val) ? val : fallback;
+}
+
+const MOVEMENT_PRESETS = {
+  dont_move: {
+    tolerant: {
+      easy: { pose: 0.19, still: 0.0100 },
+      medium: { pose: 0.16, still: 0.0080 },
+      hard: { pose: 0.13, still: 0.0060 },
+    },
+    balanced: {
+      easy: { pose: 0.16, still: 0.0080 },
+      medium: { pose: 0.13, still: 0.0060 },
+      hard: { pose: 0.10, still: 0.0040 },
+    },
+    strict: {
+      easy: { pose: 0.14, still: 0.0055 },
+      medium: { pose: 0.11, still: 0.0038 },
+      hard: { pose: 0.085, still: 0.0028 },
+    },
+  },
+  tiptoeing: {
+    tolerant: {
+      easy: { pose: 0.18, still: 0.0090 },
+      medium: { pose: 0.15, still: 0.0070 },
+      hard: { pose: 0.12, still: 0.0055 },
+    },
+    balanced: {
+      easy: { pose: 0.15, still: 0.0070 },
+      medium: { pose: 0.12, still: 0.0050 },
+      hard: { pose: 0.09, still: 0.0036 },
+    },
+    strict: {
+      easy: { pose: 0.13, still: 0.0055 },
+      medium: { pose: 0.10, still: 0.0038 },
+      hard: { pose: 0.075, still: 0.0028 },
+    },
+  },
+};
+
+function movementPresetFor(moduleKeyValue, level) {
+  const mod = MOVEMENT_PRESETS[moduleKeyValue] || MOVEMENT_PRESETS.dont_move;
+  return mod[level] || mod.balanced;
+}
+
+function updateRecommendationHint() {
+  const el = document.getElementById("gms-reco");
+  if (!el) return;
+  const tips = {
+    dont_move: "Empfehlung: Balanced fuer den Alltag. Bei zu vielen False Positives -> Tolerant, bei zu lascher Erkennung -> Strict.",
+    tiptoeing: "Empfehlung: Tolerant bis Kameraausschnitt und Licht stabil sind, danach auf Balanced wechseln.",
+  };
+  el.textContent = tips[moduleKey] || "Empfehlung: Mit Balanced starten und nur bei Bedarf in kleinen Schritten anpassen.";
+}
+
+function applyMovementPreset(level) {
+  const preset = movementPresetFor(moduleKey, level);
+  document.getElementById("gms-move-easy-pose").value = String(preset.easy.pose);
+  document.getElementById("gms-move-easy-still").value = String(preset.easy.still);
+  document.getElementById("gms-move-medium-pose").value = String(preset.medium.pose);
+  document.getElementById("gms-move-medium-still").value = String(preset.medium.still);
+  document.getElementById("gms-move-hard-pose").value = String(preset.hard.pose);
+  document.getElementById("gms-move-hard-still").value = String(preset.hard.still);
+  setMsg(`Preset ${level} angewendet. Bitte speichern.`, false);
+}
+
+function applyModuleSettings(data) {
+  document.getElementById("gms-set-easy-mult").value = String(Number(data.easy_target_multiplier ?? 0.85));
+  document.getElementById("gms-set-hard-mult").value = String(Number(data.hard_target_multiplier ?? 1.25));
+  document.getElementById("gms-set-random").value = String(Number(data.target_randomization_percent ?? 10));
+
+  document.getElementById("gms-move-easy-pose").value = String(Number(data.movement_easy_pose_deviation ?? 0.16));
+  document.getElementById("gms-move-easy-still").value = String(Number(data.movement_easy_stillness ?? 0.008));
+  document.getElementById("gms-move-medium-pose").value = String(Number(data.movement_medium_pose_deviation ?? 0.13));
+  document.getElementById("gms-move-medium-still").value = String(Number(data.movement_medium_stillness ?? 0.006));
+  document.getElementById("gms-move-hard-pose").value = String(Number(data.movement_hard_pose_deviation ?? 0.10));
+  document.getElementById("gms-move-hard-still").value = String(Number(data.movement_hard_stillness ?? 0.004));
+}
+
+async function loadModuleSettings() {
+  const data = await api(`/api/games/modules/${moduleKey}/settings`);
+  applyModuleSettings(data || {});
+}
+
+async function saveModuleSettings() {
+  const payload = {
+    easy_target_multiplier: numberInputValue("gms-set-easy-mult", 0.85),
+    hard_target_multiplier: numberInputValue("gms-set-hard-mult", 1.25),
+    target_randomization_percent: Math.round(numberInputValue("gms-set-random", 10)),
+    movement_easy_pose_deviation: numberInputValue("gms-move-easy-pose", 0.16),
+    movement_easy_stillness: numberInputValue("gms-move-easy-still", 0.008),
+    movement_medium_pose_deviation: numberInputValue("gms-move-medium-pose", 0.13),
+    movement_medium_stillness: numberInputValue("gms-move-medium-still", 0.006),
+    movement_hard_pose_deviation: numberInputValue("gms-move-hard-pose", 0.10),
+    movement_hard_stillness: numberInputValue("gms-move-hard-still", 0.004),
+  };
+  const saved = await api(`/api/games/modules/${moduleKey}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  applyModuleSettings(saved || payload);
+  setMsg("Preset gespeichert.", false);
+}
+
+document.getElementById("gms-module-select")?.addEventListener("change", (event) => {
+  const next = String(event.target.value || "").trim();
+  if (!next || next === moduleKey) return;
+  window.location.href = `/games/module-settings?module_key=${encodeURIComponent(next)}`;
+});
+
+document.getElementById("gms-save-settings")?.addEventListener("click", () => {
+  saveModuleSettings().catch((err) => setMsg(`Speichern fehlgeschlagen: ${err.message}`, true));
+});
+
+document.getElementById("gms-preset-tolerant")?.addEventListener("click", () => applyMovementPreset("tolerant"));
+document.getElementById("gms-preset-balanced")?.addEventListener("click", () => applyMovementPreset("balanced"));
+document.getElementById("gms-preset-strict")?.addEventListener("click", () => applyMovementPreset("strict"));
+
+loadModuleSettings().catch((err) => setMsg(`Initialisierung fehlgeschlagen: ${err.message}`, true));
+updateRecommendationHint();
+</script>
+{% endblock %}

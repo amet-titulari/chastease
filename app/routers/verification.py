@@ -12,6 +12,7 @@ from app.models.session import Session as SessionModel
 from app.models.task import Task
 from app.models.message import Message
 from app.models.verification import Verification
+from app.services.image_stamp import stamp_verification_timestamp
 from app.services.task_service import TaskService
 from app.services.verification_analysis import analyze_verification
 
@@ -103,7 +104,7 @@ async def upload_verification(
     target_path = target_dir / f"{capture_stamp}-{uuid4().hex}{suffix}"
 
     data = await file.read()
-    target_path.write_bytes(data)
+    target_path.write_bytes(stamp_verification_timestamp(data))
 
     record.image_path = str(target_path)
     record.observed_seal_number = observed_seal_number

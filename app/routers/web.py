@@ -1547,6 +1547,8 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
             "title": "Games",
             "summary": "Spielmodule, Konfigurationen und Run-Flow ueberblicken.",
             "href": "/games",
+            "secondary_href": "/games/module-settings?module_key=dont_move",
+            "secondary_label": "Presets",
             "count": counts["game_modules"],
             "count_label": "Module",
         },
@@ -1652,6 +1654,36 @@ def games_postures_page(
             "module_key": module.key,
             "module_title": module.title,
             "module_summary": module.summary,
+        },
+    )
+
+
+@router.get("/games/module-settings", response_class=HTMLResponse)
+def games_module_settings_page(
+    request: Request,
+    module_key: str = Query(default="dont_move", max_length=120),
+    db: Session = Depends(get_db),
+):
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    module = get_module(module_key)
+    if module is None:
+        return RedirectResponse(url="/games", status_code=303)
+
+    modules = [as_public_module_payload(item) for item in list_modules()]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="game_module_settings.html",
+        context={
+            "title": f"{settings.app_name} - Spiel-Presets",
+            "current_user": user,
+            "module_key": module.key,
+            "module_title": module.title,
+            "module_summary": module.summary,
+            "modules": modules,
         },
     )
 

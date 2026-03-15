@@ -1,4 +1,32 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _normalize_sqlite_url(url: str) -> str:
+    if not isinstance(url, str):
+        return url
+    prefix = "sqlite:///"
+    if not url.startswith(prefix):
+        return url
+
+    raw_path = url[len(prefix):]
+    if raw_path.startswith("/"):
+        return url
+
+    absolute_path = (PROJECT_ROOT / raw_path).resolve()
+    return f"{prefix}{absolute_path.as_posix()}"
+
+
+def _normalize_local_path(path_value: str) -> str:
+    if not isinstance(path_value, str):
+        return path_value
+    path = Path(path_value)
+    if path.is_absolute():
+        return path_value
+    return str((PROJECT_ROOT / path).resolve())
 
 
 class Settings(BaseSettings):
@@ -59,3 +87,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+settings.database_url = _normalize_sqlite_url(settings.database_url)
+settings.media_dir = _normalize_local_path(settings.media_dir)

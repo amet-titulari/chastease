@@ -3,7 +3,7 @@ from app.services.games.base import DifficultyProfile, GameModuleDefinition, Gam
 
 TIPTOEING_MODULE = GameModuleDefinition(
     key="tiptoeing",
-    title="Auf Zehenspitzen stehen",
+    title="Tiptoeing",
     summary="Single-Pose-Stillhalte-Modul auf Zehenspitzen mit strenger AI-Verifikation.",
     supports_auto_capture=True,
     difficulties=(

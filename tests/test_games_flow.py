@@ -468,6 +468,97 @@ def test_dont_move_movement_event_endpoint_registers_violation_and_capture():
         assert str(payload["step"]["capture_url"]).startswith("/media/verifications/games/")
 
 
+def test_dont_move_complete_endpoint_passes_without_creating_capture():
+    with TestClient(app) as client:
+        _register_admin(client)
+        posture_key = f"test_dm_complete_pose_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "DM Complete Pose",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "No movement.",
+                "target_seconds": 90,
+                "sort_order": 6,
+                "is_active": True,
+                "allowed_module_keys": ["dont_move"],
+            },
+        )
+        assert create_resp.status_code == 200
+
+        session_id = _create_and_sign(client)
+        start_resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "dont_move",
+                "difficulty": "medium",
+                "duration_minutes": 3,
+                "selected_posture_key": posture_key,
+                "session_penalty_seconds": 0,
+            },
+        )
+        assert start_resp.status_code == 200
+        run = start_resp.json()
+        run_id = int(run["id"])
+        step_id = int(run["current_step"]["id"])
+
+        complete_resp = client.post(f"/api/games/runs/{run_id}/steps/{step_id}/complete")
+        assert complete_resp.status_code == 200
+
+        payload = complete_resp.json()
+        assert payload["step"]["status"] == "passed"
+        assert payload["step"]["verification_status"] == "confirmed"
+        assert payload["step"]["capture_path"] is None
+        assert payload["step"]["capture_url"] is None
+        assert payload["step"]["verification_count"] == 0
+
+
+def test_tiptoeing_complete_endpoint_passes_without_creating_capture():
+    with TestClient(app) as client:
+        _register_admin(client)
+        posture_key = f"test_tiptoeing_complete_pose_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/tiptoeing/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "Tiptoeing Complete Pose",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "Stay on tiptoes.",
+                "target_seconds": 90,
+                "sort_order": 7,
+                "is_active": True,
+                "allowed_module_keys": ["tiptoeing"],
+            },
+        )
+        assert create_resp.status_code == 200
+
+        session_id = _create_and_sign(client)
+        start_resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "tiptoeing",
+                "difficulty": "medium",
+                "duration_minutes": 3,
+                "session_penalty_seconds": 0,
+            },
+        )
+        assert start_resp.status_code == 200
+        run = start_resp.json()
+        run_id = int(run["id"])
+        step_id = int(run["current_step"]["id"])
+
+        complete_resp = client.post(f"/api/games/runs/{run_id}/steps/{step_id}/complete")
+        assert complete_resp.status_code == 200
+
+        payload = complete_resp.json()
+        assert payload["step"]["status"] == "passed"
+        assert payload["step"]["verification_status"] == "confirmed"
+        assert payload["step"]["capture_path"] is None
+        assert payload["step"]["capture_url"] is None
+        assert payload["step"]["verification_count"] == 0
+
+
 def test_start_game_run_and_fetch_state():
     with TestClient(app) as client:
         _register_admin(client)
@@ -1324,16 +1415,25 @@ def test_module_settings_can_be_saved_and_used_for_run_start_defaults():
                 "easy_target_multiplier": 0.6,
                 "hard_target_multiplier": 1.4,
                 "target_randomization_percent": 0,
+                "movement_easy_pose_deviation": 0.2,
+                "movement_easy_stillness": 0.01,
+                "movement_medium_pose_deviation": 0.18,
+                "movement_medium_stillness": 0.008,
+                "movement_hard_pose_deviation": 0.14,
+                "movement_hard_stillness": 0.006,
             },
         )
         assert saved.status_code == 200
         assert saved.json()["easy_target_multiplier"] == 0.6
         assert saved.json()["hard_target_multiplier"] == 1.4
         assert saved.json()["target_randomization_percent"] == 0
+        assert float(saved.json()["movement_medium_stillness"]) == 0.008
 
         read_back = client.get("/api/games/modules/posture_training/settings")
         assert read_back.status_code == 200
         assert read_back.json()["easy_target_multiplier"] == 0.6
+        assert float(read_back.json()["movement_easy_pose_deviation"]) == 0.2
+        assert float(read_back.json()["movement_hard_stillness"]) == 0.006
 
         session_id = _create_and_sign(client)
         medium = client.post(

@@ -137,17 +137,30 @@
   }
   .volume-wrap {
     display: grid;
-    gap: 0.25rem;
+    gap: 0.35rem;
   }
   .volume-row {
     display: flex;
     gap: 0.5rem;
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
-  .volume-value {
-    font-size: 0.78rem;
-    color: #9db3c9;
+  .volume-row input[type="range"] {
+    flex: 1 1 auto;
+  }
+  .icon-btn {
+    width: 42px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.06);
+    color: #d9efff;
+    font-size: 1.05rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .icon-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
   }
   .verify-preview {
     display: flex;
@@ -262,12 +275,13 @@
     <div class="top-row" style="align-items:center;">
       <h1 style="margin:0;">{{ module_title }}</h1>
       <div class="header-actions">
-        <a class="header-btn" href="/games/postures?module_key={{ module_key }}">Postures verwalten</a>
+        <a class="header-btn" href="/admin/postures/matrix">Posture-Matrix</a>
         <a class="header-btn secondary" href="/games">Zur Spieleauswahl</a>
       </div>
     </div>
     <p class="game-meta">Session {{ session_id }} · {{ module_summary }}</p>
     <p class="game-meta">Die Startwerte wurden aus dem letzten Run dieser Session uebernommen.</p>
+    <p class="game-meta">Posture-Zuordnungen werden zentral in Admin > Posture-Matrix gepflegt.</p>
 
     <div class="setup-grid">
       <label>Dauer (Min)
@@ -279,14 +293,11 @@
       <label>Schwierigkeit
         <select id="gm-difficulty"></select>
       </label>
+      <label id="gm-dont-move-options" class="hidden">Pose aus Pool
+        <select id="gm-dont-move-posture"></select>
+      </label>
       <label id="gm-max-misses-wrap">Max Verfehlungen
         <input id="gm-max-misses" type="number" min="1" max="20" value="{{ initial_setup.max_misses_before_penalty }}" />
-      </label>
-    </div>
-
-    <div id="gm-dont-move-options" class="setup-grid hidden" style="margin-top:0.45rem;">
-      <label>Pose aus Pool
-        <select id="gm-dont-move-posture"></select>
       </label>
     </div>
 
@@ -299,12 +310,10 @@
         </div>
       </label>
 
-      <label class="volume-wrap">Beep-Lautstaerke
-        <input id="gm-beep-volume" type="range" min="0" max="100" step="5" value="35" />
+      <label class="volume-wrap">Beep
         <div class="volume-row">
-          <span id="gm-beep-volume-value" class="volume-value">35%</span>
-          <button id="gm-test-beep" type="button" class="ghost">Test-Beep</button>
-          <button id="gm-test-double-beep" type="button" class="ghost">Doppel-Beep</button>
+          <input id="gm-beep-volume" type="range" min="0" max="100" step="5" value="35" />
+          <button id="gm-test-beep" type="button" class="icon-btn" title="Test-Beep" aria-label="Test-Beep">&#128266;</button>
         </div>
       </label>
     </div>
@@ -358,7 +367,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.js"></script>
 <script>
 const sessionId = {{ session_id }};
 const moduleKey = {{ module_key | tojson }};
@@ -386,6 +394,8 @@ let movementStrikeCount = 0;
 let movementCooldownUntil = 0;
 let movementRedFlashUntil = 0;
 let movementEventInFlight = false;
+let movementMonitorActive = false;
+let movementLastMarker = null;
 let sequenceToken = 0;
 let sequenceStepId = null;
 let verifyInFlight = false;
@@ -396,6 +406,12 @@ let moduleSettings = {
   easy_target_multiplier: 0.85,
   hard_target_multiplier: 1.25,
   target_randomization_percent: 10,
+  movement_easy_pose_deviation: null,
+  movement_easy_stillness: null,
+  movement_medium_pose_deviation: null,
+  movement_medium_stillness: null,
+  movement_hard_pose_deviation: null,
+  movement_hard_stillness: null,
 };
 
 const statusEl = document.getElementById("gm-status");
@@ -419,9 +435,7 @@ const playVideoEl = document.getElementById("gm-video");
 const feedWrapEl = document.getElementById("gm-feed-wrap");
 const motionOverlayEl = document.getElementById("gm-motion-overlay");
 const beepVolumeEl = document.getElementById("gm-beep-volume");
-const beepVolumeValueEl = document.getElementById("gm-beep-volume-value");
 const testBeepEl = document.getElementById("gm-test-beep");
-const testDoubleBeepEl = document.getElementById("gm-test-double-beep");
 const dontMoveOptionsEl = document.getElementById("gm-dont-move-options");
 const dontMovePostureEl = document.getElementById("gm-dont-move-posture");
 const missLabelEl = document.getElementById("gm-miss-label");
@@ -430,20 +444,55 @@ const maxMissesWrapEl = document.getElementById("gm-max-misses-wrap");
 const sessionPenaltyLabelTextEl = document.getElementById("gm-session-penalty-label-text");
 const cameraGuidanceEl = document.getElementById("gm-camera-guidance");
 
-const movementWatchIndices = [27, 28, 29, 30, 31, 32, 25, 26];
+const movementWatchIndices = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 const movementPoseCompareIndices = [11, 12, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 const movementDefaults = {
   dont_move: {
-    easy: { poseDeviation: 0.16, stillness: 0.008 },
-    medium: { poseDeviation: 0.13, stillness: 0.006 },
-    hard: { poseDeviation: 0.10, stillness: 0.004 },
+    easy: { poseDeviation: 0.16, stillness: 0.0080 },
+    medium: { poseDeviation: 0.13, stillness: 0.0060 },
+    hard: { poseDeviation: 0.10, stillness: 0.0040 },
   },
   tiptoeing: {
-    easy: { poseDeviation: 0.14, stillness: 0.007 },
-    medium: { poseDeviation: 0.11, stillness: 0.005 },
-    hard: { poseDeviation: 0.08, stillness: 0.0035 },
+    easy: { poseDeviation: 0.15, stillness: 0.0070 },
+    medium: { poseDeviation: 0.12, stillness: 0.0050 },
+    hard: { poseDeviation: 0.09, stillness: 0.0036 },
   },
 };
+
+const TASKS_VISION_SCRIPT_URLS = [
+  "/static/vendor/mediapipe/tasks-vision/0.10.14/vision_bundle.mjs",
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs",
+  "https://unpkg.com/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs",
+];
+
+const TASKS_VISION_WASM_ROOTS = [
+  "/static/vendor/mediapipe/tasks-vision/0.10.14/wasm",
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",
+  "https://unpkg.com/@mediapipe/tasks-vision@0.10.14/wasm",
+];
+
+let visionModule = null;
+
+async function ensureVisionLoaded() {
+  if (visionModule) return;
+
+  let lastError = null;
+  for (const url of TASKS_VISION_SCRIPT_URLS) {
+    try {
+      const mod = await import(url);
+      if (mod && mod.FilesetResolver && mod.PoseLandmarker) {
+        visionModule = mod;
+        return;
+      }
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw new Error(
+    `MediaPipe Tasks Vision konnte nicht geladen werden (${lastError ? lastError.message : "CDN blockiert"})`
+  );
+}
 
 function setStatus(msg, warn = false) {
   statusEl.textContent = msg || "";
@@ -499,7 +548,6 @@ function applyBeepVolume(percentValue, persist = true) {
   const safePercent = Math.max(0, Math.min(100, Number(percentValue || 0)));
   beepVolume = safePercent / 100;
   beepVolumeEl.value = String(safePercent);
-  beepVolumeValueEl.textContent = `${safePercent}%`;
   if (persist) {
     window.localStorage.setItem("game_beep_volume_percent", String(safePercent));
   }
@@ -524,18 +572,21 @@ function drawMotionOverlay(marker = null, forceAlert = false) {
   if (!ctx) return;
   const w = motionOverlayEl.width;
   const h = motionOverlayEl.height;
-  if (!w || !h) return;
+  if (!w || !h || w < 20 || h < 20) {
+    syncMotionOverlaySize();
+    return;
+  }
 
   ctx.clearRect(0, 0, w, h);
   const isAlert = forceAlert || Date.now() < movementRedFlashUntil;
+  if (!movementMonitorActive && !isAlert) {
+    return;
+  }
   const stroke = isAlert ? "rgba(255, 72, 72, 0.96)" : "rgba(56, 221, 112, 0.96)";
-  const fill = isAlert ? "rgba(255, 72, 72, 0.08)" : "rgba(56, 221, 112, 0.06)";
 
   ctx.lineWidth = Math.max(4, Math.floor(Math.min(w, h) * 0.012));
   ctx.strokeStyle = stroke;
-  ctx.fillStyle = fill;
   ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth);
-  ctx.fillRect(ctx.lineWidth, ctx.lineWidth, w - (2 * ctx.lineWidth), h - (2 * ctx.lineWidth));
 
   if (marker && Number.isFinite(marker.x) && Number.isFinite(marker.y)) {
     const mx = Math.max(0, Math.min(w, marker.x * w));
@@ -560,9 +611,22 @@ function activeDifficultyKey() {
 }
 
 function movementProfile() {
-  const moduleProfile = movementDefaults[moduleKey] || movementDefaults.dont_move;
   const diff = activeDifficultyKey();
-  return moduleProfile[diff] || moduleProfile.medium;
+  const moduleProfile = movementDefaults[moduleKey] || movementDefaults.dont_move;
+  const fallback = moduleProfile[diff] || moduleProfile.medium;
+
+  const poseKey = `movement_${diff}_pose_deviation`;
+  const stillnessKey = `movement_${diff}_stillness`;
+  const poseVal = Number(moduleSettings?.[poseKey]);
+  const stillnessVal = Number(moduleSettings?.[stillnessKey]);
+
+  if (Number.isFinite(poseVal) && poseVal > 0 && Number.isFinite(stillnessVal) && stillnessVal > 0) {
+    return {
+      poseDeviation: poseVal,
+      stillness: stillnessVal,
+    };
+  }
+  return fallback;
 }
 
 function copyLandmarks(landmarks) {
@@ -573,6 +637,38 @@ function copyLandmarks(landmarks) {
     z: Number(item?.z || 0),
     visibility: Number(item?.visibility ?? 1),
   }));
+}
+
+function fallbackMarkerFromPoseLandmarks(poseLandmarks) {
+  if (!Array.isArray(poseLandmarks) || poseLandmarks.length === 0) return null;
+  const indices = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+  let sx = 0;
+  let sy = 0;
+  let count = 0;
+  for (const idx of indices) {
+    const item = poseLandmarks[idx];
+    if (!item) continue;
+    const v = Number(item.visibility ?? 1);
+    if (v < 0.35) continue;
+    sx += Number(item.x || 0);
+    sy += Number(item.y || 0);
+    count += 1;
+  }
+  if (count <= 0) return null;
+  return { x: sx / count, y: sy / count };
+}
+
+function bodyRegionLabelForIndex(idx) {
+  if (idx === 0) return "Kopf";
+  if (idx === 11 || idx === 12) return "Schulter";
+  if (idx === 13 || idx === 14) return "Oberarm";
+  if (idx === 15 || idx === 16) return "Hand";
+  if (idx === 23 || idx === 24) return "Huefte";
+  if (idx === 25 || idx === 26) return "Oberschenkel";
+  if (idx === 27 || idx === 28) return "Knie";
+  if (idx === 29 || idx === 30) return "Sprunggelenk";
+  if (idx === 31 || idx === 32) return "Fuss";
+  return "Koerper";
 }
 
 function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
@@ -590,6 +686,7 @@ function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
   let poseDeviation = 0;
   let poseVisiblePoints = 0;
   let marker = null;
+  let markerIndex = null;
 
   for (const idx of movementWatchIndices) {
     const cur = worldLandmarks[idx];
@@ -600,15 +697,20 @@ function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
     const dx = Number(cur.x || 0) - Number(prev.x || 0);
     const dy = Number(cur.y || 0) - Number(prev.y || 0);
     const dz = Number(cur.z || 0) - Number(prev.z || 0);
-    const weight = (idx === 29 || idx === 30) ? 1.35 : 1.0;
+    const weight = 1.0;
     const delta = Math.hypot(dx, dy, dz) * weight;
     if (delta > maxMovement) {
       maxMovement = delta;
+      markerIndex = idx;
       const markerSource = Array.isArray(poseLandmarks) ? poseLandmarks[idx] : null;
       if (markerSource) {
         marker = { x: Number(markerSource.x || 0), y: Number(markerSource.y || 0) };
       }
     }
+  }
+
+  if (!marker) {
+    marker = movementLastMarker || fallbackMarkerFromPoseLandmarks(poseLandmarks);
   }
 
   for (const idx of movementPoseCompareIndices) {
@@ -635,7 +737,7 @@ function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
 
   movementLastWorldLandmarks = copyLandmarks(worldLandmarks);
   const now = Date.now();
-  const violation = movementStrikeCount >= 3 && now >= movementCooldownUntil;
+  const violation = movementStrikeCount >= 4 && now >= movementCooldownUntil;
   if (violation) {
     movementStrikeCount = 0;
     movementCooldownUntil = now + 2200;
@@ -643,6 +745,9 @@ function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
   return {
     violation,
     marker,
+    markerIndex,
+    markerLabel: bodyRegionLabelForIndex(markerIndex ?? -1),
+    markerStrength: maxMovement,
     movementScore: maxMovement,
     poseScore: avgPoseDeviation,
     poseOk,
@@ -652,16 +757,25 @@ function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
 
 async function initMovementPose() {
   if (!isSinglePoseModule || movementPoseReady) return;
-  if (typeof vision === "undefined") {
-    throw new Error("MediaPipe Tasks Vision konnte nicht geladen werden");
-  }
+  await ensureVisionLoaded();
 
-  const { FilesetResolver, PoseLandmarker, RunningMode } = vision;
+  const { FilesetResolver, PoseLandmarker } = visionModule;
 
   if (!movementFileset) {
-    movementFileset = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
-    );
+    let lastError = null;
+    for (const wasmRoot of TASKS_VISION_WASM_ROOTS) {
+      try {
+        movementFileset = await FilesetResolver.forVisionTasks(wasmRoot);
+        break;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    if (!movementFileset) {
+      throw new Error(
+        `MediaPipe WASM konnte nicht geladen werden (${lastError ? lastError.message : "unbekannt"})`
+      );
+    }
   }
 
   movementPose = await PoseLandmarker.createFromOptions(movementFileset, {
@@ -669,7 +783,7 @@ async function initMovementPose() {
       modelAssetPath:
         "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
     },
-    runningMode: RunningMode.VIDEO,
+    runningMode: "VIDEO",
     numPoses: 1,
     minPoseDetectionConfidence: 0.6,
     minPosePresenceConfidence: 0.6,
@@ -682,10 +796,11 @@ function describeMovementReason(verdict) {
   const profile = movementProfile();
   const movePart = `movement=${Number(verdict?.movementScore || 0).toFixed(4)}/${Number(profile.stillness).toFixed(4)}`;
   const posePart = `pose=${Number(verdict?.poseScore || 0).toFixed(4)}/${Number(profile.poseDeviation).toFixed(4)}`;
-  return `Lokale Bewegung erkannt (${movePart}, ${posePart})`;
+  const region = String(verdict?.markerLabel || "Koerper");
+  return `Lokale Bewegung erkannt (${region}; ${movePart}, ${posePart})`;
 }
 
-async function captureViolationFrameBlob(marker = null) {
+async function captureViolationFrameBlob(marker = null, markerMeta = null) {
   if (!cameraStream) return null;
   const canvas = document.createElement("canvas");
   const w = Math.max(640, Number(playVideoEl.videoWidth || 0));
@@ -704,12 +819,41 @@ async function captureViolationFrameBlob(marker = null) {
   if (marker && Number.isFinite(marker.x) && Number.isFinite(marker.y)) {
     const mx = Math.max(0, Math.min(w, marker.x * w));
     const my = Math.max(0, Math.min(h, marker.y * h));
-    const radius = Math.max(14, Math.floor(Math.min(w, h) * 0.04));
+    const strength = Math.max(0, Number(markerMeta?.strength || 0));
+    const strengthNorm = Math.min(2.5, strength / Math.max(0.0001, Number(movementProfile().stillness || 0.004)));
+    const radius = Math.max(14, Math.floor(Math.min(w, h) * (0.03 + (0.008 * strengthNorm))));
+
+    ctx.fillStyle = "rgba(255, 24, 24, 0.22)";
+    ctx.beginPath();
+    ctx.arc(mx, my, radius, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.beginPath();
     ctx.arc(mx, my, radius, 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(255, 36, 36, 1)";
     ctx.lineWidth = Math.max(5, Math.floor(Math.min(w, h) * 0.01));
     ctx.stroke();
+
+    const cross = Math.max(20, Math.floor(radius * 1.45));
+    ctx.beginPath();
+    ctx.moveTo(mx - cross, my);
+    ctx.lineTo(mx + cross, my);
+    ctx.moveTo(mx, my - cross);
+    ctx.lineTo(mx, my + cross);
+    ctx.stroke();
+
+    const label = String(markerMeta?.label || "Bewegung");
+    ctx.font = `bold ${Math.max(18, Math.floor(Math.min(w, h) * 0.032))}px sans-serif`;
+    ctx.textBaseline = "middle";
+    const textWidth = ctx.measureText(label).width;
+    const padX = 10;
+    const padY = 6;
+    const tx = Math.max(8, Math.min(w - textWidth - (padX * 2) - 8, mx + radius + 10));
+    const ty = Math.max(18, Math.min(h - 18, my - radius - 14));
+    ctx.fillStyle = "rgba(0, 0, 0, 0.62)";
+    ctx.fillRect(tx, ty - 14 - padY, textWidth + (padX * 2), 28 + (padY * 2));
+    ctx.fillStyle = "rgba(255, 90, 90, 0.98)";
+    ctx.fillText(label, tx + padX, ty);
   }
 
   return await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
@@ -721,15 +865,27 @@ async function submitMovementViolation(token, marker, verdict) {
   movementEventInFlight = true;
 
   try {
-    const blob = await captureViolationFrameBlob(marker);
+    const effectiveMarker = (marker && Number.isFinite(marker.x) && Number.isFinite(marker.y))
+      ? marker
+      : bestEffortMovementMarker();
+
+    const markerLabel = String(verdict?.markerLabel || "Bewegung");
+    const markerStrength = Number(verdict?.markerStrength || verdict?.movementScore || 0);
+
+    const blob = await captureViolationFrameBlob(effectiveMarker, {
+      label: markerLabel,
+      strength: markerStrength,
+    });
     if (!blob) throw new Error("Kontrollbild fuer Bewegung konnte nicht erzeugt werden");
 
     const form = new FormData();
     form.append("file", blob, "movement_violation.jpg");
-    if (marker && Number.isFinite(marker.x) && Number.isFinite(marker.y)) {
-      form.append("marker_x", String(marker.x));
-      form.append("marker_y", String(marker.y));
+    if (effectiveMarker && Number.isFinite(effectiveMarker.x) && Number.isFinite(effectiveMarker.y)) {
+      form.append("marker_x", String(effectiveMarker.x));
+      form.append("marker_y", String(effectiveMarker.y));
     }
+    form.append("marker_label", markerLabel);
+    form.append("marker_strength", String(markerStrength));
     form.append("reason", describeMovementReason(verdict));
 
     const result = await api(`/api/games/runs/${runId}/steps/${activeRun.current_step.id}/movement-event`, {
@@ -748,6 +904,21 @@ async function submitMovementViolation(token, marker, verdict) {
   }
 }
 
+function bestEffortMovementMarker() {
+  if (movementLastMarker && Number.isFinite(movementLastMarker.x) && Number.isFinite(movementLastMarker.y)) {
+    return movementLastMarker;
+  }
+
+  if (Array.isArray(movementLatestPoseLandmarks) && movementLatestPoseLandmarks.length > 0) {
+    const fallback = fallbackMarkerFromPoseLandmarks(movementLatestPoseLandmarks);
+    if (fallback && Number.isFinite(fallback.x) && Number.isFinite(fallback.y)) {
+      return fallback;
+    }
+  }
+
+  return null;
+}
+
 async function startMovementMonitor(token) {
   if (!isSinglePoseModule) return;
   if (dontMoveMonitorHandle) {
@@ -758,15 +929,8 @@ async function startMovementMonitor(token) {
   try {
     await initMovementPose();
   } catch (err) {
-    setStatus(`${err.message} - Fallback auf periodische Stichprobe.`, true);
-    dontMoveMonitorHandle = setInterval(() => {
-      if (token !== sequenceToken) {
-        clearInterval(dontMoveMonitorHandle);
-        dontMoveMonitorHandle = null;
-        return;
-      }
-      verifyCurrentStepWithMode(token, { sampleOnly: true }).catch(() => {});
-    }, 2500);
+    setStatus(`${err.message} - Echtzeit-Bewegungserkennung nicht verfuegbar.`, true);
+    analysisEl.textContent = "Echtzeit-Bewegungserkennung konnte nicht gestartet werden.";
     return;
   }
 
@@ -777,6 +941,9 @@ async function startMovementMonitor(token) {
   movementStrikeCount = 0;
   movementCooldownUntil = 0;
   movementRedFlashUntil = 0;
+  movementLastMarker = null;
+  movementMonitorActive = true;
+  syncMotionOverlaySize();
   drawMotionOverlay();
 
   dontMoveMonitorHandle = setInterval(async () => {
@@ -797,6 +964,10 @@ async function startMovementMonitor(token) {
       if (!verdict) {
         drawMotionOverlay();
         return;
+      }
+
+      if (verdict.marker && Number.isFinite(verdict.marker.x) && Number.isFinite(verdict.marker.y)) {
+        movementLastMarker = verdict.marker;
       }
 
       if (verdict.violation) {
@@ -824,6 +995,8 @@ function stopMovementMonitor() {
   movementStrikeCount = 0;
   movementCooldownUntil = 0;
   movementRedFlashUntil = 0;
+  movementLastMarker = null;
+  movementMonitorActive = false;
   if (motionOverlayEl) {
     const ctx = motionOverlayEl.getContext("2d");
     if (ctx) {
@@ -967,6 +1140,15 @@ function renderRun(run) {
   setupSectionEl.classList.toggle("hidden", run.status === "active");
   playStageEl.classList.toggle("hidden", run.status !== "active");
 
+  if (run.status === "active" && isSinglePoseModule) {
+    requestAnimationFrame(() => {
+      syncMotionOverlaySize();
+      if (movementMonitorActive) {
+        drawMotionOverlay(movementLastMarker);
+      }
+    });
+  }
+
   if (run.status === "active" && run.current_step) {
     startRunPolling();
     if (sequenceStepId !== run.current_step.id) {
@@ -1091,7 +1273,11 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
       },
       onFinished: () => {
         stopMovementMonitor();
-        verifyCurrentStepWithMode(token, { sampleOnly: false });
+        if (isSinglePoseModule) {
+          completeStrictStepWithoutCapture(token).catch(() => {});
+        } else {
+          verifyCurrentStepWithMode(token, { sampleOnly: false });
+        }
       },
     });
   };
@@ -1142,6 +1328,9 @@ async function loadModule() {
 
   if (isDontMoveModule) {
     dontMoveOptionsEl.classList.remove("hidden");
+    if (maxMissesWrapEl) {
+      maxMissesWrapEl.classList.remove("hidden");
+    }
     if (cameraGuidanceEl) {
       cameraGuidanceEl.textContent = "Achte auf einen stabilen Ganzkoerper-Ausschnitt ohne Verdeckung der relevanten Haltung.";
     }
@@ -1171,6 +1360,12 @@ async function loadModuleSettings() {
     easy_target_multiplier: Number(data.easy_target_multiplier || 0.85),
     hard_target_multiplier: Number(data.hard_target_multiplier || 1.25),
     target_randomization_percent: Number(data.target_randomization_percent || 10),
+    movement_easy_pose_deviation: Number(data.movement_easy_pose_deviation || 0),
+    movement_easy_stillness: Number(data.movement_easy_stillness || 0),
+    movement_medium_pose_deviation: Number(data.movement_medium_pose_deviation || 0),
+    movement_medium_stillness: Number(data.movement_medium_stillness || 0),
+    movement_hard_pose_deviation: Number(data.movement_hard_pose_deviation || 0),
+    movement_hard_stillness: Number(data.movement_hard_stillness || 0),
   };
 }
 
@@ -1209,8 +1404,8 @@ async function startCamera() {
   playVideoEl.srcObject = cameraStream;
   window.setTimeout(() => {
     syncMotionOverlaySize();
-    if (isSinglePoseModule) {
-      drawMotionOverlay();
+    if (isSinglePoseModule && movementMonitorActive) {
+      drawMotionOverlay(movementLastMarker);
     }
   }, 120);
 }
@@ -1245,6 +1440,43 @@ async function verifyCurrentStep(token) {
   return verifyCurrentStepWithMode(token, { sampleOnly: false });
 }
 
+async function completeStrictStepWithoutCapture(token) {
+  if (token !== sequenceToken) return;
+  if (!activeRun || activeRun.status !== "active" || !activeRun.current_step) return;
+
+  if (!movementPoseReady) {
+    analysisEl.textContent = "Echtzeit-Bewegungserkennung nicht verfuegbar - automatischer Abschluss gestoppt.";
+    setStatus("Echtzeit-Bewegungserkennung fehlt. Bitte Spiel neu starten.", true);
+    return;
+  }
+
+  try {
+    updatePhase("ABSCHLUSS", "...");
+    const result = await api(`/api/games/runs/${runId}/steps/${activeRun.current_step.id}/complete`, {
+      method: "POST",
+    });
+    analysisEl.textContent = result.step.analysis || "Haltephase ohne Bewegungsverstoss abgeschlossen.";
+    renderRun(result.run);
+    if (result.run.status === "completed") {
+      setStatus("Spiel abgeschlossen.", false);
+      updatePhase("FERTIG", "--");
+    }
+  } catch (err) {
+    const msg = String(err && err.message ? err.message : err || "");
+    if (msg.includes("not active") || msg.includes("not pending")) {
+      loadRun().catch(() => {});
+      return;
+    }
+    analysisEl.textContent = `Abschluss fehlgeschlagen: ${err.message}`;
+    setStatus(`Abschluss fehlgeschlagen: ${err.message}`, true);
+    setTimeout(() => {
+      if (token === sequenceToken && activeRun && activeRun.status === "active") {
+        completeStrictStepWithoutCapture(token).catch(() => {});
+      }
+    }, 2000);
+  }
+}
+
 async function verifyCurrentStepWithMode(token, options = {}) {
   const sampleOnly = Boolean(options.sampleOnly);
   if (token !== sequenceToken) return;
@@ -1277,6 +1509,13 @@ async function verifyCurrentStepWithMode(token, options = {}) {
     form.append("file", blob, "autocap.jpg");
     form.append("observed_posture", activeRun.current_step.posture_name || "");
     form.append("sample_only", sampleOnly ? "true" : "false");
+    if (isSinglePoseModule) {
+      const marker = bestEffortMovementMarker();
+      if (marker && Number.isFinite(marker.x) && Number.isFinite(marker.y)) {
+        form.append("marker_x", String(marker.x));
+        form.append("marker_y", String(marker.y));
+      }
+    }
 
     const result = await api(`/api/games/runs/${runId}/steps/${activeRun.current_step.id}/verify`, {
       method: "POST",
@@ -1348,6 +1587,16 @@ async function startRun() {
     effectiveDuration = Math.max(1, duration);
   }
 
+  if (isSinglePoseModule) {
+    try {
+      await initMovementPose();
+    } catch (err) {
+      setStatus(`Start blockiert: ${err.message}`, true);
+      analysisEl.textContent = "Echtzeit-Bewegungserkennung konnte nicht initialisiert werden.";
+      return;
+    }
+  }
+
   try {
     const run = await api(`/api/games/sessions/${sessionId}/runs/start`, {
       method: "POST",
@@ -1407,30 +1656,18 @@ testBeepEl.addEventListener("click", async () => {
     setStatus(`Test-Beep fehlgeschlagen: ${err.message}`, true);
   }
 });
-testDoubleBeepEl.addEventListener("click", async () => {
-  try {
-    const ctx = getAudioContext();
-    if (ctx && ctx.state === "suspended") {
-      await ctx.resume();
-    }
-    beepDouble();
-    setStatus("Doppel-Beep abgespielt.", false);
-  } catch (err) {
-    setStatus(`Doppel-Beep fehlgeschlagen: ${err.message}`, true);
-  }
-});
 
 playVideoEl.addEventListener("loadedmetadata", () => {
   syncMotionOverlaySize();
-  if (isSinglePoseModule) {
-    drawMotionOverlay();
+  if (isSinglePoseModule && movementMonitorActive) {
+    drawMotionOverlay(movementLastMarker);
   }
 });
 
 window.addEventListener("resize", () => {
   syncMotionOverlaySize();
-  if (isSinglePoseModule) {
-    drawMotionOverlay();
+  if (isSinglePoseModule && movementMonitorActive) {
+    drawMotionOverlay(movementLastMarker);
   }
 });
 
