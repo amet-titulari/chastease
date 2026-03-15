@@ -62,6 +62,14 @@
     padding: 1.1rem 1.2rem;
     margin-top: 1rem;
   }
+  .create-toggle-row {
+    margin-top: 0.85rem;
+    display: flex;
+    justify-content: center;
+  }
+  .create-toggle-row button {
+    min-width: 180px;
+  }
   .form-panel h3 { margin: 0 0 0.8rem; font-size: 1rem; color: #d8e8f8; }
 
   .empty-hint { text-align: center; color: var(--color-text-muted, #8899aa); padding: 1.5rem 0; font-size: 0.9rem; }
@@ -113,7 +121,11 @@
       <div class="empty-hint">Wird geladen…</div>
     </div>
 
-    <div class="form-panel" id="im-form-panel">
+    <div class="create-toggle-row" id="im-create-toggle-row">
+      <button type="button" id="im-new-btn">Neu</button>
+    </div>
+
+    <div class="form-panel" id="im-form-panel" style="display:none;">
       <h3 id="im-form-title">Neues Item erstellen</h3>
       <form id="im-form" class="stack" autocomplete="off">
         <input type="hidden" id="im-edit-id" value="" />
@@ -182,6 +194,16 @@ function imEscHtml(s) {
     .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
+function imShowForm() {
+  document.getElementById("im-form-panel").style.display = "";
+  document.getElementById("im-create-toggle-row").style.display = "none";
+}
+
+function imHideForm() {
+  document.getElementById("im-form-panel").style.display = "none";
+  document.getElementById("im-create-toggle-row").style.display = "flex";
+}
+
 function imAutoKey() {
   const id = document.getElementById("im-edit-id").value;
   if (id) return;
@@ -232,6 +254,8 @@ async function imStartEdit(itemId) {
     const item = (data.items || []).find((row) => row.id === itemId);
     if (!item) throw new Error("Item nicht gefunden");
 
+    imShowForm();
+
     document.getElementById("im-edit-id").value = item.id;
     document.getElementById("im-name").value = item.name || "";
     document.getElementById("im-key").value = item.key || "";
@@ -256,6 +280,7 @@ function imResetForm() {
   document.getElementById("im-form-title").textContent = "Neues Item erstellen";
   document.getElementById("im-save-btn").textContent = "Item speichern";
   document.getElementById("im-cancel-btn").style.display = "none";
+  imHideForm();
 }
 
 async function imDelete(id, name) {
@@ -370,6 +395,11 @@ document.getElementById("im-form").addEventListener("submit", async (e) => {
 });
 
 document.getElementById("im-cancel-btn").addEventListener("click", imResetForm);
+document.getElementById("im-new-btn").addEventListener("click", () => {
+  imResetForm();
+  imShowForm();
+  document.getElementById("im-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+});
 
 imLoadList();
 </script>

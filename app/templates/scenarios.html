@@ -62,6 +62,14 @@
     padding: 1.1rem 1.2rem;
     margin-top: 1rem;
   }
+  .create-toggle-row {
+    margin-top: 0.85rem;
+    display: flex;
+    justify-content: center;
+  }
+  .create-toggle-row button {
+    min-width: 180px;
+  }
   .form-panel h3 { margin: 0 0 0.8rem; font-size: 1rem; color: #d8e8f8; }
 
   .preset-grid {
@@ -203,8 +211,12 @@
       <div class="empty-hint">Wird geladen…</div>
     </div>
 
+    <div class="create-toggle-row" id="sm-create-toggle-row">
+      <button type="button" id="sm-new-btn">Neu</button>
+    </div>
+
     <!-- ── Formular ── -->
-    <div class="form-panel" id="sm-form-panel">
+    <div class="form-panel" id="sm-form-panel" style="display:none;">
       <h3 id="sm-form-title">Neues Scenario erstellen</h3>
 
       <!-- Presets -->
@@ -304,6 +316,16 @@ async function smFetch(url, options = {}) {
 
 let smInventoryCatalog = [];
 let smInventoryAssigned = [];
+
+function smShowForm() {
+  document.getElementById("sm-form-panel").style.display = "";
+  document.getElementById("sm-create-toggle-row").style.display = "none";
+}
+
+function smHideForm() {
+  document.getElementById("sm-form-panel").style.display = "none";
+  document.getElementById("sm-create-toggle-row").style.display = "flex";
+}
 
 function smRenderInventoryEditor() {
   const host = document.getElementById("sm-inventory-editor");
@@ -542,6 +564,7 @@ async function smLoadPresets() {
 // ── Load preset into form ──
 function smLoadPreset(preset) {
   smReset();
+  smShowForm();
   document.getElementById("sm-title").value = preset.title || "";
   document.getElementById("sm-key").value = preset.key || "";
   document.getElementById("sm-summary").value = preset.summary || "";
@@ -555,6 +578,7 @@ async function smStartEdit(id) {
   try {
     const s = await smFetch(`/api/scenarios/${id}`);
     smReset();
+    smShowForm();
     document.getElementById("sm-edit-id").value = s.id;
     document.getElementById("sm-form-title").textContent = `Scenario bearbeiten: ${s.title}`;
     document.getElementById("sm-title").value = s.title;
@@ -581,6 +605,7 @@ function smReset() {
   smInventoryAssigned = [];
   smRenderInventoryEditor();
   document.getElementById("sm-cancel-btn").style.display = "none";
+  smHideForm();
 }
 
 // ── Delete ──
@@ -640,6 +665,11 @@ document.getElementById("sm-form").addEventListener("submit", async (e) => {
 });
 
 document.getElementById("sm-cancel-btn").addEventListener("click", smReset);
+document.getElementById("sm-new-btn").addEventListener("click", () => {
+  smReset();
+  smShowForm();
+  document.getElementById("sm-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+});
 document.getElementById("sm-add-phase-btn").addEventListener("click", () => smAddPhase());
 document.getElementById("sm-add-lore-btn").addEventListener("click", () => smAddLore());
 

@@ -235,7 +235,7 @@ def test_games_page_renders_game_cards_and_current_session_entrypoint():
         assert "Aktuelle Session" in html
         assert "Posture Training" in html
         assert "Spiel oeffnen" in html
-        assert "Postures verwalten" in html
+        assert "Postures verwalten" not in html
         assert 'id="admin-menu"' in html
         assert "/game/" in html
 

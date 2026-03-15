@@ -111,10 +111,8 @@
         </div>
         {% if current_session %}
           <a class="cta" href="/game/{{ current_session.id }}?module_key={{ module.key }}">Spiel oeffnen</a>
-          <a class="cta secondary" href="/games/postures?module_key={{ module.key }}">Postures verwalten</a>
         {% else %}
           <a class="cta disabled" href="#">Spiel oeffnen</a>
-          <a class="cta secondary disabled" href="#">Postures verwalten</a>
         {% endif %}
       </article>
     {% endfor %}

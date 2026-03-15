@@ -79,8 +79,12 @@
     <div class="container">
       <h1 class="brand">Chastease</h1>
       <nav class="topnav">
-        <a href="/">Start</a>
-        <a href="/experience">Experience</a>
+        {% if current_user %}
+          <a href="/experience">Experience</a>
+          <a href="/games">Games</a>
+        {% else %}
+          <a href="/">Start</a>
+        {% endif %}
         {% if current_user and current_user.is_admin %}
           <details class="admin-menu" id="admin-menu">
             <summary>Admin</summary>

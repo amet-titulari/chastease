@@ -52,6 +52,14 @@
     padding: 1.1rem 1.2rem;
     margin-top: 1rem;
   }
+  .create-toggle-row {
+    margin-top: 0.85rem;
+    display: flex;
+    justify-content: center;
+  }
+  .create-toggle-row button {
+    min-width: 180px;
+  }
   .form-panel h3 { margin: 0 0 0.8rem; font-size: 1rem; color: #d8e8f8; }
 
   .strictness-label { font-size: 0.82rem; color: var(--color-text-muted, #8899aa); min-width: 4rem; }
@@ -229,8 +237,12 @@
       <div class="empty-hint">Wird geladen…</div>
     </div>
 
+    <div class="create-toggle-row" id="pm-create-toggle-row">
+      <button type="button" id="pm-new-btn">Neu</button>
+    </div>
+
     <!-- ── Neue Persona / Bearbeiten ── -->
-    <div class="form-panel" id="pm-form-panel">
+    <div class="form-panel" id="pm-form-panel" style="display:none;">
       <h3 id="pm-form-title">Neue Persona erstellen</h3>
 
       <!-- Preset-Auswahl -->
@@ -385,6 +397,16 @@ let pmAvatarMediaId = null;
 let pmCurrentPersonaId = null;
 let pmCurrentTemplates = [];
 let pmTplImportReplaceMode = false;
+
+function pmShowForm() {
+  document.getElementById("pm-form-panel").style.display = "";
+  document.getElementById("pm-create-toggle-row").style.display = "none";
+}
+
+function pmHideForm() {
+  document.getElementById("pm-form-panel").style.display = "none";
+  document.getElementById("pm-create-toggle-row").style.display = "flex";
+}
 
 function pmUpdateAvatarUi(url) {
   const img = document.getElementById("pm-avatar-preview");
@@ -609,6 +631,7 @@ async function pmLoadPresets() {
 
 function pmLoadPreset(preset) {
   pmResetForm();
+  pmShowForm();
   document.getElementById("pm-name").value = preset.name || "";
   document.getElementById("pm-tone").value = preset.speech_style_tone || "";
   const dom = preset.speech_style_dominance || "";
@@ -625,6 +648,7 @@ function pmLoadPreset(preset) {
 async function pmStartEdit(id) {
   try {
     const p = await pmFetch(`/api/personas/${id}`);
+    pmShowForm();
     document.getElementById("pm-edit-id").value = p.id;
     document.getElementById("pm-name").value = p.name || "";
     document.getElementById("pm-tone").value = p.speech_style_tone || "";
@@ -696,6 +720,11 @@ document.getElementById("pm-form").addEventListener("submit", async (e) => {
 
 // ── Cancel ──
 document.getElementById("pm-cancel-btn").addEventListener("click", pmResetForm);
+document.getElementById("pm-new-btn").addEventListener("click", () => {
+  pmResetForm();
+  pmShowForm();
+  document.getElementById("pm-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+});
 
 function pmResetForm() {
   document.getElementById("pm-edit-id").value = "";
@@ -715,6 +744,7 @@ function pmResetForm() {
   document.getElementById("pm-task-lib-panel").style.display = "none";
   pmTplResetForm();
   pmRenderTemplates([]);
+  pmHideForm();
 }
 
 function escHtml(s) {
