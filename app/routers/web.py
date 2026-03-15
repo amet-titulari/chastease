@@ -1548,7 +1548,7 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
             "summary": "Spielmodule, Konfigurationen und Run-Flow ueberblicken.",
             "href": "/games",
             "secondary_href": "/games/module-settings?module_key=dont_move",
-            "secondary_label": "Presets",
+            "secondary_label": "Schwellwerte",
             "count": counts["game_modules"],
             "count_label": "Module",
         },

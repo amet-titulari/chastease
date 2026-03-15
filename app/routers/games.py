@@ -49,14 +49,14 @@ DEFAULT_HARD_TARGET_MULTIPLIER = 1.25
 DEFAULT_TARGET_RANDOMIZATION_PERCENT = 10
 DEFAULT_MOVEMENT_THRESHOLDS_BY_MODULE = {
     "dont_move": {
-        "easy": {"pose_deviation": 0.16, "stillness": 0.0080},
-        "medium": {"pose_deviation": 0.13, "stillness": 0.0060},
-        "hard": {"pose_deviation": 0.10, "stillness": 0.0040},
+        "easy": {"pose_deviation": 0.24, "stillness": 0.0130},
+        "medium": {"pose_deviation": 0.21, "stillness": 0.0100},
+        "hard": {"pose_deviation": 0.17, "stillness": 0.0080},
     },
     "tiptoeing": {
-        "easy": {"pose_deviation": 0.15, "stillness": 0.0070},
-        "medium": {"pose_deviation": 0.12, "stillness": 0.0050},
-        "hard": {"pose_deviation": 0.09, "stillness": 0.0036},
+        "easy": {"pose_deviation": 0.22, "stillness": 0.0120},
+        "medium": {"pose_deviation": 0.19, "stillness": 0.0090},
+        "hard": {"pose_deviation": 0.15, "stillness": 0.0070},
     },
 }
 MAX_POSTURE_ZIP_BYTES = 64 * 1024 * 1024
@@ -90,12 +90,12 @@ class ModuleSettingsUpdateRequest(BaseModel):
     easy_target_multiplier: float = Field(default=DEFAULT_EASY_TARGET_MULTIPLIER, gt=0.1, le=3.0)
     hard_target_multiplier: float = Field(default=DEFAULT_HARD_TARGET_MULTIPLIER, gt=0.1, le=3.0)
     target_randomization_percent: int = Field(default=DEFAULT_TARGET_RANDOMIZATION_PERCENT, ge=0, le=60)
-    movement_easy_pose_deviation: float = Field(default=0.16, ge=0.01, le=1.0)
-    movement_easy_stillness: float = Field(default=0.008, ge=0.0005, le=0.1)
-    movement_medium_pose_deviation: float = Field(default=0.13, ge=0.01, le=1.0)
-    movement_medium_stillness: float = Field(default=0.006, ge=0.0005, le=0.1)
-    movement_hard_pose_deviation: float = Field(default=0.10, ge=0.01, le=1.0)
-    movement_hard_stillness: float = Field(default=0.004, ge=0.0005, le=0.1)
+    movement_easy_pose_deviation: float = Field(default=0.24, ge=0.01, le=1.0)
+    movement_easy_stillness: float = Field(default=0.013, ge=0.0005, le=0.1)
+    movement_medium_pose_deviation: float = Field(default=0.21, ge=0.01, le=1.0)
+    movement_medium_stillness: float = Field(default=0.010, ge=0.0005, le=0.1)
+    movement_hard_pose_deviation: float = Field(default=0.17, ge=0.01, le=1.0)
+    movement_hard_stillness: float = Field(default=0.008, ge=0.0005, le=0.1)
 
 
 class PostureTemplateCreateRequest(BaseModel):
