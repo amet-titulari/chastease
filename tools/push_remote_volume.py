@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Push local app data to a remote docker volume via scp.
 
-Supports two modes:
-- all: push full local data directory
+Supports three modes:
+- rebuild: clear remote data directory and replace with local copy
+- all: push full local data directory (without cleanup)
 - db-only: push only database file
 """
 
@@ -15,8 +16,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-defaultMode = "all"
-#defaultMode = "db-only"
+defaultMode = "rebuild"
+# defaultMode = "all"
+# defaultMode = "db-only"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -42,9 +44,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mode",
-        choices=("all", "db-only"),
+        choices=("rebuild", "all", "db-only"),
         default=defaultMode,
-        help="all = copy full data dir, db-only = copy only DB file",
+        help="rebuild = wipe remote then copy local, all = copy full data dir, db-only = copy only DB file",
     )
     parser.add_argument(
         "--db-filename",
@@ -120,14 +122,36 @@ def remote_backup_target(
     return rc
 
 
+def remote_reset_data_dir(
+    *,
+    user: str,
+    host: str,
+    port: int,
+    identity_file: str | None,
+    remote_target: str,
+    dry_run: bool,
+) -> int:
+    # Rebuild mode intentionally deletes everything inside the configured remote target.
+    remote_cmd = (
+        f"mkdir -p '{remote_target}' && "
+        f"find '{remote_target}' -mindepth 1 -maxdepth 1 -exec rm -rf -- {{}} +"
+    )
+    cmd = build_ssh_cmd(port, identity_file, remote_cmd, user, host)
+    rc = run_cmd(cmd, dry_run=dry_run)
+    if rc == 0:
+        print(f"Remote target cleared for rebuild: {remote_target}")
+    return rc
+
+
 def main() -> int:
     args = build_parser().parse_args()
 
     if shutil.which("scp") is None:
         print("Error: 'scp' not found in PATH.", file=sys.stderr)
         return 127
-    if args.remote_backup and shutil.which("ssh") is None:
-        print("Error: 'ssh' not found in PATH (required for --remote-backup).", file=sys.stderr)
+    ssh_required = args.remote_backup or args.mode == "rebuild"
+    if ssh_required and shutil.which("ssh") is None:
+        print("Error: 'ssh' not found in PATH (required for --remote-backup or --mode rebuild).", file=sys.stderr)
         return 127
 
     local_dir = Path(args.local_dir).expanduser().resolve()
@@ -172,6 +196,18 @@ def main() -> int:
     remote_target = remote_data_root
     if args.remote_backup:
         rc = remote_backup_target(
+            user=args.user,
+            host=args.host,
+            port=args.port,
+            identity_file=args.identity_file,
+            remote_target=remote_target,
+            dry_run=args.dry_run,
+        )
+        if rc != 0:
+            return rc
+
+    if args.mode == "rebuild":
+        rc = remote_reset_data_dir(
             user=args.user,
             host=args.host,
             port=args.port,
