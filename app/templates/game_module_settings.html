@@ -120,7 +120,9 @@ async function api(url, options = {}) {
 }
 
 function numberInputValue(id, fallback = 0) {
-  const val = Number(document.getElementById(id)?.value ?? fallback);
+  const raw = String(document.getElementById(id)?.value ?? fallback).trim();
+  const normalized = raw.replace(",", ".");
+  const val = Number(normalized);
   return Number.isFinite(val) ? val : fallback;
 }
 
@@ -132,9 +134,9 @@ const MOVEMENT_PRESETS = {
       hard: { pose: 0.13, still: 0.0060 },
     },
     balanced: {
-      easy: { pose: 0.24, still: 0.0130 },
-      medium: { pose: 0.21, still: 0.0100 },
-      hard: { pose: 0.17, still: 0.0080 },
+      easy: { pose: 0.32, still: 0.0200 },
+      medium: { pose: 0.28, still: 0.0150 },
+      hard: { pose: 0.25, still: 0.0100 },
     },
     strict: {
       easy: { pose: 0.14, still: 0.0055 },
