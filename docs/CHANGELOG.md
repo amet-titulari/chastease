@@ -5,6 +5,24 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ---
 
+## [0.2.5] - 2026-03-15
+
+### Hinzugefuegt
+
+- Drittes Spielemodul `tiptoeing` ("Auf Zehenspitzen stehen") als Single-Pose-Stillhalte-Spiel mit AI-Verifikation.
+- Modul in Registry und Module-Listing integriert.
+
+### Geaendert
+
+- Single-Pose-Strict-Laufzeitlogik aus `dont_move` generalisiert, damit mehrere Module dieselbe strenge Verifizierungsmechanik nutzen koennen.
+- Game-Frontend (`/game/{session_id}`) auf modulklassenbasierte Single-Pose-Logik erweitert (Auswahl, Startparameter, Monitoring).
+
+### Tests
+
+- Games-Flow-Tests fuer Modul-Listing und Start-Flow von `tiptoeing` ergaenzt.
+
+---
+
 ## [0.2.3] – 2026-03-14
 
 ### Hinzugefügt

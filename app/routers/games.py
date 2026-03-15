@@ -51,6 +51,11 @@ MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN = 2
 MEDIA_CONTENT_URL_RE = re.compile(r"^/api/media/(?P<media_id>\d+)/content/?$")
 SHARED_POSTURE_POOL_MODULE_KEYS = {"posture_training", "dont_move"}
 EMPTY_ALLOWED_MODULE_SENTINEL = "__none__"
+SINGLE_POSE_STRICT_MODULE_KEYS = {"dont_move", "tiptoeing"}
+
+
+def _is_single_pose_strict_module(module_key: str) -> bool:
+    return module_key in SINGLE_POSE_STRICT_MODULE_KEYS
 
 
 class StartGameRunRequest(BaseModel):
@@ -460,6 +465,31 @@ def _module_settings_payload(item: GameModuleSetting | None) -> dict:
         "hard_target_multiplier": item.hard_target_multiplier,
         "target_randomization_percent": item.target_randomization_percent,
     }
+
+
+def _verification_criteria_for_step(run: GameRun, step: GameRunStep) -> str:
+    base_instruction = (step.instruction or "Keine Zusatzkriterien hinterlegt.").strip()
+
+    if run.module_key == "tiptoeing":
+        return (
+            "Aufgabe: strenge Bildpruefung fuer Tiptoeing. "
+            f"Soll-Pose: '{step.posture_name}'. "
+            "Pflichtausschnitt: Fuesse, Knoechel und Bereich bis knapp unter die Knie muessen sichtbar sein. "
+            "Virtueller Klotz-Regel: Die Person soll auf den Zehenspitzen stehen, als ob sie auf einem virtuellen Klotz steht. "
+            "Verstoss: Sobald eine Ferse den virtuellen Klotzbereich beruehrt oder absinkt, ist das Ergebnis 'suspicious'. "
+            f"Zusatzkriterien: {base_instruction} "
+            "Bewerte 'confirmed' NUR wenn die Pose klar sichtbar ist und alle Regeln gleichzeitig eingehalten sind. "
+            "Bei Unsicherheit, unvollstaendigem Ausschnitt, verdeckten Fersen oder unklarer Haltung immer 'suspicious'."
+        )
+
+    return (
+        "Aufgabe: strenge Bildpruefung fuer eine konkrete Pose. "
+        f"Soll-Pose: '{step.posture_name}'. "
+        f"Soll-Kriterien: {base_instruction} "
+        "Bewerte 'confirmed' NUR wenn die Pose klar sichtbar ist und mit Soll-Pose plus Kriterien uebereinstimmt. "
+        "Wenn Koerperhaltung, Ausrichtung, Kamerawinkel oder Bildqualitaet keine sichere Zuordnung erlauben: 'suspicious'. "
+        "Bei Teiltreffern oder Unsicherheit niemals 'confirmed'."
+    )
 
 
 def _load_module_settings(db: Session, module_key: str) -> GameModuleSetting | None:
@@ -1224,9 +1254,9 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
 
     effective_transition_seconds = int(payload.transition_seconds)
     effective_max_misses_before_penalty = int(payload.max_misses_before_penalty)
-    if module.key == "dont_move":
+    if _is_single_pose_strict_module(module.key):
         effective_transition_seconds = 0
-        # Dont move applies penalty per violation, threshold is intentionally neutralized.
+        # Single-pose strict modules apply penalty per violation; threshold is neutralized.
         effective_max_misses_before_penalty = 1
 
     run = GameRun(
@@ -1251,8 +1281,8 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
         raise HTTPException(status_code=409, detail="No postures configured for this module")
 
     selected_steps = list(available_steps)
-    if module.key == "dont_move":
-        if payload.selected_posture_key:
+    if _is_single_pose_strict_module(module.key):
+        if module.key == "dont_move" and payload.selected_posture_key:
             selected_steps = [
                 step
                 for step in available_steps
@@ -1270,7 +1300,7 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
     easy_multiplier, hard_multiplier, randomization_percent = _resolve_effective_settings(db, payload)
     target_multiplier = _difficulty_target_multiplier(payload.difficulty, easy_multiplier, hard_multiplier)
 
-    if module.key == "dont_move":
+    if _is_single_pose_strict_module(module.key):
         target_multiplier = 1.0
         randomization_percent = 0
 
@@ -1306,7 +1336,7 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
                     f"duration_minutes={payload.duration_minutes} | "
                     f"session_penalty_per_violation_seconds={payload.session_penalty_seconds}"
                 )
-                if module.key == "dont_move"
+                if _is_single_pose_strict_module(module.key)
                 else (
                     f"Spiel gestartet: {module.title} | difficulty={difficulty.label} | "
                     f"duration_minutes={payload.duration_minutes} | max_misses={effective_max_misses_before_penalty} | "
@@ -1387,16 +1417,7 @@ async def verify_game_step(
         filename=file.filename or "capture.jpg",
         requested_seal_number=None,
         observed_seal_number=observed_posture,
-        verification_criteria=(
-            (
-                "Aufgabe: strenge Bildpruefung fuer eine konkrete Pose. "
-                f"Soll-Pose: '{step.posture_name}'. "
-                f"Soll-Kriterien: {(step.instruction or 'Keine Zusatzkriterien hinterlegt.').strip()} "
-                "Bewerte 'confirmed' NUR wenn die Pose klar sichtbar ist und mit Soll-Pose plus Kriterien uebereinstimmt. "
-                "Wenn Koerperhaltung, Ausrichtung, Kamerawinkel oder Bildqualitaet keine sichere Zuordnung erlauben: 'suspicious'. "
-                "Bei Teiltreffern oder Unsicherheit niemals 'confirmed'."
-            )
-        ),
+        verification_criteria=_verification_criteria_for_step(run, step),
         allow_heuristic_fallback=False,
     )
 
@@ -1408,7 +1429,7 @@ async def verify_game_step(
         nonlocal run, step
 
         run.miss_count += 1
-        disable_retry_for_module = run.module_key == "dont_move"
+        disable_retry_for_module = _is_single_pose_strict_module(run.module_key)
 
         if disable_retry_for_module:
             if run.session_penalty_seconds > 0:
@@ -1529,7 +1550,7 @@ async def verify_game_step(
             )
         else:
             _handle_failed_step_with_retry_policy()
-            if run.module_key != "dont_move":
+            if not _is_single_pose_strict_module(run.module_key):
                 step.status = "failed"
                 step.completed_at = now
 
@@ -1540,7 +1561,7 @@ async def verify_game_step(
                     message_type="game_step_sample_fail",
                     content=(
                         f"Stichprobe fehlgeschlagen: {step.posture_name}"
-                        if run.module_key != "dont_move"
+                        if not _is_single_pose_strict_module(run.module_key)
                         else f"Bewegungsverstoss in Stichprobe erkannt: {step.posture_name}"
                     ),
                 )

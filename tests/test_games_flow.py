@@ -62,6 +62,7 @@ def test_list_game_modules_contains_posture_training():
         items = resp.json()["items"]
         assert any(item["key"] == "posture_training" for item in items)
         assert any(item["key"] == "dont_move" for item in items)
+        assert any(item["key"] == "tiptoeing" for item in items)
 
 
 def test_start_game_run_with_dont_move_module():
@@ -87,6 +88,48 @@ def test_start_game_run_with_dont_move_module():
         assert payload["max_misses_before_penalty"] == 1
         assert payload["current_step"] is not None
         assert int(payload["current_step"]["raw_target_seconds"]) == 8 * 60
+
+
+def test_start_game_run_with_tiptoeing_module():
+    with TestClient(app) as client:
+        _register_admin(client)
+
+        posture_key = f"test_tiptoeing_pose_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/tiptoeing/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "Tiptoeing Pose",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "Stay on tiptoes.",
+                "target_seconds": 120,
+                "sort_order": 1,
+                "is_active": True,
+                "allowed_module_keys": ["tiptoeing"],
+            },
+        )
+        assert create_resp.status_code == 200
+
+        session_id = _create_and_sign(client)
+
+        resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "tiptoeing",
+                "difficulty": "medium",
+                "duration_minutes": 6,
+                "max_misses_before_penalty": 4,
+                "session_penalty_seconds": 120,
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["module_key"] == "tiptoeing"
+        assert payload["status"] == "active"
+        assert payload["transition_seconds"] == 0
+        assert payload["max_misses_before_penalty"] == 1
+        assert payload["current_step"] is not None
+        assert int(payload["current_step"]["raw_target_seconds"]) == 6 * 60
 
 
 def test_posture_allowed_module_keys_roundtrip():
@@ -241,6 +284,22 @@ def test_posture_matrix_can_persist_empty_allowed_module_keys():
 def test_dont_move_rejects_posture_not_allowed_for_module():
     with TestClient(app) as client:
         _register_admin(client)
+        allowed_dm_key = f"test_dm_allowed_pose_{uuid4().hex[:8]}"
+        allowed_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": allowed_dm_key,
+                "title": "DM Allowed Pose",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "No movement.",
+                "target_seconds": 100,
+                "sort_order": 1,
+                "is_active": True,
+                "allowed_module_keys": ["dont_move"],
+            },
+        )
+        assert allowed_resp.status_code == 200
+
         posture_key = f"test_pt_only_pose_{uuid4().hex[:8]}"
         create_resp = client.post(
             "/api/games/modules/posture_training/postures",

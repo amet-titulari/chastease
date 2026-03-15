@@ -300,6 +300,7 @@
 
     <div class="setup-camera">
       <div class="game-meta">Kamera-Vorschau (Pflicht vor Spielstart)</div>
+      <div id="gm-camera-guidance" class="game-meta"></div>
       <video id="gm-setup-video" class="camera-video" autoplay muted playsinline></video>
       <button id="gm-cam-start" type="button">Kamera aktivieren</button>
       <button id="gm-start-btn" type="button">Spiel starten</button>
@@ -347,6 +348,9 @@
 const sessionId = {{ session_id }};
 const moduleKey = {{ module_key | tojson }};
 const isDontMoveModule = moduleKey === "dont_move";
+const isTiptoeingModule = moduleKey === "tiptoeing";
+const singlePoseModuleKeys = new Set(["dont_move", "tiptoeing"]);
+const isSinglePoseModule = singlePoseModuleKeys.has(moduleKey);
 const initialDifficulty = {{ initial_setup.difficulty | tojson }};
 let runId = {{ latest_run_id if latest_run_id is not none else 'null' }};
 let activeRun = null;
@@ -395,6 +399,8 @@ const missLabelEl = document.getElementById("gm-miss-label");
 const transitionWrapEl = document.getElementById("gm-transition-wrap");
 const maxMissesWrapEl = document.getElementById("gm-max-misses-wrap");
 const sessionPenaltyLabelTextEl = document.getElementById("gm-session-penalty-label-text");
+const cameraGuidanceEl = document.getElementById("gm-camera-guidance");
+const beepControlsWrapEl = document.querySelector("label.volume-wrap");
 
 function setStatus(msg, warn = false) {
   statusEl.textContent = msg || "";
@@ -425,6 +431,7 @@ function getAudioContext() {
 }
 
 function beep() {
+  if (isSinglePoseModule) return;
   const ctx = getAudioContext();
   if (!ctx) return;
   if (ctx.state === "suspended") {
@@ -442,6 +449,7 @@ function beep() {
 }
 
 function beepDouble() {
+  if (isSinglePoseModule) return;
   beep();
   window.setTimeout(() => beep(), 180);
 }
@@ -457,6 +465,13 @@ function applyBeepVolume(percentValue, persist = true) {
 }
 
 function initializeBeepVolume() {
+  if (isSinglePoseModule) {
+    beepVolume = 0;
+    if (beepControlsWrapEl) {
+      beepControlsWrapEl.classList.add("hidden");
+    }
+    return;
+  }
   const stored = window.localStorage.getItem("game_beep_volume_percent");
   const initialPercent = stored !== null ? Number(stored) : Number(beepVolumeEl.value || 35);
   applyBeepVolume(initialPercent, false);
@@ -574,7 +589,7 @@ function renderRun(run) {
   activeRun = run;
   runStatusEl.textContent = run.status;
   missCountEl.textContent = String(run.miss_count || 0);
-  retryTimeEl.textContent = isDontMoveModule ? "0s" : `${run.retry_extension_seconds || 0}s`;
+  retryTimeEl.textContent = isSinglePoseModule ? "0s" : `${run.retry_extension_seconds || 0}s`;
   startTotalTimer(run.remaining_seconds, run.status === "active");
 
   const step = run.current_step;
@@ -670,7 +685,7 @@ function countdownPhase({
     if (onTick) {
       onTick(seconds);
     }
-    if (seconds > 0 && seconds <= 5) {
+    if (!isSinglePoseModule && seconds > 0 && seconds <= 5) {
       beep();
     }
     updatePhase(label, String(seconds));
@@ -693,7 +708,7 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
   const holdSeconds = Math.max(0, Math.min(Number(step.target_seconds || 0), holdBudget));
   const sampleWindowStart = 2;
   const sampleWindowEnd = Math.max(sampleWindowStart, holdSeconds - 6);
-  const sampleSecond = (!isDontMoveModule && holdSeconds >= 8)
+  const sampleSecond = (!isSinglePoseModule && holdSeconds >= 8)
     ? (sampleWindowStart + Math.floor(Math.random() * (sampleWindowEnd - sampleWindowStart + 1)))
     : null;
   let sampleTriggered = false;
@@ -703,7 +718,7 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
       loadRun().catch(() => {});
       return;
     }
-    if (isDontMoveModule) {
+    if (isSinglePoseModule) {
       if (dontMoveMonitorHandle) {
         clearInterval(dontMoveMonitorHandle);
       }
@@ -759,8 +774,7 @@ async function loadModule() {
     diffSel.value = initialDifficulty;
   }
 
-  if (isDontMoveModule) {
-    dontMoveOptionsEl.classList.remove("hidden");
+  if (isSinglePoseModule) {
     if (transitionWrapEl) transitionWrapEl.classList.add("hidden");
     if (maxMissesWrapEl) maxMissesWrapEl.classList.add("hidden");
     if (sessionPenaltyLabelTextEl) {
@@ -771,6 +785,26 @@ async function loadModule() {
     }
     document.getElementById("gm-transition-seconds").value = "0";
     document.getElementById("gm-max-misses").value = "1";
+  }
+
+  if (isTiptoeingModule) {
+    if (dontMoveOptionsEl) dontMoveOptionsEl.classList.add("hidden");
+    if (cameraGuidanceEl) {
+      cameraGuidanceEl.textContent = "Ausschnitt: Fuesse und Knoechel bis knapp unter die Knie muessen permanent sichtbar sein.";
+    }
+
+    const postureData = await api(`/api/games/modules/${moduleKey}/postures/available`);
+    const usable = postureData.items || [];
+    if (usable.length === 0) {
+      throw new Error("Keine freigegebenen Postures fuer Tiptoeing vorhanden");
+    }
+  }
+
+  if (isDontMoveModule) {
+    dontMoveOptionsEl.classList.remove("hidden");
+    if (cameraGuidanceEl) {
+      cameraGuidanceEl.textContent = "Achte auf einen stabilen Ganzkoerper-Ausschnitt ohne Verdeckung der relevanten Haltung.";
+    }
 
     const postureData = await api(`/api/games/modules/${moduleKey}/postures/available`);
     const usable = postureData.items || [];
@@ -784,6 +818,10 @@ async function loadModule() {
     if (usable.length === 0) {
       throw new Error("Keine freigegebenen Postures fuer dieses Modul vorhanden");
     }
+  }
+
+  if (!isSinglePoseModule && cameraGuidanceEl) {
+    cameraGuidanceEl.textContent = "Achte auf einen stabilen Ausschnitt mit klar erkennbarer Koerperhaltung.";
   }
 }
 
@@ -952,9 +990,14 @@ async function startRun() {
     effectiveTransitionSeconds = 0;
     effectiveMaxMisses = 1;
     if (!dontMovePostureKey) {
-      setStatus("Bitte eine Pose fuer Don't move auswaehlen.", true);
+      setStatus("Bitte eine Pose fuer dieses Modul auswaehlen.", true);
       return;
     }
+    effectiveDuration = Math.max(1, duration);
+  }
+  if (isTiptoeingModule) {
+    effectiveTransitionSeconds = 0;
+    effectiveMaxMisses = 1;
     effectiveDuration = Math.max(1, duration);
   }
 
