@@ -40,6 +40,28 @@ def test_list_game_modules_contains_posture_training():
         assert resp.status_code == 200
         items = resp.json()["items"]
         assert any(item["key"] == "posture_training" for item in items)
+        assert any(item["key"] == "dont_move" for item in items)
+
+
+def test_start_game_run_with_dont_move_module():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "dont_move",
+                "difficulty": "medium",
+                "duration_minutes": 8,
+                "max_misses_before_penalty": 2,
+                "session_penalty_seconds": 90,
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["module_key"] == "dont_move"
+        assert payload["status"] == "active"
+        assert payload["current_step"] is not None
 
 
 def test_start_game_run_and_fetch_state():
@@ -276,6 +298,56 @@ def test_game_run_auto_completes_when_total_time_elapsed_with_summary():
         summary = payload.get("summary") or {}
         assert summary.get("end_reason") == "time_elapsed"
         assert int(summary.get("total_steps") or 0) >= 1
+
+
+def test_final_summary_contains_detailed_check_entries():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 1,
+                "transition_seconds": 0,
+                "max_misses_before_penalty": 2,
+                "session_penalty_seconds": 120,
+            },
+        )
+        assert start.status_code == 200
+        run_id = start.json()["id"]
+        step = start.json()["current_step"]
+        assert step is not None
+
+        with patch("app.routers.games.analyze_verification", return_value=("confirmed", "AI mock ok")):
+            verify = client.post(
+                f"/api/games/runs/{run_id}/steps/{step['id']}/verify",
+                files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                data={"observed_posture": step["posture_name"]},
+            )
+        assert verify.status_code == 200
+
+        db = SessionLocal()
+        try:
+            run = db.query(GameRun).filter(GameRun.id == run_id).first()
+            assert run is not None
+            run.started_at = datetime.now(timezone.utc) - timedelta(seconds=120)
+            db.add(run)
+            db.commit()
+        finally:
+            db.close()
+
+        detail = client.get(f"/api/games/runs/{run_id}")
+        assert detail.status_code == 200
+        payload = detail.json()
+        assert payload["status"] == "completed"
+        summary = payload.get("summary") or {}
+        checks = summary.get("checks") or []
+        assert len(checks) >= 1
+        last = checks[-1]
+        assert last.get("verification_status") in {"confirmed", "suspicious"}
+        assert (last.get("capture_url") or "").startswith("/media/verifications/games/")
+        assert last.get("analysis")
 
 
 def test_current_step_target_seconds_is_capped_by_remaining_budget():

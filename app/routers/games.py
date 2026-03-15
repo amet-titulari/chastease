@@ -46,6 +46,7 @@ DEFAULT_TARGET_RANDOMIZATION_PERCENT = 10
 MAX_POSTURE_ZIP_BYTES = 64 * 1024 * 1024
 MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN = 2
 MEDIA_CONTENT_URL_RE = re.compile(r"^/api/media/(?P<media_id>\d+)/content/?$")
+SHARED_POSTURE_POOL_MODULE_KEYS = {"posture_training", "dont_move"}
 
 
 class StartGameRunRequest(BaseModel):
@@ -59,6 +60,8 @@ class StartGameRunRequest(BaseModel):
     easy_target_multiplier: float | None = Field(default=None, gt=0.1, le=3.0)
     hard_target_multiplier: float | None = Field(default=None, gt=0.1, le=3.0)
     target_randomization_percent: int | None = Field(default=None, ge=0, le=60)
+    selected_posture_key: str | None = Field(default=None, max_length=120)
+    hold_seconds: int | None = Field(default=None, ge=5, le=7200)
 
 
 class ModuleSettingsUpdateRequest(BaseModel):
@@ -135,10 +138,17 @@ def _template_payload(template: GamePostureTemplate) -> dict:
     }
 
 
+def _posture_pool_module_key(module_key: str) -> str:
+    if module_key in SHARED_POSTURE_POOL_MODULE_KEYS:
+        return "posture_training"
+    return module_key
+
+
 def _module_postures(db: Session, module_key: str, active_only: bool = False) -> list[GamePostureTemplate]:
+    pool_key = _posture_pool_module_key(module_key)
     query = (
         db.query(GamePostureTemplate)
-        .filter(GamePostureTemplate.module_key == module_key)
+        .filter(GamePostureTemplate.module_key == pool_key)
         .order_by(GamePostureTemplate.sort_order.asc(), GamePostureTemplate.id.asc())
     )
     if active_only:
@@ -210,7 +220,8 @@ def _process_posture_image(raw: bytes, filename: str | None, content_type: str |
 
 
 def _store_posture_media(db: Session, module_key: str, image_bytes: bytes, original_filename: str) -> MediaAsset:
-    rel_path = f"game_postures/{module_key}/{uuid4().hex}.jpg"
+    storage_key = _posture_pool_module_key(module_key)
+    rel_path = f"game_postures/{storage_key}/{uuid4().hex}.jpg"
     target = _resolve_media_path(rel_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(image_bytes)
@@ -304,7 +315,7 @@ def _steps_for_run(db: Session, module_key: str) -> list[dict]:
             for row in rows
         ]
 
-    module = get_module(module_key)
+    module = get_module(_posture_pool_module_key(module_key))
     if not module:
         return []
     return [
@@ -409,6 +420,50 @@ def _remaining_seconds_for_run(run: GameRun, now: datetime | None = None) -> int
     return max(0, int(run.total_duration_seconds) - elapsed_seconds)
 
 
+def _load_run_summary_meta(run: GameRun) -> dict:
+    if not run.summary_json:
+        return {}
+    try:
+        parsed = json.loads(run.summary_json)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _append_run_check_entry(
+    run: GameRun,
+    *,
+    step: GameRunStep,
+    verification_status: str,
+    analysis: str,
+    capture_rel_path: str,
+    sample_only: bool,
+) -> None:
+    meta = _load_run_summary_meta(run)
+    checks = meta.get("checks")
+    if not isinstance(checks, list):
+        checks = []
+
+    checks.append(
+        {
+            "captured_at": datetime.now(timezone.utc).isoformat(),
+            "step_id": step.id,
+            "posture_name": step.posture_name,
+            "verification_status": verification_status,
+            "step_status": step.status,
+            "analysis": analysis,
+            "violation_detected": verification_status != "confirmed",
+            "violation_reason": analysis if verification_status != "confirmed" else None,
+            "sample_only": bool(sample_only),
+            "capture_path": capture_rel_path,
+            "capture_url": f"/media/{capture_rel_path}",
+        }
+    )
+
+    meta["checks"] = checks
+    run.summary_json = json.dumps(meta, ensure_ascii=True)
+
+
 def _finish_run_if_done(db: Session, run: GameRun) -> bool:
     now = datetime.now(timezone.utc)
     remaining_seconds = _remaining_seconds_for_run(run, now)
@@ -441,6 +496,9 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
     failed = sum(1 for item in steps if item.status == "failed")
     total = len(steps)
     end_reason = "time_elapsed" if timed_out else "all_steps_processed"
+    existing_meta = _load_run_summary_meta(run)
+    checks = existing_meta.get("checks") if isinstance(existing_meta.get("checks"), list) else []
+
     report = {
         "end_reason": end_reason,
         "total_steps": total,
@@ -451,6 +509,7 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
         "retry_extension_seconds": run.retry_extension_seconds,
         "session_penalty_applied": bool(run.session_penalty_applied),
         "scheduled_duration_seconds": int(run.total_duration_seconds),
+        "checks": checks,
     }
     run.summary_json = json.dumps(report, ensure_ascii=True)
 
@@ -460,7 +519,7 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
             role="system",
             message_type="game_report",
             content=(
-                "Spielbericht Posture Training: "
+                f"Spielbericht {run.module_key}: "
                 f"reason={end_reason}, total={total}, passed={passed}, failed={failed}, "
                 f"timeout_failed={timeout_failed}, misses={run.miss_count}, "
                 f"retry_extension_seconds={run.retry_extension_seconds}, "
@@ -679,16 +738,18 @@ async def import_module_postures_zip(
     if not isinstance(items, list):
         raise HTTPException(status_code=422, detail="manifest.json must contain a postures array")
 
+    pool_key = _posture_pool_module_key(module_key)
+
     replaced = (
         db.query(GamePostureTemplate)
-        .filter(GamePostureTemplate.module_key == module_key)
+        .filter(GamePostureTemplate.module_key == pool_key)
         .count()
     )
 
     try:
         (
             db.query(GamePostureTemplate)
-            .filter(GamePostureTemplate.module_key == module_key)
+            .filter(GamePostureTemplate.module_key == pool_key)
             .delete(synchronize_session=False)
         )
 
@@ -743,7 +804,7 @@ async def import_module_postures_zip(
 
             db.add(
                 GamePostureTemplate(
-                    module_key=module_key,
+                    module_key=pool_key,
                     posture_key=posture_key[:120],
                     title=title,
                     image_url=resolved_image_url,
@@ -781,8 +842,10 @@ def create_module_posture(
     if not image_url:
         raise HTTPException(status_code=422, detail="image_url is required")
 
+    pool_key = _posture_pool_module_key(module_key)
+
     template = GamePostureTemplate(
-        module_key=module_key,
+        module_key=pool_key,
         posture_key=posture_key[:120],
         title=payload.title.strip(),
         image_url=image_url,
@@ -808,9 +871,11 @@ def update_module_posture(
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
 
+    pool_key = _posture_pool_module_key(module_key)
+
     template = (
         db.query(GamePostureTemplate)
-        .filter(GamePostureTemplate.id == posture_id, GamePostureTemplate.module_key == module_key)
+        .filter(GamePostureTemplate.id == posture_id, GamePostureTemplate.module_key == pool_key)
         .first()
     )
     if not template:
@@ -848,9 +913,11 @@ def delete_module_posture(module_key: str, posture_id: int, db: Session = Depend
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
+    pool_key = _posture_pool_module_key(module_key)
+
     template = (
         db.query(GamePostureTemplate)
-        .filter(GamePostureTemplate.id == posture_id, GamePostureTemplate.module_key == module_key)
+        .filter(GamePostureTemplate.id == posture_id, GamePostureTemplate.module_key == pool_key)
         .first()
     )
     if not template:
@@ -887,14 +954,38 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
     db.add(run)
     db.flush()
 
-    run_steps = _steps_for_run(db, module.key)
-    if not run_steps:
+    available_steps = _steps_for_run(db, module.key)
+    if not available_steps:
         raise HTTPException(status_code=409, detail="No postures configured for this module")
+
+    selected_steps = list(available_steps)
+    if module.key == "dont_move":
+        if payload.selected_posture_key:
+            selected_steps = [
+                step
+                for step in available_steps
+                if (step.get("posture_key") or "") == payload.selected_posture_key
+            ]
+            if not selected_steps:
+                raise HTTPException(status_code=422, detail="Selected posture is not available")
+        else:
+            selected_steps = [available_steps[0]]
+
+        if payload.hold_seconds is not None:
+            chosen = dict(selected_steps[0])
+            chosen["target_seconds"] = int(payload.hold_seconds)
+            selected_steps = [chosen]
+        else:
+            selected_steps = [selected_steps[0]]
 
     easy_multiplier, hard_multiplier, randomization_percent = _resolve_effective_settings(db, payload)
     target_multiplier = _difficulty_target_multiplier(payload.difficulty, easy_multiplier, hard_multiplier)
 
-    for idx, step in enumerate(run_steps):
+    if module.key == "dont_move":
+        target_multiplier = 1.0
+        randomization_percent = 0
+
+    for idx, step in enumerate(selected_steps):
         base_target_seconds = max(1, int(step["target_seconds"] or 120))
         target_seconds = _adjust_target_seconds(
             base_seconds=base_target_seconds,
@@ -1020,8 +1111,9 @@ async def verify_game_step(
         nonlocal run, step
 
         run.miss_count += 1
+        disable_retry_for_module = run.module_key == "dont_move"
         retry_depth = _retry_depth_for_step(db, run.id, step)
-        can_append_retry = retry_depth < MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN
+        can_append_retry = (not disable_retry_for_module) and (retry_depth < MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN)
 
         if can_append_retry:
             run.retry_extension_seconds += difficulty.retry_extension_seconds
@@ -1133,6 +1225,15 @@ async def verify_game_step(
         step.status = "failed"
         step.completed_at = now
         _handle_failed_step_with_retry_policy()
+
+    _append_run_check_entry(
+        run,
+        step=step,
+        verification_status=status,
+        analysis=analysis,
+        capture_rel_path=capture_rel_path,
+        sample_only=sample_only,
+    )
 
     db.add(step)
     db.add(run)

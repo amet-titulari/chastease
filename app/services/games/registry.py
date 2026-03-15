@@ -1,9 +1,11 @@
 from app.services.games.base import GameModuleDefinition
+from app.services.games.dont_move import DONT_MOVE_MODULE
 from app.services.games.posture_training import POSTURE_TRAINING_MODULE
 
 
 GAME_MODULES: tuple[GameModuleDefinition, ...] = (
     POSTURE_TRAINING_MODULE,
+    DONT_MOVE_MODULE,
 )
 
 

@@ -202,6 +202,39 @@
     border-color: #ff6b6b;
     box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.35) inset;
   }
+  .final-report {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+  }
+  .final-check {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 0.45rem;
+    align-items: start;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    padding: 0.4rem;
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .final-check img {
+    width: 96px;
+    height: 72px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.22);
+    background: #091019;
+  }
+  .final-check img.ok { border-color: #2fdc8a; }
+  .final-check img.fail { border-color: #ff6b6b; }
+  .final-check .meta {
+    display: grid;
+    gap: 0.2rem;
+    font-size: 0.8rem;
+    color: #c6d8ea;
+  }
+  .final-check .meta strong.ok { color: #9de2bf; }
+  .final-check .meta strong.fail { color: #ffb4b4; }
   @media (max-width: 980px) {
     .setup-grid { grid-template-columns: 1fr; }
     .setup-secondary { grid-template-columns: 1fr; }
@@ -297,6 +330,7 @@
       <p id="gm-analysis" class="game-meta"></p>
       <p class="game-meta">Misses: <span id="gm-miss-count">0</span> · Retry +Zeit: <span id="gm-retry-time">0s</span></p>
       <div id="gm-capture-gallery" class="capture-gallery"></div>
+      <div id="gm-final-report" class="final-report"></div>
     </aside>
   </section>
 </section>
@@ -340,6 +374,7 @@ const retryTimeEl = document.getElementById("gm-retry-time");
 const analysisEl = document.getElementById("gm-analysis");
 const verifyThumbEl = document.getElementById("gm-verify-thumb");
 const captureGalleryEl = document.getElementById("gm-capture-gallery");
+const finalReportEl = document.getElementById("gm-final-report");
 const setupVideoEl = document.getElementById("gm-setup-video");
 const playVideoEl = document.getElementById("gm-video");
 const beepVolumeEl = document.getElementById("gm-beep-volume");
@@ -441,6 +476,46 @@ function updateVerificationPreview(stepResult, sampleOnly) {
   }
 }
 
+function escHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderFinalReport(summary) {
+  const checks = Array.isArray(summary?.checks) ? summary.checks : [];
+  if (checks.length === 0) {
+    finalReportEl.innerHTML = "";
+    return;
+  }
+
+  finalReportEl.innerHTML = checks
+    .map((entry, idx) => {
+      const status = String(entry.verification_status || "").toLowerCase();
+      const statusLabel = status === "confirmed" ? "Bestanden" : "Nicht bestanden";
+      const statusClass = status === "confirmed" ? "ok" : "fail";
+      const modeLabel = entry.sample_only ? "Stichprobe" : "Endpruefung";
+      const imgClass = status === "confirmed" ? "ok" : "fail";
+      const imgUrl = escHtml(entry.capture_url || "");
+      const analysis = escHtml(entry.analysis || "-");
+      const posture = escHtml(entry.posture_name || "-");
+      return `
+        <article class="final-check">
+          <img class="${imgClass}" src="${imgUrl}" alt="Kontrollbild ${idx + 1}" />
+          <div class="meta">
+            <div><strong>${idx + 1}. ${modeLabel}</strong> · Pose: ${posture}</div>
+            <div><strong class="${statusClass}">${statusLabel}</strong></div>
+            <div>Begruendung: ${analysis}</div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function appendCaptureThumbnail(stepResult) {
   if (!stepResult) return;
   const imageUrl = stepResult.capture_url || "";
@@ -527,8 +602,11 @@ function renderRun(run) {
     const timeoutFailed = Number(summary.timeout_failed_steps || 0);
     const misses = Number(summary.miss_count || run.miss_count || 0);
     analysisEl.textContent = `Spiel beendet (${reason}). Schritte: ${passed}/${total} bestanden, ${failed} fehlgeschlagen (${timeoutFailed} wegen Zeitablauf). Misses: ${misses}.`;
+    renderFinalReport(summary);
     setStatus("Spiel abgeschlossen.", false);
     updatePhase("FERTIG", "--");
+  } else {
+    finalReportEl.innerHTML = "";
   }
 
   if (run.status === "active" && !cameraStream) {
@@ -823,6 +901,7 @@ async function startRun() {
     verifyThumbEl.removeAttribute("src");
     verifyThumbEl.classList.remove("ok", "fail");
     captureGalleryEl.innerHTML = "";
+    finalReportEl.innerHTML = "";
     setStatus("Spiel gestartet.", false);
     renderRun(run);
   } catch (err) {
