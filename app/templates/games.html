@@ -85,10 +85,6 @@
   <section class="card full" style="display:grid; gap:0.45rem;">
     <h2 style="margin:0;">Spiele</h2>
     <p class="games-note">Waehle ein Spiel als Card. Danach oeffnet sich das Spiel-Setup fuer die aktuelle Session.</p>
-    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-      <a class="cta secondary" href="/games/module-settings?module_key=dont_move">Dont Move Schwellwerte</a>
-      <a class="cta secondary" href="/games/module-settings?module_key=tiptoeing">Tiptoeing Schwellwerte</a>
-    </div>
     {% if current_session %}
       <p class="games-note">Aktuelle Session: #{{ current_session.id }} · {{ current_session.status }} · Persona: {{ current_session.persona_name }} · Player: {{ current_session.player_nickname }}</p>
     {% else %}

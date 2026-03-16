@@ -385,7 +385,7 @@ function populateModuleFilter() {
 
 async function loadMatrix() {
   setStatus("Matrix wird geladen...");
-  const data = await api("/api/games/postures/matrix");
+  const data = await api("/api/inventory/postures/matrix");
   modules = Array.isArray(data.modules) ? data.modules : [];
   items = Array.isArray(data.items) ? data.items : [];
   populateModuleFilter();
@@ -501,7 +501,7 @@ function closePreviewModal() {
 async function saveMatrix() {
   const payload = { items: collectPayload() };
   try {
-    const result = await api("/api/games/postures/matrix", {
+    const result = await api("/api/inventory/postures/matrix", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

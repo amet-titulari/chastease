@@ -1410,7 +1410,7 @@ def game_page(
 
     initial_setup = {
         "duration_minutes": 20,
-        "transition_seconds": 8,
+        "transition_seconds": 0 if module.key in {"dont_move", "tiptoeing"} else 8,
         "difficulty": "medium",
         "max_misses_before_penalty": 3,
         "session_penalty_days": 0,
@@ -1420,9 +1420,11 @@ def game_page(
     if latest_run is not None:
         base_duration_seconds = max(60, int(latest_run.total_duration_seconds or 0) - int(latest_run.retry_extension_seconds or 0))
         penalty_total = max(0, int(latest_run.session_penalty_seconds or 0))
+        raw_transition = int(latest_run.transition_seconds or 0)
+        default_transition = 0 if module.key in {"dont_move", "tiptoeing"} else 8
         initial_setup = {
             "duration_minutes": max(1, int(round(base_duration_seconds / 60))),
-            "transition_seconds": max(0, min(60, int(latest_run.transition_seconds or 8))),
+            "transition_seconds": max(0, min(60, raw_transition if raw_transition > 0 else default_transition)),
             "difficulty": latest_run.difficulty_key or "medium",
             "max_misses_before_penalty": max(1, int(latest_run.max_misses_before_penalty or 3)),
             "session_penalty_days": penalty_total // 86400,
@@ -1548,7 +1550,7 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
             "summary": "Spielmodule, Konfigurationen und Run-Flow ueberblicken.",
             "href": "/games",
             "secondary_href": "/games/module-settings?module_key=dont_move",
-            "secondary_label": "Schwellwerte",
+            "secondary_label": "Spiele Konfiguration",
             "count": counts["game_modules"],
             "count_label": "Module",
         },

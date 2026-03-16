@@ -1,5 +1,4 @@
 from pathlib import Path
-from uuid import uuid4
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -37,7 +36,7 @@ def _timestamp_slug(value: datetime | None = None) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     dt = dt.astimezone(timezone.utc)
-    return dt.strftime("%Y%m%d_%H%M%S_%f")
+    return dt.strftime("%Y%m%d-%H%M")
 
 
 def _safe_suffix(filename: str | None) -> str:
@@ -47,6 +46,12 @@ def _safe_suffix(filename: str | None) -> str:
     if len(suffix) > 10 or any(ch in suffix for ch in ("/", "\\", " ")):
         return ".jpg"
     return suffix
+
+
+def _chat_verification_filename(session_id: int, verification_id: int, filename: str | None) -> str:
+    stamp = _timestamp_slug()
+    suffix = _safe_suffix(filename)
+    return f"session{session_id}-game0-run{verification_id}-{stamp}{suffix}"
 
 
 def _verification_image_url(image_path: str | None) -> str | None:
@@ -99,9 +104,7 @@ async def upload_verification(
 
     target_dir = Path(settings.media_dir) / "verifications" / "chat" / str(session_id)
     target_dir.mkdir(parents=True, exist_ok=True)
-    suffix = _safe_suffix(file.filename)
-    capture_stamp = _timestamp_slug()
-    target_path = target_dir / f"{capture_stamp}-{uuid4().hex}{suffix}"
+    target_path = target_dir / _chat_verification_filename(session_id, verification_id, file.filename)
 
     data = await file.read()
     target_path.write_bytes(stamp_verification_timestamp(data))

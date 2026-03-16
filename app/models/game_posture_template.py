@@ -11,6 +11,8 @@ class GamePostureTemplate(Base):
     posture_key = Column(String(120), nullable=False)
     title = Column(String(200), nullable=False)
     image_url = Column(String(500), nullable=True)
+    reference_landmarks_json = Column(Text, nullable=True)
+    reference_landmarks_detected_at = Column(DateTime(timezone=True), nullable=True)
     instruction = Column(Text, nullable=True)
     target_seconds = Column(Integer, nullable=False, default=120)
     sort_order = Column(Integer, nullable=False, default=0)

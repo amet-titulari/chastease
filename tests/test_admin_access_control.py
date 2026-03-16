@@ -57,9 +57,9 @@ def test_scenario_api_requires_admin_authentication():
 
 def test_game_posture_matrix_api_requires_admin_authentication():
     with TestClient(app) as client:
-        unauth = client.get("/api/games/postures/matrix")
+        unauth = client.get("/api/inventory/postures/matrix")
         assert unauth.status_code == 401
 
         _register_user(client, prefix="nonadmin-api-games", make_admin=False)
-        forbidden = client.get("/api/games/postures/matrix")
+        forbidden = client.get("/api/inventory/postures/matrix")
         assert forbidden.status_code == 403

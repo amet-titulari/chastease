@@ -55,6 +55,29 @@ def _quota_payload(db: Session, session_obj: SessionModel, now: datetime) -> dic
             return None
         return max(0, limit - used[key])
 
+    def _next_period_start(period: str) -> datetime:
+        start = HygieneService.period_start(period, now)
+        if period == "day":
+            return start + timedelta(days=1)
+        if period == "week":
+            return start + timedelta(days=7)
+        if period == "month":
+            if start.month == 12:
+                return start.replace(year=start.year + 1, month=1)
+            return start.replace(month=start.month + 1)
+        raise ValueError(f"Unsupported period: {period}")
+
+    next_allowed_at: dict[str, str | None] = {"daily": None, "weekly": None, "monthly": None}
+    blocking_times: list[datetime] = []
+    for period_key, period_name in (("daily", "day"), ("weekly", "week"), ("monthly", "month")):
+        remaining = _remaining(period_key)
+        if remaining is not None and remaining <= 0:
+            next_at = _next_period_start(period_name)
+            next_allowed_at[period_key] = next_at.isoformat()
+            blocking_times.append(next_at)
+
+    next_allowed_at["overall"] = max(blocking_times).isoformat() if blocking_times else None
+
     return {
         "limits": limits,
         "used": used,
@@ -63,6 +86,7 @@ def _quota_payload(db: Session, session_obj: SessionModel, now: datetime) -> dic
             "weekly": _remaining("weekly"),
             "monthly": _remaining("monthly"),
         },
+        "next_allowed_at": next_allowed_at,
     }
 
 
@@ -141,7 +165,14 @@ def request_hygiene_opening(
     now = datetime.now(timezone.utc)
     quota = _quota_payload(db=db, session_obj=session_obj, now=now)
     if _quota_exceeded(quota):
-        raise HTTPException(status_code=400, detail="Hygiene opening quota reached")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "hygiene_quota_reached",
+                "message": "Hygiene opening quota reached",
+                "quota": quota,
+            },
+        )
 
     due_back_at = HygieneService.calculate_due_back(now, payload.duration_seconds)
     opening = HygieneOpening(

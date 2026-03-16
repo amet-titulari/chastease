@@ -235,6 +235,7 @@ def test_games_page_renders_game_cards_and_current_session_entrypoint():
         assert "Aktuelle Session" in html
         assert "Posture Training" in html
         assert "Spiel oeffnen" in html
+        assert "Schwellwerte" not in html
         assert "Postures verwalten" not in html
         assert 'id="admin-menu"' in html
         assert "/game/" in html
@@ -281,7 +282,7 @@ def test_admin_posture_matrix_page_renders():
         assert "Matrix speichern" in html
         assert "Sichtbare im Modul aktivieren" in html
         assert "Suche" in html
-        assert "/api/games/postures/matrix" in html
+        assert "/api/inventory/postures/matrix" in html
 
 
 def test_admin_operations_page_renders():

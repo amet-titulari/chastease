@@ -31,19 +31,69 @@
   }
   .pm-title { margin: 0; font-size: 0.98rem; color: #e2f1ff; }
   .pm-image {
-    width: 100%;
-    max-width: 240px;
-    aspect-ratio: 3/4;
-    object-fit: contain;
+    display: block;
+    width: min(240px, 100%);
+    height: auto;
+    object-fit: initial;
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: #05080c;
+  }
+  .pm-image-wrap {
+    position: relative;
+    display: inline-block;
+    width: fit-content;
+    line-height: 0;
+    justify-self: start;
+  }
+  .pm-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    opacity: 0.95;
+    margin: 0;
+    transform: none;
+  }
+  .pm-overlay.is-editable {
+    pointer-events: auto;
+    cursor: crosshair;
+  }
+  .pm-overlay line {
+    fill: none;
+    stroke: rgba(85, 210, 255, 0.85);
+    stroke-width: 0.008;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .pm-overlay circle {
+    fill: rgba(255, 151, 71, 0.95);
+    cursor: grab;
+  }
+  .pm-overlay circle.is-dragging {
+    fill: rgba(255, 215, 120, 0.98);
+    cursor: grabbing;
+  }
+  .pm-skeleton-editing .js-skeleton-edit {
+    display: none;
+  }
+  .pm-skeleton-save,
+  .pm-skeleton-cancel {
+    display: none;
+  }
+  .pm-skeleton-editing .pm-skeleton-save,
+  .pm-skeleton-editing .pm-skeleton-cancel {
+    display: inline-flex;
   }
   .pm-meta { margin: 0; color: #9db1c7; font-size: 0.82rem; }
   .pm-form-grid { display: grid; gap: 0.45rem; grid-template-columns: repeat(2, minmax(120px, 1fr)); }
   .pm-form-grid .full { grid-column: 1 / -1; }
   .pm-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
   .pm-status { margin: 0; color: #9db1c7; font-size: 0.82rem; }
+  .pm-reference-active { color: #9de2bf; }
+  .pm-reference-inactive { color: #ffb4b4; }
   .warn { color: #ffb4b4; }
   .ok { color: #9de2bf; }
   .pm-transfer { display: flex; gap: 0.55rem; align-items: center; flex-wrap: wrap; }
@@ -56,10 +106,6 @@
   <section class="card full" style="display:grid; gap:0.45rem;">
     <div style="display:flex; justify-content:space-between; gap:0.6rem; align-items:center; flex-wrap:wrap;">
       <h2 style="margin:0;">Postures verwalten</h2>
-      <div class="pm-top-actions">
-        <a href="/games/module-settings?module_key={{ module_key }}">Spiel-Schwellwerte</a>
-        <a href="/games">Zur Spieleauswahl</a>
-      </div>
     </div>
     <p class="pm-note">{{ module_title }} · {{ module_summary }}</p>
     <p class="pm-note">Hier kannst du Postures bearbeiten, loeschen, neu anlegen sowie als ZIP importieren/exportieren.</p>
@@ -83,6 +129,7 @@
 const MODULE_KEY = {{ module_key | tojson }};
 let items = [];
 let availableModules = [];
+const skeletonEditStateById = new Map();
 
 function setMsg(msg, warn = false) {
   const el = document.getElementById("pm-msg");
@@ -119,16 +166,222 @@ function moduleCheckboxesHtml(selectedKeys) {
     .join("");
 }
 
+const SKELETON_EDGES = [
+  ["left_shoulder", "right_shoulder"],
+  ["left_shoulder", "left_elbow"],
+  ["left_elbow", "left_wrist"],
+  ["right_shoulder", "right_elbow"],
+  ["right_elbow", "right_wrist"],
+  ["left_shoulder", "left_hip"],
+  ["right_shoulder", "right_hip"],
+  ["left_hip", "right_hip"],
+  ["left_hip", "left_knee"],
+  ["left_knee", "left_ankle"],
+  ["right_hip", "right_knee"],
+  ["right_knee", "right_ankle"],
+];
+
+function referencePointsFromJson(referenceJson) {
+  if (!referenceJson) return null;
+  try {
+    const parsed = JSON.parse(referenceJson);
+    const points = parsed?.points;
+    const meta = parsed?.meta;
+    if (!points || !meta || !Array.isArray(meta.center)) return null;
+    const scale = Number(meta.scale || 0);
+    const centerX = Number(meta.center[0]);
+    const centerY = Number(meta.center[1]);
+    if (!Number.isFinite(scale) || scale <= 0) return null;
+    if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) return null;
+
+    const denorm = {};
+    Object.entries(points).forEach(([name, value]) => {
+      const x = Number(value?.x);
+      const y = Number(value?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      denorm[name] = {
+        x: centerX + (x * scale),
+        y: centerY + (y * scale),
+      };
+    });
+    return denorm;
+  } catch {
+    return null;
+  }
+}
+
+function referenceModelFromJson(referenceJson) {
+  if (!referenceJson) return null;
+  try {
+    const parsed = JSON.parse(referenceJson);
+    const points = parsed?.points;
+    const meta = parsed?.meta;
+    if (!points || !meta || !Array.isArray(meta.center)) return null;
+    const scale = Number(meta.scale || 0);
+    const centerX = Number(meta.center[0]);
+    const centerY = Number(meta.center[1]);
+    if (!Number.isFinite(scale) || scale <= 0) return null;
+    if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) return null;
+
+    const absPoints = {};
+    const visByName = {};
+    Object.entries(points).forEach(([name, value]) => {
+      const x = Number(value?.x);
+      const y = Number(value?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      absPoints[name] = {
+        x: centerX + (x * scale),
+        y: centerY + (y * scale),
+      };
+      visByName[name] = Number.isFinite(Number(value?.visibility)) ? Number(value?.visibility) : 1.0;
+    });
+
+    return {
+      meta: { scale, center: [centerX, centerY] },
+      absPoints,
+      visibility: visByName,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clamp01(value) {
+  return Math.min(1, Math.max(0, Number(value) || 0));
+}
+
+function editableJsonFromState(state) {
+  const points = {};
+  const centerX = Number(state?.meta?.center?.[0] || 0);
+  const centerY = Number(state?.meta?.center?.[1] || 0);
+  const scale = Number(state?.meta?.scale || 0);
+  if (!Number.isFinite(scale) || scale <= 0) return null;
+
+  Object.entries(state.absPoints || {}).forEach(([name, p]) => {
+    const xAbs = Number(p?.x);
+    const yAbs = Number(p?.y);
+    if (!Number.isFinite(xAbs) || !Number.isFinite(yAbs)) return;
+    points[name] = {
+      x: (xAbs - centerX) / scale,
+      y: (yAbs - centerY) / scale,
+      visibility: Number.isFinite(Number(state.visibility?.[name])) ? Number(state.visibility[name]) : 1.0,
+    };
+  });
+
+  return JSON.stringify({
+    points,
+    meta: {
+      scale,
+      center: [centerX, centerY],
+    },
+  });
+}
+
+function defaultReferenceAbsPoints() {
+  return {
+    left_shoulder: { x: 0.40, y: 0.30 },
+    right_shoulder: { x: 0.60, y: 0.30 },
+    left_elbow: { x: 0.37, y: 0.43 },
+    right_elbow: { x: 0.63, y: 0.43 },
+    left_wrist: { x: 0.36, y: 0.56 },
+    right_wrist: { x: 0.64, y: 0.56 },
+    left_hip: { x: 0.45, y: 0.55 },
+    right_hip: { x: 0.55, y: 0.55 },
+    left_knee: { x: 0.44, y: 0.75 },
+    right_knee: { x: 0.56, y: 0.75 },
+    left_ankle: { x: 0.43, y: 0.92 },
+    right_ankle: { x: 0.57, y: 0.92 },
+  };
+}
+
+function rearReferenceAbsPoints() {
+  const front = defaultReferenceAbsPoints();
+  return {
+    left_shoulder: front.right_shoulder,
+    right_shoulder: front.left_shoulder,
+    left_elbow: front.right_elbow,
+    right_elbow: front.left_elbow,
+    left_wrist: front.right_wrist,
+    right_wrist: front.left_wrist,
+    left_hip: front.right_hip,
+    right_hip: front.left_hip,
+    left_knee: front.right_knee,
+    right_knee: front.left_knee,
+    left_ankle: front.right_ankle,
+    right_ankle: front.left_ankle,
+  };
+}
+
+function defaultReferenceJson(variant = "front") {
+  const center = [0.5, 0.5];
+  const scale = 0.24;
+  const abs = variant === "rear" ? rearReferenceAbsPoints() : defaultReferenceAbsPoints();
+
+  const points = {};
+  Object.entries(abs).forEach(([name, p]) => {
+    points[name] = {
+      x: (p.x - center[0]) / scale,
+      y: (p.y - center[1]) / scale,
+      visibility: 1.0,
+    };
+  });
+
+  return JSON.stringify({
+    points,
+    meta: {
+      scale,
+      center,
+    },
+  });
+}
+
+function skeletonOverlaySvg(referenceJson) {
+  const points = referencePointsFromJson(referenceJson);
+  if (!points) return "";
+
+  const lines = SKELETON_EDGES
+    .map(([a, b]) => {
+      const pa = points[a];
+      const pb = points[b];
+      if (!pa || !pb) return "";
+      return `<line data-edge-a="${a}" data-edge-b="${b}" x1="${clamp01(pa.x)}" y1="${clamp01(pa.y)}" x2="${clamp01(pb.x)}" y2="${clamp01(pb.y)}" />`;
+    })
+    .join("");
+
+  const circles = Object.entries(points)
+    .map(([name, p]) => `<circle data-point-name="${name}" cx="${clamp01(p.x)}" cy="${clamp01(p.y)}" r="0.012" />`)
+    .join("");
+
+  if (!lines && !circles) return "";
+  return `<svg class="pm-overlay" viewBox="0 0 1 1" preserveAspectRatio="none">${lines}${circles}</svg>`;
+}
+
 function cardHtml(item) {
+  const referenceActive = Boolean(item.reference_pose_available);
+  const referenceLabel = referenceActive ? "Aktiv" : "Inaktiv";
+  const referenceClass = referenceActive ? "pm-reference-active" : "pm-reference-inactive";
+  const toggleText = referenceActive ? "Landmark-Erkennung deaktivieren" : "Landmark-Erkennung aktivieren";
+  const toggleEnabled = referenceActive ? "false" : "true";
+  const overlay = referenceActive ? skeletonOverlaySvg(item.reference_landmarks_json) : "";
   return `
-    <article class="pm-card" data-id="${item.id}" data-image-url="${esc(item.image_url || "")}">
+    <article class="pm-card" data-id="${item.id}" data-image-url="${esc(item.image_url || "")}" data-reference-json="${esc(item.reference_landmarks_json || "")}">
       <div class="pm-view">
         <h3 class="pm-title">${esc(item.title)}</h3>
-        ${item.image_url ? `<img class="pm-image" src="${esc(item.image_url)}" alt="Posture" />` : ""}
+        ${item.image_url ? `<div class="pm-image-wrap"><img class="pm-image" src="${esc(item.image_url)}" alt="Posture" />${overlay}</div>` : ""}
         <p class="pm-meta">Key: ${esc(item.posture_key)} · Sort: ${item.sort_order} · Target: ${item.target_seconds}s · Aktiv: ${item.is_active ? "Ja" : "Nein"}</p>
+        <p class="pm-meta">Referenz-Landmark-Skelett: <strong class="${referenceClass}">${referenceLabel}</strong></p>
         <p class="pm-meta">Instruktion: ${esc(item.instruction || "-")}</p>
         <div class="pm-actions">
           <button type="button" class="ghost js-edit">Bearbeiten</button>
+          <button type="button" class="ghost js-reference-toggle" data-enabled="${toggleEnabled}">${toggleText}</button>
+          <button type="button" class="ghost js-reference-refresh">Landmark-Skelett neu berechnen</button>
+          ${!referenceActive ? '<button type="button" class="ghost js-skeleton-seed-front">Front-Standard setzen</button>' : ''}
+          ${!referenceActive ? '<button type="button" class="ghost js-skeleton-seed-rear">Rueckansicht-Standard setzen</button>' : ''}
+          ${referenceActive ? '<button type="button" class="ghost js-skeleton-edit">Skelettpunkte bearbeiten</button>' : ''}
+          ${referenceActive ? '<button type="button" class="ghost pm-skeleton-save js-skeleton-save">Skelett speichern</button>' : ''}
+          ${referenceActive ? '<button type="button" class="ghost pm-skeleton-cancel js-skeleton-cancel">Bearbeitung abbrechen</button>' : ''}
+          <input class="js-reference-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" />
+          <button type="button" class="ghost js-reference-upload">Eigenes Referenzbild setzen</button>
           <button type="button" class="warn js-delete">Loeschen</button>
         </div>
       </div>
@@ -254,11 +507,38 @@ function renderCards(list) {
   items = Array.isArray(list) ? list : [];
   const root = document.getElementById("pm-grid");
   root.innerHTML = [...items.map((it) => cardHtml(it)), newCardHtml()].join("");
+  syncOverlaySizing();
+}
+
+function syncOverlaySizing() {
+  document.querySelectorAll("#pm-grid .pm-card").forEach((card) => {
+    const wrap = card.querySelector(".pm-image-wrap");
+    const img = card.querySelector(".pm-image");
+    const overlay = card.querySelector(".pm-overlay");
+    if (!(wrap instanceof HTMLElement)) return;
+    if (!(img instanceof HTMLImageElement)) return;
+    if (!(overlay instanceof SVGElement)) return;
+
+    const apply = () => {
+      const w = Math.max(1, img.clientWidth || 0);
+      const h = Math.max(1, img.clientHeight || 0);
+      wrap.style.width = `${w}px`;
+      wrap.style.height = `${h}px`;
+      overlay.style.width = `${w}px`;
+      overlay.style.height = `${h}px`;
+    };
+
+    if (img.complete) {
+      apply();
+    } else {
+      img.addEventListener("load", apply, { once: true });
+    }
+  });
 }
 
 async function loadItems() {
   try {
-    const data = await api(`/api/games/modules/${MODULE_KEY}/postures`);
+    const data = await api(`/api/inventory/postures/modules/${MODULE_KEY}`);
     renderCards(data.items || []);
   } catch (err) {
     setMsg(`Fehler beim Laden: ${err.message}`, true);
@@ -280,7 +560,7 @@ async function uploadForCard(card) {
   const form = new FormData();
   form.append("file", file, file.name);
   try {
-    const result = await api(`/api/games/modules/${MODULE_KEY}/postures/upload-image`, {
+    const result = await api(`/api/inventory/postures/modules/${MODULE_KEY}/upload-image`, {
       method: "POST",
       body: form,
     });
@@ -311,7 +591,7 @@ async function saveCard(card) {
   const isNew = !id || id === "new";
   try {
     await api(
-      isNew ? `/api/games/modules/${MODULE_KEY}/postures` : `/api/games/modules/${MODULE_KEY}/postures/${id}`,
+      isNew ? `/api/inventory/postures/modules/${MODULE_KEY}` : `/api/inventory/postures/modules/${MODULE_KEY}/${id}`,
       {
         method: isNew ? "POST" : "PUT",
         headers: { "Content-Type": "application/json" },
@@ -330,11 +610,237 @@ async function removeCard(card) {
   if (!id) return;
   if (!confirm("Posture wirklich loeschen?")) return;
   try {
-    await api(`/api/games/modules/${MODULE_KEY}/postures/${id}`, { method: "DELETE" });
+    await api(`/api/inventory/postures/modules/${MODULE_KEY}/${id}`, { method: "DELETE" });
     setMsg("Posture geloescht.");
     await loadItems();
   } catch (err) {
     setCardStatus(card, `Loeschen fehlgeschlagen: ${err.message}`, true);
+  }
+}
+
+async function updateReferencePose(card, enabled, refresh = false) {
+  const id = Number(card.dataset.id || 0);
+  if (!id) {
+    setCardStatus(card, "Bitte Posture zuerst speichern.", true);
+    return;
+  }
+  try {
+    await api(`/api/inventory/postures/modules/${MODULE_KEY}/${id}/reference-pose`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled, refresh }),
+    });
+    setMsg(enabled ? "Referenz-Landmark aktualisiert." : "Referenz-Landmark deaktiviert.");
+    await loadItems();
+  } catch (err) {
+    setCardStatus(card, `Landmark-Aktion fehlgeschlagen: ${err.message}`, true);
+  }
+}
+
+async function uploadReferencePoseForCard(card) {
+  const id = Number(card.dataset.id || 0);
+  if (!id) {
+    setCardStatus(card, "Bitte Posture zuerst speichern.", true);
+    return;
+  }
+  const input = card.querySelector(".js-reference-file");
+  const file = input?.files?.[0];
+  if (!file) {
+    setCardStatus(card, "Bitte Referenzbild auswaehlen.", true);
+    return;
+  }
+
+  const form = new FormData();
+  form.append("file", file, file.name);
+  try {
+    await api(`/api/inventory/postures/modules/${MODULE_KEY}/${id}/reference-pose/upload-image`, {
+      method: "POST",
+      body: form,
+    });
+    setMsg("Eigenes Referenzbild uebernommen und Landmark-Skelett aktiviert.");
+    await loadItems();
+  } catch (err) {
+    setCardStatus(card, `Referenzbild fehlgeschlagen: ${err.message}`, true);
+  }
+}
+
+function updateOverlayGeometry(svg, absPoints) {
+  if (!(svg instanceof SVGElement)) return;
+  const points = absPoints || {};
+  svg.querySelectorAll("line[data-edge-a][data-edge-b]").forEach((line) => {
+    const a = line.getAttribute("data-edge-a") || "";
+    const b = line.getAttribute("data-edge-b") || "";
+    const pa = points[a];
+    const pb = points[b];
+    if (!pa || !pb) {
+      line.setAttribute("visibility", "hidden");
+      return;
+    }
+    line.setAttribute("visibility", "visible");
+    line.setAttribute("x1", `${clamp01(pa.x)}`);
+    line.setAttribute("y1", `${clamp01(pa.y)}`);
+    line.setAttribute("x2", `${clamp01(pb.x)}`);
+    line.setAttribute("y2", `${clamp01(pb.y)}`);
+  });
+
+  svg.querySelectorAll("circle[data-point-name]").forEach((circle) => {
+    const name = circle.getAttribute("data-point-name") || "";
+    const p = points[name];
+    if (!p) {
+      circle.setAttribute("visibility", "hidden");
+      return;
+    }
+    circle.setAttribute("visibility", "visible");
+    circle.setAttribute("cx", `${clamp01(p.x)}`);
+    circle.setAttribute("cy", `${clamp01(p.y)}`);
+  });
+}
+
+function attachSkeletonDrag(card, state) {
+  const overlay = card.querySelector(".pm-overlay");
+  if (!(overlay instanceof SVGElement)) return;
+  overlay.classList.add("is-editable");
+
+  let draggingName = null;
+  let activeCircle = null;
+
+  const movePointFromEvent = (event) => {
+    if (!draggingName) return;
+    const rect = overlay.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const x = clamp01((event.clientX - rect.left) / rect.width);
+    const y = clamp01((event.clientY - rect.top) / rect.height);
+    state.absPoints[draggingName] = { x, y };
+    updateOverlayGeometry(overlay, state.absPoints);
+  };
+
+  const stopDrag = () => {
+    if (activeCircle) {
+      activeCircle.classList.remove("is-dragging");
+    }
+    activeCircle = null;
+    draggingName = null;
+    window.removeEventListener("pointermove", movePointFromEvent);
+    window.removeEventListener("pointerup", stopDrag);
+  };
+
+  overlay.querySelectorAll("circle[data-point-name]").forEach((circle) => {
+    circle.addEventListener("pointerdown", (event) => {
+      const pointName = circle.getAttribute("data-point-name") || "";
+      if (!pointName) return;
+      draggingName = pointName;
+      activeCircle = circle;
+      circle.classList.add("is-dragging");
+      window.addEventListener("pointermove", movePointFromEvent);
+      window.addEventListener("pointerup", stopDrag, { once: true });
+      event.preventDefault();
+      event.stopPropagation();
+    });
+  });
+}
+
+function beginSkeletonEdit(card) {
+  const id = Number(card.dataset.id || 0);
+  if (!id) return;
+  const raw = card.dataset.referenceJson || "";
+  const model = referenceModelFromJson(raw);
+  if (!model || !model.absPoints || !Object.keys(model.absPoints).length) {
+    setCardStatus(card, "Kein editierbares Landmark-Skelett vorhanden. Bitte zuerst Referenzbild setzen.", true);
+    return;
+  }
+
+  const state = {
+    id,
+    meta: model.meta,
+    absPoints: { ...model.absPoints },
+    visibility: { ...model.visibility },
+    originalJson: raw,
+  };
+  skeletonEditStateById.set(id, state);
+  card.classList.add("pm-skeleton-editing");
+  const overlay = card.querySelector(".pm-overlay");
+  if (overlay instanceof SVGElement) {
+    updateOverlayGeometry(overlay, state.absPoints);
+  }
+  attachSkeletonDrag(card, state);
+  setCardStatus(card, "Punkte verschieben und danach auf 'Skelett speichern' klicken.", false);
+}
+
+function cancelSkeletonEdit(card) {
+  const id = Number(card.dataset.id || 0);
+  const state = skeletonEditStateById.get(id);
+  if (state) {
+    const overlay = card.querySelector(".pm-overlay");
+    if (overlay instanceof SVGElement) {
+      overlay.classList.remove("is-editable");
+      const original = referencePointsFromJson(state.originalJson) || {};
+      updateOverlayGeometry(overlay, original);
+    }
+  }
+  skeletonEditStateById.delete(id);
+  card.classList.remove("pm-skeleton-editing");
+  setCardStatus(card, "Bearbeitung verworfen.", false);
+}
+
+async function saveSkeletonEdit(card) {
+  const id = Number(card.dataset.id || 0);
+  const state = skeletonEditStateById.get(id);
+  if (!id || !state) {
+    setCardStatus(card, "Keine aktive Skelett-Bearbeitung gefunden.", true);
+    return;
+  }
+  const nextJson = editableJsonFromState(state);
+  if (!nextJson) {
+    setCardStatus(card, "Skelettdaten ungueltig und konnten nicht gespeichert werden.", true);
+    return;
+  }
+
+  try {
+    await api(`/api/inventory/postures/modules/${MODULE_KEY}/${id}/reference-pose/manual`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reference_landmarks_json: nextJson }),
+    });
+    setMsg("Landmark-Skelett gespeichert.");
+    skeletonEditStateById.delete(id);
+    card.classList.remove("pm-skeleton-editing");
+    await loadItems();
+  } catch (err) {
+    setCardStatus(card, `Skelett speichern fehlgeschlagen: ${err.message}`, true);
+  }
+}
+
+async function seedDefaultSkeleton(card, variant = "front") {
+  const id = Number(card.dataset.id || 0);
+  if (!id) {
+    setCardStatus(card, "Bitte Posture zuerst speichern.", true);
+    return;
+  }
+
+  // First try a real auto-fit from the current posture image (no upload needed).
+  try {
+    await api(`/api/inventory/postures/modules/${MODULE_KEY}/${id}/reference-pose`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: true, refresh: true }),
+    });
+    setMsg("Skelett automatisch auf dem aktuellen Bild erzeugt.");
+    await loadItems();
+    return;
+  } catch {
+    // Fallback to default scaffold when auto-detection is not possible for this image.
+  }
+
+  try {
+    await api(`/api/inventory/postures/modules/${MODULE_KEY}/${id}/reference-pose/manual`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reference_landmarks_json: defaultReferenceJson(variant) }),
+    });
+    setMsg(`${variant === "rear" ? "Rueckansicht" : "Front"}-Standard gesetzt (Auto-Fit war fuer dieses Bild nicht moeglich).`);
+    await loadItems();
+  } catch (err) {
+    setCardStatus(card, `Standard-Skelett fehlgeschlagen: ${err.message}`, true);
   }
 }
 
@@ -351,7 +857,7 @@ function triggerDownload(blob, filename) {
 
 async function exportZip() {
   try {
-    const res = await fetch(`/api/games/modules/${MODULE_KEY}/postures/export`);
+    const res = await fetch(`/api/inventory/postures/modules/${MODULE_KEY}/export`);
     if (!res.ok) {
       const payload = await res.json().catch(() => ({}));
       throw new Error(payload.detail || res.statusText || "Export fehlgeschlagen");
@@ -378,7 +884,7 @@ async function importZip() {
   const form = new FormData();
   form.append("file", file, file.name);
   try {
-    const result = await api(`/api/games/modules/${MODULE_KEY}/postures/import-zip`, {
+    const result = await api(`/api/inventory/postures/modules/${MODULE_KEY}/import-zip`, {
       method: "POST",
       body: form,
     });
@@ -415,6 +921,39 @@ document.getElementById("pm-grid")?.addEventListener("click", async (event) => {
   }
   if (btn.classList.contains("js-delete")) {
     await removeCard(card);
+    return;
+  }
+  if (btn.classList.contains("js-reference-toggle")) {
+    const enabled = String(btn.dataset.enabled || "false") === "true";
+    await updateReferencePose(card, enabled, false);
+    return;
+  }
+  if (btn.classList.contains("js-reference-refresh")) {
+    await updateReferencePose(card, true, true);
+    return;
+  }
+  if (btn.classList.contains("js-skeleton-seed-front")) {
+    await seedDefaultSkeleton(card, "front");
+    return;
+  }
+  if (btn.classList.contains("js-skeleton-seed-rear")) {
+    await seedDefaultSkeleton(card, "rear");
+    return;
+  }
+  if (btn.classList.contains("js-skeleton-edit")) {
+    beginSkeletonEdit(card);
+    return;
+  }
+  if (btn.classList.contains("js-skeleton-cancel")) {
+    cancelSkeletonEdit(card);
+    return;
+  }
+  if (btn.classList.contains("js-skeleton-save")) {
+    await saveSkeletonEdit(card);
+    return;
+  }
+  if (btn.classList.contains("js-reference-upload")) {
+    await uploadReferencePoseForCard(card);
   }
 });
 
@@ -424,5 +963,7 @@ document.getElementById("pm-import")?.addEventListener("click", importZip);
 loadModules()
   .then(() => loadItems())
   .catch((err) => setMsg(`Initialisierung fehlgeschlagen: ${err.message}`, true));
+
+window.addEventListener("resize", syncOverlaySizing);
 </script>
 {% endblock %}

@@ -2,6 +2,7 @@ import io
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
 import zipfile
@@ -84,7 +85,7 @@ def test_start_game_run_with_dont_move_module():
         payload = resp.json()
         assert payload["module_key"] == "dont_move"
         assert payload["status"] == "active"
-        assert payload["transition_seconds"] == 0
+        assert payload["transition_seconds"] == 5
         assert payload["max_misses_before_penalty"] == 1
         assert payload["current_step"] is not None
         assert int(payload["current_step"]["raw_target_seconds"]) == 8 * 60
@@ -126,10 +127,61 @@ def test_start_game_run_with_tiptoeing_module():
         payload = resp.json()
         assert payload["module_key"] == "tiptoeing"
         assert payload["status"] == "active"
-        assert payload["transition_seconds"] == 0
+        assert payload["transition_seconds"] == 5
         assert payload["max_misses_before_penalty"] == 1
         assert payload["current_step"] is not None
         assert int(payload["current_step"]["raw_target_seconds"]) == 6 * 60
+
+
+def test_strict_module_accepts_custom_start_countdown_seconds():
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+
+        resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "dont_move",
+                "difficulty": "medium",
+                "duration_minutes": 8,
+                "start_countdown_seconds": 9,
+                "max_misses_before_penalty": 2,
+                "session_penalty_seconds": 90,
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["transition_seconds"] == 9
+
+
+def test_strict_module_uses_admin_configured_start_countdown_by_default():
+    with TestClient(app) as client:
+        _register_admin(client)
+
+        saved = client.put(
+            "/api/games/settings/global",
+            json={
+                "easy_target_multiplier": 0.75,
+                "hard_target_multiplier": 1.5,
+                "target_randomization_percent": 10,
+                "start_countdown_seconds": 11,
+            },
+        )
+        assert saved.status_code == 200
+        assert saved.json()["start_countdown_seconds"] == 11
+
+        session_id = _create_and_sign(client)
+        resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "dont_move",
+                "difficulty": "medium",
+                "duration_minutes": 8,
+                "max_misses_before_penalty": 2,
+                "session_penalty_seconds": 90,
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["transition_seconds"] == 11
 
 
 def test_posture_allowed_module_keys_roundtrip():
@@ -189,7 +241,7 @@ def test_posture_matrix_bulk_update_endpoint():
         posture_id = int(create_resp.json()["id"])
 
         update_resp = client.put(
-            "/api/games/postures/matrix",
+            "/api/inventory/postures/matrix",
             json={
                 "items": [
                     {
@@ -202,7 +254,7 @@ def test_posture_matrix_bulk_update_endpoint():
         assert update_resp.status_code == 200
         assert int(update_resp.json().get("updated", 0)) >= 1
 
-        matrix_resp = client.get("/api/games/postures/matrix")
+        matrix_resp = client.get("/api/inventory/postures/matrix")
         assert matrix_resp.status_code == 200
         matrix_items = matrix_resp.json().get("items") or []
         target = next((item for item in matrix_items if int(item.get("id", 0)) == posture_id), None)
@@ -261,7 +313,7 @@ def test_posture_matrix_can_persist_empty_allowed_module_keys():
         posture_id = int(create_resp.json()["id"])
 
         update_resp = client.put(
-            "/api/games/postures/matrix",
+            "/api/inventory/postures/matrix",
             json={
                 "items": [
                     {
@@ -273,7 +325,7 @@ def test_posture_matrix_can_persist_empty_allowed_module_keys():
         )
         assert update_resp.status_code == 200
 
-        matrix_resp = client.get("/api/games/postures/matrix")
+        matrix_resp = client.get("/api/inventory/postures/matrix")
         assert matrix_resp.status_code == 200
         matrix_items = matrix_resp.json().get("items") or []
         target = next((item for item in matrix_items if int(item.get("id", 0)) == posture_id), None)
@@ -621,6 +673,149 @@ def test_verify_step_with_photo_advances_or_retries():
         assert payload["step"]["status"] in {"passed", "failed"}
 
 
+def test_pose_similarity_suspicious_forces_verification_to_suspicious():
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 10,
+                "max_misses_before_penalty": 1,
+                "session_penalty_seconds": 60,
+            },
+        )
+        assert start.status_code == 200
+        run = start.json()
+        run_id = run["id"]
+        step_id = run["current_step"]["id"]
+
+        with patch("app.routers.games.analyze_verification", return_value=("confirmed", "AI confirmed")):
+            with patch(
+                "app.routers.games._evaluate_pose_similarity_for_step",
+                return_value=(
+                    "suspicious",
+                    "Pose-Score 58.0/100 (min 74.0)",
+                    {"score": 58.0, "threshold": 74.0},
+                ),
+            ):
+                verify = client.post(
+                    f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+                    files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                    data={"observed_posture": run["current_step"]["posture_name"]},
+                )
+        assert verify.status_code == 200
+        payload = verify.json()
+        assert payload["step"]["verification_status"] == "suspicious"
+        assert payload["step"]["pose_similarity_status"] == "suspicious"
+        assert payload["step"]["pose_similarity"]["score"] == 58.0
+
+
+def test_pose_similarity_result_is_exposed_in_verify_payload():
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 10,
+                "max_misses_before_penalty": 1,
+                "session_penalty_seconds": 60,
+            },
+        )
+        assert start.status_code == 200
+        run = start.json()
+        run_id = run["id"]
+        step_id = run["current_step"]["id"]
+
+        with patch("app.routers.games.analyze_verification", return_value=("confirmed", "AI confirmed")):
+            with patch(
+                "app.routers.games._evaluate_pose_similarity_for_step",
+                return_value=(
+                    "confirmed",
+                    "Pose-Score 88.5/100 (min 74.0)",
+                    {"score": 88.5, "threshold": 74.0},
+                ),
+            ):
+                verify = client.post(
+                    f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+                    files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                    data={"observed_posture": run["current_step"]["posture_name"]},
+                )
+        assert verify.status_code == 200
+        payload = verify.json()
+        assert payload["step"]["pose_similarity_status"] == "confirmed"
+        assert payload["step"]["pose_similarity"]["threshold"] == 74.0
+
+
+def test_pose_similarity_uses_module_configured_threshold():
+    with TestClient(app) as client:
+        _register_admin(client)
+
+        saved = client.put(
+            "/api/games/modules/posture_training/settings",
+            json={
+                "easy_target_multiplier": 0.75,
+                "hard_target_multiplier": 1.5,
+                "target_randomization_percent": 10,
+                "start_countdown_seconds": 7,
+                "movement_easy_pose_deviation": 0.4,
+                "movement_easy_stillness": 0.04,
+                "movement_medium_pose_deviation": 0.35,
+                "movement_medium_stillness": 0.03,
+                "movement_hard_pose_deviation": 0.225,
+                "movement_hard_stillness": 0.02,
+                "pose_similarity_min_score_easy": 70.0,
+                "pose_similarity_min_score_medium": 90.0,
+                "pose_similarity_min_score_hard": 95.0,
+            },
+        )
+        assert saved.status_code == 200
+        assert float(saved.json()["pose_similarity_min_score_medium"]) == 90.0
+
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 10,
+                "max_misses_before_penalty": 1,
+                "session_penalty_seconds": 60,
+            },
+        )
+        assert start.status_code == 200
+        run = start.json()
+        run_id = run["id"]
+        step_id = run["current_step"]["id"]
+
+        with patch("app.routers.games.analyze_verification", return_value=("confirmed", "AI confirmed")):
+            with patch("app.routers.games.pose_similarity_available", return_value=True):
+                with patch(
+                    "app.routers.games._lookup_posture_template_for_step",
+                    return_value=SimpleNamespace(reference_landmarks_json="{}"),
+                ):
+                    with patch(
+                        "app.routers.games.score_against_reference",
+                        return_value={"score": 88.0, "position_score": 88.0, "angle_score": 88.0},
+                    ):
+                        verify = client.post(
+                            f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+                            files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                            data={"observed_posture": run["current_step"]["posture_name"]},
+                        )
+
+        assert verify.status_code == 200
+        payload = verify.json()
+        assert payload["step"]["verification_status"] == "suspicious"
+        assert payload["step"]["pose_similarity_status"] == "suspicious"
+        assert payload["step"]["pose_similarity"]["threshold"] == 90.0
+
+
 def test_sample_only_verification_keeps_step_pending_when_confirmed():
     with TestClient(app) as client:
         _register_admin(client)
@@ -659,6 +854,52 @@ def test_sample_only_verification_keeps_step_pending_when_confirmed():
         assert run_after["status"] == "active"
         assert run_after["current_step"] is not None
         assert run_after["current_step"]["id"] == step_id
+
+
+def test_monitor_only_verification_keeps_step_pending_without_capture_on_confirmed_score():
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 10,
+                "max_misses_before_penalty": 1,
+                "session_penalty_seconds": 60,
+            },
+        )
+        assert start.status_code == 200
+        run = start.json()
+        run_id = run["id"]
+        step_id = run["current_step"]["id"]
+
+        with patch(
+            "app.routers.games._evaluate_pose_similarity_for_step",
+            return_value=(
+                "confirmed",
+                "Pose-Score 92.0/100 (min 80.0)",
+                {"score": 92.0, "threshold": 80.0},
+            ),
+        ):
+            verify = client.post(
+                f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+                files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                data={
+                    "observed_posture": run["current_step"]["posture_name"],
+                    "monitor_only": "true",
+                },
+            )
+
+        assert verify.status_code == 200
+        payload = verify.json()
+        assert payload["step"]["monitor_only"] is True
+        assert payload["step"]["sample_only"] is False
+        assert payload["step"]["status"] == "pending"
+        assert payload["step"]["finalized"] is False
+        assert payload["step"]["capture_path"] is None
+        assert payload["step"]["capture_url"] is None
 
 
 def test_failed_step_chain_appends_max_two_retries():
@@ -705,7 +946,7 @@ def test_failed_step_chain_appends_max_two_retries():
         assert retry_3 is None
 
 
-def test_game_verification_capture_is_saved_under_session_with_run_start_prefix():
+def test_game_verification_capture_is_saved_with_session_game_run_timestamp_name():
     with TestClient(app) as client:
         _register_admin(client)
         session_id = _create_and_sign(client)
@@ -736,7 +977,8 @@ def test_game_verification_capture_is_saved_under_session_with_run_start_prefix(
         path_parts = capture_path.split("/")
         assert len(path_parts) == 4
         filename = path_parts[3]
-        assert filename.startswith(f"{run_id}-")
+        assert filename.startswith(f"session{session_id}-game{run_id}-run")
+        assert "-" in filename
 
         full_path = Path(settings.media_dir) / capture_path
         assert full_path.is_file()
@@ -949,6 +1191,46 @@ def test_posture_management_crud_and_run_uses_managed_postures():
         deleted = client.delete(f"/api/games/modules/posture_training/postures/{posture_id}")
         assert deleted.status_code == 200
         assert deleted.json()["deleted"] == posture_id
+
+
+def test_manual_reference_landmark_update_endpoint_persists_json():
+    with TestClient(app) as client:
+        _register_admin(client)
+        created = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "title": "Manual Landmark Pose",
+                "posture_key": f"manual_landmark_{uuid4().hex[:8]}",
+                "image_url": "/static/img/postures/wall.jpg",
+                "instruction": "Manual landmark test",
+                "target_seconds": 60,
+                "sort_order": 3,
+                "is_active": True,
+            },
+        )
+        assert created.status_code == 200
+        posture_id = int(created.json()["id"])
+
+        manual_json = {
+            "points": {
+                "left_shoulder": {"x": -0.2, "y": -0.3, "visibility": 0.99},
+                "right_shoulder": {"x": 0.2, "y": -0.3, "visibility": 0.99},
+                "left_hip": {"x": -0.15, "y": 0.1, "visibility": 0.99},
+                "right_hip": {"x": 0.15, "y": 0.1, "visibility": 0.99},
+            },
+            "meta": {"scale": 0.4, "center": [0.5, 0.5]},
+        }
+
+        updated = client.put(
+            f"/api/games/modules/posture_training/postures/{posture_id}/reference-pose/manual",
+            json={"reference_landmarks_json": json.dumps(manual_json)},
+        )
+        assert updated.status_code == 200
+        body = updated.json()
+        assert body["reference_pose_available"] is True
+        parsed = json.loads(body["reference_landmarks_json"])
+        assert parsed["meta"]["scale"] == 0.4
+        assert "left_shoulder" in parsed["points"]
 
 
 def test_run_step_order_prioritizes_positive_sort_and_places_zero_at_end():
@@ -1409,12 +1691,27 @@ def test_sort_order_zero_is_allowed_and_used_for_run_steps():
 def test_module_settings_can_be_saved_and_used_for_run_start_defaults():
     with TestClient(app) as client:
         _register_admin(client)
+        global_saved = client.put(
+            "/api/games/settings/global",
+            json={
+                "easy_target_multiplier": 0.6,
+                "hard_target_multiplier": 1.4,
+                "target_randomization_percent": 0,
+                "start_countdown_seconds": 7,
+            },
+        )
+        assert global_saved.status_code == 200
+        assert global_saved.json()["easy_target_multiplier"] == 0.6
+        assert global_saved.json()["hard_target_multiplier"] == 1.4
+        assert global_saved.json()["target_randomization_percent"] == 0
+
         saved = client.put(
             "/api/games/modules/posture_training/settings",
             json={
                 "easy_target_multiplier": 0.6,
                 "hard_target_multiplier": 1.4,
                 "target_randomization_percent": 0,
+                "start_countdown_seconds": 7,
                 "movement_easy_pose_deviation": 0.2,
                 "movement_easy_stillness": 0.01,
                 "movement_medium_pose_deviation": 0.18,
@@ -1424,14 +1721,16 @@ def test_module_settings_can_be_saved_and_used_for_run_start_defaults():
             },
         )
         assert saved.status_code == 200
-        assert saved.json()["easy_target_multiplier"] == 0.6
-        assert saved.json()["hard_target_multiplier"] == 1.4
-        assert saved.json()["target_randomization_percent"] == 0
         assert float(saved.json()["movement_medium_stillness"]) == 0.008
+
+        global_read_back = client.get("/api/games/settings/global")
+        assert global_read_back.status_code == 200
+        assert global_read_back.json()["easy_target_multiplier"] == 0.6
+        assert global_read_back.json()["hard_target_multiplier"] == 1.4
+        assert global_read_back.json()["target_randomization_percent"] == 0
 
         read_back = client.get("/api/games/modules/posture_training/settings")
         assert read_back.status_code == 200
-        assert read_back.json()["easy_target_multiplier"] == 0.6
         assert float(read_back.json()["movement_easy_pose_deviation"]) == 0.2
         assert float(read_back.json()["movement_hard_stillness"]) == 0.006
 
