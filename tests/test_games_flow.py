@@ -1488,6 +1488,34 @@ def test_posture_zip_export_and_import_roundtrip_with_images():
         )
         assert create_a.status_code == 200
         assert create_b.status_code == 200
+        posture_a = create_a.json()
+        posture_b = create_b.json()
+
+        manual_reference = {
+            "points": {
+                "left_shoulder": {"x": -0.21, "y": -0.44, "visibility": 0.93},
+                "right_shoulder": {"x": 0.22, "y": -0.43, "visibility": 0.91},
+            },
+            "meta": {"center": [0.5, 0.5], "scale": 1.0},
+        }
+        manual_ref_saved = client.put(
+            f"/api/games/modules/posture_training/postures/{posture_a['id']}/reference-pose/manual",
+            json={"reference_landmarks_json": json.dumps(manual_reference, ensure_ascii=True)},
+        )
+        assert manual_ref_saved.status_code == 200
+
+        manual_reference_b = {
+            "points": {
+                "left_shoulder": {"x": -0.19, "y": -0.42, "visibility": 0.92},
+                "right_shoulder": {"x": 0.20, "y": -0.41, "visibility": 0.90},
+            },
+            "meta": {"center": [0.5, 0.5], "scale": 1.0},
+        }
+        manual_ref_saved_b = client.put(
+            f"/api/games/modules/posture_training/postures/{posture_b['id']}/reference-pose/manual",
+            json={"reference_landmarks_json": json.dumps(manual_reference_b, ensure_ascii=True)},
+        )
+        assert manual_ref_saved_b.status_code == 200
 
         exported = client.get("/api/games/modules/posture_training/postures/export")
         assert exported.status_code == 200
@@ -1500,6 +1528,9 @@ def test_posture_zip_export_and_import_roundtrip_with_images():
         assert manifest.get("format") == "chastease-postures-v1"
         assert len(manifest.get("postures") or []) == 2
         assert any(name.startswith("images/") for name in names)
+        by_key = {str(item.get("posture_key") or ""): item for item in (manifest.get("postures") or [])}
+        assert "reference_landmarks_json" in by_key.get(posture_a["posture_key"], {})
+        assert "reference_landmarks_json" in by_key.get(posture_b["posture_key"], {})
 
         listed_before = client.get("/api/games/modules/posture_training/postures")
         assert listed_before.status_code == 200
@@ -1526,6 +1557,9 @@ def test_posture_zip_export_and_import_roundtrip_with_images():
         assert "ZIP Export A" in titles
         assert "ZIP Export B" in titles
         assert all((item.get("image_url") or "").startswith("/api/media/") for item in items)
+        imported_by_title = {item["title"]: item for item in items}
+        assert imported_by_title["ZIP Export A"].get("reference_pose_available") is True
+        assert "left_shoulder" in (imported_by_title["ZIP Export A"].get("reference_landmarks_json") or "")
 
 
 def test_posture_zip_import_rejects_missing_local_image_file_reference():
@@ -1559,7 +1593,7 @@ def test_posture_zip_import_rejects_missing_local_image_file_reference():
         assert "lokale bild-url" in detail.lower()
 
 
-def test_posture_zip_import_sets_fallback_reference_skeleton_when_detection_returns_none(monkeypatch):
+def test_posture_zip_import_fails_when_detection_returns_none_and_no_reference_present(monkeypatch):
     from app.routers import games as games_router
 
     monkeypatch.setattr(games_router, "extract_reference_landmarks_json", lambda _: None)
@@ -1575,34 +1609,26 @@ def test_posture_zip_import_sets_fallback_reference_skeleton_when_detection_retu
                 "module_key": "posture_training",
                 "postures": [
                     {
-                        "posture_key": "fallback_ref",
-                        "title": "Fallback Ref",
+                        "posture_key": "no_ref",
+                        "title": "No Ref",
                         "instruction": "test",
                         "target_seconds": 90,
                         "sort_order": 1,
                         "is_active": True,
-                        "image_file": "images/fallback.jpg",
+                        "image_file": "images/no-ref.jpg",
                     }
                 ],
             }
             archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=True))
-            archive.writestr("images/fallback.jpg", img)
+            archive.writestr("images/no-ref.jpg", img)
 
         imported = client.post(
             "/api/games/modules/posture_training/postures/import-zip",
-            files={"file": ("fallback.zip", archive_io.getvalue(), "application/zip")},
+            files={"file": ("no-ref.zip", archive_io.getvalue(), "application/zip")},
         )
-        assert imported.status_code == 200
-
-        listed = client.get("/api/games/modules/posture_training/postures")
-        assert listed.status_code == 200
-        items = listed.json().get("items") or []
-        item = next((row for row in items if row.get("posture_key") == "fallback_ref"), None)
-        assert item is not None
-        assert item.get("reference_pose_available") is True
-        reference_json = item.get("reference_landmarks_json") or ""
-        assert "left_shoulder" in reference_json
-        assert "meta" in reference_json
+        assert imported.status_code == 422
+        detail = imported.json().get("detail") or ""
+        assert "no detectable pose landmarks" in detail.lower()
 
 
 def test_difficulty_uses_medium_baseline_target_with_multipliers():
