@@ -437,6 +437,43 @@ def _refresh_reference_landmarks(template: GamePostureTemplate, image_bytes: byt
     template.reference_landmarks_detected_at = datetime.now(timezone.utc)
 
 
+def _default_reference_landmarks_json() -> str:
+    center_x = 0.5
+    center_y = 0.5
+    scale = 0.24
+    abs_points = {
+        "left_shoulder": (0.40, 0.30),
+        "right_shoulder": (0.60, 0.30),
+        "left_elbow": (0.37, 0.43),
+        "right_elbow": (0.63, 0.43),
+        "left_wrist": (0.36, 0.56),
+        "right_wrist": (0.64, 0.56),
+        "left_hip": (0.45, 0.55),
+        "right_hip": (0.55, 0.55),
+        "left_knee": (0.44, 0.75),
+        "right_knee": (0.56, 0.75),
+        "left_ankle": (0.43, 0.92),
+        "right_ankle": (0.57, 0.92),
+    }
+    points = {}
+    for name, (x_abs, y_abs) in abs_points.items():
+        points[name] = {
+            "x": (x_abs - center_x) / scale,
+            "y": (y_abs - center_y) / scale,
+            "visibility": 1.0,
+        }
+    return json.dumps(
+        {
+            "points": points,
+            "meta": {
+                "scale": scale,
+                "center": [center_x, center_y],
+            },
+        },
+        ensure_ascii=True,
+    )
+
+
 def _lookup_posture_template_for_step(db: Session, run: GameRun, step: GameRunStep) -> GamePostureTemplate | None:
     pool_key = _posture_pool_module_key(run.module_key)
     return (
@@ -1503,6 +1540,9 @@ async def import_module_postures_zip(
             else:
                 reference_image_bytes = _try_load_posture_image_bytes_from_url(db, resolved_image_url)
             _refresh_reference_landmarks(template, reference_image_bytes)
+            if not template.reference_landmarks_json:
+                template.reference_landmarks_json = _default_reference_landmarks_json()
+                template.reference_landmarks_detected_at = datetime.now(timezone.utc)
             _set_allowed_module_keys(db, int(template.id), allowed_module_keys)
             imported += 1
 

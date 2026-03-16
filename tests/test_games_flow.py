@@ -1559,6 +1559,52 @@ def test_posture_zip_import_rejects_missing_local_image_file_reference():
         assert "lokale bild-url" in detail.lower()
 
 
+def test_posture_zip_import_sets_fallback_reference_skeleton_when_detection_returns_none(monkeypatch):
+    from app.routers import games as games_router
+
+    monkeypatch.setattr(games_router, "extract_reference_landmarks_json", lambda _: None)
+
+    with TestClient(app) as client:
+        _register_admin(client)
+
+        img = _ppm_bytes(768, 1024, rgb=(30, 90, 150))
+        archive_io = io.BytesIO()
+        with zipfile.ZipFile(archive_io, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+            manifest = {
+                "format": "chastease-postures-v1",
+                "module_key": "posture_training",
+                "postures": [
+                    {
+                        "posture_key": "fallback_ref",
+                        "title": "Fallback Ref",
+                        "instruction": "test",
+                        "target_seconds": 90,
+                        "sort_order": 1,
+                        "is_active": True,
+                        "image_file": "images/fallback.jpg",
+                    }
+                ],
+            }
+            archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=True))
+            archive.writestr("images/fallback.jpg", img)
+
+        imported = client.post(
+            "/api/games/modules/posture_training/postures/import-zip",
+            files={"file": ("fallback.zip", archive_io.getvalue(), "application/zip")},
+        )
+        assert imported.status_code == 200
+
+        listed = client.get("/api/games/modules/posture_training/postures")
+        assert listed.status_code == 200
+        items = listed.json().get("items") or []
+        item = next((row for row in items if row.get("posture_key") == "fallback_ref"), None)
+        assert item is not None
+        assert item.get("reference_pose_available") is True
+        reference_json = item.get("reference_landmarks_json") or ""
+        assert "left_shoulder" in reference_json
+        assert "meta" in reference_json
+
+
 def test_difficulty_uses_medium_baseline_target_with_multipliers():
     with TestClient(app) as client:
         _register_admin(client)
