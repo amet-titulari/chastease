@@ -182,6 +182,7 @@
 - [x] Max-Misses-Regel mit Session-Penalty und Abschlussbericht
 
 ### v0.3.1 API Anpassungen
+- [ ] Namensgebung bei Kontroll- und Spielverifikationsbilder auf SessionID-GameID-RunNumber-yyyymmtt-hhmm
 - [ ] Hygiene-Öffnung Anzeigen wann nächste Öffnung erlaubt wenn aktuel Kontingent Tag/Woche/Monat ausgeschöpft ist
 - [ ] eigenes Modul für Postures im Inventar (z.B. /api/inventory/postures
 - [ ] Posture-Matrix in Inventar-Modul Posture verschieben
