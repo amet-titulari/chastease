@@ -1593,7 +1593,7 @@ def test_posture_zip_import_rejects_missing_local_image_file_reference():
         assert "lokale bild-url" in detail.lower()
 
 
-def test_posture_zip_import_fails_when_detection_returns_none_and_no_reference_present(monkeypatch):
+def test_posture_zip_import_reports_missing_reference_when_detection_returns_none(monkeypatch):
     from app.routers import games as games_router
 
     monkeypatch.setattr(games_router, "extract_reference_landmarks_json", lambda _: None)
@@ -1626,9 +1626,19 @@ def test_posture_zip_import_fails_when_detection_returns_none_and_no_reference_p
             "/api/games/modules/posture_training/postures/import-zip",
             files={"file": ("no-ref.zip", archive_io.getvalue(), "application/zip")},
         )
-        assert imported.status_code == 422
-        detail = imported.json().get("detail") or ""
-        assert "no detectable pose landmarks" in detail.lower()
+        assert imported.status_code == 200
+        body = imported.json()
+        assert body.get("imported") == 1
+        assert body.get("generated_reference_count") == 0
+        assert body.get("missing_reference_count") == 1
+
+        listed = client.get("/api/games/modules/posture_training/postures")
+        assert listed.status_code == 200
+        items = listed.json().get("items") or []
+        item = next((row for row in items if row.get("posture_key") == "no_ref"), None)
+        assert item is not None
+        assert item.get("reference_pose_available") is False
+        assert item.get("reference_landmarks_json") is None
 
 
 def test_difficulty_uses_medium_baseline_target_with_multipliers():

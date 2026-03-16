@@ -1434,6 +1434,8 @@ async def import_module_postures_zip(
         )
 
         imported = 0
+        generated_reference_count = 0
+        missing_reference_count = 0
         for idx, item in enumerate(items, start=1):
             if not isinstance(item, dict):
                 raise HTTPException(status_code=422, detail=f"Posture entry #{idx} is invalid")
@@ -1551,14 +1553,10 @@ async def import_module_postures_zip(
                 template.reference_landmarks_detected_at = datetime.now(timezone.utc)
             else:
                 _refresh_reference_landmarks(template, reference_image_bytes)
-                if not template.reference_landmarks_json:
-                    raise HTTPException(
-                        status_code=422,
-                        detail=(
-                            f"Posture entry #{idx} has no detectable pose landmarks. "
-                            "Please provide a clearer full-body image or include reference_landmarks_json in the ZIP manifest."
-                        ),
-                    )
+                if template.reference_landmarks_json:
+                    generated_reference_count += 1
+                else:
+                    missing_reference_count += 1
             _set_allowed_module_keys(db, int(template.id), allowed_module_keys)
             imported += 1
 
@@ -1596,8 +1594,15 @@ async def import_module_postures_zip(
         module_key=module_key,
         imported=imported,
         replaced=replaced,
+        generated_reference_count=generated_reference_count,
+        missing_reference_count=missing_reference_count,
     )
-    return {"imported": imported, "replaced": replaced}
+    return {
+        "imported": imported,
+        "replaced": replaced,
+        "generated_reference_count": generated_reference_count,
+        "missing_reference_count": missing_reference_count,
+    }
 
 
 @router.post("/modules/{module_key}/postures")
