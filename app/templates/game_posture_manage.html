@@ -565,8 +565,7 @@ async function uploadForCard(card) {
       body: form,
     });
     card.dataset.imageUrl = result.content_url;
-    setCardStatus(card, "Bild hochgeladen.");
-    await loadItems();
+    setCardStatus(card, "Bild hochgeladen. Jetzt auf Speichern/Anlegen klicken.");
   } catch (err) {
     setCardStatus(card, `Bild-Upload fehlgeschlagen: ${err.message}`, true);
   }
