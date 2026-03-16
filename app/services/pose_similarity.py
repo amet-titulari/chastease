@@ -16,6 +16,10 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 os.environ.setdefault("GLOG_minloglevel", "2")
 os.environ.setdefault("ABSL_MIN_LOG_LEVEL", "2")
 os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
+# On headless Linux (Docker), MediaPipe needs Mesa/EGL.  Force software
+# rendering so it works even when no GPU device node is present.
+os.environ.setdefault("MESA_GL_VERSION_OVERRIDE", "4.1")
+os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
 
 try:
     import mediapipe as mp  # type: ignore
