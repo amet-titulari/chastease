@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta, timezone
 import io
 import json
+import logging
 import mimetypes
 from pathlib import Path
 import random
 import re
+import sys
+import traceback
 import zipfile
 from uuid import uuid4
 
@@ -32,6 +35,7 @@ from app.services.pose_similarity import extract_reference_landmarks_json, pose_
 from app.services.verification_analysis import analyze_verification
 
 router = APIRouter(prefix="/api/games", tags=["games"])
+logger = logging.getLogger(__name__)
 
 ALLOWED_IMAGE_MIME_TYPES = {
     "image/jpeg": ".jpg",
@@ -356,16 +360,8 @@ def _process_posture_image(raw: bytes, filename: str | None, content_type: str |
     except (UnidentifiedImageError, OSError):
         raise HTTPException(status_code=415, detail="Uploaded image cannot be decoded")
 
-    if image.width < POSTURE_MIN_WIDTH or image.height < POSTURE_MIN_HEIGHT:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Image resolution too small. "
-                f"Minimum is {POSTURE_MIN_WIDTH}x{POSTURE_MIN_HEIGHT}px."
-            ),
-        )
-
     # Normalize all posture images to a consistent portrait format.
+    # Smaller images are upscaled to keep admin UX simple and predictable.
     normalized = ImageOps.fit(
         image.convert("RGB"),
         POSTURE_TARGET_SIZE,
@@ -1517,6 +1513,26 @@ async def import_module_postures_zip(
     except ValueError:
         db.rollback()
         raise HTTPException(status_code=422, detail="ZIP contains invalid numeric posture fields")
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "Unexpected failure while importing posture ZIP",
+            extra={
+                "module_key": module_key,
+                "upload_filename": file.filename,
+                "upload_content_type": file.content_type,
+                "zip_size_bytes": len(raw_zip),
+                "items_count": len(items),
+            },
+            exc_info=exc,
+        )
+        print(
+            f"[posture_import_error] module_key={module_key} file={file.filename} content_type={file.content_type}",
+            file=sys.stderr,
+            flush=True,
+        )
+        traceback.print_exception(type(exc), exc, exc.__traceback__, file=sys.stderr)
+        raise
 
     audit_log(
         "admin_game_postures_imported",

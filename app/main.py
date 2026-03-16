@@ -1,6 +1,9 @@
 from pathlib import Path
 from contextlib import asynccontextmanager
 from uuid import uuid4
+import logging
+import sys
+import traceback
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from alembic import command
@@ -43,6 +46,7 @@ from app.services.task_sweeper import sweep_overdue_tasks_for_active_sessions
 
 
 scheduler: BackgroundScheduler | None = None
+logger = logging.getLogger("uvicorn.error")
 
 
 @asynccontextmanager
@@ -129,7 +133,10 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError):
 
 
 @app.exception_handler(Exception)
-async def unexpected_exception_handler(_: Request, exc: Exception):
+async def unexpected_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path, exc_info=exc)
+    print(f"[internal_error] {request.method} {request.url.path}", file=sys.stderr, flush=True)
+    traceback.print_exception(type(exc), exc, exc.__traceback__, file=sys.stderr)
     if settings.debug:
         return _error_response(
             status_code=500,

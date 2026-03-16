@@ -1392,7 +1392,7 @@ def test_upload_posture_image_returns_content_url():
         assert payload["content_url"].startswith("/api/media/")
 
 
-def test_upload_posture_image_rejects_too_small_resolution():
+def test_upload_posture_image_accepts_small_resolution():
     with TestClient(app) as client:
         _register_admin(client)
         small = _ppm_bytes(320, 480)
@@ -1400,8 +1400,10 @@ def test_upload_posture_image_rejects_too_small_resolution():
             "/api/games/modules/posture_training/postures/upload-image",
             files={"file": ("small.jpg", small, "image/jpeg")},
         )
-        assert uploaded.status_code == 422
-        assert "resolution too small" in (uploaded.json().get("detail") or "").lower()
+        assert uploaded.status_code == 200
+        payload = uploaded.json()
+        assert payload["media_kind"] == "game_posture"
+        assert payload["content_url"].startswith("/api/media/")
 
 
 def test_uploaded_posture_image_url_can_be_persisted_on_posture():
