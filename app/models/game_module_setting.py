@@ -21,5 +21,6 @@ class GameModuleSetting(Base):
     pose_similarity_min_score_easy = Column(Float, nullable=True)
     pose_similarity_min_score_medium = Column(Float, nullable=True)
     pose_similarity_min_score_hard = Column(Float, nullable=True)
+    mask_image_url = Column(String(512), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

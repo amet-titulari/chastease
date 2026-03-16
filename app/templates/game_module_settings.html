@@ -81,6 +81,11 @@
     align-items: end;
   }
   .gms-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+  .gms-mask-section { margin-top: 1.2rem; padding: 1rem; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); }
+  .gms-mask-section h4 { margin: 0 0 0.4rem 0; font-size: 1rem; }
+  .gms-mask-row { display: flex; align-items: center; gap: 1.2rem; margin-top: 0.6rem; flex-wrap: wrap; }
+  .gms-mask-thumb { max-width: 160px; max-height: 220px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #111; object-fit: contain; }
+  .gms-mask-upload { display: flex; flex-direction: column; gap: 0.5rem; }
   .gms-default-label {
     margin: 0;
     padding: 0.4rem 0.5rem;
@@ -401,6 +406,12 @@ async function loadModuleSettings(moduleKey) {
   const data = await api(`/api/games/modules/${moduleKey}/settings`);
   applyMovementFields(moduleKey, data || {});
   applyPoseSimilarityFields(moduleKey, data || {});
+  const slug = slugKey(moduleKey);
+  const maskPreview = document.getElementById(`gms-mask-preview-${slug}`);
+  if (maskPreview instanceof HTMLImageElement) {
+    const maskUrl = data?.mask_image_url || "/static/masks/tiptoeing-mask.png";
+    maskPreview.src = maskUrl;
+  }
 }
 
 function movementPayloadFromInputs(moduleKey) {
@@ -574,6 +585,20 @@ function moduleCardHtml(module) {
         </div>
       </div>
       ${helpBlock}
+      ${key === "tiptoeing" ? `
+      <div class="gms-mask-section">
+        <h4>Masken-Bild</h4>
+        <p class="gms-note">Gruene Bereiche = erlaubt, schwarze Bereiche = verboten. PNG oder JPG mit deutlichen Farben hochladen.</p>
+        <div class="gms-mask-row">
+          <img id="gms-mask-preview-${slug}" class="gms-mask-thumb" alt="Aktuelle Maske" />
+          <div class="gms-mask-upload">
+            <input type="file" id="gms-mask-file-${slug}" accept="image/png,image/jpeg,image/webp" />
+            <button type="button" class="ghost gms-upload-mask-btn" data-module-key="${key}">Maske hochladen</button>
+          </div>
+        </div>
+        <p id="gms-mask-msg-${slug}" class="gms-status"></p>
+      </div>
+      ` : ""}
       <div class="gms-actions">
         <button type="button" class="gms-save-module" data-module-key="${key}">Modul speichern</button>
       </div>
@@ -610,8 +635,43 @@ document.getElementById("gms-module-cards")?.addEventListener("click", (event) =
     const moduleKey = String(saveBtn.dataset.moduleKey || "");
     if (!moduleKey) return;
     saveModuleSettings(moduleKey).catch((err) => setModuleMsg(moduleKey, `Speichern fehlgeschlagen: ${err.message}`, true));
+    return;
+  }
+
+  const maskBtn = target.closest(".gms-upload-mask-btn");
+  if (maskBtn instanceof HTMLButtonElement) {
+    const moduleKey = String(maskBtn.dataset.moduleKey || "");
+    if (!moduleKey) return;
+    uploadMaskImage(moduleKey).catch((err) => {
+      const slug = slugKey(moduleKey);
+      const msgEl = document.getElementById(`gms-mask-msg-${slug}`);
+      if (msgEl) { msgEl.textContent = `Upload fehlgeschlagen: ${err.message}`; msgEl.classList.add("warn"); }
+    });
   }
 });
+
+async function uploadMaskImage(moduleKey) {
+  const slug = slugKey(moduleKey);
+  const fileInput = document.getElementById(`gms-mask-file-${slug}`);
+  const msgEl = document.getElementById(`gms-mask-msg-${slug}`);
+  if (!(fileInput instanceof HTMLInputElement) || !fileInput.files?.length) {
+    if (msgEl) { msgEl.textContent = "Bitte zuerst eine Bilddatei auswaehlen."; msgEl.classList.add("warn"); }
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+  if (msgEl) { msgEl.textContent = "Wird hochgeladen..."; msgEl.classList.remove("warn"); }
+  const result = await api(`/api/games/modules/${moduleKey}/mask`, {
+    method: "POST",
+    body: formData,
+  });
+  const preview = document.getElementById(`gms-mask-preview-${slug}`);
+  if (preview instanceof HTMLImageElement && result.mask_image_url) {
+    preview.src = result.mask_image_url;
+  }
+  if (msgEl) { msgEl.textContent = "Maske erfolgreich hochgeladen."; msgEl.classList.remove("warn"); }
+  fileInput.value = "";
+}
 
 async function init() {
   renderModuleCards();

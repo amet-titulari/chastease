@@ -378,7 +378,8 @@ const sessionId = {{ session_id }};
 const moduleKey = {{ module_key | tojson }};
 const isDontMoveModule = moduleKey === "dont_move";
 const isTiptoeingModule = moduleKey === "tiptoeing";
-const TIPTOEING_MASK_URL = "/static/masks/tiptoeing-mask.png";
+const TIPTOEING_MASK_FALLBACK_URL = "/static/masks/tiptoeing-mask.png";
+let tiptoeingMaskUrl = TIPTOEING_MASK_FALLBACK_URL;
 const singlePoseModuleKeys = new Set(["dont_move", "tiptoeing"]);
 const isSinglePoseModule = singlePoseModuleKeys.has(moduleKey);
 const initialDifficulty = {{ initial_setup.difficulty | tojson }};
@@ -588,7 +589,7 @@ async function ensureTiptoeingMaskLoaded() {
 
   const img = new Image();
   img.decoding = "async";
-  img.src = TIPTOEING_MASK_URL;
+  img.src = tiptoeingMaskUrl;
 
   await new Promise((resolve, reject) => {
     img.onload = () => resolve();
@@ -1546,7 +1547,7 @@ async function loadModule() {
       cameraGuidanceEl.textContent = "Ausschnitt: Fuesse bis untere Knie sichtbar. Ziel: Beine/Fuesse innerhalb Gruen halten, Schwarz niemals beruehren.";
     }
     if (maskPreviewEl) {
-      maskPreviewEl.src = TIPTOEING_MASK_URL;
+      maskPreviewEl.src = tiptoeingMaskUrl;
       maskPreviewEl.style.display = "";
     }
 
@@ -1608,7 +1609,11 @@ async function loadModuleSettings() {
     pose_similarity_min_score_easy: Number(data.pose_similarity_min_score_easy || 0),
     pose_similarity_min_score_medium: Number(data.pose_similarity_min_score_medium || 0),
     pose_similarity_min_score_hard: Number(data.pose_similarity_min_score_hard || 0),
+    mask_image_url: data.mask_image_url || null,
   };
+  if (isTiptoeingModule && moduleSettings.mask_image_url) {
+    tiptoeingMaskUrl = moduleSettings.mask_image_url;
+  }
 }
 
 async function loadRun() {

@@ -710,6 +710,7 @@ def _module_settings_payload(item: GameModuleSetting | None, module_key: str) ->
             "hard_target_multiplier": DEFAULT_HARD_TARGET_MULTIPLIER,
             "target_randomization_percent": DEFAULT_TARGET_RANDOMIZATION_PERCENT,
             "start_countdown_seconds": default_start_countdown,
+            "mask_image_url": None,
             "movement_easy_pose_deviation": float(defaults["easy"]["pose_deviation"]),
             "movement_easy_stillness": float(defaults["easy"]["stillness"]),
             "movement_medium_pose_deviation": float(defaults["medium"]["pose_deviation"]),
@@ -751,6 +752,7 @@ def _module_settings_payload(item: GameModuleSetting | None, module_key: str) ->
             if item.start_countdown_seconds is not None
             else default_start_countdown
         ),
+        "mask_image_url": item.mask_image_url or None,
         "movement_easy_pose_deviation": easy_pose,
         "movement_easy_stillness": easy_still,
         "movement_medium_pose_deviation": medium_pose,
@@ -1211,6 +1213,82 @@ def update_module_settings(
         pose_similarity_min_score_hard=item.pose_similarity_min_score_hard,
     )
     return _module_settings_payload(item, module_key)
+
+
+MAX_MASK_IMAGE_BYTES = 8 * 1024 * 1024
+
+
+@router.post("/modules/{module_key}/mask")
+async def upload_module_mask(
+    module_key: str,
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = require_admin_session_user(request, db)
+    module = get_module(module_key)
+    if not module:
+        raise HTTPException(status_code=404, detail="Game module not found")
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=422, detail="Uploaded file is empty")
+    if len(raw) > MAX_MASK_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Mask image exceeds 8 MB limit")
+
+    mime_type = file.content_type or ""
+    if mime_type not in ALLOWED_IMAGE_MIME_TYPES:
+        guessed_mime, _ = mimetypes.guess_type(file.filename or "mask.png")
+        mime_type = guessed_mime or mime_type
+    if mime_type not in ALLOWED_IMAGE_MIME_TYPES:
+        raise HTTPException(status_code=415, detail="Unsupported image format")
+
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img.load()
+    except (UnidentifiedImageError, OSError):
+        raise HTTPException(status_code=415, detail="Uploaded image cannot be decoded")
+
+    # Convert to RGBA PNG to preserve the green/black mask channels.
+    out = io.BytesIO()
+    img.convert("RGBA").save(out, format="PNG", optimize=True)
+    processed = out.getvalue()
+
+    rel_path = f"game_masks/{module_key}/{uuid4().hex}.png"
+    target = _resolve_media_path(rel_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(processed)
+
+    ext = Path(file.filename or "mask.png").suffix.lower() or ".png"
+    original_filename = f"mask_{module_key}{ext}"
+    asset = MediaAsset(
+        owner_user_id=None,
+        media_kind="game_mask",
+        storage_path=rel_path,
+        original_filename=original_filename,
+        mime_type="image/png",
+        file_size_bytes=len(processed),
+        visibility="shared",
+    )
+    db.add(asset)
+    db.flush()
+
+    mask_url = f"/api/media/{asset.id}/content"
+    item = _load_module_settings(db, module_key)
+    if item is None:
+        item = GameModuleSetting(module_key=module_key)
+    item.mask_image_url = mask_url
+    db.add(item)
+    db.commit()
+
+    audit_log(
+        "admin_game_module_mask_uploaded",
+        actor_user_id=user.id,
+        module_key=module_key,
+        media_asset_id=asset.id,
+        mask_url=mask_url,
+    )
+    return {"mask_image_url": mask_url}
 
 
 @router.get("/modules/{module_key}/postures")

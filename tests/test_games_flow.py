@@ -1841,3 +1841,47 @@ def test_module_settings_can_be_saved_and_used_for_run_start_defaults():
         assert easy.status_code == 200
         easy_target = easy.json()["current_step"]["target_seconds"]
         assert easy_target == max(1, int(round(base * 0.6)))
+
+
+def test_tiptoeing_mask_upload_and_settings_roundtrip():
+    with TestClient(app) as client:
+        _register_admin(client)
+
+        # Settings should initially have no mask URL
+        settings_before = client.get("/api/games/modules/tiptoeing/settings")
+        assert settings_before.status_code == 200
+        assert settings_before.json().get("mask_image_url") is None
+
+        # Upload a green/black mask image (green rectangle on black or vice versa)
+        img = _ppm_bytes(200, 300, rgb=(0, 200, 0))
+        uploaded = client.post(
+            "/api/games/modules/tiptoeing/mask",
+            files={"file": ("mask.png", img, "image/png")},
+        )
+        assert uploaded.status_code == 200
+        mask_url = uploaded.json().get("mask_image_url")
+        assert mask_url and mask_url.startswith("/api/media/")
+
+        # Settings should now reflect the uploaded mask
+        settings_after = client.get("/api/games/modules/tiptoeing/settings")
+        assert settings_after.status_code == 200
+        assert settings_after.json().get("mask_image_url") == mask_url
+
+        # The mask image should be accessible via the media URL
+        mask_content = client.get(mask_url)
+        assert mask_content.status_code == 200
+        assert mask_content.headers.get("content-type", "").startswith("image/")
+
+        # Upload a second mask — should update the settings
+        img2 = _ppm_bytes(300, 400, rgb=(0, 0, 0))
+        uploaded2 = client.post(
+            "/api/games/modules/tiptoeing/mask",
+            files={"file": ("mask2.jpg", img2, "image/jpeg")},
+        )
+        assert uploaded2.status_code == 200
+        mask_url2 = uploaded2.json().get("mask_image_url")
+        assert mask_url2 != mask_url
+
+        settings_final = client.get("/api/games/modules/tiptoeing/settings")
+        assert settings_final.status_code == 200
+        assert settings_final.json().get("mask_image_url") == mask_url2
