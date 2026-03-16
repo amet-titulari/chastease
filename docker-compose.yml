@@ -13,6 +13,7 @@ services:
     environment:
       - CHASTEASE_DATABASE_URL=sqlite:////app/data/chastease.db
       - CHASTEASE_MEDIA_DIR=/app/data/media
+      - CHASTEASE_POSE_LANDMARKER_MODEL_PATH=/opt/chastease-models/pose_landmarker.task
     restart: unless-stopped
 
 volumes:
