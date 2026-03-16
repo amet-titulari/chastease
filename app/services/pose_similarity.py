@@ -49,7 +49,8 @@ POSE_LANDMARKER_MODEL_URLS = (
 )
 
 _tasks_pose_landmarker = None
-_tasks_pose_landmarker_init_failed = False
+_tasks_pose_landmarker_last_fail: float = 0.0
+_LANDMARKER_RETRY_COOLDOWN = 60.0  # seconds before retrying after a failed init
 
 
 BLAZEPOSE_NAMES: dict[int, str] = {
@@ -151,18 +152,24 @@ def _ensure_model_asset_path() -> Path | None:
 
 
 def _get_tasks_pose_landmarker():
-    global _tasks_pose_landmarker, _tasks_pose_landmarker_init_failed
+    import time
+
+    global _tasks_pose_landmarker, _tasks_pose_landmarker_last_fail
     if _tasks_pose_landmarker is not None:
         return _tasks_pose_landmarker
-    if _tasks_pose_landmarker_init_failed:
+    # Avoid hammering model loading on every image during bulk imports;
+    # retry after a cooldown period instead of giving up permanently.
+    if _tasks_pose_landmarker_last_fail and (time.monotonic() - _tasks_pose_landmarker_last_fail) < _LANDMARKER_RETRY_COOLDOWN:
         return None
     if not _has_tasks_pose_api():
-        _tasks_pose_landmarker_init_failed = True
+        _tasks_pose_landmarker_last_fail = time.monotonic()
+        logger.warning("PoseLandmarker: Tasks API not available")
         return None
 
     model_path = _ensure_model_asset_path()
     if model_path is None:
-        _tasks_pose_landmarker_init_failed = True
+        _tasks_pose_landmarker_last_fail = time.monotonic()
+        logger.warning("PoseLandmarker: no model file found (check CHASTEASE_POSE_LANDMARKER_MODEL_PATH or internet access)")
         return None
 
     try:
@@ -176,10 +183,11 @@ def _get_tasks_pose_landmarker():
             output_segmentation_masks=False,
         )
         _tasks_pose_landmarker = mp_tasks_vision.PoseLandmarker.create_from_options(options)
+        logger.info("PoseLandmarker initialized successfully from %s", model_path)
         return _tasks_pose_landmarker
     except Exception:
-        _tasks_pose_landmarker_init_failed = True
-        logger.exception("Failed to initialize PoseLandmarker")
+        _tasks_pose_landmarker_last_fail = time.monotonic()
+        logger.exception("Failed to initialize PoseLandmarker from %s", model_path)
         return None
 
 

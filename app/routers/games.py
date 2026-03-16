@@ -425,14 +425,21 @@ def _try_load_posture_image_bytes_from_url(db: Session, image_url: str) -> bytes
 
 def _refresh_reference_landmarks(template: GamePostureTemplate, image_bytes: bytes | None) -> None:
     if not image_bytes:
+        logger.debug("_refresh_reference_landmarks: no image bytes for posture_key=%s", getattr(template, "posture_key", "?"))
         template.reference_landmarks_json = None
         template.reference_landmarks_detected_at = None
         return
     reference_json = extract_reference_landmarks_json(image_bytes)
     if reference_json is None:
+        logger.info(
+            "_refresh_reference_landmarks: detection returned no landmarks for posture_key=%s (image %d bytes)",
+            getattr(template, "posture_key", "?"),
+            len(image_bytes),
+        )
         template.reference_landmarks_json = None
         template.reference_landmarks_detected_at = None
         return
+    logger.info("_refresh_reference_landmarks: landmarks detected for posture_key=%s", getattr(template, "posture_key", "?"))
     template.reference_landmarks_json = reference_json
     template.reference_landmarks_detected_at = datetime.now(timezone.utc)
 
