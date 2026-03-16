@@ -45,8 +45,8 @@
 - [ ] HTMX Integration
 - [x] `.env`-Konfiguration & Pydantic Settings
 - [x] `data/`-Verzeichnis in `.gitignore`
-- [ ] Client-Privacy-Baseline: kein LocalStorage, kein IndexedDB, kein Service-Worker-Cache
-- [ ] Upload-Pfad für Verifikationsbilder so definieren, dass keine bewusste Galerie-Speicherung durch die App erfolgt
+- [x] Client-Privacy-Baseline: kein LocalStorage, kein IndexedDB, kein Service-Worker-Cache
+- [x] Upload-Pfad für Verifikationsbilder so definieren, dass keine bewusste Galerie-Speicherung durch die App erfolgt
 
 **Deliverable**: `python -m uvicorn app.main:app` startet ohne Fehler
 
@@ -66,8 +66,7 @@
 - [x] Persona-Konfigurationsseite
 - [x] Spielerprofil-Konfigurationsseite
 - [x] KI-Konfigurationsseite (API-Key, Modell)
-- [ ] API-Key Verschlüsselung (Fernet)
-- [ ] API Absicherung durch Login oder Token
+
 
 **Deliverable**: Gespräch mit konfigurierter Keyholderin möglich
 
@@ -181,7 +180,18 @@
 - [x] Gefuehrtes und ueberwachtes Training (Game-Screen mit Gesamt-Timer, aktueller Posture, Auto-Capture)
 - [x] Variable Retry-Zeit je Schwierigkeitsgrad (easy/medium/hard)
 - [x] Max-Misses-Regel mit Session-Penalty und Abschlussbericht
+
+### v0.3.1 API Anpassungen
 - [ ] Hygiene-Öffnung Anzeigen wann nächste Öffnung erlaubt wenn aktuel Kontingent Tag/Woche/Monat ausgeschöpft ist
+- [ ] eigenes Modul für Postures im Inventar (z.B. /api/inventory/postures
+- [ ] Posture-Matrix in Inventar-Modul Posture verschieben
+- [ ] API-Key Verschlüsselung (Fernet)
+- [ ] API Absicherung durch Login oder Token
+- [ ] API /api/sessions/blueprints nur für eigenen User ermöglichen
+- [ ] API /api/sessions/{session_id} nur für eigene Sessions des USERS
+- [ ] API /api/personas antwortet mit "http_error" in Swagger --> additonalProp1 beschreiben!
+- [ ] API /api/games/modules/{module_key}/postures anpassen an Inventar/Postures Logik nur available erforderlich.
+- [ ] Mostures Import und export
 
 ### v0.4 – Erweiterungen - Schnittstellen
 - [ ] Lovense für Devices
