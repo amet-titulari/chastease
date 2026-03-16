@@ -67,6 +67,7 @@
 - [x] Spielerprofil-Konfigurationsseite
 - [x] KI-Konfigurationsseite (API-Key, Modell)
 - [ ] API-Key Verschlüsselung (Fernet)
+- [ ] API Absicherung durch Login oder Token
 
 **Deliverable**: Gespräch mit konfigurierter Keyholderin möglich
 
@@ -180,6 +181,7 @@
 - [x] Gefuehrtes und ueberwachtes Training (Game-Screen mit Gesamt-Timer, aktueller Posture, Auto-Capture)
 - [x] Variable Retry-Zeit je Schwierigkeitsgrad (easy/medium/hard)
 - [x] Max-Misses-Regel mit Session-Penalty und Abschlussbericht
+- [ ] Hygiene-Öffnung Anzeigen wann nächste Öffnung erlaubt wenn aktuel Kontingent Tag/Woche/Monat ausgeschöpft ist
 
 ### v0.4 – Erweiterungen - Schnittstellen
 - [ ] Lovense für Devices
