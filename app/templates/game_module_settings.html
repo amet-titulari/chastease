@@ -2,112 +2,222 @@
 
 {% block extra_head %}
 <style>
-  .gms-shell { max-width: 1080px; margin: 0 auto; display: grid; gap: 0.9rem; }
+  .gms-shell { max-width: 1180px; margin: 0 auto; display: grid; gap: 0.9rem; }
   .gms-note { margin: 0; color: #9db1c7; }
+  .gms-cards {
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: 1fr;
+  }
+  .gms-module-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.8rem;
+    display: grid;
+    gap: 0.55rem;
+    align-content: start;
+  }
+  .gms-module-card h3 {
+    margin: 0;
+    color: #e2f1ff;
+  }
+  .gms-module-summary {
+    margin: 0;
+    color: #9db1c7;
+    font-size: 0.85rem;
+  }
   .gms-grid {
     display: grid;
     gap: 0.55rem;
-    grid-template-columns: repeat(3, minmax(150px, 1fr));
+    grid-template-columns: repeat(2, minmax(150px, 1fr));
+    align-items: end;
+  }
+  .gms-matrix-wrap {
+    overflow-x: auto;
+  }
+  .gms-matrix {
+    display: grid;
+    gap: 0.45rem;
+    grid-template-columns: minmax(180px, 1.4fr) repeat(3, minmax(120px, 1fr));
+    align-items: end;
+  }
+  .gms-matrix-head {
+    color: #c9def3;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+  }
+  .gms-metric-label {
+    margin: 0;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #d8e6f6;
+  }
+  .gms-metric-score {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #d8e6f6;
+  }
+  .gms-metric-pose {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #d8e6f6;
+  }
+  .gms-metric-still {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #d8e6f6;
+  }
+  .gms-global-grid {
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: repeat(4, minmax(140px, 1fr));
     align-items: end;
   }
   .gms-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; }
-  .gms-preset-row {
-    display: flex;
-    gap: 0.55rem;
-    flex-wrap: wrap;
-    align-items: center;
+  .gms-default-label {
+    margin: 0;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #d8e6f6;
   }
-  .gms-preset-row .ghost {
-    min-width: 120px;
+  .gms-difficulty-hint-label {
+    margin: 0;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    background: rgba(115, 183, 255, 0.08);
+    border: 1px solid rgba(115, 183, 255, 0.28);
+    color: #d7eaff;
+  }
+  .gms-difficulty-hint-cell {
+    margin: 0;
+    padding: 0.42rem 0.5rem;
+    border-radius: 8px;
+    border: 1px dashed rgba(152, 209, 255, 0.34);
+    background: rgba(72, 120, 168, 0.10);
+    color: #b7cee6;
+    font-size: 0.78rem;
+    line-height: 1.25;
+    text-align: center;
+  }
+  .gms-preset-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .gms-preset-cell .ghost {
+    min-width: 96px;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.78rem;
   }
   .gms-status { margin: 0; color: #9db1c7; font-size: 0.85rem; }
+  .gms-metric-help-list {
+    margin: 0.1rem 0 0;
+    padding: 0.55rem 0.65rem;
+    border-radius: 9px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.03);
+    color: #a8bfd6;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    display: grid;
+    gap: 0.25rem;
+  }
+  .gms-metric-help-line {
+    margin: 0;
+  }
+  .gms-help {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    margin-left: 0.35rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    color: #c9def3;
+    font-size: 0.72rem;
+    font-weight: 800;
+    cursor: help;
+    user-select: none;
+  }
   .warn { color: #ffb4b4; }
   .ok { color: #9de2bf; }
   @media (max-width: 980px) {
+    .gms-global-grid { grid-template-columns: 1fr; }
     .gms-grid { grid-template-columns: 1fr; }
+    .gms-matrix {
+      grid-template-columns: minmax(160px, 1.2fr) repeat(3, minmax(110px, 1fr));
+    }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="gms-shell" data-module-key="{{ module_key }}">
+<section class="gms-shell">
   <section class="card full" style="display:grid; gap:0.55rem;">
-    <div style="display:flex; justify-content:space-between; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-      <h2 style="margin:0;">Spiel-Schwellwerte</h2>
-      <div class="gms-actions">
-        <a href="/games">Zur Spieleauswahl</a>
-        <a href="/admin/postures/matrix">Posture-Matrix</a>
-      </div>
-    </div>
+    <h2 style="margin:0;">Spielekonfiguration</h2>
+    <p class="gms-note">Globale Basiswerte gelten fuer alle Spiele. Modulspezifische Schwellenwerte pflegst du darunter in separaten Cards pro Modul.</p>
 
-    <p class="gms-note">{{ module_title }} · {{ module_summary }}</p>
-    <p class="gms-note">Hier konfigurierst du Multiplikatoren und Bewegungs-Schwellen pro Modul. Die Werte gelten direkt fuer Don’t Move und Tiptoeing zur Laufzeit.</p>
-
-    <label>Modul
-      <select id="gms-module-select">
-        {% for mod in modules %}
-          <option value="{{ mod.key }}" {% if mod.key == module_key %}selected{% endif %}>{{ mod.title }}</option>
-        {% endfor %}
-      </select>
-    </label>
-
-    <div class="gms-preset-row">
-      <span class="gms-note">Schnellwerte:</span>
-      <button type="button" id="gms-preset-tolerant" class="ghost">Tolerant</button>
-      <button type="button" id="gms-preset-balanced" class="ghost">Balanced</button>
-      <button type="button" id="gms-preset-strict" class="ghost">Strict</button>
-    </div>
-    <p id="gms-reco" class="gms-note"></p>
-
-    <div class="gms-grid">
+    <div class="gms-global-grid">
       <label>Easy-Multiplikator
-        <input id="gms-set-easy-mult" type="number" min="0.1" max="3" step="0.01" value="0.75" />
+        <input id="gms-global-easy-mult" type="number" min="0.1" max="3" step="0.01" value="0.75" />
       </label>
       <label>Hard-Multiplikator
-        <input id="gms-set-hard-mult" type="number" min="0.1" max="3" step="0.01" value="1.50" />
+        <input id="gms-global-hard-mult" type="number" min="0.1" max="3" step="0.01" value="1.50" />
       </label>
       <label>Ziel-Randomisierung (%)
-        <input id="gms-set-random" type="number" min="0" max="60" step="1" value="10" />
+        <input id="gms-global-random" type="number" min="0" max="60" step="1" value="10" />
       </label>
-
-      <label>Easy Pose-Deviation
-        <input id="gms-move-easy-pose" type="number" min="0.01" max="1" step="0.001" value="0.40" />
+      <label>Initialer Start-Countdown (Sek)
+        <input id="gms-global-start-countdown" type="number" min="0" max="60" step="1" value="5" />
       </label>
-      <label>Easy Stillness
-        <input id="gms-move-easy-still" type="number" min="0.0005" max="0.1" step="0.0001" value="0.040" />
-      </label>
-      <span></span>
-
-      <label>Medium Pose-Deviation
-        <input id="gms-move-medium-pose" type="number" min="0.01" max="1" step="0.001" value="0.35" />
-      </label>
-      <label>Medium Stillness
-        <input id="gms-move-medium-still" type="number" min="0.0005" max="0.1" step="0.0001" value="0.030" />
-      </label>
-      <span></span>
-
-      <label>Hard Pose-Deviation
-        <input id="gms-move-hard-pose" type="number" min="0.01" max="1" step="0.001" value="0.225" />
-      </label>
-      <label>Hard Stillness
-        <input id="gms-move-hard-still" type="number" min="0.0005" max="0.1" step="0.0001" value="0.020" />
-      </label>
-      <div class="gms-actions">
-        <button type="button" id="gms-save-settings">Schwellwerte speichern</button>
-      </div>
     </div>
 
-    <p id="gms-msg" class="gms-status"></p>
+    <div class="gms-actions">
+      <button type="button" id="gms-save-global">Globale Konfiguration speichern</button>
+    </div>
+
+    <p id="gms-global-msg" class="gms-status"></p>
+  </section>
+
+  <section class="card full" style="display:grid; gap:0.55rem;">
+    <h2 style="margin:0;">Modulspezifische Konfiguration</h2>
+    <p class="gms-note">Bewegungs-Schwellen und Presets werden pro Modul getrennt gespeichert.</p>
+    <div id="gms-module-cards" class="gms-cards"></div>
   </section>
 </section>
 {% endblock %}
 
 {% block scripts %}
 <script>
-let moduleKey = document.querySelector(".gms-shell")?.dataset.moduleKey || "dont_move";
+const MODULES = {{ modules | tojson }};
 
-function setMsg(msg, warn = false) {
-  const el = document.getElementById("gms-msg");
+function slugKey(value) {
+  return String(value || "").replace(/[^a-zA-Z0-9_\-]+/g, "_");
+}
+
+function setGlobalMsg(msg, warn = false) {
+  const el = document.getElementById("gms-global-msg");
+  el.textContent = msg || "";
+  el.className = warn ? "gms-status warn" : "gms-status ok";
+}
+
+function setModuleMsg(moduleKey, msg, warn = false) {
+  const el = document.getElementById(`gms-module-msg-${slugKey(moduleKey)}`);
+  if (!el) return;
   el.textContent = msg || "";
   el.className = warn ? "gms-status warn" : "gms-status ok";
 }
@@ -126,12 +236,30 @@ function numberInputValue(id, fallback = 0) {
   return Number.isFinite(val) ? val : fallback;
 }
 
+function decimalToPercent(value, fallback = 0) {
+  const base = Number(value);
+  const safe = Number.isFinite(base) ? base : fallback;
+  return safe * 100;
+}
+
+function percentToDecimal(value, fallback = 0) {
+  const base = Number(value);
+  const safe = Number.isFinite(base) ? base : fallback;
+  return safe / 100;
+}
+
+function formatPercent(value, digits = 2) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "0";
+  return num.toFixed(digits).replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
+}
+
 const MOVEMENT_PRESETS = {
   dont_move: {
     tolerant: {
-      easy: { pose: 0.50, still: 0.0500 },
-      medium: { pose: 0.4375, still: 0.0375 },
-      hard: { pose: 0.28125, still: 0.0250 },
+      easy: { pose: 0.82, still: 0.26 },
+      medium: { pose: 0.68, still: 0.16 },
+      hard: { pose: 0.52, still: 0.095 },
     },
     balanced: {
       easy: { pose: 0.40, still: 0.0400 },
@@ -146,19 +274,19 @@ const MOVEMENT_PRESETS = {
   },
   tiptoeing: {
     tolerant: {
-      easy: { pose: 0.18, still: 0.0090 },
-      medium: { pose: 0.15, still: 0.0070 },
-      hard: { pose: 0.12, still: 0.0055 },
+      easy: { pose: 0.12, still: 0.18 },
+      medium: { pose: 0.15, still: 0.22 },
+      hard: { pose: 0.18, still: 0.25 },
     },
     balanced: {
-      easy: { pose: 0.22, still: 0.0120 },
-      medium: { pose: 0.19, still: 0.0090 },
-      hard: { pose: 0.15, still: 0.0070 },
+      easy: { pose: 0.14, still: 0.22 },
+      medium: { pose: 0.18, still: 0.26 },
+      hard: { pose: 0.22, still: 0.30 },
     },
     strict: {
-      easy: { pose: 0.13, still: 0.0055 },
-      medium: { pose: 0.10, still: 0.0038 },
-      hard: { pose: 0.075, still: 0.0028 },
+      easy: { pose: 0.18, still: 0.28 },
+      medium: { pose: 0.22, still: 0.32 },
+      hard: { pose: 0.26, still: 0.36 },
     },
   },
 };
@@ -168,81 +296,329 @@ function movementPresetFor(moduleKeyValue, level) {
   return mod[level] || mod.balanced;
 }
 
-function updateRecommendationHint() {
-  const el = document.getElementById("gms-reco");
-  if (!el) return;
+function recommendationFor(moduleKey) {
   const tips = {
+    posture_training: "Empfehlung: Hier zaehlt nur der Pose-Score. Deviation und Stillness sind in diesem Modul deaktiviert.",
     dont_move: "Empfehlung: Balanced fuer den Alltag. Bei zu vielen False Positives -> Tolerant, bei zu lascher Erkennung -> Strict.",
     tiptoeing: "Empfehlung: Tolerant bis Kameraausschnitt und Licht stabil sind, danach auf Balanced wechseln.",
   };
-  el.textContent = tips[moduleKey] || "Empfehlung: Mit Balanced starten und nur bei Bedarf in kleinen Schritten anpassen.";
+  return tips[moduleKey] || "Empfehlung: Mit Balanced starten und nur bei Bedarf in kleinen Schritten anpassen.";
 }
 
-function applyMovementPreset(level) {
-  const preset = movementPresetFor(moduleKey, level);
-  document.getElementById("gms-move-easy-pose").value = String(preset.easy.pose);
-  document.getElementById("gms-move-easy-still").value = String(preset.easy.still);
-  document.getElementById("gms-move-medium-pose").value = String(preset.medium.pose);
-  document.getElementById("gms-move-medium-still").value = String(preset.medium.still);
-  document.getElementById("gms-move-hard-pose").value = String(preset.hard.pose);
-  document.getElementById("gms-move-hard-still").value = String(preset.hard.still);
-  setMsg(`Preset ${level} angewendet. Bitte speichern.`, false);
+function moduleFieldId(moduleKey, field) {
+  return `gms-${slugKey(moduleKey)}-${field}`;
 }
 
-function applyModuleSettings(data) {
-  document.getElementById("gms-set-easy-mult").value = String(Number(data.easy_target_multiplier ?? 0.75));
-  document.getElementById("gms-set-hard-mult").value = String(Number(data.hard_target_multiplier ?? 1.5));
-  document.getElementById("gms-set-random").value = String(Number(data.target_randomization_percent ?? 10));
-
-  document.getElementById("gms-move-easy-pose").value = String(Number(data.movement_easy_pose_deviation ?? 0.40));
-  document.getElementById("gms-move-easy-still").value = String(Number(data.movement_easy_stillness ?? 0.040));
-  document.getElementById("gms-move-medium-pose").value = String(Number(data.movement_medium_pose_deviation ?? 0.35));
-  document.getElementById("gms-move-medium-still").value = String(Number(data.movement_medium_stillness ?? 0.030));
-  document.getElementById("gms-move-hard-pose").value = String(Number(data.movement_hard_pose_deviation ?? 0.225));
-  document.getElementById("gms-move-hard-still").value = String(Number(data.movement_hard_stillness ?? 0.020));
-}
-
-async function loadModuleSettings() {
-  const data = await api(`/api/games/modules/${moduleKey}/settings`);
-  applyModuleSettings(data || {});
-}
-
-async function saveModuleSettings() {
-  const payload = {
-    easy_target_multiplier: numberInputValue("gms-set-easy-mult", 0.75),
-    hard_target_multiplier: numberInputValue("gms-set-hard-mult", 1.5),
-    target_randomization_percent: Math.round(numberInputValue("gms-set-random", 10)),
-    movement_easy_pose_deviation: numberInputValue("gms-move-easy-pose", 0.40),
-    movement_easy_stillness: numberInputValue("gms-move-easy-still", 0.040),
-    movement_medium_pose_deviation: numberInputValue("gms-move-medium-pose", 0.35),
-    movement_medium_stillness: numberInputValue("gms-move-medium-still", 0.030),
-    movement_hard_pose_deviation: numberInputValue("gms-move-hard-pose", 0.225),
-    movement_hard_stillness: numberInputValue("gms-move-hard-still", 0.020),
+function globalPayloadFromInputs() {
+  return {
+    easy_target_multiplier: numberInputValue("gms-global-easy-mult", 0.75),
+    hard_target_multiplier: numberInputValue("gms-global-hard-mult", 1.5),
+    target_randomization_percent: Math.round(numberInputValue("gms-global-random", 10)),
+    start_countdown_seconds: Math.round(numberInputValue("gms-global-start-countdown", 5)),
   };
-  const saved = await api(`/api/games/modules/${moduleKey}/settings`, {
+}
+
+function applyGlobalSettings(data) {
+  document.getElementById("gms-global-easy-mult").value = String(Number(data.easy_target_multiplier ?? 0.75));
+  document.getElementById("gms-global-hard-mult").value = String(Number(data.hard_target_multiplier ?? 1.5));
+  document.getElementById("gms-global-random").value = String(Number(data.target_randomization_percent ?? 10));
+  document.getElementById("gms-global-start-countdown").value = String(Number(data.start_countdown_seconds ?? 5));
+}
+
+async function loadGlobalSettings() {
+  const data = await api("/api/games/settings/global");
+  applyGlobalSettings(data || {});
+}
+
+async function saveGlobalSettings() {
+  const payload = globalPayloadFromInputs();
+  const saved = await api("/api/games/settings/global", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  applyModuleSettings(saved || payload);
-  setMsg("Preset gespeichert.", false);
+  applyGlobalSettings(saved || payload);
+  setGlobalMsg("Globale Konfiguration gespeichert.", false);
 }
 
-document.getElementById("gms-module-select")?.addEventListener("change", (event) => {
-  const next = String(event.target.value || "").trim();
-  if (!next || next === moduleKey) return;
-  window.location.href = `/games/module-settings?module_key=${encodeURIComponent(next)}`;
+function applyMovementFields(moduleKey, data) {
+  const easyPoseEl = document.getElementById(moduleFieldId(moduleKey, "easy-pose"));
+  const easyStillEl = document.getElementById(moduleFieldId(moduleKey, "easy-still"));
+  const mediumPoseEl = document.getElementById(moduleFieldId(moduleKey, "medium-pose"));
+  const mediumStillEl = document.getElementById(moduleFieldId(moduleKey, "medium-still"));
+  const hardPoseEl = document.getElementById(moduleFieldId(moduleKey, "hard-pose"));
+  const hardStillEl = document.getElementById(moduleFieldId(moduleKey, "hard-still"));
+  if (!(easyPoseEl instanceof HTMLInputElement)) return;
+  if (!(easyStillEl instanceof HTMLInputElement)) return;
+  if (!(mediumPoseEl instanceof HTMLInputElement)) return;
+  if (!(mediumStillEl instanceof HTMLInputElement)) return;
+  if (!(hardPoseEl instanceof HTMLInputElement)) return;
+  if (!(hardStillEl instanceof HTMLInputElement)) return;
+
+  easyPoseEl.value = formatPercent(decimalToPercent(data.movement_easy_pose_deviation ?? 0.40));
+  easyStillEl.value = formatPercent(decimalToPercent(data.movement_easy_stillness ?? 0.040));
+  mediumPoseEl.value = formatPercent(decimalToPercent(data.movement_medium_pose_deviation ?? 0.35));
+  mediumStillEl.value = formatPercent(decimalToPercent(data.movement_medium_stillness ?? 0.030));
+  hardPoseEl.value = formatPercent(decimalToPercent(data.movement_hard_pose_deviation ?? 0.225));
+  hardStillEl.value = formatPercent(decimalToPercent(data.movement_hard_stillness ?? 0.020));
+}
+
+function defaultPoseSimilarityThreshold(moduleKey, difficultyKey) {
+  const byModule = {
+    posture_training: { easy: 62, medium: 74, hard: 84 },
+    dont_move: { easy: 45, medium: 55, hard: 65 },
+    tiptoeing: { easy: 8, medium: 10, hard: 12 },
+  };
+  const defaults = byModule[moduleKey] || { easy: 0, medium: 0, hard: 0 };
+  return Number(defaults[difficultyKey] ?? 0);
+}
+
+function applyPoseSimilarityFields(moduleKey, data) {
+  const easyDefault = defaultPoseSimilarityThreshold(moduleKey, "easy");
+  const mediumDefault = defaultPoseSimilarityThreshold(moduleKey, "medium");
+  const hardDefault = defaultPoseSimilarityThreshold(moduleKey, "hard");
+
+  const easyRaw = Number(data.pose_similarity_min_score_easy);
+  const mediumRaw = Number(data.pose_similarity_min_score_medium);
+  const hardRaw = Number(data.pose_similarity_min_score_hard);
+
+  const easyValue = Number.isFinite(easyRaw) && easyRaw > 0 ? easyRaw : easyDefault;
+  const mediumValue = Number.isFinite(mediumRaw) && mediumRaw > 0 ? mediumRaw : mediumDefault;
+  const hardValue = Number.isFinite(hardRaw) && hardRaw > 0 ? hardRaw : hardDefault;
+
+  document.getElementById(moduleFieldId(moduleKey, "pose-score-easy")).value = String(
+    Number(easyValue)
+  );
+  document.getElementById(moduleFieldId(moduleKey, "pose-score-medium")).value = String(
+    Number(mediumValue)
+  );
+  document.getElementById(moduleFieldId(moduleKey, "pose-score-hard")).value = String(
+    Number(hardValue)
+  );
+}
+
+async function loadModuleSettings(moduleKey) {
+  const data = await api(`/api/games/modules/${moduleKey}/settings`);
+  applyMovementFields(moduleKey, data || {});
+  applyPoseSimilarityFields(moduleKey, data || {});
+}
+
+function movementPayloadFromInputs(moduleKey) {
+  return {
+    movement_easy_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "easy-pose"), 40.0), 0.40),
+    movement_easy_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "easy-still"), 4.0), 0.040),
+    movement_medium_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "medium-pose"), 35.0), 0.35),
+    movement_medium_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "medium-still"), 3.0), 0.030),
+    movement_hard_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "hard-pose"), 22.5), 0.225),
+    movement_hard_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "hard-still"), 2.0), 0.020),
+  };
+}
+
+function poseSimilarityPayloadFromInputs(moduleKey) {
+  return {
+    pose_similarity_min_score_easy: numberInputValue(
+      moduleFieldId(moduleKey, "pose-score-easy"),
+      defaultPoseSimilarityThreshold(moduleKey, "easy")
+    ),
+    pose_similarity_min_score_medium: numberInputValue(
+      moduleFieldId(moduleKey, "pose-score-medium"),
+      defaultPoseSimilarityThreshold(moduleKey, "medium")
+    ),
+    pose_similarity_min_score_hard: numberInputValue(
+      moduleFieldId(moduleKey, "pose-score-hard"),
+      defaultPoseSimilarityThreshold(moduleKey, "hard")
+    ),
+  };
+}
+
+async function saveModuleSettings(moduleKey) {
+  const payload = {
+    ...globalPayloadFromInputs(),
+    ...movementPayloadFromInputs(moduleKey),
+    ...poseSimilarityPayloadFromInputs(moduleKey),
+  };
+  await api(`/api/games/modules/${moduleKey}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  setModuleMsg(moduleKey, "Modul-Konfiguration gespeichert.", false);
+}
+
+function applyMovementPreset(moduleKey, level) {
+  const easyPoseEl = document.getElementById(moduleFieldId(moduleKey, "easy-pose"));
+  const easyStillEl = document.getElementById(moduleFieldId(moduleKey, "easy-still"));
+  const mediumPoseEl = document.getElementById(moduleFieldId(moduleKey, "medium-pose"));
+  const mediumStillEl = document.getElementById(moduleFieldId(moduleKey, "medium-still"));
+  const hardPoseEl = document.getElementById(moduleFieldId(moduleKey, "hard-pose"));
+  const hardStillEl = document.getElementById(moduleFieldId(moduleKey, "hard-still"));
+  if (!(easyPoseEl instanceof HTMLInputElement)) return;
+  if (!(easyStillEl instanceof HTMLInputElement)) return;
+  if (!(mediumPoseEl instanceof HTMLInputElement)) return;
+  if (!(mediumStillEl instanceof HTMLInputElement)) return;
+  if (!(hardPoseEl instanceof HTMLInputElement)) return;
+  if (!(hardStillEl instanceof HTMLInputElement)) return;
+
+  const preset = movementPresetFor(moduleKey, level);
+  easyPoseEl.value = formatPercent(decimalToPercent(preset.easy.pose));
+  easyStillEl.value = formatPercent(decimalToPercent(preset.easy.still));
+  mediumPoseEl.value = formatPercent(decimalToPercent(preset.medium.pose));
+  mediumStillEl.value = formatPercent(decimalToPercent(preset.medium.still));
+  hardPoseEl.value = formatPercent(decimalToPercent(preset.hard.pose));
+  hardStillEl.value = formatPercent(decimalToPercent(preset.hard.still));
+  setModuleMsg(moduleKey, `Preset ${level} angewendet. Bitte speichern.`, false);
+}
+
+function moduleCardHtml(module) {
+  const key = String(module.key || "");
+  const slug = slugKey(key);
+  const title = String(module.title || key);
+  const summary = String(module.summary || "");
+  const reco = recommendationFor(key);
+  const isPostureTraining = key === "posture_training";
+  const poseScoreEasyDefault = defaultPoseSimilarityThreshold(key, "easy");
+  const poseScoreMediumDefault = defaultPoseSimilarityThreshold(key, "medium");
+  const poseScoreHardDefault = defaultPoseSimilarityThreshold(key, "hard");
+  const hintsByModule = {
+    posture_training: {
+      easy: "Einsteigerfreundlich und fehlertolerant",
+      medium: "Alltagstauglich und fokussiert",
+      hard: "Technisch sauber und streng",
+    },
+    dont_move: {
+      easy: "Stabiler Einstieg, wenig False Positives",
+      medium: "Empfohlener Alltagssweetspot",
+      hard: "Hohe Disziplin, sehr strenge Erkennung",
+    },
+    tiptoeing: {
+      easy: "Fuer Setup- und Lichtphase",
+      medium: "Empfohlener Standard nach Kalibrierung",
+      hard: "Nur bei sehr stabiler Kamera sinnvoll",
+    },
+  };
+  const moduleHints = hintsByModule[key] || {
+    easy: "Sanfter Einstieg",
+    medium: "Ausgewogene Standardstufe",
+    hard: "Strikte Herausforderung",
+  };
+  const defaultRow = isPostureTraining
+    ? `
+          <p class="gms-default-label">Default Werte</p>
+          <div class="gms-preset-cell"><span class="gms-note">Nicht relevant</span></div>
+          <div class="gms-preset-cell"><span class="gms-note">Nicht relevant</span></div>
+          <div class="gms-preset-cell"><span class="gms-note">Nicht relevant</span></div>
+      `
+    : `
+          <p class="gms-default-label">Default Werte</p>
+          <div class="gms-preset-cell">
+            <button type="button" class="ghost gms-preset-btn" data-preset="tolerant" data-module-key="${key}">Tolerant</button>
+          </div>
+          <div class="gms-preset-cell">
+            <button type="button" class="ghost gms-preset-btn" data-preset="balanced" data-module-key="${key}">Balanced</button>
+          </div>
+          <div class="gms-preset-cell">
+            <button type="button" class="ghost gms-preset-btn" data-preset="strict" data-module-key="${key}">Strict</button>
+          </div>
+      `;
+  const hintRow = `
+          <p class="gms-difficulty-hint-label">Empfehlung</p>
+          <p class="gms-difficulty-hint-cell">${moduleHints.easy}</p>
+          <p class="gms-difficulty-hint-cell">${moduleHints.medium}</p>
+          <p class="gms-difficulty-hint-cell">${moduleHints.hard}</p>
+      `;
+  const movementRows = isPostureTraining
+    ? ""
+    : `
+            <p class="gms-metric-label gms-metric-pose">${key === "tiptoeing" ? "Schwarz-Schwelle % (hoeher = strenger)" : "Pose-Abweichung % (kleiner = strenger)"}<span class="gms-help" title="${key === "tiptoeing" ? "Pixel mit niedrigeren RGB-Werten gelten als verboten (schwarz). Hoeherer Wert macht die Schwarz-Erkennung strenger." : "Maximal erlaubte Abweichung zur Zielpose. Niedriger Wert bedeutet strengere Erkennung."}">?</span></p>
+          <input id="gms-${slug}-easy-pose" type="number" min="1" max="100" step="0.1" value="${key === "tiptoeing" ? "14" : "40"}" />
+          <input id="gms-${slug}-medium-pose" type="number" min="1" max="100" step="0.1" value="${key === "tiptoeing" ? "18" : "35"}" />
+          <input id="gms-${slug}-hard-pose" type="number" min="1" max="100" step="0.1" value="${key === "tiptoeing" ? "22" : "22.5"}" />
+
+            <p class="gms-metric-label gms-metric-still">${key === "tiptoeing" ? "Gruen-Minimum % (hoeher = strenger)" : "Stillness % (kleiner = strenger)"}<span class="gms-help" title="${key === "tiptoeing" ? "Minimaler Gruenkanal fuer erlaubte Zone. Hoeherer Wert erfordert ein klareres Gruen." : "Maximal erlaubte Bewegung waehrend des Haltens. Niedriger Wert bedeutet strengere Erkennung."}">?</span></p>
+          <input id="gms-${slug}-easy-still" type="number" min="0.05" max="100" step="0.01" value="${key === "tiptoeing" ? "22" : "4.0"}" />
+          <input id="gms-${slug}-medium-still" type="number" min="0.05" max="100" step="0.01" value="${key === "tiptoeing" ? "26" : "3.0"}" />
+          <input id="gms-${slug}-hard-still" type="number" min="0.05" max="100" step="0.01" value="${key === "tiptoeing" ? "30" : "2.0"}" />
+      `;
+  const helpBlock = isPostureTraining
+    ? `
+      <div class="gms-metric-help-list" aria-live="polite">
+        <p class="gms-metric-help-line"><strong>Pose-Score Minimum:</strong> Mindestwert der Pose-Aehnlichkeit. Hoeher = strenger. Startempfehlung in diesem Modul: 62 / 74 / 84.</p>
+      </div>
+      `
+    : `
+      <div class="gms-metric-help-list" aria-live="polite">
+        <p class="gms-metric-help-line"><strong>${key === "tiptoeing" ? "Gruen-Ueberhang %" : "Pose-Score Minimum"}:</strong> ${key === "tiptoeing" ? "Wie deutlich Gruen gegen Rot/Blau dominieren muss. Hoeher = strenger." : "Mindestwert der Pose-Aehnlichkeit. Hoeher = strenger."}</p>
+        <p class="gms-metric-help-line"><strong>${key === "tiptoeing" ? "Schwarz-Schwelle %" : "Pose-Abweichung %"}:</strong> ${key === "tiptoeing" ? "Ab wann ein Pixel als verbotene schwarze Zone gilt. Hoeher = strenger." : "Maximal erlaubte Abweichung zur Zielpose. Kleiner = strenger."}</p>
+        <p class="gms-metric-help-line"><strong>${key === "tiptoeing" ? "Gruen-Minimum %" : "Stillness %"}:</strong> ${key === "tiptoeing" ? "Minimaler Gruenwert fuer die erlaubte Zone. Hoeher = strenger." : "Maximal erlaubte Bewegung waehrend des Haltens. Kleiner = strenger."}</p>
+      </div>
+      `;
+  return `
+    <article class="gms-module-card" data-module-key="${key}">
+      <h3>${title}</h3>
+      <p class="gms-module-summary">${summary}</p>
+      <p class="gms-note">${reco}</p>
+      <div class="gms-matrix-wrap">
+        <div class="gms-matrix">
+          <div class="gms-matrix-head">Metrik</div>
+          <div class="gms-matrix-head">Easy</div>
+          <div class="gms-matrix-head">Medium</div>
+          <div class="gms-matrix-head">Hard</div>
+          ${defaultRow}
+          ${hintRow}
+
+          <p class="gms-metric-label gms-metric-score">${key === "tiptoeing" ? "Gruen-Ueberhang % (hoeher = strenger)" : "Pose-Score Minimum (%)"}<span class="gms-help" title="${key === "tiptoeing" ? "Minimaler Abstand Gruen zu Rot/Blau. Hoeherer Wert bedeutet strengere Farberkennung." : "Mindestwert fuer die Pose-Aehnlichkeit. Hoeherer Wert bedeutet strengere Erkennung."}">?</span></p>
+          <input id="gms-${slug}-pose-score-easy" type="number" min="0" max="100" step="0.1" value="${poseScoreEasyDefault}" />
+          <input id="gms-${slug}-pose-score-medium" type="number" min="0" max="100" step="0.1" value="${poseScoreMediumDefault}" />
+          <input id="gms-${slug}-pose-score-hard" type="number" min="0" max="100" step="0.1" value="${poseScoreHardDefault}" />
+          ${movementRows}
+        </div>
+      </div>
+      ${helpBlock}
+      <div class="gms-actions">
+        <button type="button" class="gms-save-module" data-module-key="${key}">Modul speichern</button>
+      </div>
+      <p id="gms-module-msg-${slug}" class="gms-status"></p>
+    </article>
+  `;
+}
+
+function renderModuleCards() {
+  const root = document.getElementById("gms-module-cards");
+  root.innerHTML = (MODULES || []).map((module) => moduleCardHtml(module)).join("");
+}
+
+document.getElementById("gms-save-global")?.addEventListener("click", () => {
+  saveGlobalSettings().catch((err) => setGlobalMsg(`Speichern fehlgeschlagen: ${err.message}`, true));
 });
 
-document.getElementById("gms-save-settings")?.addEventListener("click", () => {
-  saveModuleSettings().catch((err) => setMsg(`Speichern fehlgeschlagen: ${err.message}`, true));
+document.getElementById("gms-module-cards")?.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  const presetBtn = target.closest(".gms-preset-btn");
+  if (presetBtn instanceof HTMLButtonElement) {
+    const level = String(presetBtn.dataset.preset || "balanced");
+    const moduleKey = String(presetBtn.dataset.moduleKey || "");
+    if (moduleKey) {
+      applyMovementPreset(moduleKey, level);
+    }
+    return;
+  }
+
+  const saveBtn = target.closest(".gms-save-module");
+  if (saveBtn instanceof HTMLButtonElement) {
+    const moduleKey = String(saveBtn.dataset.moduleKey || "");
+    if (!moduleKey) return;
+    saveModuleSettings(moduleKey).catch((err) => setModuleMsg(moduleKey, `Speichern fehlgeschlagen: ${err.message}`, true));
+  }
 });
 
-document.getElementById("gms-preset-tolerant")?.addEventListener("click", () => applyMovementPreset("tolerant"));
-document.getElementById("gms-preset-balanced")?.addEventListener("click", () => applyMovementPreset("balanced"));
-document.getElementById("gms-preset-strict")?.addEventListener("click", () => applyMovementPreset("strict"));
+async function init() {
+  renderModuleCards();
+  await loadGlobalSettings();
+  await Promise.all((MODULES || []).map((module) => loadModuleSettings(String(module.key || ""))));
+}
 
-loadModuleSettings().catch((err) => setMsg(`Initialisierung fehlgeschlagen: ${err.message}`, true));
-updateRecommendationHint();
+init().catch((err) => setGlobalMsg(`Initialisierung fehlgeschlagen: ${err.message}`, true));
 </script>
 {% endblock %}

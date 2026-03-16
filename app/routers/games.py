@@ -28,6 +28,7 @@ from app.security import require_admin_session_user
 from app.services.games import as_public_module_payload, get_module, list_modules
 from app.services.image_stamp import stamp_verification_timestamp
 from app.services.audit_logger import audit_log
+from app.services.pose_similarity import extract_reference_landmarks_json, pose_similarity_available, score_against_reference
 from app.services.verification_analysis import analyze_verification
 
 router = APIRouter(prefix="/api/games", tags=["games"])
@@ -47,6 +48,13 @@ POSTURE_TARGET_SIZE = (768, 1024)
 DEFAULT_EASY_TARGET_MULTIPLIER = 0.75
 DEFAULT_HARD_TARGET_MULTIPLIER = 1.5
 DEFAULT_TARGET_RANDOMIZATION_PERCENT = 10
+DEFAULT_STRICT_START_COUNTDOWN_SECONDS = 5
+GLOBAL_GAME_SETTINGS_KEY = "__global__"
+POSE_SIMILARITY_THRESHOLD_BY_DIFFICULTY = {
+    "easy": 62.0,
+    "medium": 74.0,
+    "hard": 84.0,
+}
 DEFAULT_MOVEMENT_THRESHOLDS_BY_MODULE = {
     "dont_move": {
         "easy": {"pose_deviation": 0.40, "stillness": 0.0400},
@@ -54,9 +62,12 @@ DEFAULT_MOVEMENT_THRESHOLDS_BY_MODULE = {
         "hard": {"pose_deviation": 0.225, "stillness": 0.0200},
     },
     "tiptoeing": {
-        "easy": {"pose_deviation": 0.22, "stillness": 0.0120},
-        "medium": {"pose_deviation": 0.19, "stillness": 0.0090},
-        "hard": {"pose_deviation": 0.15, "stillness": 0.0070},
+        # Tiptoeing uses these fields as mask color thresholds:
+        # - pose_deviation => black threshold (0..1)
+        # - stillness => green minimum channel threshold (0..1)
+        "easy": {"pose_deviation": 0.14, "stillness": 0.22},
+        "medium": {"pose_deviation": 0.18, "stillness": 0.26},
+        "hard": {"pose_deviation": 0.22, "stillness": 0.30},
     },
 }
 MAX_POSTURE_ZIP_BYTES = 64 * 1024 * 1024
@@ -76,6 +87,7 @@ class StartGameRunRequest(BaseModel):
     difficulty: str = Field(default="medium", max_length=40)
     duration_minutes: int = Field(default=20, ge=1, le=240)
     transition_seconds: int = Field(default=8, ge=0, le=60)
+    start_countdown_seconds: int | None = Field(default=None, ge=0, le=60)
     initiated_by: str = Field(default="player", pattern="^(player|ai)$")
     max_misses_before_penalty: int = Field(default=3, ge=1, le=20)
     session_penalty_seconds: int = Field(default=300, ge=0, le=86400)
@@ -90,12 +102,23 @@ class ModuleSettingsUpdateRequest(BaseModel):
     easy_target_multiplier: float = Field(default=DEFAULT_EASY_TARGET_MULTIPLIER, gt=0.1, le=3.0)
     hard_target_multiplier: float = Field(default=DEFAULT_HARD_TARGET_MULTIPLIER, gt=0.1, le=3.0)
     target_randomization_percent: int = Field(default=DEFAULT_TARGET_RANDOMIZATION_PERCENT, ge=0, le=60)
+    start_countdown_seconds: int = Field(default=DEFAULT_STRICT_START_COUNTDOWN_SECONDS, ge=0, le=60)
     movement_easy_pose_deviation: float = Field(default=0.40, ge=0.01, le=1.0)
-    movement_easy_stillness: float = Field(default=0.040, ge=0.0005, le=0.1)
+    movement_easy_stillness: float = Field(default=0.040, ge=0.0005, le=1.0)
     movement_medium_pose_deviation: float = Field(default=0.35, ge=0.01, le=1.0)
-    movement_medium_stillness: float = Field(default=0.030, ge=0.0005, le=0.1)
+    movement_medium_stillness: float = Field(default=0.030, ge=0.0005, le=1.0)
     movement_hard_pose_deviation: float = Field(default=0.225, ge=0.01, le=1.0)
-    movement_hard_stillness: float = Field(default=0.020, ge=0.0005, le=0.1)
+    movement_hard_stillness: float = Field(default=0.020, ge=0.0005, le=1.0)
+    pose_similarity_min_score_easy: float = Field(default=62.0, ge=0.0, le=100.0)
+    pose_similarity_min_score_medium: float = Field(default=74.0, ge=0.0, le=100.0)
+    pose_similarity_min_score_hard: float = Field(default=84.0, ge=0.0, le=100.0)
+
+
+class GlobalGameSettingsUpdateRequest(BaseModel):
+    easy_target_multiplier: float = Field(default=DEFAULT_EASY_TARGET_MULTIPLIER, gt=0.1, le=3.0)
+    hard_target_multiplier: float = Field(default=DEFAULT_HARD_TARGET_MULTIPLIER, gt=0.1, le=3.0)
+    target_randomization_percent: int = Field(default=DEFAULT_TARGET_RANDOMIZATION_PERCENT, ge=0, le=60)
+    start_countdown_seconds: int = Field(default=DEFAULT_STRICT_START_COUNTDOWN_SECONDS, ge=0, le=60)
 
 
 class PostureTemplateCreateRequest(BaseModel):
@@ -127,6 +150,15 @@ class PostureMatrixItemUpdateRequest(BaseModel):
 
 class PostureMatrixBulkUpdateRequest(BaseModel):
     items: list[PostureMatrixItemUpdateRequest] = Field(default_factory=list)
+
+
+class PostureReferencePoseUpdateRequest(BaseModel):
+    enabled: bool = True
+    refresh: bool = False
+
+
+class PostureReferencePoseManualUpdateRequest(BaseModel):
+    reference_landmarks_json: str = Field(min_length=2, max_length=200000)
 
 
 def _load_session(db: Session, session_id: int) -> SessionModel:
@@ -177,6 +209,8 @@ def _template_payload(template: GamePostureTemplate, allowed_module_keys: list[s
         "target_seconds": template.target_seconds,
         "sort_order": template.sort_order,
         "is_active": bool(template.is_active),
+        "reference_pose_available": bool(template.reference_landmarks_json),
+        "reference_landmarks_json": template.reference_landmarks_json,
         "allowed_module_keys": sorted({str(item) for item in effective_allowed if str(item).strip()}),
         "created_at": template.created_at.isoformat() if template.created_at else None,
         "updated_at": template.updated_at.isoformat() if template.updated_at else None,
@@ -377,6 +411,95 @@ def _media_asset_from_content_url(db: Session, image_url: str) -> MediaAsset | N
     return db.query(MediaAsset).filter(MediaAsset.id == media_id).first()
 
 
+def _try_load_posture_image_bytes_from_url(db: Session, image_url: str) -> bytes | None:
+    asset = _media_asset_from_content_url(db, image_url)
+    if not asset:
+        return None
+    try:
+        media_path = _resolve_media_path(asset.storage_path)
+    except HTTPException:
+        return None
+    if not media_path.exists() or not media_path.is_file():
+        return None
+    try:
+        return media_path.read_bytes()
+    except OSError:
+        return None
+
+
+def _refresh_reference_landmarks(template: GamePostureTemplate, image_bytes: bytes | None) -> None:
+    if not image_bytes:
+        template.reference_landmarks_json = None
+        template.reference_landmarks_detected_at = None
+        return
+    reference_json = extract_reference_landmarks_json(image_bytes)
+    if reference_json is None:
+        template.reference_landmarks_json = None
+        template.reference_landmarks_detected_at = None
+        return
+    template.reference_landmarks_json = reference_json
+    template.reference_landmarks_detected_at = datetime.now(timezone.utc)
+
+
+def _lookup_posture_template_for_step(db: Session, run: GameRun, step: GameRunStep) -> GamePostureTemplate | None:
+    pool_key = _posture_pool_module_key(run.module_key)
+    return (
+        db.query(GamePostureTemplate)
+        .filter(
+            GamePostureTemplate.module_key == pool_key,
+            GamePostureTemplate.posture_key == step.posture_key,
+        )
+        .order_by(GamePostureTemplate.id.desc())
+        .first()
+    )
+
+
+def _evaluate_pose_similarity_for_step(
+    db: Session,
+    run: GameRun,
+    step: GameRunStep,
+    image_bytes: bytes,
+) -> tuple[str, str, dict | None]:
+    if run.module_key != "posture_training":
+        return "skipped", "pose_similarity_not_applicable", None
+    if not pose_similarity_available():
+        return "skipped", "pose_runtime_unavailable", None
+
+    template = _lookup_posture_template_for_step(db, run, step)
+    if template is None:
+        return "skipped", "reference_template_not_found", None
+    if not template.reference_landmarks_json:
+        return "skipped", "reference_pose_not_available", None
+
+    scored = score_against_reference(image_bytes=image_bytes, reference_landmarks_json=template.reference_landmarks_json)
+    if scored is None:
+        return "skipped", "pose_not_detected", None
+
+    difficulty_key = str(run.difficulty_key or "medium").lower()
+    module_settings = _module_settings_payload(_load_module_settings(db, run.module_key), run.module_key)
+    threshold = float(
+        {
+            "easy": module_settings.get("pose_similarity_min_score_easy", 62.0),
+            "medium": module_settings.get("pose_similarity_min_score_medium", 74.0),
+            "hard": module_settings.get("pose_similarity_min_score_hard", 84.0),
+        }.get(difficulty_key, module_settings.get("pose_similarity_min_score_medium", 74.0))
+    )
+    score = float(scored.get("score", 0.0))
+    if score >= threshold:
+        return "confirmed", f"Pose-Score {score:.1f}/100 (min {threshold:.1f})", {
+            "score": score,
+            "threshold": threshold,
+            "difficulty": difficulty_key,
+            **scored,
+        }
+    return "suspicious", f"Pose-Score {score:.1f}/100 (min {threshold:.1f})", {
+        "score": score,
+        "threshold": threshold,
+        "difficulty": difficulty_key,
+        **scored,
+    }
+
+
 def _is_media_content_url(image_url: str) -> bool:
     return bool(MEDIA_CONTENT_URL_RE.match((image_url or "").strip()))
 
@@ -386,7 +509,7 @@ def _timestamp_slug(value: datetime | None = None) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     dt = dt.astimezone(timezone.utc)
-    return dt.strftime("%Y%m%d_%H%M%S_%f")
+    return dt.strftime("%Y%m%d-%H%M")
 
 
 def _safe_capture_suffix(filename: str | None) -> str:
@@ -398,15 +521,13 @@ def _safe_capture_suffix(filename: str | None) -> str:
     return suffix
 
 
-def _store_game_verification_capture(run: GameRun, image_bytes: bytes, filename: str | None) -> str:
-    run_started = _as_utc(run.started_at) or datetime.now(timezone.utc)
-    run_stamp = _timestamp_slug(run_started)
+def _store_game_verification_capture(run: GameRun, image_bytes: bytes, filename: str | None, run_number: int) -> str:
     capture_stamp = _timestamp_slug()
     suffix = _safe_capture_suffix(filename)
 
     rel_path = (
         f"verifications/games/{run.session_id}/"
-        f"{run.id}-{run_stamp}_{capture_stamp}-{uuid4().hex}{suffix}"
+        f"session{run.session_id}-game{run.id}-run{max(1, int(run_number))}-{capture_stamp}{suffix}"
     )
     target = _resolve_media_path(rel_path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -527,19 +648,74 @@ def _default_movement_thresholds_for_module(module_key: str) -> dict:
     return DEFAULT_MOVEMENT_THRESHOLDS_BY_MODULE["dont_move"]
 
 
-def _module_settings_payload(item: GameModuleSetting | None, module_key: str) -> dict:
-    defaults = _default_movement_thresholds_for_module(module_key)
+def _default_start_countdown_seconds(module_key: str) -> int:
+    if _is_single_pose_strict_module(module_key):
+        return DEFAULT_STRICT_START_COUNTDOWN_SECONDS
+    return 0
+
+
+def _default_pose_similarity_thresholds_for_module(module_key: str) -> dict:
+    if module_key == "posture_training":
+        return {
+            "easy": POSE_SIMILARITY_THRESHOLD_BY_DIFFICULTY["easy"],
+            "medium": POSE_SIMILARITY_THRESHOLD_BY_DIFFICULTY["medium"],
+            "hard": POSE_SIMILARITY_THRESHOLD_BY_DIFFICULTY["hard"],
+        }
+    if module_key == "dont_move":
+        return {
+            "easy": 45.0,
+            "medium": 55.0,
+            "hard": 65.0,
+        }
+    if module_key == "tiptoeing":
+        return {
+            # Tiptoeing uses these fields as green dominance deltas (%).
+            "easy": 8.0,
+            "medium": 10.0,
+            "hard": 12.0,
+        }
+    return {
+        "easy": 0.0,
+        "medium": 0.0,
+        "hard": 0.0,
+    }
+
+
+def _global_settings_payload(item: GameModuleSetting | None) -> dict:
     if item is None:
         return {
             "easy_target_multiplier": DEFAULT_EASY_TARGET_MULTIPLIER,
             "hard_target_multiplier": DEFAULT_HARD_TARGET_MULTIPLIER,
             "target_randomization_percent": DEFAULT_TARGET_RANDOMIZATION_PERCENT,
+            "start_countdown_seconds": DEFAULT_STRICT_START_COUNTDOWN_SECONDS,
+        }
+    return {
+        "easy_target_multiplier": float(item.easy_target_multiplier),
+        "hard_target_multiplier": float(item.hard_target_multiplier),
+        "target_randomization_percent": int(item.target_randomization_percent),
+        "start_countdown_seconds": int(item.start_countdown_seconds or DEFAULT_STRICT_START_COUNTDOWN_SECONDS),
+    }
+
+
+def _module_settings_payload(item: GameModuleSetting | None, module_key: str) -> dict:
+    defaults = _default_movement_thresholds_for_module(module_key)
+    default_start_countdown = _default_start_countdown_seconds(module_key)
+    default_pose_similarity = _default_pose_similarity_thresholds_for_module(module_key)
+    if item is None:
+        return {
+            "easy_target_multiplier": DEFAULT_EASY_TARGET_MULTIPLIER,
+            "hard_target_multiplier": DEFAULT_HARD_TARGET_MULTIPLIER,
+            "target_randomization_percent": DEFAULT_TARGET_RANDOMIZATION_PERCENT,
+            "start_countdown_seconds": default_start_countdown,
             "movement_easy_pose_deviation": float(defaults["easy"]["pose_deviation"]),
             "movement_easy_stillness": float(defaults["easy"]["stillness"]),
             "movement_medium_pose_deviation": float(defaults["medium"]["pose_deviation"]),
             "movement_medium_stillness": float(defaults["medium"]["stillness"]),
             "movement_hard_pose_deviation": float(defaults["hard"]["pose_deviation"]),
             "movement_hard_stillness": float(defaults["hard"]["stillness"]),
+            "pose_similarity_min_score_easy": float(default_pose_similarity["easy"]),
+            "pose_similarity_min_score_medium": float(default_pose_similarity["medium"]),
+            "pose_similarity_min_score_hard": float(default_pose_similarity["hard"]),
             "movement_thresholds": {
                 "easy": {
                     "pose_deviation": float(defaults["easy"]["pose_deviation"]),
@@ -567,12 +743,32 @@ def _module_settings_payload(item: GameModuleSetting | None, module_key: str) ->
         "easy_target_multiplier": item.easy_target_multiplier,
         "hard_target_multiplier": item.hard_target_multiplier,
         "target_randomization_percent": item.target_randomization_percent,
+        "start_countdown_seconds": (
+            int(item.start_countdown_seconds)
+            if item.start_countdown_seconds is not None
+            else default_start_countdown
+        ),
         "movement_easy_pose_deviation": easy_pose,
         "movement_easy_stillness": easy_still,
         "movement_medium_pose_deviation": medium_pose,
         "movement_medium_stillness": medium_still,
         "movement_hard_pose_deviation": hard_pose,
         "movement_hard_stillness": hard_still,
+        "pose_similarity_min_score_easy": (
+            float(item.pose_similarity_min_score_easy)
+            if item.pose_similarity_min_score_easy is not None
+            else float(default_pose_similarity["easy"])
+        ),
+        "pose_similarity_min_score_medium": (
+            float(item.pose_similarity_min_score_medium)
+            if item.pose_similarity_min_score_medium is not None
+            else float(default_pose_similarity["medium"])
+        ),
+        "pose_similarity_min_score_hard": (
+            float(item.pose_similarity_min_score_hard)
+            if item.pose_similarity_min_score_hard is not None
+            else float(default_pose_similarity["hard"])
+        ),
         "movement_thresholds": {
             "easy": {
                 "pose_deviation": easy_pose,
@@ -619,25 +815,43 @@ def _load_module_settings(db: Session, module_key: str) -> GameModuleSetting | N
     return db.query(GameModuleSetting).filter(GameModuleSetting.module_key == module_key).first()
 
 
+def _load_global_settings(db: Session) -> GameModuleSetting | None:
+    return _load_module_settings(db, GLOBAL_GAME_SETTINGS_KEY)
+
+
 def _resolve_effective_settings(db: Session, payload: StartGameRunRequest) -> tuple[float, float, int]:
-    configured = _load_module_settings(db, payload.module_key)
-    default_payload = _module_settings_payload(configured, payload.module_key)
+    configured_module = _load_module_settings(db, payload.module_key)
+    module_payload = _module_settings_payload(configured_module, payload.module_key)
+    configured_global = _load_global_settings(db)
+    global_payload = _global_settings_payload(configured_global)
     easy = (
         payload.easy_target_multiplier
         if payload.easy_target_multiplier is not None
-        else float(default_payload["easy_target_multiplier"])
+        else float(global_payload["easy_target_multiplier"] if configured_global is not None else module_payload["easy_target_multiplier"])
     )
     hard = (
         payload.hard_target_multiplier
         if payload.hard_target_multiplier is not None
-        else float(default_payload["hard_target_multiplier"])
+        else float(global_payload["hard_target_multiplier"] if configured_global is not None else module_payload["hard_target_multiplier"])
     )
     randomization = (
         payload.target_randomization_percent
         if payload.target_randomization_percent is not None
-        else int(default_payload["target_randomization_percent"])
+        else int(global_payload["target_randomization_percent"] if configured_global is not None else module_payload["target_randomization_percent"])
     )
     return easy, hard, randomization
+
+
+def _resolve_effective_start_countdown_seconds(db: Session, payload: StartGameRunRequest) -> int:
+    if payload.start_countdown_seconds is not None:
+        return max(0, min(60, int(payload.start_countdown_seconds)))
+    configured_global = _load_global_settings(db)
+    if configured_global is not None:
+        global_payload = _global_settings_payload(configured_global)
+        return max(0, min(60, int(global_payload.get("start_countdown_seconds", DEFAULT_STRICT_START_COUNTDOWN_SECONDS))))
+    configured_module = _load_module_settings(db, payload.module_key)
+    module_payload = _module_settings_payload(configured_module, payload.module_key)
+    return max(0, min(60, int(module_payload.get("start_countdown_seconds", 0))))
 
 
 def _difficulty_target_multiplier(difficulty: str, easy_multiplier: float, hard_multiplier: float) -> float:
@@ -709,11 +923,23 @@ def _append_run_check_entry(
     analysis: str,
     capture_rel_path: str | None,
     sample_only: bool,
+    monitor_only: bool = False,
+    pose_similarity: dict | None = None,
 ) -> None:
     meta = _load_run_summary_meta(run)
     checks = meta.get("checks")
     if not isinstance(checks, list):
         checks = []
+
+    pose_score = None
+    pose_threshold = None
+    if isinstance(pose_similarity, dict):
+        raw_score = pose_similarity.get("score")
+        raw_threshold = pose_similarity.get("threshold")
+        if isinstance(raw_score, (int, float)):
+            pose_score = float(raw_score)
+        if isinstance(raw_threshold, (int, float)):
+            pose_threshold = float(raw_threshold)
 
     checks.append(
         {
@@ -726,6 +952,9 @@ def _append_run_check_entry(
             "violation_detected": verification_status != "confirmed",
             "violation_reason": analysis if verification_status != "confirmed" else None,
             "sample_only": bool(sample_only),
+            "monitor_only": bool(monitor_only),
+            "pose_score": pose_score,
+            "pose_threshold": pose_threshold,
             "capture_path": capture_rel_path,
             "capture_url": (f"/media/{capture_rel_path}" if capture_rel_path else None),
         }
@@ -733,6 +962,24 @@ def _append_run_check_entry(
 
     meta["checks"] = checks
     run.summary_json = json.dumps(meta, ensure_ascii=True)
+
+
+def _historical_pose_scores_for_step(run: GameRun, step_id: int) -> list[float]:
+    meta = _load_run_summary_meta(run)
+    checks = meta.get("checks")
+    if not isinstance(checks, list):
+        return []
+
+    scores: list[float] = []
+    for entry in checks:
+        if not isinstance(entry, dict):
+            continue
+        if int(entry.get("step_id") or 0) != int(step_id):
+            continue
+        raw = entry.get("pose_score")
+        if isinstance(raw, (int, float)):
+            scores.append(float(raw))
+    return scores
 
 
 def _finish_run_if_done(db: Session, run: GameRun) -> bool:
@@ -877,6 +1124,41 @@ def get_module_settings(module_key: str, request: Request, db: Session = Depends
     return _module_settings_payload(item, module_key)
 
 
+@router.get("/settings/global")
+def get_global_game_settings(request: Request, db: Session = Depends(get_db)) -> dict:
+    require_admin_session_user(request, db)
+    item = _load_global_settings(db)
+    return _global_settings_payload(item)
+
+
+@router.put("/settings/global")
+def update_global_game_settings(
+    payload: GlobalGameSettingsUpdateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    user = require_admin_session_user(request, db)
+    item = _load_global_settings(db)
+    if item is None:
+        item = GameModuleSetting(module_key=GLOBAL_GAME_SETTINGS_KEY)
+    item.easy_target_multiplier = payload.easy_target_multiplier
+    item.hard_target_multiplier = payload.hard_target_multiplier
+    item.target_randomization_percent = payload.target_randomization_percent
+    item.start_countdown_seconds = payload.start_countdown_seconds
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    audit_log(
+        "admin_game_global_settings_updated",
+        actor_user_id=user.id,
+        easy_target_multiplier=item.easy_target_multiplier,
+        hard_target_multiplier=item.hard_target_multiplier,
+        target_randomization_percent=item.target_randomization_percent,
+        start_countdown_seconds=item.start_countdown_seconds,
+    )
+    return _global_settings_payload(item)
+
+
 @router.put("/modules/{module_key}/settings")
 def update_module_settings(
     module_key: str,
@@ -894,12 +1176,16 @@ def update_module_settings(
     item.easy_target_multiplier = payload.easy_target_multiplier
     item.hard_target_multiplier = payload.hard_target_multiplier
     item.target_randomization_percent = payload.target_randomization_percent
+    item.start_countdown_seconds = payload.start_countdown_seconds
     item.movement_easy_pose_deviation = payload.movement_easy_pose_deviation
     item.movement_easy_stillness = payload.movement_easy_stillness
     item.movement_medium_pose_deviation = payload.movement_medium_pose_deviation
     item.movement_medium_stillness = payload.movement_medium_stillness
     item.movement_hard_pose_deviation = payload.movement_hard_pose_deviation
     item.movement_hard_stillness = payload.movement_hard_stillness
+    item.pose_similarity_min_score_easy = payload.pose_similarity_min_score_easy
+    item.pose_similarity_min_score_medium = payload.pose_similarity_min_score_medium
+    item.pose_similarity_min_score_hard = payload.pose_similarity_min_score_hard
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -910,12 +1196,16 @@ def update_module_settings(
         easy_target_multiplier=item.easy_target_multiplier,
         hard_target_multiplier=item.hard_target_multiplier,
         target_randomization_percent=item.target_randomization_percent,
+        start_countdown_seconds=item.start_countdown_seconds,
         movement_easy_pose_deviation=item.movement_easy_pose_deviation,
         movement_easy_stillness=item.movement_easy_stillness,
         movement_medium_pose_deviation=item.movement_medium_pose_deviation,
         movement_medium_stillness=item.movement_medium_stillness,
         movement_hard_pose_deviation=item.movement_hard_pose_deviation,
         movement_hard_stillness=item.movement_hard_stillness,
+        pose_similarity_min_score_easy=item.pose_similarity_min_score_easy,
+        pose_similarity_min_score_medium=item.pose_similarity_min_score_medium,
+        pose_similarity_min_score_hard=item.pose_similarity_min_score_hard,
     )
     return _module_settings_payload(item, module_key)
 
@@ -952,7 +1242,6 @@ def list_available_module_postures(module_key: str, db: Session = Depends(get_db
     return {"items": items}
 
 
-@router.get("/postures/matrix")
 def list_posture_matrix(request: Request, db: Session = Depends(get_db)) -> dict:
     require_admin_session_user(request, db)
     modules = [as_public_module_payload(module) for module in list_modules()]
@@ -969,7 +1258,6 @@ def list_posture_matrix(request: Request, db: Session = Depends(get_db)) -> dict
     return {"modules": modules, "items": items}
 
 
-@router.put("/postures/matrix")
 def update_posture_matrix(payload: PostureMatrixBulkUpdateRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     user = require_admin_session_user(request, db)
     if not payload.items:
@@ -1213,6 +1501,12 @@ async def import_module_postures_zip(
             )
             db.add(template)
             db.flush()
+            reference_image_bytes = None
+            if image_file:
+                reference_image_bytes = processed
+            else:
+                reference_image_bytes = _try_load_posture_image_bytes_from_url(db, resolved_image_url)
+            _refresh_reference_landmarks(template, reference_image_bytes)
             _set_allowed_module_keys(db, int(template.id), allowed_module_keys)
             imported += 1
 
@@ -1265,6 +1559,7 @@ def create_module_posture(
     )
     db.add(template)
     db.flush()
+    _refresh_reference_landmarks(template, _try_load_posture_image_bytes_from_url(db, image_url))
     allowed_module_keys = _normalize_allowed_module_keys(payload.allowed_module_keys, pool_key, allow_empty=True)
     _set_allowed_module_keys(db, int(template.id), allowed_module_keys)
     db.commit()
@@ -1311,6 +1606,7 @@ def update_module_posture(
         if not next_image:
             raise HTTPException(status_code=422, detail="image_url cannot be empty")
         template.image_url = next_image
+        _refresh_reference_landmarks(template, _try_load_posture_image_bytes_from_url(db, next_image))
     if payload.instruction is not None:
         template.instruction = payload.instruction.strip() or None
     if payload.target_seconds is not None:
@@ -1377,6 +1673,172 @@ def delete_module_posture(module_key: str, posture_id: int, request: Request, db
     return {"deleted": posture_id}
 
 
+@router.put("/modules/{module_key}/postures/{posture_id}/reference-pose")
+def update_module_posture_reference_pose(
+    module_key: str,
+    posture_id: int,
+    payload: PostureReferencePoseUpdateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    user = require_admin_session_user(request, db)
+    module = get_module(module_key)
+    if not module:
+        raise HTTPException(status_code=404, detail="Game module not found")
+
+    pool_key = _posture_pool_module_key(module_key)
+    template = (
+        db.query(GamePostureTemplate)
+        .filter(GamePostureTemplate.id == posture_id, GamePostureTemplate.module_key == pool_key)
+        .first()
+    )
+    if not template:
+        raise HTTPException(status_code=404, detail="Posture not found")
+
+    if payload.enabled:
+        if payload.refresh or not template.reference_landmarks_json:
+            image_bytes = _try_load_posture_image_bytes_from_url(db, template.image_url or "")
+            if not image_bytes:
+                raise HTTPException(status_code=422, detail="Posture image is unavailable for landmark extraction")
+            _refresh_reference_landmarks(template, image_bytes)
+            if not template.reference_landmarks_json:
+                raise HTTPException(status_code=422, detail="No pose landmarks detected in posture image")
+    else:
+        template.reference_landmarks_json = None
+        template.reference_landmarks_detected_at = None
+
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+
+    allowed = _load_allowed_module_map(db, [int(template.id)]).get(int(template.id))
+    if allowed is None:
+        next_allowed = _default_allowed_module_keys_for_pool(pool_key)
+    else:
+        next_allowed = sorted(allowed)
+
+    audit_log(
+        "admin_game_posture_reference_pose_updated",
+        actor_user_id=user.id,
+        module_key=module_key,
+        posture_id=posture_id,
+        enabled=bool(template.reference_landmarks_json),
+        refreshed=bool(payload.refresh and payload.enabled),
+    )
+    return _template_payload(template, allowed_module_keys=next_allowed)
+
+
+@router.put("/modules/{module_key}/postures/{posture_id}/reference-pose/manual")
+def update_module_posture_reference_pose_manual(
+    module_key: str,
+    posture_id: int,
+    payload: PostureReferencePoseManualUpdateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    user = require_admin_session_user(request, db)
+    module = get_module(module_key)
+    if not module:
+        raise HTTPException(status_code=404, detail="Game module not found")
+
+    pool_key = _posture_pool_module_key(module_key)
+    template = (
+        db.query(GamePostureTemplate)
+        .filter(GamePostureTemplate.id == posture_id, GamePostureTemplate.module_key == pool_key)
+        .first()
+    )
+    if not template:
+        raise HTTPException(status_code=404, detail="Posture not found")
+
+    try:
+        parsed = json.loads(payload.reference_landmarks_json)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=422, detail="reference_landmarks_json is not valid JSON") from exc
+
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=422, detail="reference_landmarks_json must be a JSON object")
+
+    points = parsed.get("points")
+    meta = parsed.get("meta")
+    if not isinstance(points, dict) or not isinstance(meta, dict):
+        raise HTTPException(status_code=422, detail="reference_landmarks_json must contain points and meta objects")
+
+    center = meta.get("center")
+    scale = meta.get("scale")
+    if not isinstance(center, list) or len(center) != 2:
+        raise HTTPException(status_code=422, detail="reference_landmarks_json.meta.center must have two values")
+    if not isinstance(scale, (int, float)) or float(scale) <= 0:
+        raise HTTPException(status_code=422, detail="reference_landmarks_json.meta.scale must be > 0")
+
+    template.reference_landmarks_json = json.dumps(parsed, ensure_ascii=True)
+    template.reference_landmarks_detected_at = datetime.now(timezone.utc)
+
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+
+    allowed = _load_allowed_module_map(db, [int(template.id)]).get(int(template.id))
+    if allowed is None:
+        next_allowed = _default_allowed_module_keys_for_pool(pool_key)
+    else:
+        next_allowed = sorted(allowed)
+
+    audit_log(
+        "admin_game_posture_reference_pose_manual_updated",
+        actor_user_id=user.id,
+        module_key=module_key,
+        posture_id=posture_id,
+    )
+    return _template_payload(template, allowed_module_keys=next_allowed)
+
+
+@router.post("/modules/{module_key}/postures/{posture_id}/reference-pose/upload")
+async def upload_module_posture_reference_pose_image(
+    module_key: str,
+    posture_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = require_admin_session_user(request, db)
+    module = get_module(module_key)
+    if not module:
+        raise HTTPException(status_code=404, detail="Game module not found")
+
+    pool_key = _posture_pool_module_key(module_key)
+    template = (
+        db.query(GamePostureTemplate)
+        .filter(GamePostureTemplate.id == posture_id, GamePostureTemplate.module_key == pool_key)
+        .first()
+    )
+    if not template:
+        raise HTTPException(status_code=404, detail="Posture not found")
+
+    raw = await file.read()
+    processed, _ = _process_posture_image(raw, file.filename, file.content_type)
+    _refresh_reference_landmarks(template, processed)
+    if not template.reference_landmarks_json:
+        raise HTTPException(status_code=422, detail="No pose landmarks detected in uploaded reference image")
+
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+
+    allowed = _load_allowed_module_map(db, [int(template.id)]).get(int(template.id))
+    if allowed is None:
+        next_allowed = _default_allowed_module_keys_for_pool(pool_key)
+    else:
+        next_allowed = sorted(allowed)
+
+    audit_log(
+        "admin_game_posture_reference_pose_uploaded",
+        actor_user_id=user.id,
+        module_key=module_key,
+        posture_id=posture_id,
+    )
+    return _template_payload(template, allowed_module_keys=next_allowed)
+
+
 @router.post("/sessions/{session_id}/runs/start")
 def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = Depends(get_db)) -> dict:
     _load_session(db, session_id)
@@ -1390,7 +1852,7 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
     effective_transition_seconds = int(payload.transition_seconds)
     effective_max_misses_before_penalty = int(payload.max_misses_before_penalty)
     if _is_single_pose_strict_module(module.key):
-        effective_transition_seconds = 0
+        effective_transition_seconds = _resolve_effective_start_countdown_seconds(db, payload)
         # Single-pose strict modules apply penalty per violation; threshold is neutralized.
         effective_max_misses_before_penalty = 1
 
@@ -1523,6 +1985,7 @@ async def verify_game_step(
     file: UploadFile = File(...),
     observed_posture: str | None = Form(default=None),
     sample_only: bool = Form(default=False),
+    monitor_only: bool = Form(default=False),
     marker_x: float | None = Form(default=None),
     marker_y: float | None = Form(default=None),
     db: Session = Depends(get_db),
@@ -1543,23 +2006,81 @@ async def verify_game_step(
     if step.status != "pending":
         raise HTTPException(status_code=409, detail="Game step is not pending")
 
+    if monitor_only and run.module_key != "posture_training":
+        raise HTTPException(status_code=422, detail="monitor_only is only supported for posture_training")
+
     data = await file.read()
     capture_bytes = data
     if marker_x is not None or marker_y is not None:
         capture_bytes = _annotate_movement_capture(data, marker_x=marker_x, marker_y=marker_y)
-    capture_rel_path = _store_game_verification_capture(run, capture_bytes, file.filename)
+
     difficulty = _difficulty_for(run.module_key, run.difficulty_key)
     if difficulty is None:
         raise HTTPException(status_code=409, detail="Difficulty profile missing")
 
-    status, analysis = analyze_verification(
+    pose_status, pose_analysis, pose_details = _evaluate_pose_similarity_for_step(
+        db=db,
+        run=run,
+        step=step,
         image_bytes=data,
-        filename=file.filename or "capture.jpg",
-        requested_seal_number=None,
-        observed_seal_number=observed_posture,
-        verification_criteria=_verification_criteria_for_step(run, step),
-        allow_heuristic_fallback=False,
     )
+
+    if monitor_only:
+        status = "confirmed" if pose_status == "confirmed" else "suspicious"
+        analysis = pose_analysis or ("Pose-Check bestaetigt." if status == "confirmed" else "Pose-Check nicht bestaetigt.")
+    else:
+        status, analysis = analyze_verification(
+            image_bytes=data,
+            filename=file.filename or "capture.jpg",
+            requested_seal_number=None,
+            observed_seal_number=observed_posture,
+            verification_criteria=_verification_criteria_for_step(run, step),
+            allow_heuristic_fallback=False,
+        )
+        if pose_status == "suspicious":
+            status = "suspicious"
+            analysis = f"{analysis} {pose_analysis}".strip()
+        elif pose_status == "confirmed":
+            analysis = f"{analysis} {pose_analysis}".strip()
+
+        # For posture_training final checks, decide by average pose score over the full hold duration.
+        if run.module_key == "posture_training" and not sample_only:
+            threshold = None
+            current_score = None
+            if isinstance(pose_details, dict):
+                raw_threshold = pose_details.get("threshold")
+                raw_score = pose_details.get("score")
+                if isinstance(raw_threshold, (int, float)):
+                    threshold = float(raw_threshold)
+                if isinstance(raw_score, (int, float)):
+                    current_score = float(raw_score)
+
+            scores = _historical_pose_scores_for_step(run, step.id)
+            if current_score is not None:
+                scores.append(current_score)
+
+            if threshold is not None and scores:
+                avg_score = sum(scores) / len(scores)
+                status = "confirmed" if avg_score >= threshold else "suspicious"
+                analysis = (
+                    f"Durchschnittlicher Pose-Score {avg_score:.1f}/100 (min {threshold:.1f}; samples={len(scores)})."
+                )
+
+    capture_rel_path = None
+    if not monitor_only:
+        capture_rel_path = _store_game_verification_capture(
+            run,
+            capture_bytes,
+            file.filename,
+            run_number=int(step.verification_count or 0) + 1,
+        )
+    elif status != "confirmed":
+        capture_rel_path = _store_game_verification_capture(
+            run,
+            capture_bytes,
+            file.filename,
+            run_number=int(step.verification_count or 0) + 1,
+        )
 
     step.verification_count += 1
     step.last_analysis = analysis
@@ -1678,7 +2199,10 @@ async def verify_game_step(
                 )
             )
 
-    if sample_only:
+    if monitor_only:
+        # Monitor checks run frequently; avoid writing chat messages for every tick.
+        pass
+    elif sample_only:
         if status == "confirmed":
             db.add(
                 Message(
@@ -1729,6 +2253,8 @@ async def verify_game_step(
         analysis=analysis,
         capture_rel_path=capture_rel_path,
         sample_only=sample_only,
+        monitor_only=monitor_only,
+        pose_similarity=pose_details,
     )
 
     db.add(step)
@@ -1745,9 +2271,12 @@ async def verify_game_step(
             "verification_count": step.verification_count,
             "verification_status": status,
             "analysis": step.last_analysis,
+            "pose_similarity_status": pose_status,
+            "pose_similarity": pose_details,
             "capture_path": capture_rel_path,
-            "capture_url": f"/media/{capture_rel_path}",
+            "capture_url": (f"/media/{capture_rel_path}" if capture_rel_path else None),
             "sample_only": sample_only,
+            "monitor_only": monitor_only,
             "finalized": step.status != "pending",
         },
     }
@@ -1791,7 +2320,12 @@ async def register_movement_event(
         marker_label=marker_label,
         marker_strength=marker_strength,
     )
-    capture_rel_path = _store_game_verification_capture(run, annotated, file.filename)
+    capture_rel_path = _store_game_verification_capture(
+        run,
+        annotated,
+        file.filename,
+        run_number=int(step.verification_count or 0) + 1,
+    )
     now = datetime.now(timezone.utc)
 
     marker_note = ""

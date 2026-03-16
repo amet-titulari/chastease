@@ -35,6 +35,15 @@
     margin-top: 0.7rem;
     max-width: 560px;
   }
+  .mask-preview {
+    width: 100%;
+    max-width: 320px;
+    border-radius: 10px;
+    border: 1px solid rgba(95, 157, 221, 0.42);
+    background: rgba(7, 19, 33, 0.9);
+    display: none;
+    object-fit: contain;
+  }
   .camera-video {
     width: 100%;
     border-radius: 10px;
@@ -274,10 +283,6 @@
   <section id="gm-setup-section" class="game-card">
     <div class="top-row" style="align-items:center;">
       <h1 style="margin:0;">{{ module_title }}</h1>
-      <div class="header-actions">
-        <a class="header-btn" href="/admin/postures/matrix">Posture-Matrix</a>
-        <a class="header-btn secondary" href="/games">Zur Spieleauswahl</a>
-      </div>
     </div>
     <p class="game-meta">Session {{ session_id }} · {{ module_summary }}</p>
     <p class="game-meta">Die Startwerte wurden aus dem letzten Run dieser Session uebernommen.</p>
@@ -287,7 +292,7 @@
       <label>Dauer (Min)
         <input id="gm-duration" type="number" min="1" max="240" value="{{ initial_setup.duration_minutes }}" />
       </label>
-      <label id="gm-transition-wrap">Wechseldauer (Sek)
+      <label id="gm-transition-wrap"><span id="gm-transition-label-text">Wechseldauer (Sek)</span>
         <input id="gm-transition-seconds" type="number" min="0" max="60" value="{{ initial_setup.transition_seconds }}" />
       </label>
       <label>Schwierigkeit
@@ -321,6 +326,7 @@
     <div class="setup-camera">
       <div class="game-meta">Kamera-Vorschau (Pflicht vor Spielstart)</div>
       <div id="gm-camera-guidance" class="game-meta"></div>
+      <img id="gm-mask-preview" class="mask-preview" alt="Tiptoeing Masken-Vorschlag" />
       <video id="gm-setup-video" class="camera-video" autoplay muted playsinline></video>
       <button id="gm-cam-start" type="button">Kamera aktivieren</button>
       <button id="gm-start-btn" type="button">Spiel starten</button>
@@ -372,6 +378,7 @@ const sessionId = {{ session_id }};
 const moduleKey = {{ module_key | tojson }};
 const isDontMoveModule = moduleKey === "dont_move";
 const isTiptoeingModule = moduleKey === "tiptoeing";
+const TIPTOEING_MASK_URL = "/static/masks/tiptoeing-mask.png";
 const singlePoseModuleKeys = new Set(["dont_move", "tiptoeing"]);
 const isSinglePoseModule = singlePoseModuleKeys.has(moduleKey);
 const initialDifficulty = {{ initial_setup.difficulty | tojson }};
@@ -382,6 +389,7 @@ let totalTimerHandle = null;
 let phaseTimerHandle = null;
 let runPollHandle = null;
 let dontMoveMonitorHandle = null;
+let postureScoreMonitorHandle = null;
 let movementPose = null;
 let movementFileset = null;
 let movementPoseReady = false;
@@ -396,6 +404,9 @@ let movementRedFlashUntil = 0;
 let movementEventInFlight = false;
 let movementMonitorActive = false;
 let movementLastMarker = null;
+let tiptoeingMaskImage = null;
+let tiptoeingMaskReady = false;
+let tiptoeingOutsideGreenFrames = 0;
 let sequenceToken = 0;
 let sequenceStepId = null;
 let verifyInFlight = false;
@@ -412,6 +423,9 @@ let moduleSettings = {
   movement_medium_stillness: null,
   movement_hard_pose_deviation: null,
   movement_hard_stillness: null,
+  pose_similarity_min_score_easy: null,
+  pose_similarity_min_score_medium: null,
+  pose_similarity_min_score_hard: null,
 };
 
 const statusEl = document.getElementById("gm-status");
@@ -440,9 +454,11 @@ const dontMoveOptionsEl = document.getElementById("gm-dont-move-options");
 const dontMovePostureEl = document.getElementById("gm-dont-move-posture");
 const missLabelEl = document.getElementById("gm-miss-label");
 const transitionWrapEl = document.getElementById("gm-transition-wrap");
+const transitionLabelTextEl = document.getElementById("gm-transition-label-text");
 const maxMissesWrapEl = document.getElementById("gm-max-misses-wrap");
 const sessionPenaltyLabelTextEl = document.getElementById("gm-session-penalty-label-text");
 const cameraGuidanceEl = document.getElementById("gm-camera-guidance");
+const maskPreviewEl = document.getElementById("gm-mask-preview");
 
 const movementWatchIndices = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 const movementPoseCompareIndices = [11, 12, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
@@ -453,9 +469,9 @@ const movementDefaults = {
     hard: { poseDeviation: 0.17, stillness: 0.0080 },
   },
   tiptoeing: {
-    easy: { poseDeviation: 0.22, stillness: 0.0120 },
-    medium: { poseDeviation: 0.19, stillness: 0.0090 },
-    hard: { poseDeviation: 0.15, stillness: 0.0070 },
+    easy: { poseDeviation: 0.14, stillness: 0.22 },
+    medium: { poseDeviation: 0.18, stillness: 0.26 },
+    hard: { poseDeviation: 0.22, stillness: 0.30 },
   },
 };
 
@@ -566,6 +582,59 @@ function syncMotionOverlaySize() {
   motionOverlayEl.height = Math.max(1, Math.floor(rect.height));
 }
 
+async function ensureTiptoeingMaskLoaded() {
+  if (!isTiptoeingModule) return;
+  if (tiptoeingMaskReady && tiptoeingMaskImage) return;
+
+  const img = new Image();
+  img.decoding = "async";
+  img.src = TIPTOEING_MASK_URL;
+
+  await new Promise((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("Tiptoeing-Maske konnte nicht geladen werden"));
+  });
+
+  tiptoeingMaskImage = img;
+  tiptoeingMaskReady = true;
+}
+
+function isMaskBlack(r, g, b, a, profile) {
+  const blackLimit = Math.round(Math.max(0, Math.min(255, Number(profile?.blackThreshold || 0.18) * 255)));
+  return a > 32 && r <= blackLimit && g <= blackLimit && b <= blackLimit;
+}
+
+function isMaskGreen(r, g, b, a, profile) {
+  const greenMin = Math.round(Math.max(0, Math.min(255, Number(profile?.greenMinThreshold || 0.26) * 255)));
+  const dominance = Math.round(Math.max(0, Math.min(255, Number(profile?.dominanceThreshold || 0.10) * 255)));
+  return a > 32 && g >= greenMin && g >= (r + dominance) && g >= (b + dominance);
+}
+
+function readTiptoeingMaskZone(nx, ny, profile) {
+  if (!tiptoeingMaskReady || !tiptoeingMaskImage) return "none";
+
+  const xNorm = Math.max(0, Math.min(1, Number(nx || 0)));
+  const yNorm = Math.max(0, Math.min(1, Number(ny || 0)));
+  const sampleCanvas = document.createElement("canvas");
+  sampleCanvas.width = Math.max(1, motionOverlayEl?.width || 1);
+  sampleCanvas.height = Math.max(1, motionOverlayEl?.height || 1);
+  const sampleCtx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+  if (!sampleCtx) return "none";
+
+  sampleCtx.drawImage(tiptoeingMaskImage, 0, 0, sampleCanvas.width, sampleCanvas.height);
+  const px = Math.max(0, Math.min(sampleCanvas.width - 1, Math.round(xNorm * (sampleCanvas.width - 1))));
+  const py = Math.max(0, Math.min(sampleCanvas.height - 1, Math.round(yNorm * (sampleCanvas.height - 1))));
+  const data = sampleCtx.getImageData(px, py, 1, 1).data;
+  const r = Number(data[0] || 0);
+  const g = Number(data[1] || 0);
+  const b = Number(data[2] || 0);
+  const a = Number(data[3] || 0);
+
+  if (isMaskBlack(r, g, b, a, profile)) return "black";
+  if (isMaskGreen(r, g, b, a, profile)) return "green";
+  return "neutral";
+}
+
 function drawMotionOverlay(marker = null, forceAlert = false) {
   if (!motionOverlayEl || !isSinglePoseModule) return;
   const ctx = motionOverlayEl.getContext("2d");
@@ -582,6 +651,14 @@ function drawMotionOverlay(marker = null, forceAlert = false) {
   if (!movementMonitorActive && !isAlert) {
     return;
   }
+
+  if (isTiptoeingModule && tiptoeingMaskReady && tiptoeingMaskImage) {
+    ctx.save();
+    ctx.globalAlpha = isAlert ? 0.4 : 0.32;
+    ctx.drawImage(tiptoeingMaskImage, 0, 0, w, h);
+    ctx.restore();
+  }
+
   const stroke = isAlert ? "rgba(255, 72, 72, 0.96)" : "rgba(56, 221, 112, 0.96)";
 
   ctx.lineWidth = Math.max(4, Math.floor(Math.min(w, h) * 0.012));
@@ -629,6 +706,30 @@ function movementProfile() {
   return fallback;
 }
 
+function tiptoeingMaskProfile() {
+  const diff = activeDifficultyKey();
+  const fallback = movementDefaults.tiptoeing[diff] || movementDefaults.tiptoeing.medium;
+
+  const blackRaw = Number(moduleSettings?.[`movement_${diff}_pose_deviation`]);
+  const greenMinRaw = Number(moduleSettings?.[`movement_${diff}_stillness`]);
+  const dominancePctRaw = Number(moduleSettings?.[`pose_similarity_min_score_${diff}`]);
+
+  const blackThreshold = Number.isFinite(blackRaw) && blackRaw > 0 ? blackRaw : fallback.poseDeviation;
+  const greenMinThreshold = Number.isFinite(greenMinRaw) && greenMinRaw > 0 ? greenMinRaw : fallback.stillness;
+  const dominanceDefaultPct = diff === "easy" ? 8 : (diff === "hard" ? 12 : 10);
+  const dominanceThreshold = (
+    Number.isFinite(dominancePctRaw) && dominancePctRaw > 0
+      ? (dominancePctRaw / 100)
+      : (dominanceDefaultPct / 100)
+  );
+
+  return {
+    blackThreshold: Math.max(0.01, Math.min(0.95, blackThreshold)),
+    greenMinThreshold: Math.max(0.01, Math.min(0.95, greenMinThreshold)),
+    dominanceThreshold: Math.max(0.01, Math.min(0.95, dominanceThreshold)),
+  };
+}
+
 function copyLandmarks(landmarks) {
   if (!Array.isArray(landmarks)) return null;
   return landmarks.map((item) => ({
@@ -669,6 +770,76 @@ function bodyRegionLabelForIndex(idx) {
   if (idx === 29 || idx === 30) return "Sprunggelenk";
   if (idx === 31 || idx === 32) return "Fuss";
   return "Koerper";
+}
+
+function evaluateTiptoeingMask(poseLandmarks) {
+  if (!Array.isArray(poseLandmarks) || poseLandmarks.length === 0) return null;
+  if (!tiptoeingMaskReady) return null;
+
+  const profile = tiptoeingMaskProfile();
+  const tracked = [25, 26, 27, 28, 29, 30, 31, 32];
+  let blackHit = null;
+  let outsideGreen = null;
+
+  for (const idx of tracked) {
+    const item = poseLandmarks[idx];
+    if (!item) continue;
+    const v = Number(item.visibility ?? 1);
+    if (!Number.isFinite(v) || v < 0.45) continue;
+
+    const nx = Number(item.x || 0);
+    const ny = Number(item.y || 0);
+    const zone = readTiptoeingMaskZone(nx, ny, profile);
+    if (zone === "black") {
+      blackHit = {
+        marker: { x: nx, y: ny },
+        markerIndex: idx,
+        markerLabel: `Verbotene Zone (${bodyRegionLabelForIndex(idx)})`,
+        markerStrength: 1.0,
+        reason: "Verbotene Zone beruehrt",
+      };
+      break;
+    }
+    if (!outsideGreen && zone !== "green") {
+      outsideGreen = {
+        marker: { x: nx, y: ny },
+        markerIndex: idx,
+        markerLabel: `Gruene Zone verlassen (${bodyRegionLabelForIndex(idx)})`,
+        markerStrength: 0.65,
+        reason: "Leg/Fuss ausserhalb der gruenen Zone",
+      };
+    }
+  }
+
+  if (blackHit) {
+    tiptoeingOutsideGreenFrames = 0;
+    return {
+      violation: true,
+      immediate: true,
+      ...blackHit,
+    };
+  }
+
+  if (outsideGreen) {
+    tiptoeingOutsideGreenFrames += 1;
+    const violation = tiptoeingOutsideGreenFrames >= 3;
+    return {
+      violation,
+      immediate: false,
+      ...outsideGreen,
+    };
+  }
+
+  tiptoeingOutsideGreenFrames = 0;
+  return {
+    violation: false,
+    immediate: false,
+    marker: null,
+    markerIndex: null,
+    markerLabel: "Gruene Zone gehalten",
+    markerStrength: 0,
+    reason: "Innerhalb der gruenerlaubten Zone",
+  };
 }
 
 function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
@@ -793,6 +964,13 @@ async function initMovementPose() {
 }
 
 function describeMovementReason(verdict) {
+  if (isTiptoeingModule) {
+    const markerLabel = String(verdict?.markerLabel || "Bein/Fuss");
+    if (String(verdict?.reason || "").includes("Verbotene Zone")) {
+      return `Tiptoeing-Maskenverstoss: Verbotene Zone beruehrt (${markerLabel}).`;
+    }
+    return `Tiptoeing-Maskenverstoss: Gruene Zone verlassen (${markerLabel}).`;
+  }
   const profile = movementProfile();
   const movePart = `movement=${Number(verdict?.movementScore || 0).toFixed(4)}/${Number(profile.stillness).toFixed(4)}`;
   const posePart = `pose=${Number(verdict?.poseScore || 0).toFixed(4)}/${Number(profile.poseDeviation).toFixed(4)}`;
@@ -811,6 +989,14 @@ async function captureViolationFrameBlob(marker = null, markerMeta = null) {
   if (!ctx) return null;
 
   ctx.drawImage(playVideoEl, 0, 0, w, h);
+
+  if (isTiptoeingModule && tiptoeingMaskReady && tiptoeingMaskImage) {
+    ctx.save();
+    ctx.globalAlpha = 0.34;
+    ctx.drawImage(tiptoeingMaskImage, 0, 0, w, h);
+    ctx.restore();
+  }
+
   const border = Math.max(8, Math.floor(Math.min(w, h) * 0.018));
   ctx.strokeStyle = "rgba(255, 48, 48, 0.98)";
   ctx.lineWidth = border;
@@ -928,6 +1114,9 @@ async function startMovementMonitor(token) {
 
   try {
     await initMovementPose();
+    if (isTiptoeingModule) {
+      await ensureTiptoeingMaskLoaded();
+    }
   } catch (err) {
     setStatus(`${err.message} - Echtzeit-Bewegungserkennung nicht verfuegbar.`, true);
     analysisEl.textContent = "Echtzeit-Bewegungserkennung konnte nicht gestartet werden.";
@@ -942,6 +1131,7 @@ async function startMovementMonitor(token) {
   movementCooldownUntil = 0;
   movementRedFlashUntil = 0;
   movementLastMarker = null;
+  tiptoeingOutsideGreenFrames = 0;
   movementMonitorActive = true;
   syncMotionOverlaySize();
   drawMotionOverlay();
@@ -960,7 +1150,9 @@ async function startMovementMonitor(token) {
       movementLatestPoseLandmarks = copyLandmarks(result?.landmarks?.[0] || []);
       movementLatestWorldLandmarks = copyLandmarks(result?.worldLandmarks?.[0] || []);
 
-      const verdict = evaluatePoseMovement(movementLatestWorldLandmarks, movementLatestPoseLandmarks);
+      const verdict = isTiptoeingModule
+        ? evaluateTiptoeingMask(movementLatestPoseLandmarks)
+        : evaluatePoseMovement(movementLatestWorldLandmarks, movementLatestPoseLandmarks);
       if (!verdict) {
         drawMotionOverlay();
         return;
@@ -996,12 +1188,20 @@ function stopMovementMonitor() {
   movementCooldownUntil = 0;
   movementRedFlashUntil = 0;
   movementLastMarker = null;
+  tiptoeingOutsideGreenFrames = 0;
   movementMonitorActive = false;
   if (motionOverlayEl) {
     const ctx = motionOverlayEl.getContext("2d");
     if (ctx) {
       ctx.clearRect(0, 0, motionOverlayEl.width, motionOverlayEl.height);
     }
+  }
+}
+
+function stopPostureScoreMonitor() {
+  if (postureScoreMonitorHandle) {
+    clearInterval(postureScoreMonitorHandle);
+    postureScoreMonitorHandle = null;
   }
 }
 
@@ -1031,6 +1231,18 @@ function updateVerificationPreview(stepResult, sampleOnly) {
     verifyThumbEl.classList.add("fail");
     return;
   }
+}
+
+function poseSimilaritySummary(stepResult) {
+  if (!stepResult || !stepResult.pose_similarity) return "";
+  const status = String(stepResult.pose_similarity_status || "").trim();
+  const score = Number(stepResult.pose_similarity.score);
+  const threshold = Number(stepResult.pose_similarity.threshold);
+  if (!Number.isFinite(score) || !Number.isFinite(threshold)) {
+    return status ? ` Pose-Check: ${status}.` : "";
+  }
+  const statusLabel = status || (score >= threshold ? "confirmed" : "suspicious");
+  return ` Pose-Check: ${statusLabel} (${score.toFixed(1)}/100, min ${threshold.toFixed(1)}).`;
 }
 
 function escHtml(value) {
@@ -1185,6 +1397,7 @@ function renderRun(run) {
 function stopStepSequence() {
   sequenceToken += 1;
   sequenceStepId = null;
+  stopPostureScoreMonitor();
   stopMovementMonitor();
   if (phaseTimerHandle) {
     clearInterval(phaseTimerHandle);
@@ -1238,12 +1451,12 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
   sequenceStepId = step.id;
   const budget = Math.max(0, Number(runRemainingSeconds || 0));
   const configuredTransition = Math.max(0, Math.min(Number(transitionSeconds || 0), budget));
-  const transition = isSinglePoseModule ? Math.min(5, budget) : configuredTransition;
+  const transition = configuredTransition;
   const holdBudget = Math.max(0, budget - transition);
   const holdSeconds = Math.max(0, Math.min(Number(step.target_seconds || 0), holdBudget));
   const sampleWindowStart = 2;
   const sampleWindowEnd = Math.max(sampleWindowStart, holdSeconds - 6);
-  const sampleSecond = (!isSinglePoseModule && holdSeconds >= 8)
+  const sampleSecond = (!isSinglePoseModule && moduleKey !== "posture_training" && holdSeconds >= 8)
     ? (sampleWindowStart + Math.floor(Math.random() * (sampleWindowEnd - sampleWindowStart + 1)))
     : null;
   let sampleTriggered = false;
@@ -1257,6 +1470,17 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
       // Strict modules use frame-based movement detection on the live stream.
       startMovementMonitor(token).catch(() => {});
     }
+    if (moduleKey === "posture_training") {
+      stopPostureScoreMonitor();
+      postureScoreMonitorHandle = setInterval(() => {
+        if (token !== sequenceToken || !activeRun || activeRun.status !== "active") {
+          stopPostureScoreMonitor();
+          return;
+        }
+        verifyCurrentStepWithMode(token, { monitorOnly: true }).catch(() => {});
+      }, 2000);
+    }
+
     countdownPhase({
       token,
       label: "POSE HALTEN",
@@ -1272,6 +1496,7 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
         }
       },
       onFinished: () => {
+        stopPostureScoreMonitor();
         stopMovementMonitor();
         if (isSinglePoseModule) {
           completeStrictStepWithoutCapture(token).catch(() => {});
@@ -1309,17 +1534,23 @@ async function loadModule() {
     if (missLabelEl) {
       missLabelEl.textContent = "Verstoesse";
     }
-    document.getElementById("gm-transition-seconds").value = "0";
     document.getElementById("gm-max-misses").value = "1";
+  } else if (transitionLabelTextEl) {
+    transitionLabelTextEl.textContent = "Wechseldauer (Sek)";
+    if (transitionWrapEl) transitionWrapEl.classList.remove("hidden");
   }
 
   if (isTiptoeingModule) {
     if (dontMoveOptionsEl) dontMoveOptionsEl.classList.add("hidden");
     if (cameraGuidanceEl) {
-      cameraGuidanceEl.textContent = "Ausschnitt: Fuesse und Knoechel bis knapp unter die Knie muessen permanent sichtbar sein.";
+      cameraGuidanceEl.textContent = "Ausschnitt: Fuesse bis untere Knie sichtbar. Ziel: Beine/Fuesse innerhalb Gruen halten, Schwarz niemals beruehren.";
+    }
+    if (maskPreviewEl) {
+      maskPreviewEl.src = TIPTOEING_MASK_URL;
+      maskPreviewEl.style.display = "";
     }
 
-    const postureData = await api(`/api/games/modules/${moduleKey}/postures/available`);
+    const postureData = await api(`/api/inventory/postures/modules/${moduleKey}/available`);
     const usable = postureData.items || [];
     if (usable.length === 0) {
       throw new Error("Keine freigegebenen Postures fuer Tiptoeing vorhanden");
@@ -1334,8 +1565,12 @@ async function loadModule() {
     if (cameraGuidanceEl) {
       cameraGuidanceEl.textContent = "Achte auf einen stabilen Ganzkoerper-Ausschnitt ohne Verdeckung der relevanten Haltung.";
     }
+    if (maskPreviewEl) {
+      maskPreviewEl.style.display = "none";
+      maskPreviewEl.removeAttribute("src");
+    }
 
-    const postureData = await api(`/api/games/modules/${moduleKey}/postures/available`);
+    const postureData = await api(`/api/inventory/postures/modules/${moduleKey}/available`);
     const usable = postureData.items || [];
     dontMovePostureEl.innerHTML = "";
     for (const item of usable) {
@@ -1352,6 +1587,10 @@ async function loadModule() {
   if (!isSinglePoseModule && cameraGuidanceEl) {
     cameraGuidanceEl.textContent = "Achte auf einen stabilen Ausschnitt mit klar erkennbarer Koerperhaltung.";
   }
+  if (!isTiptoeingModule && maskPreviewEl) {
+    maskPreviewEl.style.display = "none";
+    maskPreviewEl.removeAttribute("src");
+  }
 }
 
 async function loadModuleSettings() {
@@ -1366,6 +1605,9 @@ async function loadModuleSettings() {
     movement_medium_stillness: Number(data.movement_medium_stillness || 0),
     movement_hard_pose_deviation: Number(data.movement_hard_pose_deviation || 0),
     movement_hard_stillness: Number(data.movement_hard_stillness || 0),
+    pose_similarity_min_score_easy: Number(data.pose_similarity_min_score_easy || 0),
+    pose_similarity_min_score_medium: Number(data.pose_similarity_min_score_medium || 0),
+    pose_similarity_min_score_hard: Number(data.pose_similarity_min_score_hard || 0),
   };
 }
 
@@ -1416,6 +1658,7 @@ function stopCamera() {
   cameraStream = null;
   setupVideoEl.srcObject = null;
   playVideoEl.srcObject = null;
+  stopPostureScoreMonitor();
   stopMovementMonitor();
 }
 
@@ -1479,13 +1722,14 @@ async function completeStrictStepWithoutCapture(token) {
 
 async function verifyCurrentStepWithMode(token, options = {}) {
   const sampleOnly = Boolean(options.sampleOnly);
+  const monitorOnly = Boolean(options.monitorOnly);
   if (token !== sequenceToken) return;
   if (!activeRun || activeRun.status !== "active" || !activeRun.current_step) return;
   if (verifyInFlight) {
-    if (!sampleOnly) {
+    if (!sampleOnly && !monitorOnly) {
       setTimeout(() => {
         if (token === sequenceToken) {
-          verifyCurrentStepWithMode(token, { sampleOnly: false }).catch(() => {});
+          verifyCurrentStepWithMode(token, { sampleOnly: false, monitorOnly: false }).catch(() => {});
         }
       }, 350);
     }
@@ -1497,7 +1741,7 @@ async function verifyCurrentStepWithMode(token, options = {}) {
   }
 
   verifyInFlight = true;
-  if (!sampleOnly) {
+  if (!sampleOnly && !monitorOnly) {
     updatePhase("PRUEFUNG", "...");
   }
 
@@ -1509,6 +1753,7 @@ async function verifyCurrentStepWithMode(token, options = {}) {
     form.append("file", blob, "autocap.jpg");
     form.append("observed_posture", activeRun.current_step.posture_name || "");
     form.append("sample_only", sampleOnly ? "true" : "false");
+    form.append("monitor_only", monitorOnly ? "true" : "false");
     if (isSinglePoseModule) {
       const marker = bestEffortMovementMarker();
       if (marker && Number.isFinite(marker.x) && Number.isFinite(marker.y)) {
@@ -1522,17 +1767,27 @@ async function verifyCurrentStepWithMode(token, options = {}) {
       body: form,
     });
 
-    updateVerificationPreview(result.step, sampleOnly);
-    appendCaptureThumbnail(result.step);
+    if (!monitorOnly) {
+      updateVerificationPreview(result.step, sampleOnly);
+    }
+    if (result.step && result.step.capture_url) {
+      appendCaptureThumbnail(result.step);
+    }
 
-    if (sampleOnly) {
+    if (monitorOnly) {
+      if (result.step && result.step.capture_url && result.step.pose_similarity) {
+        const score = Number(result.step.pose_similarity.score || 0);
+        const threshold = Number(result.step.pose_similarity.threshold || 0);
+        analysisEl.textContent = `Pose-Score unterschritten: ${score.toFixed(1)}/100 (min ${threshold.toFixed(1)}). Kontrollbild gespeichert.`;
+      }
+    } else if (sampleOnly) {
       if (result.step && result.step.finalized) {
-        analysisEl.textContent = `Stichprobe fehlgeschlagen: ${result.step.analysis || "Pose nicht bestaetigt."}`;
+        analysisEl.textContent = `Stichprobe fehlgeschlagen: ${result.step.analysis || "Pose nicht bestaetigt."}${poseSimilaritySummary(result.step)}`;
       } else {
-        analysisEl.textContent = "Stichprobe bestaetigt.";
+        analysisEl.textContent = `Stichprobe bestaetigt.${poseSimilaritySummary(result.step)}`;
       }
     } else {
-      analysisEl.textContent = result.step.analysis || "Pruefung abgeschlossen.";
+      analysisEl.textContent = `${result.step.analysis || "Pruefung abgeschlossen."}${poseSimilaritySummary(result.step)}`;
     }
     renderRun(result.run);
     if (result.run.status === "completed") {
@@ -1540,13 +1795,15 @@ async function verifyCurrentStepWithMode(token, options = {}) {
       updatePhase("FERTIG", "--");
     }
   } catch (err) {
-    analysisEl.textContent = `Pruefung fehlgeschlagen: ${err.message}`;
-    setStatus(`Verifikation fehlgeschlagen: ${err.message}`, true);
-    setTimeout(() => {
-      if (token === sequenceToken && activeRun && activeRun.status === "active") {
-        verifyCurrentStepWithMode(token, { sampleOnly }).catch(() => {});
-      }
-    }, 2500);
+    if (!monitorOnly) {
+      analysisEl.textContent = `Pruefung fehlgeschlagen: ${err.message}`;
+      setStatus(`Verifikation fehlgeschlagen: ${err.message}`, true);
+      setTimeout(() => {
+        if (token === sequenceToken && activeRun && activeRun.status === "active") {
+          verifyCurrentStepWithMode(token, { sampleOnly, monitorOnly }).catch(() => {});
+        }
+      }, 2500);
+    }
   } finally {
     verifyInFlight = false;
   }
