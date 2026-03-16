@@ -3,6 +3,9 @@ import math
 import io
 import os
 import logging
+from pathlib import Path
+import urllib.parse
+import urllib.request
 from typing import Any
 
 from PIL import Image, ImageOps
@@ -19,6 +22,13 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     mp = None
 
+try:
+    from mediapipe.tasks import python as mp_tasks_python  # type: ignore
+    from mediapipe.tasks.python import vision as mp_tasks_vision  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    mp_tasks_python = None
+    mp_tasks_vision = None
+
 if mp is not None:
     try:
         from absl import logging as absl_logging  # type: ignore
@@ -28,6 +38,18 @@ if mp is not None:
     except Exception:
         pass
     logging.getLogger("absl").setLevel(logging.ERROR)
+
+
+logger = logging.getLogger(__name__)
+
+POSE_LANDMARKER_MODEL_URLS = (
+    "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task",
+    "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+    "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+)
+
+_tasks_pose_landmarker = None
+_tasks_pose_landmarker_init_failed = False
 
 
 BLAZEPOSE_NAMES: dict[int, str] = {
@@ -55,8 +77,21 @@ ANGLE_TRIPLETS: dict[str, tuple[str, str, str]] = {
 }
 
 
+def _has_legacy_pose_api() -> bool:
+    return bool(mp is not None and hasattr(mp, "solutions") and hasattr(mp.solutions, "pose"))
+
+
+def _has_tasks_pose_api() -> bool:
+    return bool(
+        mp is not None
+        and mp_tasks_python is not None
+        and mp_tasks_vision is not None
+        and hasattr(mp_tasks_vision, "PoseLandmarker")
+    )
+
+
 def pose_similarity_available() -> bool:
-    return mp is not None
+    return _has_tasks_pose_api() or _has_legacy_pose_api()
 
 
 def _decode_image_rgb(image_bytes: bytes):
@@ -65,9 +100,146 @@ def _decode_image_rgb(image_bytes: bytes):
     return image
 
 
+def _model_cache_dir() -> Path:
+    env_cache_dir = str(os.getenv("CHASTEASE_POSE_LANDMARKER_CACHE_DIR", "")).strip()
+    if env_cache_dir:
+        target = Path(env_cache_dir).expanduser().resolve()
+    else:
+        media_dir = Path(os.getenv("CHASTEASE_MEDIA_DIR", "./data/media")).expanduser().resolve()
+        target = media_dir.parent / "models" / "pose_landmarker"
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def _candidate_model_urls() -> list[str]:
+    env_urls = str(os.getenv("CHASTEASE_POSE_LANDMARKER_MODEL_URLS", "")).strip()
+    if env_urls:
+        return [item.strip() for item in env_urls.split(",") if item.strip()]
+    env_url = str(os.getenv("CHASTEASE_POSE_LANDMARKER_MODEL_URL", "")).strip()
+    if env_url:
+        return [env_url]
+    return list(POSE_LANDMARKER_MODEL_URLS)
+
+
+def _ensure_model_asset_path() -> Path | None:
+    configured_path = str(os.getenv("CHASTEASE_POSE_LANDMARKER_MODEL_PATH", "")).strip()
+    if configured_path:
+        candidate = Path(configured_path).expanduser().resolve()
+        if candidate.exists() and candidate.is_file():
+            return candidate
+        logger.warning("Configured pose model path does not exist: %s", configured_path)
+
+    cache_dir = _model_cache_dir()
+    for url in _candidate_model_urls():
+        parsed = urllib.parse.urlparse(url)
+        file_name = Path(parsed.path).name or "pose_landmarker.task"
+        target = cache_dir / file_name
+        if target.exists() and target.is_file() and target.stat().st_size > 0:
+            return target
+        try:
+            with urllib.request.urlopen(url, timeout=30) as response:
+                data = response.read()
+            if not data:
+                raise ValueError("empty model response")
+            target.write_bytes(data)
+            logger.info("Downloaded PoseLandmarker model to %s", target)
+            return target
+        except Exception as exc:
+            logger.warning("Could not download PoseLandmarker model from %s: %s", url, exc)
+
+    return None
+
+
+def _get_tasks_pose_landmarker():
+    global _tasks_pose_landmarker, _tasks_pose_landmarker_init_failed
+    if _tasks_pose_landmarker is not None:
+        return _tasks_pose_landmarker
+    if _tasks_pose_landmarker_init_failed:
+        return None
+    if not _has_tasks_pose_api():
+        _tasks_pose_landmarker_init_failed = True
+        return None
+
+    model_path = _ensure_model_asset_path()
+    if model_path is None:
+        _tasks_pose_landmarker_init_failed = True
+        return None
+
+    try:
+        options = mp_tasks_vision.PoseLandmarkerOptions(
+            base_options=mp_tasks_python.BaseOptions(model_asset_path=str(model_path)),
+            running_mode=mp_tasks_vision.RunningMode.IMAGE,
+            num_poses=1,
+            min_pose_detection_confidence=0.5,
+            min_pose_presence_confidence=0.5,
+            min_tracking_confidence=0.5,
+            output_segmentation_masks=False,
+        )
+        _tasks_pose_landmarker = mp_tasks_vision.PoseLandmarker.create_from_options(options)
+        return _tasks_pose_landmarker
+    except Exception:
+        _tasks_pose_landmarker_init_failed = True
+        logger.exception("Failed to initialize PoseLandmarker")
+        return None
+
+
+def _detect_landmarks_with_tasks(image_bytes: bytes) -> dict[str, Any] | None:
+    if not _has_tasks_pose_api():
+        return None
+
+    try:
+        import numpy as np  # type: ignore
+    except Exception:
+        return None
+
+    landmarker = _get_tasks_pose_landmarker()
+    if landmarker is None:
+        return None
+
+    image = _decode_image_rgb(image_bytes)
+    arr = np.array(image)
+
+    try:
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=arr)
+        result = landmarker.detect(mp_image)
+    except Exception:
+        logger.exception("PoseLandmarker detection failed")
+        return None
+
+    pose_groups = getattr(result, "pose_landmarks", None) or []
+    if not pose_groups:
+        return None
+
+    pose_landmarks = pose_groups[0]
+    points: dict[str, dict[str, float]] = {}
+    for idx, name in BLAZEPOSE_NAMES.items():
+        if idx >= len(pose_landmarks):
+            continue
+        landmark = pose_landmarks[idx]
+        visibility = getattr(landmark, "visibility", getattr(landmark, "presence", 0.0))
+        points[name] = {
+            "x": float(getattr(landmark, "x", 0.0)),
+            "y": float(getattr(landmark, "y", 0.0)),
+            "visibility": float(visibility),
+        }
+
+    normalized = _normalize_points(points)
+    if normalized is None:
+        return None
+    return normalized
+
+
 def _detect_landmarks(image_bytes: bytes) -> dict[str, Any] | None:
     if not pose_similarity_available():
         return None
+
+    # Prefer the current MediaPipe Tasks API and keep legacy as fallback.
+    if _has_tasks_pose_api():
+        return _detect_landmarks_with_tasks(image_bytes)
+
+    if not _has_legacy_pose_api():
+        return None
+
     try:
         import numpy as np  # type: ignore
     except Exception:
@@ -75,12 +247,15 @@ def _detect_landmarks(image_bytes: bytes) -> dict[str, Any] | None:
     image = _decode_image_rgb(image_bytes)
     arr = np.array(image)
 
-    pose = mp.solutions.pose.Pose(
-        static_image_mode=True,
-        model_complexity=1,
-        enable_segmentation=False,
-        min_detection_confidence=0.5,
-    )
+    try:
+        pose = mp.solutions.pose.Pose(
+            static_image_mode=True,
+            model_complexity=1,
+            enable_segmentation=False,
+            min_detection_confidence=0.5,
+        )
+    except Exception:
+        return None
     try:
         result = pose.process(arr)
     finally:
