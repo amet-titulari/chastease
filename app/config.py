@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     media_dir: str = "./data/media"
     hygiene_overdue_penalty_seconds: int = 600
     hygiene_opening_max_duration_seconds: int = 900
+    local_timezone: str = "Europe/Berlin"
     task_overdue_default_penalty_seconds: int = 300
     task_overdue_sweeper_enabled: bool = True
     task_overdue_sweeper_interval_seconds: int = 60

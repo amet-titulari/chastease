@@ -56,16 +56,7 @@ def _quota_payload(db: Session, session_obj: SessionModel, now: datetime) -> dic
         return max(0, limit - used[key])
 
     def _next_period_start(period: str) -> datetime:
-        start = HygieneService.period_start(period, now)
-        if period == "day":
-            return start + timedelta(days=1)
-        if period == "week":
-            return start + timedelta(days=7)
-        if period == "month":
-            if start.month == 12:
-                return start.replace(year=start.year + 1, month=1)
-            return start.replace(month=start.month + 1)
-        raise ValueError(f"Unsupported period: {period}")
+        return HygieneService.next_period_start(period, now)
 
     next_allowed_at: dict[str, str | None] = {"daily": None, "weekly": None, "monthly": None}
     next_period_start: dict[str, str | None] = {"daily": None, "weekly": None, "monthly": None}
