@@ -14,7 +14,9 @@ from app.database import SessionLocal
 from app.main import app
 from app.models.game_posture_template import GamePostureTemplate
 from app.models.game_run import GameRun
+from app.models.game_run_step import GameRunStep
 from app.models.session import Session as SessionModel
+from app.routers.games import _verification_criteria_for_step
 
 
 def _ppm_bytes(width: int, height: int, rgb: tuple[int, int, int] = (128, 128, 128)) -> bytes:
@@ -2152,6 +2154,25 @@ def test_tiptoeing_mask_upload_and_settings_roundtrip():
         settings_final = client.get("/api/games/modules/tiptoeing/settings")
         assert settings_final.status_code == 200
         assert settings_final.json().get("mask_image_url") == mask_url2
+
+
+def test_tiptoeing_verification_criteria_mentions_mask_and_tiptoes():
+    run = GameRun(module_key="tiptoeing", difficulty_key="medium", session_id=1)
+    step = GameRunStep(
+        run_id=1,
+        order_index=1,
+        posture_key="tiptoeing_hold",
+        posture_name="Auf Zehenspitzen stehen",
+        posture_image_url="/static/img/postures/stand.jpg",
+        instruction="Fuesse nur im gruenen Bereich halten.",
+        target_seconds=120,
+        status="pending",
+    )
+
+    criteria = _verification_criteria_for_step(run, step)
+    assert "Gruene Bereiche markieren erlaubte Fusszonen" in criteria
+    assert "schwarze Bereiche sind fuer die Fuesse verboten" in criteria
+    assert "sichtbar auf den Zehenspitzen stehen" in criteria
 
 
 def test_list_session_game_runs_empty():

@@ -506,6 +506,7 @@ let movementLastMarker = null;
 let tiptoeingMaskImage = null;
 let tiptoeingMaskReady = false;
 let tiptoeingOutsideGreenFrames = 0;
+let tiptoeingFlatFootFrames = 0;
 let postureOverlayStatus = "idle";
 let postureInconclusiveCount = 0;
 let currentReferenceLandmarksJson = null;
@@ -1290,12 +1291,55 @@ function bodyRegionLabelForIndex(idx) {
   return "Koerper";
 }
 
+function tiptoeingFootState(poseLandmarks, side) {
+  const heelIndex = side === "left" ? 29 : 30;
+  const toeIndex = side === "left" ? 31 : 32;
+  const ankleIndex = side === "left" ? 27 : 28;
+  const heel = poseLandmarks?.[heelIndex];
+  const toe = poseLandmarks?.[toeIndex];
+  const ankle = poseLandmarks?.[ankleIndex];
+  const heelVis = Number(heel?.visibility ?? 0);
+  const toeVis = Number(toe?.visibility ?? 0);
+  const ankleVis = Number(ankle?.visibility ?? 0);
+  const visible = heelVis >= 0.45 && toeVis >= 0.45;
+  if (!visible) {
+    return {
+      side,
+      visible: false,
+      lifted: false,
+      liftAmount: 0,
+      marker: null,
+    };
+  }
+
+  const heelY = Number(heel?.y || 0);
+  const toeY = Number(toe?.y || 0);
+  const ankleY = Number(ankle?.y || heelY);
+  const heelLift = toeY - heelY;
+  const ankleToToe = toeY - ankleY;
+  const minLift = Math.max(0.018, ankleVis >= 0.45 ? ankleToToe * 0.22 : 0.018);
+  const lifted = heelLift >= minLift;
+
+  return {
+    side,
+    visible: true,
+    lifted,
+    liftAmount: heelLift,
+    marker: {
+      x: Number(heel?.x || toe?.x || 0),
+      y: Number(heel?.y || toe?.y || 0),
+    },
+    markerLabel: `${side === "left" ? "Linke" : "Rechte"} Ferse`,
+    markerStrength: Math.max(0, minLift - heelLift),
+  };
+}
+
 function evaluateTiptoeingMask(poseLandmarks) {
   if (!Array.isArray(poseLandmarks) || poseLandmarks.length === 0) return null;
   if (!tiptoeingMaskReady) return null;
 
   const profile = tiptoeingMaskProfile();
-  const tracked = [25, 26, 27, 28, 29, 30, 31, 32];
+  const tracked = [29, 30, 31, 32];
   let blackHit = null;
   let outsideGreen = null;
 
@@ -1331,6 +1375,7 @@ function evaluateTiptoeingMask(poseLandmarks) {
 
   if (blackHit) {
     tiptoeingOutsideGreenFrames = 0;
+    tiptoeingFlatFootFrames = 0;
     return {
       violation: true,
       immediate: true,
@@ -1340,6 +1385,7 @@ function evaluateTiptoeingMask(poseLandmarks) {
 
   if (outsideGreen) {
     tiptoeingOutsideGreenFrames += 1;
+    tiptoeingFlatFootFrames = 0;
     const violation = tiptoeingOutsideGreenFrames >= 3;
     return {
       violation,
@@ -1349,14 +1395,35 @@ function evaluateTiptoeingMask(poseLandmarks) {
   }
 
   tiptoeingOutsideGreenFrames = 0;
+  const footStates = [
+    tiptoeingFootState(poseLandmarks, "left"),
+    tiptoeingFootState(poseLandmarks, "right"),
+  ];
+  const visibleFeet = footStates.filter((item) => item.visible);
+  const liftedFeet = visibleFeet.filter((item) => item.lifted);
+  if (visibleFeet.length > 0 && liftedFeet.length === 0) {
+    tiptoeingFlatFootFrames += 1;
+    const primary = [...visibleFeet].sort((left, right) => left.liftAmount - right.liftAmount)[0];
+    return {
+      violation: tiptoeingFlatFootFrames >= 4,
+      immediate: false,
+      marker: primary?.marker || null,
+      markerIndex: primary?.side === "left" ? 29 : 30,
+      markerLabel: `${primary?.markerLabel || "Ferse"} zu tief`,
+      markerStrength: Math.max(0.3, Number(primary?.markerStrength || 0.3)),
+      reason: "Nicht auf den Zehenspitzen",
+    };
+  }
+
+  tiptoeingFlatFootFrames = 0;
   return {
     violation: false,
     immediate: false,
     marker: null,
     markerIndex: null,
-    markerLabel: "Gruene Zone gehalten",
+    markerLabel: "Gruene Zone gehalten, Fersen oben",
     markerStrength: 0,
-    reason: "Innerhalb der gruenerlaubten Zone",
+    reason: "Fuesse in der erlaubten Zone und auf den Zehenspitzen",
   };
 }
 
@@ -1487,6 +1554,9 @@ function describeMovementReason(verdict) {
     const markerLabel = String(verdict?.markerLabel || "Bein/Fuss");
     if (String(verdict?.reason || "").includes("Verbotene Zone")) {
       return `Tiptoeing-Maskenverstoss: Verbotene Zone beruehrt (${markerLabel}).`;
+    }
+    if (String(verdict?.reason || "").includes("Zehenspitzen")) {
+      return `Tiptoeing-Verstoss: Ferse abgesenkt, nicht mehr auf den Zehenspitzen (${markerLabel}).`;
     }
     return `Tiptoeing-Maskenverstoss: Gruene Zone verlassen (${markerLabel}).`;
   }
@@ -1651,6 +1721,7 @@ async function startMovementMonitor(token) {
   movementRedFlashUntil = 0;
   movementLastMarker = null;
   tiptoeingOutsideGreenFrames = 0;
+  tiptoeingFlatFootFrames = 0;
   movementMonitorActive = true;
   syncMotionOverlaySize();
   drawMotionOverlay();
@@ -1748,6 +1819,7 @@ function stopMovementMonitor() {
   movementRedFlashUntil = 0;
   movementLastMarker = null;
   tiptoeingOutsideGreenFrames = 0;
+  tiptoeingFlatFootFrames = 0;
   movementMonitorActive = false;
   postureInconclusiveCount = 0;
   if (motionOverlayEl) {
@@ -1963,6 +2035,25 @@ function appendCaptureThumbnail(stepResult) {
   }
 }
 
+function syncLiveCaptureUiFromSummary(summary) {
+  const checks = Array.isArray(summary?.checks) ? summary.checks : [];
+  const withImages = checks.filter((entry) => entry && entry.capture_url);
+
+  captureGalleryEl.innerHTML = "";
+  verifyThumbEl.style.display = "none";
+  verifyThumbEl.removeAttribute("src");
+  verifyThumbEl.classList.remove("ok", "fail");
+
+  if (withImages.length === 0) return;
+
+  const latest = withImages[withImages.length - 1];
+  updateVerificationPreview(latest, Boolean(latest.sample_only));
+
+  [...withImages].reverse().slice(0, 60).forEach((entry) => {
+    appendCaptureThumbnail(entry);
+  });
+}
+
 function startTotalTimer(seconds, isActive) {
   if (totalTimerHandle) clearInterval(totalTimerHandle);
   let remaining = Math.max(0, Number(seconds || 0));
@@ -1982,10 +2073,12 @@ function startTotalTimer(seconds, isActive) {
 
 function renderRun(run) {
   activeRun = run;
+  const summary = run.summary || {};
   runStatusEl.textContent = run.status;
   missCountEl.textContent = String(run.miss_count || 0);
   retryTimeEl.textContent = isSinglePoseModule ? "0s" : `${run.retry_extension_seconds || 0}s`;
   startTotalTimer(run.remaining_seconds, run.status === "active");
+  syncLiveCaptureUiFromSummary(summary);
 
   const step = run.current_step;
   if (step) {
@@ -2036,7 +2129,6 @@ function renderRun(run) {
   }
 
   if (run.status === "completed") {
-    const summary = run.summary || {};
     const reason = summary.end_reason === "time_elapsed" ? "Zeit abgelaufen" : "Alle Schritte verarbeitet";
     const total = Number(summary.total_steps || 0);
     const passed = Number(summary.passed_steps || 0);
@@ -2203,7 +2295,7 @@ async function loadModule() {
   if (isTiptoeingModule) {
     if (dontMoveOptionsEl) dontMoveOptionsEl.classList.add("hidden");
     if (cameraGuidanceEl) {
-      cameraGuidanceEl.textContent = "Ausschnitt: Fuesse bis untere Knie sichtbar. Ziel: Beine/Fuesse innerhalb Gruen halten, Schwarz niemals beruehren.";
+      cameraGuidanceEl.textContent = "Ausschnitt: Fuesse bis untere Knie sichtbar. Ziel: nur die Fussbereiche in Gruen, Schwarz nie beruehren, Fersen angehoben auf den Zehenspitzen halten.";
     }
     if (maskPreviewEl) {
       maskPreviewEl.src = tiptoeingMaskUrl;

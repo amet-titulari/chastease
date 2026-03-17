@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Fetch app data from a remote docker volume via scp.
 
-Supports two modes:
+Supports two modes:clear
+
 - all: fetch full data directory
 - db-only: fetch only database file
 """
