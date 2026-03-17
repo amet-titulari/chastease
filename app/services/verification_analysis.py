@@ -234,6 +234,8 @@ def generate_game_run_summary(summary: dict, module_title: str) -> str:
     Returns an empty string if no LLM is reachable or the call fails.
     """
     total = int(summary.get("total_steps") or 0)
+    scheduled = int(summary.get("scheduled_steps") or total)
+    unplayed = int(summary.get("unplayed_steps") or max(0, scheduled - total))
     passed = int(summary.get("passed_steps") or 0)
     failed = int(summary.get("failed_steps") or 0)
     miss_count = int(summary.get("miss_count") or 0)
@@ -253,12 +255,14 @@ def generate_game_run_summary(summary: dict, module_title: str) -> str:
         f"Spiel: {module_title}",
         f"Beendigungsgrund: {'Zeit abgelaufen' if end_reason == 'time_elapsed' else 'Alle Schritte abgeschlossen'}",
         f"Geplante Gesamtdauer: {scheduled_duration}s",
-        f"Schritte: {total} gesamt, {passed} bestanden, {failed} fehlgeschlagen",
+        f"Gespielte Schritte: {total} ({passed} bestanden, {failed} fehlgeschlagen)",
         f"Verfehlungen gesamt: {miss_count}",
         f"Strafzeitverlaengerung erhalten: {retry_extension}s",
         f"Session-Penalty ausgeloest: {'Ja' if penalty_applied else 'Nein'}",
         f"Checks: {len(checks)} insgesamt ({len(confirmations)} bestanden, {len(violations)} Verstoss)",
     ]
+    if unplayed > 0:
+        lines.append(f"Nicht mehr gespielte Schritte wegen Zeitende: {unplayed} von {scheduled}")
     if violations:
         reasons = [
             str(v.get("violation_reason") or v.get("analysis") or "").strip()

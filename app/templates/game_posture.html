@@ -507,6 +507,7 @@ let tiptoeingMaskImage = null;
 let tiptoeingMaskReady = false;
 let tiptoeingOutsideGreenFrames = 0;
 let postureOverlayStatus = "idle";
+let postureInconclusiveCount = 0;
 let currentReferenceLandmarksJson = null;
 let sequenceToken = 0;
 let skeletonMonitorHandle = null;
@@ -1115,12 +1116,20 @@ function drawReferenceSkeletonOnCanvas(ctx, width, height, referenceJson) {
 }
 
 function postureOverlayPalette(status, hasPose) {
-  if (!hasPose || status === "suspicious") {
+  if (status === "suspicious") {
     return {
       stroke: "rgba(255, 72, 72, 0.96)",
       line: "rgba(255, 120, 120, 0.9)",
       joint: "rgba(255, 196, 196, 0.96)",
       fill: "rgba(255, 72, 72, 0.08)",
+    };
+  }
+  if (!hasPose || status === "inconclusive" || status === "idle") {
+    return {
+      stroke: "rgba(255, 194, 82, 0.96)",
+      line: "rgba(255, 210, 120, 0.92)",
+      joint: "rgba(255, 237, 196, 0.98)",
+      fill: "rgba(255, 194, 82, 0.08)",
     };
   }
   return {
@@ -1740,6 +1749,7 @@ function stopMovementMonitor() {
   movementLastMarker = null;
   tiptoeingOutsideGreenFrames = 0;
   movementMonitorActive = false;
+  postureInconclusiveCount = 0;
   if (motionOverlayEl) {
     const ctx = motionOverlayEl.getContext("2d");
     if (ctx) {
@@ -1754,6 +1764,7 @@ function stopSkeletonMonitor() {
     skeletonMonitorHandle = null;
   }
   postureOverlayStatus = "idle";
+  postureInconclusiveCount = 0;
   if (moduleKey === "posture_training") {
     movementLatestPoseLandmarks = null;
     if (motionOverlayEl) {
@@ -1846,6 +1857,8 @@ function renderFinalReport(summary) {
 
   // Summary header with stats
   const total = Number(summary?.total_steps || 0);
+  const scheduled = Number(summary?.scheduled_steps || total);
+  const unplayed = Number(summary?.unplayed_steps || Math.max(0, scheduled - total));
   const passed = Number(summary?.passed_steps || 0);
   const failed = Number(summary?.failed_steps || 0);
   const misses = Number(summary?.miss_count || 0);
@@ -1855,9 +1868,10 @@ function renderFinalReport(summary) {
   let headerHtml = `<div class="final-report-header">
     <h4>Spiel-Bericht</h4>
     <div class="final-report-stats">
-      <span>Schritte: <strong class="${passed === total ? 'stat-ok' : 'stat-fail'}">${passed}/${total}</strong></span>
+      <span>Gespielt: <strong class="${passed === total && failed === 0 ? 'stat-ok' : 'stat-fail'}">${passed}/${total}</strong></span>
       <span>Fehler: <strong class="${failed > 0 ? 'stat-fail' : 'stat-ok'}">${failed}</strong></span>
       <span>Verfehlungen: <strong class="${misses > 0 ? 'stat-fail' : 'stat-ok'}">${misses}</strong></span>`;
+  if (unplayed > 0) headerHtml += `<span>Nicht gespielt: <strong>${unplayed}/${scheduled}</strong></span>`;
   if (retryExt > 0) headerHtml += `<span>Strafzeit: <strong class="stat-fail">+${retryExt}s</strong></span>`;
   if (penaltyApplied) headerHtml += `<span><strong class="stat-fail">Session-Penalty aktiv</strong></span>`;
   headerHtml += `</div>`;
@@ -2579,8 +2593,13 @@ async function verifyCurrentStepWithMode(token, options = {}) {
     const livePoseStatus = String(
       result?.step?.pose_similarity_status || result?.step?.verification_status || ""
     ).toLowerCase();
+    const verificationStatus = String(result?.step?.verification_status || "").toLowerCase();
     if (moduleKey === "posture_training") {
-      postureOverlayStatus = livePoseStatus === "confirmed" ? "confirmed" : "suspicious";
+      if (verificationStatus === "inconclusive" || livePoseStatus === "skipped") {
+        postureOverlayStatus = "inconclusive";
+      } else {
+        postureOverlayStatus = livePoseStatus === "confirmed" ? "confirmed" : "suspicious";
+      }
       drawSkeletonOnCanvas(movementLatestPoseLandmarks);
     }
 
@@ -2592,14 +2611,22 @@ async function verifyCurrentStepWithMode(token, options = {}) {
     }
 
     if (monitorOnly) {
-      if (result.step && result.step.capture_url && result.step.pose_similarity) {
+      if (verificationStatus === "inconclusive") {
+        postureInconclusiveCount += 1;
+        const softPrefix = postureInconclusiveCount >= 2 ? "Pose weiter unklar" : "Pose noch nicht erkannt";
+        analysisEl.textContent = `${softPrefix}: ${result.step.analysis || "Bitte Kamera, Abstand oder Ausrichtung korrigieren."}`;
+      } else if (result.step && result.step.capture_url && result.step.pose_similarity) {
+        postureInconclusiveCount = 0;
         const score = Number(result.step.pose_similarity.score || 0);
         const threshold = Number(result.step.pose_similarity.threshold || 0);
         analysisEl.textContent = `Pose-Score unterschritten: ${score.toFixed(1)}/100 (min ${threshold.toFixed(1)}). Kontrollbild gespeichert.`;
       } else if (result.step && result.step.pose_similarity) {
+        postureInconclusiveCount = 0;
         const score = Number(result.step.pose_similarity.score || 0);
         const threshold = Number(result.step.pose_similarity.threshold || 0);
         analysisEl.textContent = `Live-Pose bestaetigt: ${score.toFixed(1)}/100 (min ${threshold.toFixed(1)}).`;
+      } else {
+        postureInconclusiveCount = 0;
       }
     } else if (sampleOnly) {
       if (result.step && result.step.finalized) {

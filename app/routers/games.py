@@ -10,6 +10,7 @@ import sys
 import traceback
 import zipfile
 from uuid import uuid4
+import re
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -29,7 +30,7 @@ from app.models.message import Message
 from app.models.session import Session as SessionModel
 from app.security import require_admin_session_user
 from app.services.games import as_public_module_payload, get_module, list_modules
-from app.services.image_stamp import stamp_verification_timestamp
+from app.services.image_stamp import stamp_game_verification_proof
 from app.services.audit_logger import audit_log
 from app.services.pose_similarity import extract_reference_landmarks_json, pose_similarity_available, score_against_reference
 from app.services.verification_analysis import analyze_verification, generate_game_run_summary
@@ -598,7 +599,56 @@ def _safe_capture_suffix(filename: str | None) -> str:
     return suffix
 
 
-def _store_game_verification_capture(run: GameRun, image_bytes: bytes, filename: str | None, run_number: int) -> str:
+def _compact_keywords(text: str | None, *, limit: int = 4) -> list[str]:
+    stopwords = {
+        "der", "die", "das", "den", "dem", "des", "ein", "eine", "einer", "einem", "und", "oder", "mit", "ohne",
+        "fuer", "fur", "bei", "von", "auf", "aus", "nach", "vor", "hinter", "ueber", "unter", "zwischen", "nicht",
+        "halte", "halten", "bleib", "bleibe", "soll", "sollst", "bitte", "arme", "arm", "haende", "hand", "koerper",
+    }
+    seen: set[str] = set()
+    words: list[str] = []
+    for raw in re.findall(r"[A-Za-z0-9äöüÄÖÜß_-]+", str(text or "")):
+        word = raw.strip("_- ")
+        if len(word) < 3:
+            continue
+        key = word.lower()
+        if key in stopwords or key in seen:
+            continue
+        seen.add(key)
+        words.append(word)
+        if len(words) >= limit:
+            break
+    return words
+
+
+def _compact_text(text: str | None, *, max_chars: int = 96) -> str:
+    value = " ".join(str(text or "").replace("\n", " ").split())
+    if len(value) <= max_chars:
+        return value
+    return value[: max_chars - 3].rstrip() + "..."
+
+
+def _required_proof_text_for_step(step: GameRunStep) -> str:
+    posture_name = str(step.posture_name or "").strip()
+    keywords = _compact_keywords(step.instruction, limit=4)
+    parts = [part for part in [posture_name, ", ".join(keywords)] if part]
+    return _compact_text(" | ".join(parts) or "Pose", max_chars=88)
+
+
+def _detected_proof_text(verification_status: str, analysis: str) -> str:
+    label = "OK" if str(verification_status or "").lower() == "confirmed" else "Fehler"
+    return _compact_text(f"{label}: {str(analysis or '-').strip()}", max_chars=110)
+
+
+def _store_game_verification_capture(
+    run: GameRun,
+    image_bytes: bytes,
+    filename: str | None,
+    run_number: int,
+    *,
+    required_text: str | None,
+    detected_text: str | None,
+) -> str:
     capture_stamp = _timestamp_slug()
     suffix = _safe_capture_suffix(filename)
 
@@ -608,7 +658,13 @@ def _store_game_verification_capture(run: GameRun, image_bytes: bytes, filename:
     )
     target = _resolve_media_path(rel_path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(stamp_verification_timestamp(image_bytes))
+    target.write_bytes(
+        stamp_game_verification_proof(
+            image_bytes,
+            required_text=required_text,
+            detected_text=detected_text,
+        )
+    )
     return rel_path
 
 
@@ -912,6 +968,24 @@ def _verification_criteria_for_step(run: GameRun, step: GameRunStep) -> str:
     )
 
 
+def _ai_fallback_verification_for_step(
+    run: GameRun,
+    step: GameRunStep,
+    *,
+    image_bytes: bytes,
+    filename: str,
+    observed_posture: str | None,
+) -> tuple[str, str]:
+    return analyze_verification(
+        image_bytes=image_bytes,
+        filename=filename,
+        requested_seal_number=None,
+        observed_seal_number=observed_posture,
+        verification_criteria=_verification_criteria_for_step(run, step),
+        allow_heuristic_fallback=False,
+    )
+
+
 def _load_module_settings(db: Session, module_key: str) -> GameModuleSetting | None:
     return db.query(GameModuleSetting).filter(GameModuleSetting.module_key == module_key).first()
 
@@ -1034,8 +1108,8 @@ def _append_run_check_entry(
             "verification_status": verification_status,
             "step_status": step.status,
             "analysis": analysis,
-            "violation_detected": verification_status != "confirmed",
-            "violation_reason": analysis if verification_status != "confirmed" else None,
+            "violation_detected": verification_status == "suspicious",
+            "violation_reason": analysis if verification_status == "suspicious" else None,
             "sample_only": bool(sample_only),
             "monitor_only": bool(monitor_only),
             "pose_score": pose_score,
@@ -1082,32 +1156,28 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
     if run.status == "completed":
         return True
 
-    timeout_failed = 0
-    if timed_out and pending_steps:
-        for item in pending_steps:
-            item.status = "failed"
-            item.completed_at = now
-            item.last_analysis = item.last_analysis or "Nicht verifiziert: Gesamtzeit abgelaufen."
-            db.add(item)
-            timeout_failed += 1
-
     run.status = "completed"
     run.finished_at = now
 
     steps = db.query(GameRunStep).filter(GameRunStep.run_id == run.id).all()
     passed = sum(1 for item in steps if item.status == "passed")
     failed = sum(1 for item in steps if item.status == "failed")
-    total = len(steps)
+    unplayed = sum(1 for item in steps if item.status == "pending")
+    played = passed + failed
+    scheduled_total = len(steps)
     end_reason = "time_elapsed" if timed_out else "all_steps_processed"
     existing_meta = _load_run_summary_meta(run)
     checks = existing_meta.get("checks") if isinstance(existing_meta.get("checks"), list) else []
 
     report = {
         "end_reason": end_reason,
-        "total_steps": total,
+        "total_steps": played,
+        "played_steps": played,
+        "scheduled_steps": scheduled_total,
+        "unplayed_steps": unplayed,
         "passed_steps": passed,
         "failed_steps": failed,
-        "timeout_failed_steps": timeout_failed,
+        "timeout_failed_steps": 0,
         "miss_count": run.miss_count,
         "retry_extension_seconds": run.retry_extension_seconds,
         "session_penalty_applied": bool(run.session_penalty_applied),
@@ -1133,8 +1203,8 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
             message_type="game_report",
             content=(
                 f"Spielbericht {run.module_key}: "
-                f"reason={end_reason}, total={total}, passed={passed}, failed={failed}, "
-                f"timeout_failed={timeout_failed}, misses={run.miss_count}, "
+                f"reason={end_reason}, played={played}, passed={passed}, failed={failed}, "
+                f"unplayed={unplayed}, misses={run.miss_count}, "
                 f"retry_extension_seconds={run.retry_extension_seconds}, "
                 f"session_penalty_applied={run.session_penalty_applied}"
             ),
@@ -1149,7 +1219,7 @@ def _run_payload(db: Session, run: GameRun) -> dict:
     started = _as_utc(run.started_at) or now
     remaining_seconds = _remaining_seconds_for_run(run, now)
 
-    current_step = _active_step(db, run.id)
+    current_step = None if run.status == "completed" else _active_step(db, run.id)
     summary_payload = None
     if run.summary_json:
         try:
@@ -2316,45 +2386,94 @@ async def verify_game_step(
     )
 
     if monitor_only:
-        status = "confirmed" if pose_status == "confirmed" else "suspicious"
-        analysis = pose_analysis or ("Pose-Check bestaetigt." if status == "confirmed" else "Pose-Check nicht bestaetigt.")
-    else:
-        status, analysis = analyze_verification(
-            image_bytes=data,
-            filename=file.filename or "capture.jpg",
-            requested_seal_number=None,
-            observed_seal_number=observed_posture,
-            verification_criteria=_verification_criteria_for_step(run, step),
-            allow_heuristic_fallback=False,
-        )
-        if pose_status == "suspicious":
+        if pose_status == "confirmed":
+            status = "confirmed"
+            analysis = pose_analysis or "Pose-Check bestaetigt."
+        elif pose_status == "skipped":
+            status = "inconclusive"
+            analysis_map = {
+                "pose_not_detected": "Pose aktuell nicht sicher erkannt.",
+                "reference_pose_not_available": "Referenz-Pose fehlt fuer diesen Schritt.",
+                "pose_runtime_unavailable": "Pose-Monitoring derzeit nicht verfuegbar.",
+            }
+            analysis = analysis_map.get(str(pose_analysis or "").strip(), "Pose-Check derzeit nicht eindeutig.")
+        else:
             status = "suspicious"
-            analysis = f"{analysis} {pose_analysis}".strip()
-        elif pose_status == "confirmed":
-            analysis = f"{analysis} {pose_analysis}".strip()
-
-        # For posture_training final checks, decide by average pose score over the full hold duration.
-        if run.module_key == "posture_training" and not sample_only:
-            threshold = None
-            current_score = None
-            if isinstance(pose_details, dict):
-                raw_threshold = pose_details.get("threshold")
-                raw_score = pose_details.get("score")
-                if isinstance(raw_threshold, (int, float)):
-                    threshold = float(raw_threshold)
-                if isinstance(raw_score, (int, float)):
-                    current_score = float(raw_score)
-
-            scores = _historical_pose_scores_for_step(run, step.id)
-            if current_score is not None:
-                scores.append(current_score)
-
-            if threshold is not None and scores:
-                avg_score = sum(scores) / len(scores)
-                status = "confirmed" if avg_score >= threshold else "suspicious"
-                analysis = (
-                    f"Durchschnittlicher Pose-Score {avg_score:.1f}/100 (min {threshold:.1f}; samples={len(scores)})."
+            analysis = pose_analysis or "Pose-Check nicht bestaetigt."
+    else:
+        if run.module_key == "posture_training":
+            if pose_status == "confirmed":
+                status = "confirmed"
+                analysis = pose_analysis or "Pose-Check bestaetigt."
+            elif pose_status == "suspicious":
+                status = "suspicious"
+                analysis = pose_analysis or "Pose-Check nicht bestaetigt."
+            else:
+                status, analysis = _ai_fallback_verification_for_step(
+                    run,
+                    step,
+                    image_bytes=data,
+                    filename=file.filename or "capture.jpg",
+                    observed_posture=observed_posture,
                 )
+                if pose_analysis and pose_analysis not in {"pose_not_detected", "reference_pose_not_available", "pose_runtime_unavailable"}:
+                    analysis = f"{analysis} {pose_analysis}".strip()
+
+            # For posture_training final checks, decide by average pose score over the full hold duration.
+            if not sample_only:
+                threshold = None
+                current_score = None
+                if isinstance(pose_details, dict):
+                    raw_threshold = pose_details.get("threshold")
+                    raw_score = pose_details.get("score")
+                    if isinstance(raw_threshold, (int, float)):
+                        threshold = float(raw_threshold)
+                    if isinstance(raw_score, (int, float)):
+                        current_score = float(raw_score)
+
+                scores = _historical_pose_scores_for_step(run, step.id)
+                if current_score is not None:
+                    scores.append(current_score)
+
+                if threshold is not None and scores:
+                    avg_score = sum(scores) / len(scores)
+                    status = "confirmed" if avg_score >= threshold else "suspicious"
+                    analysis = (
+                        f"Durchschnittlicher Pose-Score {avg_score:.1f}/100 (min {threshold:.1f}; samples={len(scores)})."
+                    )
+        else:
+            status, analysis = analyze_verification(
+                image_bytes=data,
+                filename=file.filename or "capture.jpg",
+                requested_seal_number=None,
+                observed_seal_number=observed_posture,
+                verification_criteria=_verification_criteria_for_step(run, step),
+                allow_heuristic_fallback=False,
+            )
+            if pose_status == "suspicious":
+                status = "suspicious"
+                analysis = f"{analysis} {pose_analysis}".strip()
+            elif pose_status == "confirmed":
+                analysis = f"{analysis} {pose_analysis}".strip()
+
+    if monitor_only and status == "inconclusive":
+        return {
+            "run": _run_payload(db, run),
+            "step": {
+                "id": step.id,
+                "status": step.status,
+                "verification_count": step.verification_count,
+                "verification_status": status,
+                "analysis": analysis,
+                "pose_similarity_status": pose_status,
+                "pose_similarity": pose_details,
+                "capture_path": None,
+                "capture_url": None,
+                "sample_only": sample_only,
+                "monitor_only": monitor_only,
+                "finalized": step.status != "pending",
+            },
+        }
 
     # Apply a green/red border to every stored verification image.
     capture_rel_path = None
@@ -2367,6 +2486,8 @@ async def verify_game_step(
             capture_bytes,
             file.filename,
             run_number=int(step.verification_count or 0) + 1,
+            required_text=_required_proof_text_for_step(step),
+            detected_text=_detected_proof_text(status, analysis),
         )
 
     step.verification_count += 1
@@ -2569,6 +2690,8 @@ async def register_movement_event(
         annotated,
         file.filename,
         run_number=int(step.verification_count or 0) + 1,
+        required_text=_required_proof_text_for_step(step),
+        detected_text=f"Verfehlung: {(reason or 'Lokale Bewegungserkennung hat eine Abweichung erkannt.').strip()}"[:420],
     )
     now = datetime.now(timezone.utc)
 

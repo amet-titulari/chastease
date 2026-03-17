@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 from pathlib import Path
 import re
+from unittest.mock import patch
 
 from app.config import settings
 from app.database import SessionLocal
@@ -102,3 +103,42 @@ def test_chat_verification_image_path_uses_session_game_run_timestamp_name():
         assert filename.startswith(f"session{session_id}-game0-run{verification_id}-")
         assert re.search(r"\d{8}-\d{4}", filename) is not None
         assert Path(image_path).is_file()
+
+
+def test_verification_upload_stamps_required_and_detected_proof_text():
+    captured: dict[str, str] = {}
+
+    def _capture_stamp(image_bytes: bytes, *, required_text: str | None = None, detected_text: str | None = None, now=None) -> bytes:
+        captured["required_text"] = required_text or ""
+        captured["detected_text"] = detected_text or ""
+        return image_bytes
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign_session(client)
+
+        request_resp = client.post(
+            f"/api/sessions/{session_id}/verifications/request",
+            json={
+                "requested_seal_number": "A-2",
+                "verification_criteria": "Plombe muss klar lesbar und unbeschaedigt sein.",
+            },
+        )
+        assert request_resp.status_code == 200
+        verification_id = request_resp.json()["verification_id"]
+
+        with patch("app.routers.verification.analyze_verification", return_value=("suspicious", "KI sagt: Plombe verdeckt.")):
+            with patch("app.routers.verification.stamp_verification_proof", side_effect=_capture_stamp):
+                upload_resp = client.post(
+                    f"/api/sessions/{session_id}/verifications/{verification_id}/upload",
+                    files={"file": ("proof.jpg", b"fake-image-bytes", "image/jpeg")},
+                    data={"observed_seal_number": "A-9"},
+                )
+
+        assert upload_resp.status_code == 200
+        assert "Soll: A-2" in captured["required_text"]
+        assert "Check:" in captured["required_text"]
+        assert "lesbar" in captured["required_text"]
+        assert "unbeschaedigt" in captured["required_text"]
+        assert "Verdacht" in captured["detected_text"]
+        assert "Ist: A-9" in captured["detected_text"]
+        assert "KI sagt: Plombe verdeckt." in captured["detected_text"]

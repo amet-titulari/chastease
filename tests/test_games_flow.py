@@ -753,6 +753,84 @@ def test_pose_similarity_result_is_exposed_in_verify_payload():
         assert payload["step"]["pose_similarity"]["threshold"] == 74.0
 
 
+def test_posture_training_uses_local_pose_result_without_ai_when_pose_is_clear():
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 10,
+                "max_misses_before_penalty": 1,
+                "session_penalty_seconds": 60,
+            },
+        )
+        assert start.status_code == 200
+        run = start.json()
+        run_id = run["id"]
+        step_id = run["current_step"]["id"]
+
+        with patch("app.routers.games.analyze_verification", side_effect=AssertionError("AI should not be called for clear local pose results")):
+            with patch(
+                "app.routers.games._evaluate_pose_similarity_for_step",
+                return_value=(
+                    "suspicious",
+                    "Pose-Score 58.0/100 (min 74.0)",
+                    {"score": 58.0, "threshold": 74.0},
+                ),
+            ):
+                verify = client.post(
+                    f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+                    files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                    data={"observed_posture": run["current_step"]["posture_name"], "sample_only": "true"},
+                )
+
+        assert verify.status_code == 200
+        payload = verify.json()
+        assert payload["step"]["verification_status"] == "suspicious"
+        assert payload["step"]["pose_similarity_status"] == "suspicious"
+
+
+def test_posture_training_uses_ai_fallback_when_pose_is_inconclusive():
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 10,
+                "max_misses_before_penalty": 1,
+                "session_penalty_seconds": 60,
+            },
+        )
+        assert start.status_code == 200
+        run = start.json()
+        run_id = run["id"]
+        step_id = run["current_step"]["id"]
+
+        with patch("app.routers.games.analyze_verification", return_value=("confirmed", "AI fallback confirmed")) as mocked_ai:
+            with patch(
+                "app.routers.games._evaluate_pose_similarity_for_step",
+                return_value=("skipped", "pose_not_detected", None),
+            ):
+                verify = client.post(
+                    f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+                    files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                    data={"observed_posture": run["current_step"]["posture_name"], "sample_only": "true"},
+                )
+
+        assert verify.status_code == 200
+        assert mocked_ai.call_count == 1
+        payload = verify.json()
+        assert payload["step"]["verification_status"] == "confirmed"
+        assert payload["step"]["pose_similarity_status"] == "skipped"
+        assert payload["step"]["analysis"] == "AI fallback confirmed"
+
+
 def test_pose_similarity_uses_module_configured_threshold():
     with TestClient(app) as client:
         _register_admin(client)
@@ -1004,6 +1082,50 @@ def test_monitor_only_verification_keeps_step_pending_without_capture_on_confirm
         assert payload["step"]["capture_url"] is None
 
 
+def test_monitor_only_pose_not_detected_is_inconclusive_without_capture_or_counting():
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 10,
+                "max_misses_before_penalty": 1,
+                "session_penalty_seconds": 60,
+            },
+        )
+        assert start.status_code == 200
+        run = start.json()
+        run_id = run["id"]
+        step_id = run["current_step"]["id"]
+
+        with patch(
+            "app.routers.games._evaluate_pose_similarity_for_step",
+            return_value=("skipped", "pose_not_detected", None),
+        ):
+            verify = client.post(
+                f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+                files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                data={
+                    "observed_posture": run["current_step"]["posture_name"],
+                    "monitor_only": "true",
+                },
+            )
+
+        assert verify.status_code == 200
+        payload = verify.json()
+        assert payload["step"]["monitor_only"] is True
+        assert payload["step"]["status"] == "pending"
+        assert payload["step"]["verification_status"] == "inconclusive"
+        assert payload["step"]["pose_similarity_status"] == "skipped"
+        assert payload["step"]["capture_path"] is None
+        assert payload["step"]["capture_url"] is None
+        assert int(payload["step"]["verification_count"]) == 0
+        assert int(payload["run"]["miss_count"]) == 0
+
+
 def test_failed_step_does_not_append_retry():
     """Retry logic was removed: a failed step simply stays failed, no new step is appended."""
     with TestClient(app) as client:
@@ -1136,7 +1258,57 @@ def test_game_run_auto_completes_when_total_time_elapsed_with_summary():
 
         summary = payload.get("summary") or {}
         assert summary.get("end_reason") == "time_elapsed"
-        assert int(summary.get("total_steps") or 0) >= 1
+        assert int(summary.get("total_steps") or 0) == 0
+        assert int(summary.get("failed_steps") or 0) == 0
+        assert int(summary.get("unplayed_steps") or 0) >= 1
+
+
+def test_timed_out_run_counts_only_played_steps_in_summary():
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+        start = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "posture_training",
+                "difficulty": "medium",
+                "duration_minutes": 1,
+                "transition_seconds": 0,
+                "max_misses_before_penalty": 2,
+                "session_penalty_seconds": 120,
+            },
+        )
+        assert start.status_code == 200
+        run = start.json()
+        run_id = int(run["id"])
+        step_id = int(run["current_step"]["id"])
+
+        with patch("app.routers.games.analyze_verification", return_value=("confirmed", "AI mock confirmed")):
+            verify = client.post(
+                f"/api/games/runs/{run_id}/steps/{step_id}/verify",
+                files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                data={"observed_posture": run["current_step"]["posture_name"]},
+            )
+        assert verify.status_code == 200
+
+        db = SessionLocal()
+        try:
+            run_row = db.query(GameRun).filter(GameRun.id == run_id).first()
+            assert run_row is not None
+            run_row.started_at = datetime.now(timezone.utc) - timedelta(seconds=120)
+            db.add(run_row)
+            db.commit()
+        finally:
+            db.close()
+
+        detail = client.get(f"/api/games/runs/{run_id}")
+        assert detail.status_code == 200
+        summary = (detail.json().get("summary") or {})
+        assert summary.get("end_reason") == "time_elapsed"
+        assert int(summary.get("total_steps") or 0) == 1
+        assert int(summary.get("passed_steps") or 0) == 1
+        assert int(summary.get("failed_steps") or 0) == 0
+        assert int(summary.get("unplayed_steps") or 0) >= 1
 
 
 def test_final_summary_contains_detailed_check_entries():

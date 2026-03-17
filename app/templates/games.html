@@ -350,6 +350,8 @@ async function loadRunReportInto(runId, bodyEl) {
     const checks = Array.isArray(summary.checks) ? summary.checks : [];
 
     const total = Number(summary.total_steps || 0);
+    const scheduled = Number(summary.scheduled_steps || total);
+    const unplayed = Number(summary.unplayed_steps || Math.max(0, scheduled - total));
     const passed = Number(summary.passed_steps || 0);
     const failed = Number(summary.failed_steps || 0);
     const misses = Number(summary.miss_count || run.miss_count || 0);
@@ -358,9 +360,10 @@ async function loadRunReportInto(runId, bodyEl) {
 
     let html = `<div class="greport-stats">
       <span>Beendigung: <strong>${escH(endReason)}</strong></span>
-      <span>Schritte: <strong class="${passed === total ? 'greport-stat-ok' : 'greport-stat-fail'}">${passed}/${total}</strong></span>
+      <span>Gespielt: <strong class="${passed === total && failed === 0 ? 'greport-stat-ok' : 'greport-stat-fail'}">${passed}/${total}</strong></span>
       <span>Fehler: <strong class="${failed > 0 ? 'greport-stat-fail' : 'greport-stat-ok'}">${failed}</strong></span>
       <span>Verfehlungen: <strong class="${misses > 0 ? 'greport-stat-fail' : 'greport-stat-ok'}">${misses}</strong></span>`;
+    if (unplayed > 0) html += `<span>Nicht gespielt: <strong>${unplayed}/${scheduled}</strong></span>`;
     if (penaltyApplied) html += `<span><strong class="greport-stat-fail">Session-Penalty ausgeloest</strong></span>`;
     html += `</div>`;
 
