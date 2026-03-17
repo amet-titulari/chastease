@@ -671,6 +671,44 @@ function currentVideoTrack() {
   return cameraStream?.getVideoTracks?.()[0] || null;
 }
 
+function cameraLabelText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isUltrawideCameraLabel(value) {
+  const text = cameraLabelText(value);
+  return text.includes("ultra") || text.includes("weitwinkel") || text.includes("wide") || text.includes("0.5");
+}
+
+function isFrontCameraLabel(value) {
+  const text = cameraLabelText(value);
+  return text.includes("front") || text.includes("vorder") || text.includes("selfie") || text.includes("face");
+}
+
+function cameraDeviceRank(device) {
+  const label = cameraLabelText(device?.label);
+  let score = 0;
+
+  if (label.includes("r\u00fcck") || label.includes("back") || label.includes("rear") || label.includes("environment")) score += 50;
+  if (label.includes("wide") || label.includes("weitwinkel")) score += 8;
+  if (label.includes("standard") || label.includes("normal")) score += 12;
+  if (label.includes("tele")) score -= 8;
+  if (isFrontCameraLabel(label)) score -= 12;
+  if (isUltrawideCameraLabel(label)) score -= 30;
+
+  return score;
+}
+
+function preferredCameraDeviceId() {
+  if (!availableCameraDevices.length) return "";
+  const ranked = [...availableCameraDevices].sort((left, right) => cameraDeviceRank(right) - cameraDeviceRank(left));
+  return String(ranked[0]?.deviceId || "").trim();
+}
+
+function effectiveCameraDeviceId() {
+  return String(selectedCameraDeviceId || preferredCameraDeviceId() || "").trim();
+}
+
 function activeCameraLabel(track = null) {
   const deviceId = String(track?.getSettings?.().deviceId || selectedCameraDeviceId || "").trim();
   const match = availableCameraDevices.find((item) => String(item.deviceId || "") === deviceId);
@@ -695,17 +733,28 @@ function updateCameraMeta(track = null) {
   const frameRate = Number(settings.frameRate || 0);
   const pixels = width * height;
   const isLowQuality = pixels > 0 && pixels < (1280 * 720);
+  const label = activeCameraLabel(liveTrack);
+  const isUltrawide = isUltrawideCameraLabel(label);
+  const isFront = isFrontCameraLabel(label);
   const fpsText = Number.isFinite(frameRate) && frameRate > 0 ? ` · ${frameRate.toFixed(frameRate >= 10 ? 0 : 1)} fps` : "";
 
   cameraMetaBoxEl.classList.remove("hidden");
-  cameraMetaBoxEl.classList.toggle("warn", isLowQuality);
+  cameraMetaBoxEl.classList.toggle("warn", isLowQuality || isUltrawide);
   cameraQualityEl.textContent = width > 0 && height > 0
     ? `Aktive Stream-Qualitaet: ${width} x ${height}${fpsText}`
     : "Aktive Stream-Qualitaet: unbekannt";
-  cameraDeviceLabelEl.textContent = `Aktive Kamera: ${activeCameraLabel(liveTrack)}`;
+  cameraDeviceLabelEl.textContent = `Aktive Kamera: ${label}`;
 
   if (isLowQuality) {
     setStatus(`Die aktive Kamera liefert nur ${width} x ${height}. Bitte andere Kamera waehlen oder Kamera neu verbinden.`, true);
+    return;
+  }
+
+  if (isUltrawide) {
+    const hint = isFront
+      ? "Ultra-Weitwinkel-Frontkamera erkannt. Diese Linse verzerrt Koerperproportionen und verschlechtert die Pose-Erkennung."
+      : "Ultra-Weitwinkelkamera erkannt. Diese Linse kann die Pose-Erkennung durch starke Verzeichnung verschlechtern.";
+    setStatus(hint, true);
   }
 }
 
@@ -726,7 +775,7 @@ function updateCameraSelectorOptions() {
 
   const autoOption = document.createElement("option");
   autoOption.value = "";
-  autoOption.textContent = "Automatische Kamerawahl";
+  autoOption.textContent = "Automatische Kamerawahl (empfohlen)";
   cameraDeviceEl.appendChild(autoOption);
 
   availableCameraDevices.forEach((device, index) => {
@@ -2347,7 +2396,7 @@ async function startCamera(forceRestart = false) {
   cameraStartBtnEl.textContent = forceRestart ? "Kamera verbindet neu ..." : "Kamera verbindet ...";
 
   try {
-    cameraStream = await openBestCameraStream(selectedCameraDeviceId);
+    cameraStream = await openBestCameraStream(effectiveCameraDeviceId());
   } finally {
     cameraStartBtnEl.disabled = false;
     cameraStartBtnEl.textContent = cameraStream ? "Kamera neu verbinden" : "Kamera aktivieren";
