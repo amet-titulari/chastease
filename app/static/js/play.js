@@ -306,12 +306,35 @@ function plRenderHygieneQuota(quotaData) {
   const limits = quotaData.limits || {};
   const used = quotaData.used || {};
   const remaining = quotaData.remaining || {};
+  const nextAllowedAt = (quotaData.next_allowed_at || {}).overall || null;
   const fmt = (v) => (v === null || v === undefined ? "unbegrenzt" : String(v));
 
-  el.textContent =
+  let text =
     `Kontingent - Tag: ${fmt(used.daily)}/${fmt(limits.daily)} (rest ${fmt(remaining.daily)}), ` +
     `Woche: ${fmt(used.weekly)}/${fmt(limits.weekly)} (rest ${fmt(remaining.weekly)}), ` +
     `Monat: ${fmt(used.monthly)}/${fmt(limits.monthly)} (rest ${fmt(remaining.monthly)})`;
+
+  if (nextAllowedAt) {
+    try {
+      const diff = new Date(nextAllowedAt).getTime() - Date.now();
+      if (diff > 0) {
+        const d = Math.floor(diff / 86400000);
+        const h = Math.floor((diff % 86400000) / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        let countdown = "";
+        if (d > 0) countdown = `${d}T ${h}h ${m}m`;
+        else if (h > 0) countdown = `${h}h ${m}m`;
+        else countdown = `${m}m`;
+        const dateStr = new Date(nextAllowedAt).toLocaleString("de-DE", {
+          day: "2-digit", month: "2-digit", year: "numeric",
+          hour: "2-digit", minute: "2-digit"
+        });
+        text += `\nNächste Öffnung erlaubt: ${dateStr} (in ${countdown})`;
+      }
+    } catch (_) {}
+  }
+
+  el.textContent = text;
 }
 
 async function plLoadHygieneQuota() {
