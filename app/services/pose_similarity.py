@@ -299,16 +299,19 @@ def _normalize_points(points: dict[str, dict[str, float]]) -> dict[str, Any] | N
     if not left_hip or not right_hip or not left_shoulder or not right_shoulder:
         return None
 
-    center_x = (left_hip["x"] + right_hip["x"]) / 2.0
-    center_y = (left_hip["y"] + right_hip["y"]) / 2.0
+    # Anchor: shoulder midpoint — stable even when hips are out of frame (close-up shots).
+    center_x = (left_shoulder["x"] + right_shoulder["x"]) / 2.0
+    center_y = (left_shoulder["y"] + right_shoulder["y"]) / 2.0
 
     shoulder_dist = math.dist(
         (left_shoulder["x"], left_shoulder["y"]),
         (right_shoulder["x"], right_shoulder["y"]),
     )
+    hip_center_x = (left_hip["x"] + right_hip["x"]) / 2.0
+    hip_center_y = (left_hip["y"] + right_hip["y"]) / 2.0
     torso_dist = math.dist(
-        ((left_shoulder["x"] + right_shoulder["x"]) / 2.0, (left_shoulder["y"] + right_shoulder["y"]) / 2.0),
         (center_x, center_y),
+        (hip_center_x, hip_center_y),
     )
     scale = shoulder_dist if shoulder_dist > 0.02 else torso_dist
     if scale <= 0.02:

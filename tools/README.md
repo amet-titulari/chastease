@@ -116,3 +116,24 @@ python tools/push_remote_volume.py --remote-backup
 ```bash
 python tools/push_remote_volume.py --dry-run
 ```
+
+## abort_active_runs.py
+
+Beendet alle aktiven GameRuns in der lokalen Datenbank. Nützlich beim Testen,
+wenn ein Spiel im Status `active` hängengeblieben ist.
+
+### Usage
+
+```bash
+python tools/abort_active_runs.py
+```
+
+### Optionale Argumente
+
+```bash
+# Andere DB-Datei verwenden (überschreibt CHASTEASE_DATABASE_URL)
+python tools/abort_active_runs.py --db-path data/chastease.db
+
+# Nur anzeigen, was beendet würde – keine Änderungen schreiben
+python tools/abort_active_runs.py --dry-run
+```

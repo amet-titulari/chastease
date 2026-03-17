@@ -503,10 +503,15 @@ let movementRedFlashUntil = 0;
 let movementEventInFlight = false;
 let movementMonitorActive = false;
 let movementLastMarker = null;
+let movementPendingViolation = null;
+let movementPoseMissingFrames = 0;
+let movementOverlayMode = "idle";
 let tiptoeingMaskImage = null;
 let tiptoeingMaskReady = false;
 let tiptoeingOutsideGreenFrames = 0;
 let tiptoeingFlatFootFrames = 0;
+let strictStartStableFrames = 0;
+let strictStartDebugText = "";
 let postureOverlayStatus = "idle";
 let postureInconclusiveCount = 0;
 let currentReferenceLandmarksJson = null;
@@ -589,6 +594,14 @@ const postureReferencePointToIndex = {
   left_ankle: 27,
   right_ankle: 28,
 };
+const referenceAngleTriplets = [
+  ["left_shoulder", "left_elbow", "left_wrist"],
+  ["right_shoulder", "right_elbow", "right_wrist"],
+  ["left_hip", "left_knee", "left_ankle"],
+  ["right_hip", "right_knee", "right_ankle"],
+  ["left_shoulder", "left_hip", "left_knee"],
+  ["right_shoulder", "right_hip", "right_knee"],
+];
 const postureSkeletonConnections = [
   [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
   [15, 17], [15, 19], [17, 19], [16, 18], [16, 20], [18, 20],
@@ -947,7 +960,22 @@ function drawMotionOverlay(marker = null, forceAlert = false) {
     ctx.restore();
   }
 
-  const stroke = isAlert ? "rgba(255, 72, 72, 0.96)" : "rgba(56, 221, 112, 0.96)";
+  const stroke = isAlert
+    ? "rgba(255, 72, 72, 0.96)"
+    : movementOverlayMode === "positioning"
+      ? "rgba(88, 178, 255, 0.96)"
+      : "rgba(56, 221, 112, 0.96)";
+  const fill = isAlert
+    ? "rgba(255, 72, 72, 0.07)"
+    : movementOverlayMode === "positioning"
+      ? "rgba(88, 178, 255, 0.08)"
+      : "rgba(56, 221, 112, 0.05)";
+
+  ctx.fillStyle = fill;
+  ctx.fillRect(0, 0, w, h);
+  if (currentReferenceLandmarksJson) {
+    drawReferenceSkeletonOnCanvas(ctx, w, h, currentReferenceLandmarksJson);
+  }
 
   ctx.lineWidth = Math.max(4, Math.floor(Math.min(w, h) * 0.012));
   ctx.strokeStyle = stroke;
@@ -968,6 +996,24 @@ function drawMotionOverlay(marker = null, forceAlert = false) {
     ctx.moveTo(mx, my - r - 8);
     ctx.lineTo(mx, my + r + 8);
     ctx.stroke();
+  }
+
+  if (movementOverlayMode === "positioning" && strictStartDebugText) {
+    const lines = String(strictStartDebugText).split("\n").slice(0, 3);
+    const fontSize = Math.max(12, Math.floor(Math.min(w, h) * 0.026));
+    const lineHeight = fontSize + 6;
+    const boxWidth = Math.min(w - 24, Math.max(220, Math.floor(w * 0.56)));
+    const boxHeight = (lines.length * lineHeight) + 18;
+    const boxX = 12;
+    const boxY = Math.max(12, h - boxHeight - 12);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.62)";
+    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+    ctx.fillStyle = "rgba(230, 244, 255, 0.98)";
+    ctx.font = `600 ${fontSize}px sans-serif`;
+    ctx.textBaseline = "top";
+    lines.forEach((line, idx) => {
+      ctx.fillText(line, boxX + 10, boxY + 9 + (idx * lineHeight), boxWidth - 20);
+    });
   }
 }
 
@@ -1003,18 +1049,19 @@ function livePoseFrameFromLandmarks(landmarks) {
   const rightShoulder = landmarks[12];
   if (!leftHip || !rightHip || !leftShoulder || !rightShoulder) return null;
 
-  const required = [leftHip, rightHip, leftShoulder, rightShoulder];
+  // Only require shoulders — hips may be out of frame in close-up reference shots.
+  const required = [leftShoulder, rightShoulder];
   if (required.some((item) => Number(item.visibility ?? 1) < 0.35)) return null;
 
-  const centerX = (Number(leftHip.x || 0) + Number(rightHip.x || 0)) / 2;
-  const centerY = (Number(leftHip.y || 0) + Number(rightHip.y || 0)) / 2;
-  const shoulderCenterX = (Number(leftShoulder.x || 0) + Number(rightShoulder.x || 0)) / 2;
-  const shoulderCenterY = (Number(leftShoulder.y || 0) + Number(rightShoulder.y || 0)) / 2;
+  const centerX = (Number(leftShoulder.x || 0) + Number(rightShoulder.x || 0)) / 2;
+  const centerY = (Number(leftShoulder.y || 0) + Number(rightShoulder.y || 0)) / 2;
   const shoulderDist = Math.hypot(
     Number(leftShoulder.x || 0) - Number(rightShoulder.x || 0),
     Number(leftShoulder.y || 0) - Number(rightShoulder.y || 0)
   );
-  const torsoDist = Math.hypot(shoulderCenterX - centerX, shoulderCenterY - centerY);
+  const hipCenterX = (Number(leftHip.x || 0) + Number(rightHip.x || 0)) / 2;
+  const hipCenterY = (Number(leftHip.y || 0) + Number(rightHip.y || 0)) / 2;
+  const torsoDist = Math.hypot(centerX - hipCenterX, centerY - hipCenterY);
   const scale = shoulderDist > 0.02 ? shoulderDist : torsoDist;
   if (!Number.isFinite(scale) || scale <= 0.02) return null;
 
@@ -1206,6 +1253,17 @@ function activeDifficultyKey() {
   return String((activeRun && activeRun.difficulty) || document.getElementById("gm-difficulty").value || "medium");
 }
 
+function strictStartReadyThreshold() {
+  if (isTiptoeingModule) return 1;
+  const diff = activeDifficultyKey();
+  const raw = Number(moduleSettings?.[`pose_similarity_min_score_${diff}`]);
+  // dont_move requires stricter pose matching so that arm/body position must be clearly correct
+  const fallback = isDontMoveModule
+    ? (diff === "easy" ? 62 : (diff === "hard" ? 78 : 70))
+    : (diff === "easy" ? 45 : (diff === "hard" ? 65 : 55));
+  return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+}
+
 function movementProfile() {
   const diff = activeDifficultyKey();
   const moduleProfile = movementDefaults[moduleKey] || movementDefaults.dont_move;
@@ -1247,6 +1305,134 @@ function tiptoeingMaskProfile() {
     greenMinThreshold: Math.max(0.01, Math.min(0.95, greenMinThreshold)),
     dominanceThreshold: Math.max(0.01, Math.min(0.95, dominanceThreshold)),
   };
+}
+
+function jointAngleDeg(a, b, c) {
+  const baX = Number(a?.x || 0) - Number(b?.x || 0);
+  const baY = Number(a?.y || 0) - Number(b?.y || 0);
+  const bcX = Number(c?.x || 0) - Number(b?.x || 0);
+  const bcY = Number(c?.y || 0) - Number(b?.y || 0);
+  const magBA = Math.hypot(baX, baY);
+  const magBC = Math.hypot(bcX, bcY);
+  if (magBA <= 1e-9 || magBC <= 1e-9) return 180;
+  const cosv = Math.max(-1, Math.min(1, ((baX * bcX) + (baY * bcY)) / (magBA * magBC)));
+  return Math.acos(cosv) * (180 / Math.PI);
+}
+
+function normalizePoseLandmarksForReference(landmarks) {
+  if (!Array.isArray(landmarks) || landmarks.length === 0) return null;
+  const points = {};
+  Object.entries(postureReferencePointToIndex).forEach(([name, idx]) => {
+    const item = landmarks[idx];
+    if (!item) return;
+    points[name] = {
+      x: Number(item.x || 0),
+      y: Number(item.y || 0),
+      visibility: Number(item.visibility ?? 0),
+    };
+  });
+
+  const leftHip = points.left_hip;
+  const rightHip = points.right_hip;
+  const leftShoulder = points.left_shoulder;
+  const rightShoulder = points.right_shoulder;
+  if (!leftHip || !rightHip || !leftShoulder || !rightShoulder) return null;
+
+  // Anchor: shoulder midpoint — stable even when hips are out of frame (close-up shots).
+  const centerX = (leftShoulder.x + rightShoulder.x) / 2;
+  const centerY = (leftShoulder.y + rightShoulder.y) / 2;
+  const shoulderDist = Math.hypot(leftShoulder.x - rightShoulder.x, leftShoulder.y - rightShoulder.y);
+  const hipCenterX = (leftHip.x + rightHip.x) / 2;
+  const hipCenterY = (leftHip.y + rightHip.y) / 2;
+  const torsoDist = Math.hypot(centerX - hipCenterX, centerY - hipCenterY);
+  const scale = shoulderDist > 0.02 ? shoulderDist : torsoDist;
+  if (!Number.isFinite(scale) || scale <= 0.02) return null;
+
+  const normalized = {};
+  let visibleCount = 0;
+  Object.entries(points).forEach(([name, point]) => {
+    normalized[name] = {
+      x: (point.x - centerX) / scale,
+      y: (point.y - centerY) / scale,
+      visibility: Number(point.visibility ?? 0),
+    };
+    if (Number(point.visibility ?? 0) >= 0.45) visibleCount += 1;
+  });
+
+  return { points: normalized, visibleCount };
+}
+
+function scoreLivePoseAgainstReference(referenceJson, landmarks) {
+  const reference = referencePointsFromJson(referenceJson);
+  const current = normalizePoseLandmarksForReference(landmarks);
+  if (!reference || !current) return null;
+
+  let posWeightSum = 0;
+  let posErrorSum = 0;
+  Object.keys(postureReferencePointToIndex).forEach((name) => {
+    const rp = reference[name];
+    const cp = current.points[name];
+    if (!rp || !cp) return;
+    const weight = Math.min(Number(rp.visibility ?? 0), Number(cp.visibility ?? 0));
+    if (weight < 0.2) return;
+    const dist = Math.hypot(Number(rp.x || 0) - Number(cp.x || 0), Number(rp.y || 0) - Number(cp.y || 0));
+    posErrorSum += weight * dist;
+    posWeightSum += weight;
+  });
+  if (posWeightSum <= 1e-9) return null;
+
+  const ePos = posErrorSum / posWeightSum;
+  let angWeightSum = 0;
+  let angErrorSum = 0;
+  referenceAngleTriplets.forEach(([aName, bName, cName]) => {
+    const ra = reference[aName];
+    const rb = reference[bName];
+    const rc = reference[cName];
+    const ca = current.points[aName];
+    const cb = current.points[bName];
+    const cc = current.points[cName];
+    if (!ra || !rb || !rc || !ca || !cb || !cc) return;
+    const weight = Math.min(
+      Number(ra.visibility ?? 0),
+      Number(rb.visibility ?? 0),
+      Number(rc.visibility ?? 0),
+      Number(ca.visibility ?? 0),
+      Number(cb.visibility ?? 0),
+      Number(cc.visibility ?? 0)
+    );
+    if (weight < 0.2) return;
+    const refAngle = jointAngleDeg(ra, rb, rc);
+    const curAngle = jointAngleDeg(ca, cb, cc);
+    angErrorSum += weight * Math.abs(refAngle - curAngle);
+    angWeightSum += weight;
+  });
+
+  const eAng = angWeightSum > 1e-9 ? (angErrorSum / angWeightSum / 180) : 0;
+  const visValues = Object.keys(postureReferencePointToIndex)
+    .map((name) => Math.min(Number(reference[name]?.visibility ?? 0), Number(current.points[name]?.visibility ?? 0)))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  const meanVis = visValues.length ? (visValues.reduce((sum, value) => sum + value, 0) / visValues.length) : 0;
+  const eVis = Math.max(0, 0.6 - meanVis);
+  const combinedError = Math.max(0, Math.min(1, (0.75 * ePos) + (0.20 * eAng) + (0.05 * eVis)));
+  return {
+    score: 100 * (1 - combinedError),
+    visibleCount: current.visibleCount,
+    meanVisibility: meanVis,
+  };
+}
+
+function requiredReferencePoseParts(referenceJson) {
+  const reference = referencePointsFromJson(referenceJson);
+  if (!reference) return [];
+  return Object.entries(reference)
+    .filter(([, point]) => Number(point?.visibility ?? 0) >= 0.35)
+    .map(([name]) => name);
+}
+
+function visibleReferencePoseParts(landmarks, names) {
+  const normalized = normalizePoseLandmarksForReference(landmarks);
+  if (!normalized) return [];
+  return names.filter((name) => Number(normalized.points?.[name]?.visibility ?? 0) >= 0.45);
 }
 
 function copyLandmarks(landmarks) {
@@ -1331,6 +1517,96 @@ function tiptoeingFootState(poseLandmarks, side) {
     },
     markerLabel: `${side === "left" ? "Linke" : "Rechte"} Ferse`,
     markerStrength: Math.max(0, minLift - heelLift),
+  };
+}
+
+function strictStartVerdict(poseLandmarks) {
+  if (isTiptoeingModule) {
+    const tipVerdict = evaluateTiptoeingMask(poseLandmarks);
+    const leftFoot = tiptoeingFootState(poseLandmarks, "left");
+    const rightFoot = tiptoeingFootState(poseLandmarks, "right");
+    const visibleFeet = [leftFoot, rightFoot].filter((item) => item.visible);
+    const liftedFeet = visibleFeet.filter((item) => item.lifted);
+    if (!tipVerdict || visibleFeet.length === 0) {
+      return {
+        ready: false,
+        marker: null,
+        markerLabel: "Fuesse nicht sichtbar",
+        analysis: "Fuesse und Knoechel muessen vor dem Start sichtbar sein.",
+        debug: "Start blockiert\nFuesse/Knoechel nicht stabil sichtbar",
+      };
+    }
+    if (tipVerdict.violation || String(tipVerdict.reason || "").includes("ausserhalb")) {
+      return {
+        ready: false,
+        marker: tipVerdict.marker || null,
+        markerLabel: tipVerdict.markerLabel || "Fussposition korrigieren",
+        analysis: "Fussbereiche muessen komplett in Gruen bleiben, Schwarz ist verboten.",
+        debug: `Start blockiert\n${tipVerdict.markerLabel || "Fussposition korrigieren"}`,
+      };
+    }
+    if (liftedFeet.length === 0) {
+      return {
+        ready: false,
+        marker: leftFoot.marker || rightFoot.marker || null,
+        markerLabel: "Fersen anheben",
+        analysis: "Vor dem Start muessen die Fersen sichtbar auf den Zehenspitzen oben sein.",
+        debug: "Start blockiert\nFersen muessen angehoben sein",
+      };
+    }
+    return {
+      ready: true,
+      marker: null,
+      markerLabel: "Tiptoeing bereit",
+      analysis: "Pose erkannt. Halte Gruen und Zehenspitzen stabil.",
+      debug: `Start bereit\nStabile Frames: ${strictStartStableFrames + 1}/6`,
+    };
+  }
+
+  const score = scoreLivePoseAgainstReference(currentReferenceLandmarksJson, poseLandmarks);
+  if (score) {
+    const threshold = strictStartReadyThreshold();
+    const requiredParts = requiredReferencePoseParts(currentReferenceLandmarksJson);
+    const visibleParts = visibleReferencePoseParts(poseLandmarks, requiredParts);
+    const visibilityRatio = requiredParts.length > 0 ? (visibleParts.length / requiredParts.length) : 0;
+    const ready = (
+      score.score >= threshold
+      && score.visibleCount >= 10
+      && score.meanVisibility >= 0.52
+      && visibilityRatio >= 0.78
+    );
+    return {
+      ready,
+      marker: movementLastMarker || fallbackMarkerFromPoseLandmarks(poseLandmarks),
+      markerLabel: ready ? "Pose bereit" : "Pose ausrichten",
+      analysis: ready
+        ? `Sollpose erkannt (${score.score.toFixed(1)}/100).`
+        : `Noch ausrichten: Pose ${score.score.toFixed(1)}/100, Start ab ${threshold.toFixed(1)}.`,
+      debug: ready
+        ? `Start bereit\nPose ${score.score.toFixed(1)}/100\nStabile Frames: ${strictStartStableFrames + 1}/6`
+        : `Start blockiert\nPose ${score.score.toFixed(1)}/100, Start ab ${threshold.toFixed(1)}\nTeile sichtbar: ${visibleParts.length}/${requiredParts.length}`,
+    };
+  }
+
+  if (currentReferenceLandmarksJson) {
+    return {
+      ready: false,
+      marker: fallbackMarkerFromPoseLandmarks(poseLandmarks),
+      markerLabel: "Pose ausrichten",
+      analysis: "Sollpose noch nicht sicher erkannt. Richte dich weiter am Referenzskelett aus.",
+      debug: "Start blockiert\nReferenzpose noch nicht sicher erkannt",
+    };
+  }
+
+  const visibleCount = Array.isArray(poseLandmarks)
+    ? poseLandmarks.filter((item) => item && Number(item.visibility ?? 0) >= 0.45).length
+    : 0;
+  return {
+    ready: false,
+    marker: fallbackMarkerFromPoseLandmarks(poseLandmarks),
+    markerLabel: visibleCount >= 10 ? "Referenzpose fehlt" : "Koerper ausrichten",
+    analysis: "Fuer Don't move wird eine gespeicherte Referenzpose benoetigt. Bitte die Posture mit Referenzpose hinterlegen.",
+    debug: `Start blockiert\nKeine Referenzpose fuer dieses Posture\nSichtbare Punkte: ${visibleCount}`,
   };
 }
 
@@ -1428,7 +1704,26 @@ function evaluateTiptoeingMask(poseLandmarks) {
 }
 
 function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
-  if (!Array.isArray(worldLandmarks) || worldLandmarks.length === 0) return null;
+  if (!Array.isArray(worldLandmarks) || worldLandmarks.length === 0) {
+    if (isDontMoveModule) {
+      movementPoseMissingFrames += 1;
+      const fallbackMarker = fallbackMarkerFromPoseLandmarks(poseLandmarks) || movementLastMarker || null;
+      return {
+        violation: movementPoseMissingFrames >= 7,
+        marker: fallbackMarker,
+        markerIndex: null,
+        markerLabel: "Koerper nicht stabil erfasst",
+        markerStrength: movementPoseMissingFrames,
+        movementScore: movementPoseMissingFrames,
+        poseScore: 999,
+        poseOk: false,
+        stillOk: false,
+        reason: "Pose verloren oder Koerper ausserhalb des Bildausschnitts",
+      };
+    }
+    return null;
+  }
+  movementPoseMissingFrames = 0;
   if (!movementTargetWorldLandmarks) {
     movementTargetWorldLandmarks = copyLandmarks(worldLandmarks);
   }
@@ -1482,8 +1777,29 @@ function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
   }
 
   const avgPoseDeviation = poseVisiblePoints > 0 ? (poseDeviation / poseVisiblePoints) : 999;
-  const poseOk = avgPoseDeviation < Number(profile.poseDeviation);
+  let poseOk = avgPoseDeviation < Number(profile.poseDeviation);
   const stillOk = maxMovement < Number(profile.stillness);
+
+  if (isDontMoveModule && currentReferenceLandmarksJson) {
+    const score = scoreLivePoseAgainstReference(currentReferenceLandmarksJson, poseLandmarks);
+    const threshold = strictStartReadyThreshold();
+    const requiredParts = requiredReferencePoseParts(currentReferenceLandmarksJson);
+    const visibleParts = visibleReferencePoseParts(poseLandmarks, requiredParts);
+    const visibilityRatio = requiredParts.length > 0 ? (visibleParts.length / requiredParts.length) : 0;
+    if (
+      !score
+      || score.score < threshold
+      || score.visibleCount < 10
+      || score.meanVisibility < 0.5
+      || visibilityRatio < 0.72
+    ) {
+      poseOk = false;
+      if (!marker) {
+        marker = fallbackMarkerFromPoseLandmarks(poseLandmarks);
+      }
+      markerIndex = null;
+    }
+  }
 
   if (!poseOk || !stillOk) {
     movementStrikeCount += 1;
@@ -1560,6 +1876,13 @@ function describeMovementReason(verdict) {
     }
     return `Tiptoeing-Maskenverstoss: Gruene Zone verlassen (${markerLabel}).`;
   }
+  if (String(verdict?.reason || "").trim()) {
+    const region = String(verdict?.markerLabel || "Koerper");
+    return `${String(verdict.reason).trim()} (${region})`;
+  }
+  if (isDontMoveModule && verdict?.poseOk === false && verdict?.stillOk === true && currentReferenceLandmarksJson) {
+    return "Sollpose nicht mehr korrekt gehalten (Referenzpose unterschritten)";
+  }
   const profile = movementProfile();
   const movePart = `movement=${Number(verdict?.movementScore || 0).toFixed(4)}/${Number(profile.stillness).toFixed(4)}`;
   const posePart = `pose=${Number(verdict?.poseScore || 0).toFixed(4)}/${Number(profile.poseDeviation).toFixed(4)}`;
@@ -1631,13 +1954,25 @@ async function captureViolationFrameBlob(marker = null, markerMeta = null) {
     ctx.fillText(label, tx + padX, ty);
   }
 
-  return await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+  const annotated = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+  if (annotated) return annotated;
+  return captureFrameBlob();
 }
 
 async function submitMovementViolation(token, marker, verdict) {
   if (token !== sequenceToken) return;
-  if (!activeRun || !activeRun.current_step || movementEventInFlight) return;
+  if (!activeRun || !activeRun.current_step) return;
+  if (movementEventInFlight) {
+    movementPendingViolation = {
+      token,
+      marker,
+      verdict,
+      attempts: Number(verdict?.attempts || 0),
+    };
+    return;
+  }
   movementEventInFlight = true;
+  movementPendingViolation = null;
 
   try {
     const effectiveMarker = (marker && Number.isFinite(marker.x) && Number.isFinite(marker.y))
@@ -1668,14 +2003,39 @@ async function submitMovementViolation(token, marker, verdict) {
       body: form,
     });
 
-    updateVerificationPreview(result.step, true);
-    appendCaptureThumbnail(result.step);
     analysisEl.textContent = `Bewegung erkannt: ${result.step.analysis || "Verstoss registriert."}`;
     renderRun(result.run);
+    // Ensure violation thumbnail is always visible after gallery rebuild
+    updateVerificationPreview(result.step, true);
+    if (captureGalleryEl && captureGalleryEl.children.length === 0 && result.step?.capture_url) {
+      appendCaptureThumbnail(result.step);
+    }
   } catch (err) {
     setStatus(`Lokale Bewegungserfassung fehlgeschlagen: ${err.message}`, true);
+    const attempts = Number(verdict?.attempts || 0);
+    if (attempts < 2 && token === sequenceToken && activeRun && activeRun.current_step) {
+      const retryVerdict = {
+        ...verdict,
+        attempts: attempts + 1,
+      };
+      window.setTimeout(() => {
+        submitMovementViolation(token, marker, retryVerdict).catch(() => {});
+      }, 400);
+    }
   } finally {
     movementEventInFlight = false;
+    if (
+      movementPendingViolation
+      && movementPendingViolation.token === sequenceToken
+      && activeRun
+      && activeRun.current_step
+    ) {
+      const pending = movementPendingViolation;
+      movementPendingViolation = null;
+      window.setTimeout(() => {
+        submitMovementViolation(pending.token, pending.marker, pending.verdict).catch(() => {});
+      }, 0);
+    }
   }
 }
 
@@ -1720,6 +2080,11 @@ async function startMovementMonitor(token) {
   movementCooldownUntil = 0;
   movementRedFlashUntil = 0;
   movementLastMarker = null;
+  movementPendingViolation = null;
+  movementPoseMissingFrames = 0;
+  movementOverlayMode = "active";
+  strictStartStableFrames = 0;
+  strictStartDebugText = "";
   tiptoeingOutsideGreenFrames = 0;
   tiptoeingFlatFootFrames = 0;
   movementMonitorActive = true;
@@ -1818,6 +2183,11 @@ function stopMovementMonitor() {
   movementCooldownUntil = 0;
   movementRedFlashUntil = 0;
   movementLastMarker = null;
+  movementPendingViolation = null;
+  movementPoseMissingFrames = 0;
+  movementOverlayMode = "idle";
+  strictStartStableFrames = 0;
+  strictStartDebugText = "";
   tiptoeingOutsideGreenFrames = 0;
   tiptoeingFlatFootFrames = 0;
   movementMonitorActive = false;
@@ -1828,6 +2198,120 @@ function stopMovementMonitor() {
       ctx.clearRect(0, 0, motionOverlayEl.width, motionOverlayEl.height);
     }
   }
+}
+
+async function startStrictStartAlignment(token, readyCountdownSeconds, onReady) {
+  if (!isSinglePoseModule) {
+    onReady();
+    return;
+  }
+  if (dontMoveMonitorHandle) {
+    clearInterval(dontMoveMonitorHandle);
+    dontMoveMonitorHandle = null;
+  }
+
+  try {
+    await initMovementPose();
+    if (isTiptoeingModule) {
+      await ensureTiptoeingMaskLoaded();
+    }
+  } catch (err) {
+    setStatus(`${err.message} - Startausrichtung nicht verfuegbar.`, true);
+    analysisEl.textContent = "Startausrichtung konnte nicht aktiviert werden.";
+    return;
+  }
+
+  movementLatestPoseLandmarks = null;
+  movementLatestWorldLandmarks = null;
+  movementLastMarker = null;
+  movementOverlayMode = "positioning";
+  movementMonitorActive = true;
+  strictStartStableFrames = 0;
+  strictStartDebugText = "Start blockiert\nWarte auf stabile Sollpose";
+  let countdownLeft = Math.max(0, Number(readyCountdownSeconds || 0));
+  let countdownStarted = countdownLeft <= 0;
+  let lastCountdownTick = Date.now();
+  updatePhase(countdownStarted ? "START" : "POSITIONIEREN", countdownStarted ? "0" : "--");
+  analysisEl.textContent = "Nimm die Sollpose ein. Der Start erfolgt erst bei stabil erkannter Haltung.";
+  syncMotionOverlaySize();
+  drawMotionOverlay();
+
+  dontMoveMonitorHandle = setInterval(() => {
+    if (token !== sequenceToken) {
+      clearInterval(dontMoveMonitorHandle);
+      dontMoveMonitorHandle = null;
+      movementMonitorActive = false;
+      movementOverlayMode = "idle";
+      return;
+    }
+    if (!movementPose || movementPoseBusy || !cameraStream) return;
+
+    movementPoseBusy = true;
+    try {
+      const result = movementPose.detectForVideo(playVideoEl, performance.now());
+      movementLatestPoseLandmarks = copyLandmarks(result?.landmarks?.[0] || []);
+      movementLatestWorldLandmarks = copyLandmarks(result?.worldLandmarks?.[0] || []);
+      const verdict = strictStartVerdict(movementLatestPoseLandmarks);
+
+      if (verdict?.marker && Number.isFinite(verdict.marker.x) && Number.isFinite(verdict.marker.y)) {
+        movementLastMarker = verdict.marker;
+      }
+
+      if (!verdict?.ready) {
+        strictStartStableFrames = 0;
+        countdownStarted = false;
+        countdownLeft = Math.max(0, Number(readyCountdownSeconds || 0));
+        movementOverlayMode = "positioning";
+        strictStartDebugText = String(verdict?.debug || "Start blockiert\nPose ausrichten");
+        updatePhase("POSITIONIEREN", "--");
+        analysisEl.textContent = verdict?.analysis || "Richte die Pose fuer den Start aus.";
+        drawMotionOverlay(verdict?.marker || null);
+        return;
+      }
+
+      strictStartStableFrames += 1;
+      // Keep "positioning" (blue) during stabilisation — only startMovementMonitor sets "active" (green)
+      strictStartDebugText = String(verdict?.debug || `Start bereit\nStabile Frames: ${strictStartStableFrames}/6`);
+      drawMotionOverlay(verdict.marker || null);
+
+      if (strictStartStableFrames < 6) {
+        updatePhase("POSITIONIEREN", "--");
+        analysisEl.textContent = `${verdict.analysis || "Pose erkannt."} Stabilisiere die Haltung kurz.`;
+        return;
+      }
+
+      if (!countdownStarted) {
+        countdownStarted = true;
+        lastCountdownTick = Date.now();
+        strictStartDebugText = `Start bereit\nCountdown: ${countdownLeft}`;
+        updatePhase("START", countdownLeft > 0 ? String(countdownLeft) : "0");
+        analysisEl.textContent = "Pose erkannt. Start laeuft.";
+        return;
+      }
+
+      if (countdownLeft > 0 && (Date.now() - lastCountdownTick) >= 1000) {
+        countdownLeft = Math.max(0, countdownLeft - 1);
+        lastCountdownTick = Date.now();
+        strictStartDebugText = `Start bereit\nCountdown: ${countdownLeft}`;
+        updatePhase("START", String(countdownLeft));
+        if (countdownLeft > 0 && countdownLeft <= 5) {
+          beep();
+        }
+      }
+
+      if (countdownLeft <= 0) {
+        clearInterval(dontMoveMonitorHandle);
+        dontMoveMonitorHandle = null;
+        movementMonitorActive = false;
+        movementOverlayMode = "idle";
+        strictStartStableFrames = 0;
+        strictStartDebugText = "";
+        onReady();
+      }
+    } finally {
+      movementPoseBusy = false;
+    }
+  }, 120);
 }
 
 function stopSkeletonMonitor() {
@@ -2258,6 +2742,11 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
       },
     });
   };
+
+  if (isSinglePoseModule) {
+    startStrictStartAlignment(token, transition, beginHold);
+    return;
+  }
 
   countdownPhase({
     token,
