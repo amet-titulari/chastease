@@ -1554,16 +1554,6 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
       // Strict modules use frame-based movement detection on the live stream.
       startMovementMonitor(token).catch(() => {});
     }
-    if (moduleKey === "posture_training") {
-      stopPostureScoreMonitor();
-      postureScoreMonitorHandle = setInterval(() => {
-        if (token !== sequenceToken || !activeRun || activeRun.status !== "active") {
-          stopPostureScoreMonitor();
-          return;
-        }
-        verifyCurrentStepWithMode(token, { monitorOnly: true }).catch(() => {});
-      }, 2000);
-    }
 
     countdownPhase({
       token,

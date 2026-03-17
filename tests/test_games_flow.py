@@ -902,7 +902,8 @@ def test_monitor_only_verification_keeps_step_pending_without_capture_on_confirm
         assert payload["step"]["capture_url"] is None
 
 
-def test_failed_step_chain_appends_max_two_retries():
+def test_failed_step_does_not_append_retry():
+    """Retry logic was removed: a failed step simply stays failed, no new step is appended."""
     with TestClient(app) as client:
         _register_admin(client)
         session_id = _create_and_sign(client)
@@ -920,30 +921,22 @@ def test_failed_step_chain_appends_max_two_retries():
         run = start.json()
         run_id = run["id"]
         initial_step_id = run["current_step"]["id"]
+        initial_step_count = len(client.get(f"/api/games/runs/{run_id}").json()["steps"])
 
-        def _verify_fail(step_id: int) -> None:
-            with patch("app.routers.games.analyze_verification", return_value=("suspicious", "AI mock fail")):
-                resp = client.post(
-                    f"/api/games/runs/{run_id}/steps/{step_id}/verify",
-                    files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
-                    data={"observed_posture": run["current_step"]["posture_name"]},
-                )
-            assert resp.status_code == 200
+        with patch("app.routers.games.analyze_verification", return_value=("suspicious", "AI mock fail")):
+            resp = client.post(
+                f"/api/games/runs/{run_id}/steps/{initial_step_id}/verify",
+                files={"file": ("pose.jpg", b"fakejpegbytes", "image/jpeg")},
+                data={"observed_posture": run["current_step"]["posture_name"]},
+            )
+        assert resp.status_code == 200
 
-        _verify_fail(initial_step_id)
-        detail_1 = client.get(f"/api/games/runs/{run_id}").json()
-        retry_1 = next((s for s in detail_1["steps"] if s.get("retry_of_step_id") == initial_step_id), None)
-        assert retry_1 is not None
-
-        _verify_fail(int(retry_1["id"]))
-        detail_2 = client.get(f"/api/games/runs/{run_id}").json()
-        retry_2 = next((s for s in detail_2["steps"] if s.get("retry_of_step_id") == int(retry_1["id"])), None)
-        assert retry_2 is not None
-
-        _verify_fail(int(retry_2["id"]))
-        detail_3 = client.get(f"/api/games/runs/{run_id}").json()
-        retry_3 = next((s for s in detail_3["steps"] if s.get("retry_of_step_id") == int(retry_2["id"])), None)
-        assert retry_3 is None
+        detail = client.get(f"/api/games/runs/{run_id}").json()
+        # No new retry step should have been appended.
+        assert len(detail["steps"]) == initial_step_count
+        failed_step = next((s for s in detail["steps"] if s["id"] == initial_step_id), None)
+        assert failed_step is not None
+        assert failed_step["status"] == "failed"
 
 
 def test_game_verification_capture_is_saved_with_session_game_run_timestamp_name():

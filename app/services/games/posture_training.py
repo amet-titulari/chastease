@@ -4,7 +4,7 @@ from app.services.games.base import DifficultyProfile, GameModuleDefinition, Gam
 POSTURE_TRAINING_MODULE = GameModuleDefinition(
     key="posture_training",
     title="Posture Training",
-    summary="Gefuehrtes Haltungsprogramm mit automatischer Kamera-Verifikation und Retry-Logik.",
+    summary="Gefuehrtes Haltungsprogramm mit automatischer Kamera-Verifikation.",
     supports_auto_capture=True,
     difficulties=(
         DifficultyProfile(
@@ -32,14 +32,14 @@ POSTURE_TRAINING_MODULE = GameModuleDefinition(
             posture_name="Stiller Stand",
             posture_image_url="/static/img/postures/stand.jpg",
             instruction="Aufrecht stehen, Schultern tief, Kinn neutral, ruhig atmen.",
-            target_seconds=120,
+            target_seconds=150,
         ),
         GameStepDefinition(
             posture_key="posture_kneel",
             posture_name="Knieposition",
             posture_image_url="/static/img/postures/kneel.jpg",
             instruction="Knieposition stabil halten, Blick gesenkt, Atmung kontrollieren.",
-            target_seconds=150,
+            target_seconds=60,
         ),
         GameStepDefinition(
             posture_key="posture_hands_back",

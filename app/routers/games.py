@@ -75,7 +75,6 @@ DEFAULT_MOVEMENT_THRESHOLDS_BY_MODULE = {
     },
 }
 MAX_POSTURE_ZIP_BYTES = 64 * 1024 * 1024
-MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN = 2
 MEDIA_CONTENT_URL_RE = re.compile(r"^/api/media/(?P<media_id>\d+)/content/?$")
 SHARED_POSTURE_POOL_MODULE_KEYS = {"posture_training", "dont_move"}
 EMPTY_ALLOWED_MODULE_SENTINEL = "__none__"
@@ -538,6 +537,28 @@ def _store_game_verification_capture(run: GameRun, image_bytes: bytes, filename:
     return rel_path
 
 
+def _add_colored_border(image_bytes: bytes, *, color: tuple[int, int, int], border_fraction: float = 0.025) -> bytes:
+    """Draw a solid colored border around the image (green = OK, red = fail)."""
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as raw_img:
+            image = ImageOps.exif_transpose(raw_img).convert("RGB")
+    except Exception:
+        return image_bytes
+
+    width, height = image.size
+    if width <= 0 or height <= 0:
+        return image_bytes
+
+    border_w = max(6, int(min(width, height) * border_fraction))
+    draw = ImageDraw.Draw(image)
+    for i in range(border_w):
+        draw.rectangle([i, i, width - 1 - i, height - 1 - i], outline=color)
+
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=90)
+    return out.getvalue()
+
+
 def _annotate_movement_capture(
     image_bytes: bytes,
     *,
@@ -885,22 +906,6 @@ def _active_step(db: Session, run_id: int) -> GameRunStep | None:
         .order_by(GameRunStep.order_index.asc(), GameRunStep.id.asc())
         .first()
     )
-
-
-def _retry_depth_for_step(db: Session, run_id: int, step: GameRunStep) -> int:
-    depth = 0
-    parent_id = step.retry_of_step_id
-    while parent_id is not None:
-        depth += 1
-        parent = (
-            db.query(GameRunStep)
-            .filter(GameRunStep.id == parent_id, GameRunStep.run_id == run_id)
-            .first()
-        )
-        if parent is None:
-            break
-        parent_id = parent.retry_of_step_id
-    return depth
 
 
 def _remaining_seconds_for_run(run: GameRun, now: datetime | None = None) -> int:
@@ -2275,8 +2280,12 @@ async def verify_game_step(
                     f"Durchschnittlicher Pose-Score {avg_score:.1f}/100 (min {threshold:.1f}; samples={len(scores)})."
                 )
 
+    # Apply green/red border to the capture for final (non-sample, non-monitor) verifications.
     capture_rel_path = None
     if not monitor_only:
+        if not sample_only:
+            border_color = (0, 200, 80) if status == "confirmed" else (220, 30, 30)
+            capture_bytes = _add_colored_border(capture_bytes, color=border_color)
         capture_rel_path = _store_game_verification_capture(
             run,
             capture_bytes,
@@ -2333,58 +2342,15 @@ async def verify_game_step(
             )
             return
 
-        retry_depth = _retry_depth_for_step(db, run.id, step)
-        can_append_retry = (not disable_retry_for_module) and (retry_depth < MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN)
-
-        if can_append_retry:
-            run.retry_extension_seconds += difficulty.retry_extension_seconds
-            run.total_duration_seconds += difficulty.retry_extension_seconds
-
-            last_order = (
-                db.query(GameRunStep)
-                .filter(GameRunStep.run_id == run.id)
-                .order_by(GameRunStep.order_index.desc())
-                .first()
+        # Posture Training: step simply fails, no retry.
+        db.add(
+            Message(
+                session_id=run.session_id,
+                role="system",
+                message_type="game_step_fail",
+                content=f"Posture nicht bestaetigt: {step.posture_name}.",
             )
-            next_order = (last_order.order_index if last_order else 0) + 1
-            db.add(
-                GameRunStep(
-                    run_id=run.id,
-                    order_index=next_order,
-                    posture_key=step.posture_key,
-                    posture_name=step.posture_name,
-                    posture_image_url=step.posture_image_url,
-                    instruction=step.instruction,
-                    target_seconds=step.target_seconds,
-                    status="pending",
-                    retry_of_step_id=step.id,
-                )
-            )
-
-            db.add(
-                Message(
-                    session_id=run.session_id,
-                    role="system",
-                    message_type="game_step_fail",
-                    content=(
-                        f"Posture nicht bestaetigt: {step.posture_name}. "
-                        f"Retry angehaengt ({retry_depth + 1}/{MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN}), "
-                        f"Gesamtzeit +{difficulty.retry_extension_seconds}s."
-                    ),
-                )
-            )
-        else:
-            db.add(
-                Message(
-                    session_id=run.session_id,
-                    role="system",
-                    message_type="game_step_fail",
-                    content=(
-                        f"Posture nicht bestaetigt: {step.posture_name}. "
-                        f"Retry-Limit erreicht ({MAX_RETRY_ATTEMPTS_PER_STEP_CHAIN}), kein weiterer Versuch angehaengt."
-                    ),
-                )
-            )
+        )
 
         if (
             run.session_penalty_seconds > 0
