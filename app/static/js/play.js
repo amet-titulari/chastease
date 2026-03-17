@@ -301,40 +301,71 @@ function plSetAttachedFile(file) {
 
 function plRenderHygieneQuota(quotaData) {
   const el = document.getElementById("psd-hygiene-quota");
+  const nextEl = document.getElementById("psd-hygiene-next-allowed");
   if (!el || !quotaData) return;
 
   const limits = quotaData.limits || {};
   const used = quotaData.used || {};
   const remaining = quotaData.remaining || {};
-  const nextAllowedAt = (quotaData.next_allowed_at || {}).overall || null;
+  const nextAllowedAt = quotaData.next_allowed_at || {};
   const fmt = (v) => (v === null || v === undefined ? "unbegrenzt" : String(v));
 
-  let text =
+  el.textContent =
     `Kontingent - Tag: ${fmt(used.daily)}/${fmt(limits.daily)} (rest ${fmt(remaining.daily)}), ` +
     `Woche: ${fmt(used.weekly)}/${fmt(limits.weekly)} (rest ${fmt(remaining.weekly)}), ` +
     `Monat: ${fmt(used.monthly)}/${fmt(limits.monthly)} (rest ${fmt(remaining.monthly)})`;
 
-  if (nextAllowedAt) {
+  if (!nextEl) return;
+
+  // Show next reset times for all limited periods, not just when exhausted
+  function fmtNextReset(isoStr, label) {
+    if (!isoStr) return null;
     try {
-      const diff = new Date(nextAllowedAt).getTime() - Date.now();
-      if (diff > 0) {
-        const d = Math.floor(diff / 86400000);
-        const h = Math.floor((diff % 86400000) / 3600000);
-        const m = Math.floor((diff % 3600000) / 60000);
-        let countdown = "";
-        if (d > 0) countdown = `${d}T ${h}h ${m}m`;
-        else if (h > 0) countdown = `${h}h ${m}m`;
-        else countdown = `${m}m`;
-        const dateStr = new Date(nextAllowedAt).toLocaleString("de-DE", {
-          day: "2-digit", month: "2-digit", year: "numeric",
-          hour: "2-digit", minute: "2-digit"
-        });
-        text += `\nNächste Öffnung erlaubt: ${dateStr} (in ${countdown})`;
-      }
-    } catch (_) {}
+      const diff = new Date(isoStr).getTime() - Date.now();
+      if (diff <= 0) return null;
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      let countdown = d > 0 ? `${d}T ${h}h ${m}m` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+      const dateStr = new Date(isoStr).toLocaleString("de-DE", {
+        day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+      });
+      return `${label}: ${dateStr} (in ${countdown})`;
+    } catch (_) { return null; }
   }
 
-  el.textContent = text;
+  const overallIso = nextAllowedAt.overall;
+  if (overallIso) {
+    // Quota exhausted — show when next opening is allowed
+    const formatted = fmtNextReset(overallIso, "Nächste Öffnung erlaubt ab");
+    if (formatted) {
+      nextEl.textContent = formatted;
+      nextEl.style.color = "var(--color-warn, #ffb300)";
+      return;
+    }
+  }
+
+  // Quota not exhausted — show when periods reset for limited quotas
+  const nextPeriodStart = quotaData.next_period_start || {};
+  const resetLines = [];
+  if (nextPeriodStart.daily) {
+    const r = fmtNextReset(nextPeriodStart.daily, "Tageslimit setzt zurück");
+    if (r) resetLines.push(r);
+  }
+  if (nextPeriodStart.weekly) {
+    const r = fmtNextReset(nextPeriodStart.weekly, "Wochenlimit setzt zurück");
+    if (r) resetLines.push(r);
+  }
+  if (nextPeriodStart.monthly) {
+    const r = fmtNextReset(nextPeriodStart.monthly, "Monatslimit setzt zurück");
+    if (r) resetLines.push(r);
+  }
+  if (resetLines.length > 0) {
+    nextEl.textContent = resetLines.join(" · ");
+    nextEl.style.color = "";
+  } else {
+    nextEl.textContent = "";
+  }
 }
 
 async function plLoadHygieneQuota() {
@@ -1200,6 +1231,7 @@ function plOpenSettings() {
   settingsOverlay?.classList.add("is-open");
   settingsDrawer?.setAttribute("aria-hidden", "false");
   plLoadSettingsSummary();
+  plLoadHygieneQuota();
 }
 
 function plCloseSettings() {

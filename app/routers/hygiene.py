@@ -68,13 +68,16 @@ def _quota_payload(db: Session, session_obj: SessionModel, now: datetime) -> dic
         raise ValueError(f"Unsupported period: {period}")
 
     next_allowed_at: dict[str, str | None] = {"daily": None, "weekly": None, "monthly": None}
+    next_period_start: dict[str, str | None] = {"daily": None, "weekly": None, "monthly": None}
     blocking_times: list[datetime] = []
     for period_key, period_name in (("daily", "day"), ("weekly", "week"), ("monthly", "month")):
         remaining = _remaining(period_key)
-        if remaining is not None and remaining <= 0:
-            next_at = _next_period_start(period_name)
-            next_allowed_at[period_key] = next_at.isoformat()
-            blocking_times.append(next_at)
+        if limits.get(period_key) is not None:
+            next_start = _next_period_start(period_name)
+            next_period_start[period_key] = next_start.isoformat()
+            if remaining is not None and remaining <= 0:
+                next_allowed_at[period_key] = next_start.isoformat()
+                blocking_times.append(next_start)
 
     next_allowed_at["overall"] = max(blocking_times).isoformat() if blocking_times else None
 
@@ -87,6 +90,7 @@ def _quota_payload(db: Session, session_obj: SessionModel, now: datetime) -> dic
             "monthly": _remaining("monthly"),
         },
         "next_allowed_at": next_allowed_at,
+        "next_period_start": next_period_start,
     }
 
 
