@@ -240,23 +240,59 @@
     gap: 0.5rem;
     margin-top: 0.35rem;
   }
+  .final-report-header {
+    border: 1px solid rgba(255, 215, 0, 0.28);
+    border-radius: 10px;
+    padding: 0.65rem 0.75rem;
+    background: rgba(255, 215, 0, 0.05);
+    display: grid;
+    gap: 0.35rem;
+  }
+  .final-report-header h4 {
+    margin: 0;
+    font-size: 0.92rem;
+    color: #ffd700;
+  }
+  .final-report-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    font-size: 0.79rem;
+    color: #c6d8ea;
+  }
+  .final-report-stats .stat-ok { color: #9de2bf; font-weight: 700; }
+  .final-report-stats .stat-fail { color: #ffb4b4; font-weight: 700; }
+  .final-ai-assessment {
+    font-size: 0.83rem;
+    color: #ddeeff;
+    line-height: 1.5;
+    border-left: 3px solid rgba(100, 180, 255, 0.4);
+    padding-left: 0.55rem;
+    margin-top: 0.25rem;
+  }
+  .final-checks-label {
+    font-size: 0.78rem;
+    color: #9db1c7;
+    margin-top: 0.2rem;
+  }
   .final-check {
     display: grid;
-    grid-template-columns: 96px 1fr;
+    grid-template-columns: 100px 1fr;
     gap: 0.45rem;
     align-items: start;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 8px;
     padding: 0.4rem;
     background: rgba(255, 255, 255, 0.02);
   }
   .final-check img {
-    width: 96px;
-    height: 72px;
+    width: 100px;
+    height: 75px;
     border-radius: 6px;
     object-fit: cover;
     border: 2px solid rgba(255, 255, 255, 0.22);
     background: #091019;
+    cursor: pointer;
   }
   .final-check img.ok { border-color: #2fdc8a; }
   .final-check img.fail { border-color: #ff6b6b; }
@@ -268,6 +304,18 @@
   }
   .final-check .meta strong.ok { color: #9de2bf; }
   .final-check .meta strong.fail { color: #ffb4b4; }
+  .final-report-link {
+    font-size: 0.82rem;
+    color: #98c6f2;
+    text-decoration: none;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid rgba(152, 198, 242, 0.3);
+    border-radius: 8px;
+    background: rgba(77, 130, 181, 0.2);
+    display: inline-block;
+    margin-top: 0.25rem;
+  }
+  .final-report-link:hover { background: rgba(77, 130, 181, 0.35); }
   @media (max-width: 980px) {
     .setup-grid { grid-template-columns: 1fr; }
     .setup-secondary { grid-template-columns: 1fr; }
@@ -1257,26 +1305,54 @@ function escHtml(value) {
 
 function renderFinalReport(summary) {
   const checks = Array.isArray(summary?.checks) ? summary.checks : [];
+  const aiAssessment = escHtml(summary?.ai_assessment || "");
+
+  // Summary header with stats
+  const total = Number(summary?.total_steps || 0);
+  const passed = Number(summary?.passed_steps || 0);
+  const failed = Number(summary?.failed_steps || 0);
+  const misses = Number(summary?.miss_count || 0);
+  const retryExt = Number(summary?.retry_extension_seconds || 0);
+  const penaltyApplied = Boolean(summary?.session_penalty_applied);
+
+  let headerHtml = `<div class="final-report-header">
+    <h4>Spiel-Bericht</h4>
+    <div class="final-report-stats">
+      <span>Schritte: <strong class="${passed === total ? 'stat-ok' : 'stat-fail'}">${passed}/${total}</strong></span>
+      <span>Fehler: <strong class="${failed > 0 ? 'stat-fail' : 'stat-ok'}">${failed}</strong></span>
+      <span>Verfehlungen: <strong class="${misses > 0 ? 'stat-fail' : 'stat-ok'}">${misses}</strong></span>`;
+  if (retryExt > 0) headerHtml += `<span>Strafzeit: <strong class="stat-fail">+${retryExt}s</strong></span>`;
+  if (penaltyApplied) headerHtml += `<span><strong class="stat-fail">Session-Penalty aktiv</strong></span>`;
+  headerHtml += `</div>`;
+
+  if (aiAssessment) {
+    headerHtml += `<div class="final-ai-assessment">${aiAssessment}</div>`;
+  }
+  headerHtml += `<a href="/games" class="final-report-link">&#8592; Zur Spieluebersicht</a></div>`;
+
   if (checks.length === 0) {
-    finalReportEl.innerHTML = "";
+    finalReportEl.innerHTML = headerHtml;
     return;
   }
 
-  finalReportEl.innerHTML = checks
+  const realChecks = checks.filter(c => c.capture_url);
+  const checksHtml = realChecks
     .map((entry, idx) => {
       const status = String(entry.verification_status || "").toLowerCase();
       const statusLabel = status === "confirmed" ? "Bestanden" : "Nicht bestanden";
       const statusClass = status === "confirmed" ? "ok" : "fail";
-      const modeLabel = entry.sample_only ? "Stichprobe" : "Endpruefung";
+      const modeLabel = entry.monitor_only ? "Monitoring" : entry.sample_only ? "Stichprobe" : "Endpruefung";
       const imgClass = status === "confirmed" ? "ok" : "fail";
       const imgUrl = escHtml(entry.capture_url || "");
       const analysis = escHtml(entry.analysis || "-");
       const posture = escHtml(entry.posture_name || "-");
+      const poseScore = entry.pose_score != null ? ` (Pose: ${Number(entry.pose_score).toFixed(1)}/100)` : "";
       return `
         <article class="final-check">
-          <img class="${imgClass}" src="${imgUrl}" alt="Kontrollbild ${idx + 1}" />
+          <img class="${imgClass}" src="${imgUrl}" alt="Kontrollbild ${idx + 1}"
+               onclick="window.open('${imgUrl}','_blank')" title="Bild vergroessern" />
           <div class="meta">
-            <div><strong>${idx + 1}. ${modeLabel}</strong> · Pose: ${posture}</div>
+            <div><strong>${idx + 1}. ${modeLabel}</strong> · Pose: ${posture}${escHtml(poseScore)}</div>
             <div><strong class="${statusClass}">${statusLabel}</strong></div>
             <div>Begruendung: ${analysis}</div>
           </div>
@@ -1284,6 +1360,12 @@ function renderFinalReport(summary) {
       `;
     })
     .join("");
+
+  const checksLabel = realChecks.length > 0
+    ? `<p class="final-checks-label">${realChecks.length} Kontrollbild${realChecks.length === 1 ? "" : "er"}</p>`
+    : "";
+
+  finalReportEl.innerHTML = headerHtml + checksLabel + checksHtml;
 }
 
 function appendCaptureThumbnail(stepResult) {
@@ -1382,8 +1464,9 @@ function renderRun(run) {
     const misses = Number(summary.miss_count || run.miss_count || 0);
     analysisEl.textContent = `Spiel beendet (${reason}). Schritte: ${passed}/${total} bestanden, ${failed} fehlgeschlagen (${timeoutFailed} wegen Zeitablauf). Misses: ${misses}.`;
     renderFinalReport(summary);
-    setStatus("Spiel abgeschlossen.", false);
+    setStatus("Spiel abgeschlossen. Bericht gespeichert.", false);
     updatePhase("FERTIG", "--");
+    stopCamera();
   } else {
     finalReportEl.innerHTML = "";
   }

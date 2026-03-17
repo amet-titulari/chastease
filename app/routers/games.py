@@ -32,7 +32,7 @@ from app.services.games import as_public_module_payload, get_module, list_module
 from app.services.image_stamp import stamp_verification_timestamp
 from app.services.audit_logger import audit_log
 from app.services.pose_similarity import extract_reference_landmarks_json, pose_similarity_available, score_against_reference
-from app.services.verification_analysis import analyze_verification
+from app.services.verification_analysis import analyze_verification, generate_game_run_summary
 
 router = APIRouter(prefix="/api/games", tags=["games"])
 logger = logging.getLogger(__name__)
@@ -1034,6 +1034,16 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
         "scheduled_duration_seconds": int(run.total_duration_seconds),
         "checks": checks,
     }
+
+    try:
+        _module = get_module(run.module_key)
+        _module_title = _module.title if _module else run.module_key
+        ai_assessment = generate_game_run_summary(report, _module_title)
+        if ai_assessment:
+            report["ai_assessment"] = ai_assessment
+    except Exception:
+        pass
+
     run.summary_json = json.dumps(report, ensure_ascii=True)
 
     db.add(
@@ -2108,6 +2118,43 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
     db.commit()
     db.refresh(run)
     return _run_payload(db, run)
+
+
+@router.get("/sessions/{session_id}/runs")
+def list_session_game_runs(session_id: int, db: Session = Depends(get_db)) -> dict:
+    runs = (
+        db.query(GameRun)
+        .filter(GameRun.session_id == session_id)
+        .order_by(GameRun.started_at.desc())
+        .all()
+    )
+    items = []
+    for run in runs:
+        summary: dict = {}
+        if run.summary_json:
+            try:
+                summary = json.loads(run.summary_json)
+            except json.JSONDecodeError:
+                pass
+        items.append(
+            {
+                "id": run.id,
+                "module_key": run.module_key,
+                "difficulty_key": run.difficulty_key,
+                "status": run.status,
+                "miss_count": run.miss_count,
+                "total_duration_seconds": run.total_duration_seconds,
+                "retry_extension_seconds": run.retry_extension_seconds,
+                "session_penalty_applied": bool(run.session_penalty_applied),
+                "started_at": _as_utc(run.started_at).isoformat() if run.started_at else None,
+                "finished_at": _as_utc(run.finished_at).isoformat() if run.finished_at else None,
+                "passed_steps": int(summary.get("passed_steps") or 0),
+                "failed_steps": int(summary.get("failed_steps") or 0),
+                "total_steps": int(summary.get("total_steps") or 0),
+                "ai_assessment": summary.get("ai_assessment") or None,
+            }
+        )
+    return {"items": items}
 
 
 @router.get("/runs/{run_id}")

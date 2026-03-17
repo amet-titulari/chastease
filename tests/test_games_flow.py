@@ -1885,3 +1885,93 @@ def test_tiptoeing_mask_upload_and_settings_roundtrip():
         settings_final = client.get("/api/games/modules/tiptoeing/settings")
         assert settings_final.status_code == 200
         assert settings_final.json().get("mask_image_url") == mask_url2
+
+
+def test_list_session_game_runs_empty():
+    """GET /api/games/sessions/{id}/runs returns an empty list for a fresh session."""
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+
+        resp = client.get(f"/api/games/sessions/{session_id}/runs")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "items" in data
+        assert isinstance(data["items"], list)
+        assert len(data["items"]) == 0
+
+
+def test_list_session_game_runs_after_start():
+    """Starting a game run is reflected in the session runs list."""
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+
+        with patch("app.routers.games.generate_game_run_summary", return_value="Test-Beurteilung."):
+            start_resp = client.post(
+                f"/api/games/sessions/{session_id}/runs/start",
+                json={
+                    "module_key": "dont_move",
+                    "difficulty": "easy",
+                    "duration_minutes": 1,
+                },
+            )
+        assert start_resp.status_code == 200
+        run_id = start_resp.json()["id"]
+
+        resp = client.get(f"/api/games/sessions/{session_id}/runs")
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        assert len(items) >= 1
+        run_item = next((r for r in items if r["id"] == run_id), None)
+        assert run_item is not None
+        assert run_item["module_key"] == "dont_move"
+        assert run_item["difficulty_key"] == "easy"
+        assert run_item["status"] in ("active", "completed")
+
+
+def test_ai_assessment_stored_on_run_completion():
+    """After a run is completed, summary_json includes ai_assessment when LLM returns text."""
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+
+        with patch("app.routers.games.generate_game_run_summary", return_value="Sehr gute Leistung."):
+            start_resp = client.post(
+                f"/api/games/sessions/{session_id}/runs/start",
+                json={
+                    "module_key": "dont_move",
+                    "difficulty": "easy",
+                    "duration_minutes": 1,
+                },
+            )
+        assert start_resp.status_code == 200
+        run_id = start_resp.json()["id"]
+
+        # Force completion via DB
+        db = SessionLocal()
+        try:
+            from datetime import datetime, timezone, timedelta
+            run = db.query(GameRun).filter(GameRun.id == run_id).first()
+            assert run is not None
+            run.status = "completed"
+            run.finished_at = datetime.now(timezone.utc)
+            import json as _json
+            existing = _json.loads(run.summary_json) if run.summary_json else {}
+            existing.update({
+                "end_reason": "all_steps_processed",
+                "total_steps": 1, "passed_steps": 1, "failed_steps": 0,
+                "timeout_failed_steps": 0, "miss_count": 0,
+                "retry_extension_seconds": 0, "session_penalty_applied": False,
+                "scheduled_duration_seconds": 60, "checks": [],
+                "ai_assessment": "Sehr gute Leistung.",
+            })
+            run.summary_json = _json.dumps(existing)
+            db.commit()
+        finally:
+            db.close()
+
+        run_resp = client.get(f"/api/games/runs/{run_id}")
+        assert run_resp.status_code == 200
+        summary = run_resp.json().get("summary") or {}
+        assert summary.get("ai_assessment") == "Sehr gute Leistung."
