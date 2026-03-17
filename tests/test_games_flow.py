@@ -816,6 +816,43 @@ def test_pose_similarity_uses_module_configured_threshold():
         assert payload["step"]["pose_similarity"]["threshold"] == 90.0
 
 
+def test_run_payload_includes_reference_landmarks_for_base_posture_steps():
+    manual_reference = json.dumps(
+        {
+            "points": {
+                "left_shoulder": {"x": -0.2, "y": -0.4, "visibility": 0.9},
+                "right_shoulder": {"x": 0.2, "y": -0.4, "visibility": 0.9},
+            },
+            "meta": {"center": [0.5, 0.5], "scale": 1.0},
+        },
+        ensure_ascii=True,
+    )
+
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+
+        with patch("app.routers.games._module_postures", return_value=[]):
+            with patch("app.routers.games.pose_similarity_available", return_value=True):
+                with patch("app.routers.games._try_load_posture_image_bytes_from_url", return_value=b"fake-image"):
+                    with patch("app.routers.games.extract_reference_landmarks_json", return_value=manual_reference):
+                        start = client.post(
+                            f"/api/games/sessions/{session_id}/runs/start",
+                            json={
+                                "module_key": "posture_training",
+                                "difficulty": "medium",
+                                "duration_minutes": 10,
+                                "max_misses_before_penalty": 1,
+                                "session_penalty_seconds": 60,
+                            },
+                        )
+
+        assert start.status_code == 200
+        payload = start.json()
+        assert payload["current_step"] is not None
+        assert payload["current_step"]["reference_landmarks_json"] == manual_reference
+
+
 def test_sample_only_verification_keeps_step_pending_when_confirmed():
     with TestClient(app) as client:
         _register_admin(client)

@@ -78,6 +78,8 @@ MAX_POSTURE_ZIP_BYTES = 64 * 1024 * 1024
 MEDIA_CONTENT_URL_RE = re.compile(r"^/api/media/(?P<media_id>\d+)/content/?$")
 SHARED_POSTURE_POOL_MODULE_KEYS = {"posture_training", "dont_move"}
 EMPTY_ALLOWED_MODULE_SENTINEL = "__none__"
+STATIC_URL_PREFIX = "/static/"
+STATIC_ROOT = (Path(__file__).resolve().parent.parent / "static").resolve()
 SINGLE_POSE_STRICT_MODULE_KEYS = {"dont_move", "tiptoeing"}
 
 
@@ -408,18 +410,34 @@ def _media_asset_from_content_url(db: Session, image_url: str) -> MediaAsset | N
 
 def _try_load_posture_image_bytes_from_url(db: Session, image_url: str) -> bytes | None:
     asset = _media_asset_from_content_url(db, image_url)
-    if not asset:
-        return None
-    try:
-        media_path = _resolve_media_path(asset.storage_path)
-    except HTTPException:
-        return None
-    if not media_path.exists() or not media_path.is_file():
-        return None
-    try:
-        return media_path.read_bytes()
-    except OSError:
-        return None
+    if asset:
+        try:
+            media_path = _resolve_media_path(asset.storage_path)
+        except HTTPException:
+            return None
+        if not media_path.exists() or not media_path.is_file():
+            return None
+        try:
+            return media_path.read_bytes()
+        except OSError:
+            return None
+
+    normalized_url = (image_url or "").strip()
+    if normalized_url.startswith(STATIC_URL_PREFIX):
+        relative_path = normalized_url[len(STATIC_URL_PREFIX) :].lstrip("/")
+        candidate = (STATIC_ROOT / relative_path).resolve()
+        try:
+            candidate.relative_to(STATIC_ROOT)
+        except ValueError:
+            return None
+        if not candidate.exists() or not candidate.is_file():
+            return None
+        try:
+            return candidate.read_bytes()
+        except OSError:
+            return None
+
+    return None
 
 
 def _refresh_reference_landmarks(template: GamePostureTemplate, image_bytes: bytes | None) -> None:
@@ -456,6 +474,31 @@ def _lookup_posture_template_for_step(db: Session, run: GameRun, step: GameRunSt
     )
 
 
+def _reference_landmarks_json_for_step(db: Session, run: GameRun, step: GameRunStep) -> str | None:
+    template = _lookup_posture_template_for_step(db, run, step)
+    if template and template.reference_landmarks_json:
+        return template.reference_landmarks_json
+
+    image_url = ""
+    if template and template.image_url:
+        image_url = str(template.image_url)
+    elif step.posture_image_url:
+        image_url = str(step.posture_image_url)
+    if not image_url or not pose_similarity_available():
+        return None
+
+    image_bytes = _try_load_posture_image_bytes_from_url(db, image_url)
+    if not image_bytes:
+        return None
+
+    reference_json = extract_reference_landmarks_json(image_bytes)
+    if reference_json and template and not template.reference_landmarks_json:
+        template.reference_landmarks_json = reference_json
+        template.reference_landmarks_detected_at = datetime.now(timezone.utc)
+        db.flush()
+    return reference_json
+
+
 def _evaluate_pose_similarity_for_step(
     db: Session,
     run: GameRun,
@@ -467,13 +510,11 @@ def _evaluate_pose_similarity_for_step(
     if not pose_similarity_available():
         return "skipped", "pose_runtime_unavailable", None
 
-    template = _lookup_posture_template_for_step(db, run, step)
-    if template is None:
-        return "skipped", "reference_template_not_found", None
-    if not template.reference_landmarks_json:
+    reference_landmarks_json = _reference_landmarks_json_for_step(db, run, step)
+    if not reference_landmarks_json:
         return "skipped", "reference_pose_not_available", None
 
-    scored = score_against_reference(image_bytes=image_bytes, reference_landmarks_json=template.reference_landmarks_json)
+    scored = score_against_reference(image_bytes=image_bytes, reference_landmarks_json=reference_landmarks_json)
     if scored is None:
         return "skipped", "pose_not_detected", None
 
@@ -1097,6 +1138,7 @@ def _run_payload(db: Session, run: GameRun) -> dict:
             "target_seconds": effective_target_seconds,
             "raw_target_seconds": current_step.target_seconds,
             "verification_count": current_step.verification_count,
+            "reference_landmarks_json": _reference_landmarks_json_for_step(db, run, current_step),
         }
 
     return {
@@ -2280,19 +2322,12 @@ async def verify_game_step(
                     f"Durchschnittlicher Pose-Score {avg_score:.1f}/100 (min {threshold:.1f}; samples={len(scores)})."
                 )
 
-    # Apply green/red border to the capture for final (non-sample, non-monitor) verifications.
+    # Apply a green/red border to every stored verification image.
     capture_rel_path = None
-    if not monitor_only:
-        if not sample_only:
-            border_color = (0, 200, 80) if status == "confirmed" else (220, 30, 30)
-            capture_bytes = _add_colored_border(capture_bytes, color=border_color)
-        capture_rel_path = _store_game_verification_capture(
-            run,
-            capture_bytes,
-            file.filename,
-            run_number=int(step.verification_count or 0) + 1,
-        )
-    elif status != "confirmed":
+    should_store_capture = (not monitor_only) or status != "confirmed"
+    if should_store_capture:
+        border_color = (0, 200, 80) if status == "confirmed" else (220, 30, 30)
+        capture_bytes = _add_colored_border(capture_bytes, color=border_color)
         capture_rel_path = _store_game_verification_capture(
             run,
             capture_bytes,

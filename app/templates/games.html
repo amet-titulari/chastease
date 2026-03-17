@@ -120,53 +120,38 @@
   .gruns-btn:hover { background: rgba(77, 130, 181, 0.45); }
   .gruns-empty { color: #9db1c7; font-size: 0.85rem; padding: 0.5rem 0; }
 
-  /* Report Modal */
-  #greport-modal {
-    border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 14px;
-    background: #0b1828;
-    color: #c6d8ea;
-    padding: 0;
-    max-width: 740px;
-    width: 96vw;
-    max-height: 92vh;
+  /* Report Cards */
+  .greport-card {
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    background: linear-gradient(165deg, rgba(16,36,56,0.9), rgba(11,18,28,0.8));
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 8px 48px rgba(0,0,0,0.7);
   }
-  #greport-modal::backdrop { background: rgba(0,0,0,0.72); }
-  .greport-head {
-    padding: 0.85rem 1rem 0.6rem;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+  .greport-card-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
-    flex-shrink: 0;
-  }
-  .greport-head h3 { margin: 0; font-size: 1rem; color: #e0efff; }
-  .greport-close {
+    gap: 0.6rem;
+    padding: 0.65rem 0.85rem;
     cursor: pointer;
-    background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 7px;
-    color: #c6d8ea;
-    font-size: 1rem;
-    padding: 0.2rem 0.6rem;
-    line-height: 1.4;
+    user-select: none;
   }
-  .greport-close:hover { background: rgba(255,255,255,0.12); }
-  .greport-body {
-    padding: 0.85rem 1rem;
-    overflow-y: auto;
+  .greport-card-head:hover { background: rgba(255,255,255,0.03); }
+  .greport-card-head h4 { margin: 0; font-size: 0.88rem; color: #e0efff; font-weight: 600; }
+  .greport-card-head .greport-head-meta { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; }
+  .greport-card-head .greport-toggle { color: #9db1c7; font-size: 0.8rem; transition: transform 0.18s; }
+  .greport-card[open] .greport-toggle { transform: rotate(180deg); }
+  .greport-card-body {
+    padding: 0 0.85rem 0.75rem;
     display: grid;
-    gap: 0.65rem;
+    gap: 0.6rem;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    padding-top: 0.65rem;
   }
   .greport-stats {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem 0.9rem;
+    gap: 0.3rem 0.85rem;
     font-size: 0.82rem;
     color: #c6d8ea;
   }
@@ -177,28 +162,28 @@
     color: #ddeeff;
     line-height: 1.55;
     border-left: 3px solid rgba(100, 180, 255, 0.4);
-    padding: 0.45rem 0.65rem;
+    padding: 0.4rem 0.6rem;
     background: rgba(100, 180, 255, 0.05);
     border-radius: 0 8px 8px 0;
   }
   .greport-checks-label { font-size: 0.78rem; color: #9db1c7; }
   .greport-checks {
     display: grid;
-    gap: 0.45rem;
+    gap: 0.4rem;
   }
   .greport-check {
     display: grid;
-    grid-template-columns: 100px 1fr;
-    gap: 0.45rem;
+    grid-template-columns: 96px 1fr;
+    gap: 0.4rem;
     align-items: start;
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.09);
     border-radius: 8px;
-    padding: 0.4rem;
+    padding: 0.35rem;
     background: rgba(255,255,255,0.02);
   }
   .greport-check img {
-    width: 100px;
-    height: 75px;
+    width: 96px;
+    height: 72px;
     border-radius: 6px;
     object-fit: cover;
     border: 2px solid rgba(255,255,255,0.22);
@@ -209,7 +194,7 @@
   .greport-check img.fail { border-color: #ff6b6b; }
   .greport-check .meta {
     display: grid;
-    gap: 0.18rem;
+    gap: 0.16rem;
     font-size: 0.79rem;
     color: #c6d8ea;
   }
@@ -263,17 +248,6 @@
   </section>
   {% endif %}
 </section>
-
-<!-- Report Modal -->
-<dialog id="greport-modal" aria-labelledby="greport-title">
-  <div class="greport-head">
-    <h3 id="greport-title">Spiel-Bericht</h3>
-    <button class="greport-close" onclick="document.getElementById('greport-modal').close()">&#x2715;</button>
-  </div>
-  <div class="greport-body" id="greport-body">
-    <p class="games-note">Wird geladen …</p>
-  </div>
-</dialog>
 {% endblock %}
 
 {% block scripts %}
@@ -322,45 +296,52 @@ async function loadRunHistory() {
       listEl.innerHTML = "<p class='gruns-empty'>Noch keine Spiele in dieser Session.</p>";
       return;
     }
-    let html = `<table class="gruns-table">
-      <thead><tr>
-        <th>#</th><th>Spiel</th><th>Schwierigkeit</th><th>Datum</th>
-        <th>Dauer</th><th>Schritte</th><th>Misses</th><th>Status</th><th></th>
-      </tr></thead><tbody>`;
-    items.forEach((r, idx) => {
+    listEl.innerHTML = "";
+    // Render newest first; each run gets its own card
+    [...items].reverse().forEach((r, idx) => {
+      const num = items.length - idx;
+      const card = document.createElement("div");
+      card.className = "greport-card";
+      card.dataset.runId = r.id;
+
       const statusBadge = r.status === "completed"
         ? (r.failed_steps === 0
             ? `<span class="gruns-badge ok">Bestanden</span>`
             : `<span class="gruns-badge fail">Fehler</span>`)
         : `<span class="gruns-badge active">${escH(r.status)}</span>`;
-      const stepsText = r.total_steps > 0
-        ? `${r.passed_steps}/${r.total_steps} &#10003;`
-        : "–";
-      html += `<tr>
-        <td style="color:#9db1c7;">${items.length - idx}</td>
-        <td><strong>${escH(moduleName(r.module_key))}</strong></td>
-        <td>${escH(diffLabel(r.difficulty_key))}</td>
-        <td style="white-space:nowrap;">${escH(fmtDate(r.started_at))}</td>
-        <td>${escH(fmtDuration(r.total_duration_seconds))}</td>
-        <td>${stepsText}</td>
-        <td>${r.miss_count}</td>
-        <td>${statusBadge}</td>
-        <td><button class="gruns-btn" onclick="openRunReport(${r.id})">Bericht</button></td>
-      </tr>`;
+
+      card.innerHTML = `
+        <div class="greport-card-head" onclick="toggleRunCard(this)">
+          <div class="greport-head-meta">
+            <h4>${escH(moduleName(r.module_key))}</h4>
+            ${statusBadge}
+            <span style="font-size:0.78rem;color:#9db1c7;">${escH(diffLabel(r.difficulty_key))} &middot; ${escH(fmtDate(r.started_at))}</span>
+            <span style="font-size:0.78rem;color:#9db1c7;">${escH(fmtDuration(r.total_duration_seconds))}</span>
+          </div>
+          <span class="greport-toggle">&#9660;</span>
+        </div>
+        <div class="greport-card-body" id="greport-body-${r.id}" style="display:none;">
+          <p class="games-note">Wird geladen …</p>
+        </div>`;
+      listEl.appendChild(card);
     });
-    html += "</tbody></table>";
-    listEl.innerHTML = html;
   } catch (e) {
     listEl.innerHTML = `<p class="games-note warn">Fehler beim Laden: ${escH(e.message)}</p>`;
   }
 }
 
-async function openRunReport(runId) {
-  const modal = document.getElementById("greport-modal");
-  const body = document.getElementById("greport-body");
-  const title = document.getElementById("greport-title");
-  body.innerHTML = "<p class='games-note'>Wird geladen …</p>";
-  modal.showModal();
+function toggleRunCard(headEl) {
+  const card = headEl.closest(".greport-card");
+  const body = card.querySelector(".greport-card-body");
+  const isOpen = body.style.display !== "none";
+  body.style.display = isOpen ? "none" : "grid";
+  card.toggleAttribute("open", !isOpen);
+  if (!isOpen && body.querySelector(".games-note")) {
+    loadRunReportInto(Number(card.dataset.runId), body);
+  }
+}
+
+async function loadRunReportInto(runId, bodyEl) {
   try {
     const resp = await fetch(`/api/games/runs/${runId}`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -368,15 +349,10 @@ async function openRunReport(runId) {
     const summary = run.summary || {};
     const checks = Array.isArray(summary.checks) ? summary.checks : [];
 
-    const mName = moduleName(run.module_key);
-    const diff = diffLabel(run.difficulty);
-    title.textContent = `${mName} · ${diff} · ${fmtDate(run.started_at)}`;
-
     const total = Number(summary.total_steps || 0);
     const passed = Number(summary.passed_steps || 0);
     const failed = Number(summary.failed_steps || 0);
     const misses = Number(summary.miss_count || run.miss_count || 0);
-    const retryExt = Number(summary.retry_extension_seconds || 0);
     const penaltyApplied = Boolean(summary.session_penalty_applied);
     const endReason = summary.end_reason === "time_elapsed" ? "Zeit abgelaufen" : "Alle Schritte abgeschlossen";
 
@@ -385,16 +361,14 @@ async function openRunReport(runId) {
       <span>Schritte: <strong class="${passed === total ? 'greport-stat-ok' : 'greport-stat-fail'}">${passed}/${total}</strong></span>
       <span>Fehler: <strong class="${failed > 0 ? 'greport-stat-fail' : 'greport-stat-ok'}">${failed}</strong></span>
       <span>Verfehlungen: <strong class="${misses > 0 ? 'greport-stat-fail' : 'greport-stat-ok'}">${misses}</strong></span>`;
-    if (retryExt > 0) html += `<span>Strafzeit: <strong class="greport-stat-fail">+${retryExt}s</strong></span>`;
-    if (penaltyApplied) html += `<span><strong class="greport-stat-fail">Session-Penalty</strong></span>`;
+    if (penaltyApplied) html += `<span><strong class="greport-stat-fail">Session-Penalty ausgeloest</strong></span>`;
     html += `</div>`;
 
     const ai = escH(summary.ai_assessment || "");
-    if (ai) {
-      html += `<div class="greport-ai">${ai}</div>`;
-    }
+    if (ai) html += `<div class="greport-ai">${ai}</div>`;
 
     const realChecks = checks.filter(c => c.capture_url);
+    const checksWithoutImage = checks.filter(c => !c.capture_url);
     if (realChecks.length > 0) {
       html += `<p class="greport-checks-label">${realChecks.length} Kontrollbild${realChecks.length === 1 ? "" : "er"}</p>`;
       html += `<div class="greport-checks">`;
@@ -416,23 +390,37 @@ async function openRunReport(runId) {
         </article>`;
       });
       html += `</div>`;
-    } else {
+    }
+
+    if (checksWithoutImage.length > 0) {
+      html += `<p class="greport-checks-label">${checksWithoutImage.length} Check${checksWithoutImage.length === 1 ? "" : "s"} ohne Bild</p>`;
+      html += `<div class="greport-checks">`;
+      checksWithoutImage.forEach((entry, idx) => {
+        const st = String(entry.verification_status || "").toLowerCase();
+        const stLabel = st === "confirmed" ? "Bestanden" : "Nicht bestanden";
+        const stCls = st === "confirmed" ? "ok" : "fail";
+        const modeLabel = entry.monitor_only ? "Monitoring" : entry.sample_only ? "Stichprobe" : "Endpruefung";
+        const poseScore = entry.pose_score != null ? ` (${Number(entry.pose_score).toFixed(1)}/100)` : "";
+        html += `<article class="greport-check">
+          <div class="meta" style="grid-column:1 / -1;">
+            <div><strong>${idx+1}. ${escH(modeLabel)}</strong> &middot; ${escH(entry.posture_name || "–")}${escH(poseScore)}</div>
+            <div class="${stCls}">${stLabel}</div>
+            <div style="font-size:0.77rem;color:#9db1c7;">${escH(entry.analysis || "–")}</div>
+          </div>
+        </article>`;
+      });
+      html += `</div>`;
+    }
+
+    if (realChecks.length === 0 && checksWithoutImage.length === 0) {
       html += `<p class="games-note">Keine gespeicherten Kontrollbilder.</p>`;
     }
 
-    body.innerHTML = html;
+    bodyEl.innerHTML = html;
   } catch (e) {
-    body.innerHTML = `<p class="games-note warn">Fehler beim Laden: ${escH(e.message)}</p>`;
+    bodyEl.innerHTML = `<p class="games-note warn">Fehler: ${escH(e.message)}</p>`;
   }
 }
-
-// Close modal on backdrop click
-document.getElementById("greport-modal").addEventListener("click", function(e) {
-  const rect = this.getBoundingClientRect();
-  if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
-    this.close();
-  }
-});
 
 loadRunHistory();
 </script>
