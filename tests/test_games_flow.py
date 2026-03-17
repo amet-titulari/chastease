@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from app.config import settings
 from app.database import SessionLocal
 from app.main import app
+from app.models.game_posture_template import GamePostureTemplate
 from app.models.game_run import GameRun
 from app.models.session import Session as SessionModel
 
@@ -851,6 +852,70 @@ def test_run_payload_includes_reference_landmarks_for_base_posture_steps():
         payload = start.json()
         assert payload["current_step"] is not None
         assert payload["current_step"]["reference_landmarks_json"] == manual_reference
+
+
+def test_run_payload_ignores_mismatched_template_landmarks_for_base_step_image():
+    wrong_reference = json.dumps(
+        {
+            "points": {
+                "left_shoulder": {"x": -0.9, "y": -0.9, "visibility": 0.9},
+                "right_shoulder": {"x": 0.9, "y": -0.9, "visibility": 0.9},
+            },
+            "meta": {"center": [0.5, 0.5], "scale": 1.0},
+        },
+        ensure_ascii=True,
+    )
+    fallback_reference = json.dumps(
+        {
+            "points": {
+                "left_shoulder": {"x": -0.2, "y": -0.4, "visibility": 0.9},
+                "right_shoulder": {"x": 0.2, "y": -0.4, "visibility": 0.9},
+            },
+            "meta": {"center": [0.5, 0.5], "scale": 1.0},
+        },
+        ensure_ascii=True,
+    )
+
+    with TestClient(app) as client:
+        _register_admin(client)
+        session_id = _create_and_sign(client)
+
+        with SessionLocal() as db:
+            db.add(
+                GamePostureTemplate(
+                    module_key="posture_training",
+                    posture_key="posture_stand",
+                    title="Old Stand Variant",
+                    image_url="/api/media/999999/content",
+                    reference_landmarks_json=wrong_reference,
+                    instruction="old",
+                    target_seconds=120,
+                    sort_order=0,
+                    is_active=False,
+                )
+            )
+            db.commit()
+
+        with patch("app.routers.games._module_postures", return_value=[]):
+            with patch("app.routers.games.pose_similarity_available", return_value=True):
+                with patch("app.routers.games._try_load_posture_image_bytes_from_url", return_value=b"fake-image"):
+                    with patch("app.routers.games.extract_reference_landmarks_json", return_value=fallback_reference):
+                        start = client.post(
+                            f"/api/games/sessions/{session_id}/runs/start",
+                            json={
+                                "module_key": "posture_training",
+                                "difficulty": "medium",
+                                "duration_minutes": 10,
+                                "max_misses_before_penalty": 1,
+                                "session_penalty_seconds": 60,
+                            },
+                        )
+
+        assert start.status_code == 200
+        payload = start.json()
+        assert payload["current_step"] is not None
+        assert payload["current_step"]["reference_landmarks_json"] == fallback_reference
+        assert payload["current_step"]["reference_landmarks_json"] != wrong_reference
 
 
 def test_sample_only_verification_keeps_step_pending_when_confirmed():

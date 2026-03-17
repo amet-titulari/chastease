@@ -463,15 +463,49 @@ def _refresh_reference_landmarks(template: GamePostureTemplate, image_bytes: byt
 
 def _lookup_posture_template_for_step(db: Session, run: GameRun, step: GameRunStep) -> GamePostureTemplate | None:
     pool_key = _posture_pool_module_key(run.module_key)
-    return (
+
+    candidates = (
         db.query(GamePostureTemplate)
         .filter(
             GamePostureTemplate.module_key == pool_key,
             GamePostureTemplate.posture_key == step.posture_key,
         )
-        .order_by(GamePostureTemplate.id.desc())
-        .first()
+        .all()
     )
+    if not candidates:
+        return None
+
+    def _normalized_image_url(value: str | None) -> str:
+        return str(value or "").strip()
+
+    def _template_rank(template: GamePostureTemplate) -> tuple[int, int, int]:
+        return (
+            1 if template.is_active else 0,
+            1 if template.reference_landmarks_json else 0,
+            int(template.id or 0),
+        )
+
+    step_image_url = _normalized_image_url(step.posture_image_url)
+    if step_image_url:
+        matching_image = [
+            template for template in candidates if _normalized_image_url(template.image_url) == step_image_url
+        ]
+        if matching_image:
+            matching_image.sort(key=_template_rank, reverse=True)
+            return matching_image[0]
+
+        # If the run step points to a different image than all known templates, the
+        # template set is stale or unrelated. Use the step image as reference source
+        # instead of attaching the wrong landmark set.
+        return None
+
+    active = [template for template in candidates if template.is_active]
+    if active:
+        active.sort(key=_template_rank, reverse=True)
+        return active[0]
+
+    candidates.sort(key=_template_rank, reverse=True)
+    return candidates[0]
 
 
 def _reference_landmarks_json_for_step(db: Session, run: GameRun, step: GameRunStep) -> str | None:
