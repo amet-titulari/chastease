@@ -107,6 +107,7 @@
   }
   .gruns-badge.ok { background: rgba(47, 220, 138, 0.15); color: #9de2bf; border: 1px solid rgba(47, 220, 138, 0.35); }
   .gruns-badge.fail { background: rgba(255, 107, 107, 0.15); color: #ffb4b4; border: 1px solid rgba(255,107,107,0.35); }
+  .gruns-badge.warn { background: rgba(255, 193, 7, 0.15); color: #ffc94a; border: 1px solid rgba(255,193,7,0.35); }
   .gruns-badge.active { background: rgba(100, 180, 255, 0.15); color: #98c6f2; border: 1px solid rgba(100,180,255,0.35); }
   .gruns-btn {
     cursor: pointer;
@@ -305,9 +306,11 @@ async function loadRunHistory() {
       card.dataset.runId = r.id;
 
       const statusBadge = r.status === "completed"
-        ? (r.failed_steps === 0
+        ? (r.failed_steps === 0 && r.unplayed_steps === 0
             ? `<span class="gruns-badge ok">Bestanden</span>`
-            : `<span class="gruns-badge fail">Fehler</span>`)
+            : (r.unplayed_steps > 0 && r.failed_steps === 0
+                ? `<span class="gruns-badge warn">Unvollständig</span>`
+                : `<span class="gruns-badge fail">Fehler</span>`))
         : `<span class="gruns-badge active">${escH(r.status)}</span>`;
 
       card.innerHTML = `

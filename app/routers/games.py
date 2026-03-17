@@ -1160,6 +1160,14 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
     run.finished_at = now
 
     steps = db.query(GameRunStep).filter(GameRunStep.run_id == run.id).all()
+    # For single-pose modules (dont_move, tiptoeing): if time expired and the step is still
+    # pending, the user never managed to enter the required position at all → counts as failed.
+    # For multi-step modules (posture_training etc.) unplayed steps are not the user's fault.
+    if timed_out and run.module_key in SINGLE_POSE_STRICT_MODULE_KEYS:
+        for item in steps:
+            if item.status == "pending":
+                item.status = "failed"
+                db.add(item)
     passed = sum(1 for item in steps if item.status == "passed")
     failed = sum(1 for item in steps if item.status == "failed")
     unplayed = sum(1 for item in steps if item.status == "pending")
@@ -2302,6 +2310,7 @@ def list_session_game_runs(session_id: int, db: Session = Depends(get_db)) -> di
                 "passed_steps": int(summary.get("passed_steps") or 0),
                 "failed_steps": int(summary.get("failed_steps") or 0),
                 "total_steps": int(summary.get("total_steps") or 0),
+                "unplayed_steps": int(summary.get("unplayed_steps") or 0),
                 "ai_assessment": summary.get("ai_assessment") or None,
             }
         )
