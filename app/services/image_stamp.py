@@ -43,5 +43,5 @@ def stamp_verification_timestamp(image_bytes: bytes, now: datetime | None = None
     draw.text((box_x1 + pad_x, box_y1 + pad_y), text, fill=(255, 255, 255, 240), font=font)
 
     out = io.BytesIO()
-    image.save(out, format="JPEG", quality=90)
+    image.save(out, format="JPEG", quality=95, optimize=True)
     return out.getvalue()

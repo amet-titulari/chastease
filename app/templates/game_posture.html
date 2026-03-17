@@ -2090,9 +2090,63 @@ function startRunPolling() {
   }, 2000);
 }
 
+function preferredCameraConstraints() {
+  return {
+    audio: false,
+    video: {
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30, max: 30 },
+      facingMode: "user",
+    },
+  };
+}
+
+async function maximizeVideoTrackQuality(track) {
+  if (!track || typeof track.getCapabilities !== "function" || typeof track.applyConstraints !== "function") {
+    return;
+  }
+
+  const caps = track.getCapabilities();
+  const advanced = {};
+
+  if (caps.width && Number.isFinite(Number(caps.width.max))) {
+    advanced.width = Number(caps.width.max);
+  }
+  if (caps.height && Number.isFinite(Number(caps.height.max))) {
+    advanced.height = Number(caps.height.max);
+  }
+  if (caps.frameRate && Number.isFinite(Number(caps.frameRate.max))) {
+    advanced.frameRate = Math.min(30, Number(caps.frameRate.max));
+  }
+
+  if (Object.keys(advanced).length === 0) return;
+
+  try {
+    await track.applyConstraints({ advanced: [advanced] });
+  } catch {
+    // Keep the original stream if the browser rejects advanced constraints.
+  }
+}
+
 async function startCamera() {
   if (cameraStream) return;
-  cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia(preferredCameraConstraints());
+  } catch {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  }
+
+  const track = cameraStream.getVideoTracks()[0];
+  if (track) {
+    try {
+      track.contentHint = "detail";
+    } catch {
+      // Ignore browsers that expose contentHint as read-only or unsupported.
+    }
+    await maximizeVideoTrackQuality(track);
+  }
+
   setupVideoEl.srcObject = cameraStream;
   playVideoEl.srcObject = cameraStream;
   window.setTimeout(() => {
@@ -2119,15 +2173,39 @@ async function captureFrameBlob() {
   const track = cameraStream.getVideoTracks()[0];
   if (!track) return null;
 
-  const imageCapture = new ImageCapture(track);
-  const photoBlob = await imageCapture.takePhoto().catch(async () => {
+  let photoBlob = null;
+  if (typeof ImageCapture !== "undefined") {
+    try {
+      const imageCapture = new ImageCapture(track);
+      photoBlob = await imageCapture.takePhoto();
+    } catch {
+      photoBlob = null;
+    }
+  }
+
+  if (!photoBlob) {
+    const settings = typeof track.getSettings === "function" ? track.getSettings() : {};
     const canvas = document.createElement("canvas");
-    canvas.width = playVideoEl.videoWidth || 640;
-    canvas.height = playVideoEl.videoHeight || 360;
+    canvas.width = Math.max(
+      1280,
+      Number(settings.width || 0),
+      Number(playVideoEl.videoWidth || 0),
+      640
+    );
+    canvas.height = Math.max(
+      720,
+      Number(settings.height || 0),
+      Number(playVideoEl.videoHeight || 0),
+      360
+    );
     const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.drawImage(playVideoEl, 0, 0, canvas.width, canvas.height);
-    return await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.88));
-  });
+    photoBlob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.94));
+  }
+
   return photoBlob || null;
 }
 

@@ -630,7 +630,7 @@ def _add_colored_border(image_bytes: bytes, *, color: tuple[int, int, int], bord
         draw.rectangle([i, i, width - 1 - i, height - 1 - i], outline=color)
 
     out = io.BytesIO()
-    image.save(out, format="JPEG", quality=90)
+    image.save(out, format="JPEG", quality=95, optimize=True)
     return out.getvalue()
 
 
@@ -678,7 +678,7 @@ def _annotate_movement_capture(
     draw.text((box_x + 9, box_y + 6), label, fill=(255, 90, 90, 255))
 
     out = io.BytesIO()
-    image.save(out, format="JPEG", quality=90)
+    image.save(out, format="JPEG", quality=95, optimize=True)
     return out.getvalue()
 
 
