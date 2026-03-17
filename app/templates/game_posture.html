@@ -2703,11 +2703,29 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
     : null;
   let sampleTriggered = false;
 
-  const beginHold = () => {
+  const beginHold = async () => {
     if (holdSeconds <= 0) {
       loadRun().catch(() => {});
       return;
     }
+
+    // Signal the server that positioning is done — the game clock starts now.
+    // For single-pose modules this prevents positioning time from eating the timer.
+    let effectiveHoldSeconds = holdSeconds;
+    if (isSinglePoseModule) {
+      try {
+        const holdData = await api(`/api/games/runs/${runId}/hold-started`, { method: "POST" });
+        const serverRemaining = Number(holdData.remaining_seconds || 0);
+        if (serverRemaining > 0) {
+          effectiveHoldSeconds = Math.min(holdSeconds, serverRemaining);
+        }
+      } catch (err) {
+        // Non-fatal: if the run already ended, the movement monitor and
+        // complete-step flow will handle the error gracefully.
+      }
+      if (token !== sequenceToken) return;
+    }
+
     if (isSinglePoseModule) {
       // Strict modules use frame-based movement detection on the live stream.
       startMovementMonitor(token).catch(() => {});
@@ -2719,7 +2737,7 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
     countdownPhase({
       token,
       label: "POSE HALTEN",
-      startSeconds: holdSeconds,
+      startSeconds: effectiveHoldSeconds,
       onTick: (secondsRemaining) => {
         if (
           sampleSecond !== null

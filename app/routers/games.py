@@ -1059,6 +1059,21 @@ def _active_step(db: Session, run_id: int) -> GameRunStep | None:
 
 def _remaining_seconds_for_run(run: GameRun, now: datetime | None = None) -> int:
     anchor = now or datetime.now(timezone.utc)
+    # For single-pose modules the hold_started_at is set when the player
+    # successfully enters the required position.  Positioning time must not
+    # count against the game timer, so we measure elapsed time from that
+    # moment rather than from run.started_at.
+    meta = _load_run_summary_meta(run)
+    hold_started_raw = meta.get("hold_started_at")
+    if hold_started_raw:
+        try:
+            hold_started = datetime.fromisoformat(hold_started_raw)
+            if hold_started.tzinfo is None:
+                hold_started = hold_started.replace(tzinfo=timezone.utc)
+            elapsed_seconds = max(0, int((anchor - hold_started).total_seconds()))
+            return max(0, int(run.total_duration_seconds) - elapsed_seconds)
+        except (ValueError, TypeError):
+            pass
     started = _as_utc(run.started_at) or anchor
     elapsed_seconds = max(0, int((anchor - started).total_seconds()))
     return max(0, int(run.total_duration_seconds) - elapsed_seconds)
@@ -2654,6 +2669,30 @@ async def verify_game_step(
             "finalized": step.status != "pending",
         },
     }
+
+
+@router.post("/runs/{run_id}/hold-started")
+def mark_hold_started(
+    run_id: int,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Called by the client when the player successfully enters the required
+    starting position.  Records hold_started_at in summary_json so that
+    _remaining_seconds_for_run measures elapsed time from this moment and
+    the positioning phase does not consume the game timer."""
+    run = db.query(GameRun).filter(GameRun.id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Game run not found")
+    if run.status != "active":
+        raise HTTPException(status_code=409, detail="Game run is not active")
+    meta = _load_run_summary_meta(run)
+    if not meta.get("hold_started_at"):
+        meta["hold_started_at"] = datetime.now(timezone.utc).isoformat()
+        run.summary_json = json.dumps(meta, ensure_ascii=True)
+        db.add(run)
+        db.commit()
+        db.refresh(run)
+    return {"remaining_seconds": _remaining_seconds_for_run(run)}
 
 
 @router.post("/runs/{run_id}/steps/{step_id}/movement-event")
