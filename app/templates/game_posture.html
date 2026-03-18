@@ -1070,8 +1070,25 @@ function livePoseFrameFromLandmarks(landmarks) {
 
 function drawReferenceSkeletonOnCanvas(ctx, width, height, referenceJson) {
   const points = referencePointsFromJson(referenceJson);
+  if (!points) return;
+
   const liveFrame = livePoseFrameFromLandmarks(movementLatestPoseLandmarks);
-  if (!points || !liveFrame) return;
+  // When live pose is not yet detected (e.g. user is still stepping into frame)
+  // draw the reference skeleton as a static guide centred in the canvas so the
+  // user knows where to stand. Use a typical torso height as the scale.
+  const frame = liveFrame || (() => {
+    // Estimate a sensible scale from the reference itself (hip-to-shoulder distance).
+    const ls = points.left_shoulder;
+    const rs = points.right_shoulder;
+    const lh = points.left_hip;
+    const rh = points.right_hip;
+    if (!ls || !rs || !lh || !rh) return null;
+    const shoulderDist = Math.hypot(ls.x - rs.x, ls.y - rs.y);
+    const scale = shoulderDist > 0.02 ? shoulderDist : 0.18;
+    // Centre slightly above mid-frame so a standing person is well-placed.
+    return { centerX: 0.5, centerY: 0.58, scale };
+  })();
+  if (!frame) return;
 
   ctx.save();
   ctx.setLineDash([8, 7]);
@@ -1100,13 +1117,13 @@ function drawReferenceSkeletonOnCanvas(ctx, width, height, referenceJson) {
     const fromRef = points[fromName];
     const toRef = points[toName];
     const from = fromRef ? {
-      x: liveFrame.centerX + (Number(fromRef.x || 0) * liveFrame.scale),
-      y: liveFrame.centerY + (Number(fromRef.y || 0) * liveFrame.scale),
+      x: frame.centerX + (Number(fromRef.x || 0) * frame.scale),
+      y: frame.centerY + (Number(fromRef.y || 0) * frame.scale),
       visibility: fromRef.visibility,
     } : null;
     const to = toRef ? {
-      x: liveFrame.centerX + (Number(toRef.x || 0) * liveFrame.scale),
-      y: liveFrame.centerY + (Number(toRef.y || 0) * liveFrame.scale),
+      x: frame.centerX + (Number(toRef.x || 0) * frame.scale),
+      y: frame.centerY + (Number(toRef.y || 0) * frame.scale),
       visibility: toRef.visibility,
     } : null;
     if (!from || !to) continue;
@@ -1123,13 +1140,13 @@ function drawReferenceSkeletonOnCanvas(ctx, width, height, referenceJson) {
     const fromRef = points[fromName];
     const toRef = points[toName];
     const from = fromRef ? {
-      x: liveFrame.centerX + (Number(fromRef.x || 0) * liveFrame.scale),
-      y: liveFrame.centerY + (Number(fromRef.y || 0) * liveFrame.scale),
+      x: frame.centerX + (Number(fromRef.x || 0) * frame.scale),
+      y: frame.centerY + (Number(fromRef.y || 0) * frame.scale),
       visibility: fromRef.visibility,
     } : null;
     const to = toRef ? {
-      x: liveFrame.centerX + (Number(toRef.x || 0) * liveFrame.scale),
-      y: liveFrame.centerY + (Number(toRef.y || 0) * liveFrame.scale),
+      x: frame.centerX + (Number(toRef.x || 0) * frame.scale),
+      y: frame.centerY + (Number(toRef.y || 0) * frame.scale),
       visibility: toRef.visibility,
     } : null;
     if (!from || !to) continue;
@@ -1144,8 +1161,8 @@ function drawReferenceSkeletonOnCanvas(ctx, width, height, referenceJson) {
   const radius = Math.max(3, Math.floor(Math.min(width, height) * 0.009));
   Object.values(points).forEach((pointRef) => {
     const point = pointRef ? {
-      x: liveFrame.centerX + (Number(pointRef.x || 0) * liveFrame.scale),
-      y: liveFrame.centerY + (Number(pointRef.y || 0) * liveFrame.scale),
+      x: frame.centerX + (Number(pointRef.x || 0) * frame.scale),
+      y: frame.centerY + (Number(pointRef.y || 0) * frame.scale),
       visibility: pointRef.visibility,
     } : null;
     if (!point || Number(point.visibility ?? 1) < 0.35) return;
@@ -2692,10 +2709,15 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
   const token = sequenceToken;
   sequenceStepId = step.id;
   const budget = Math.max(0, Number(runRemainingSeconds || 0));
-  const configuredTransition = Math.max(0, Math.min(Number(transitionSeconds || 0), budget));
-  const transition = configuredTransition;
+  // For single-pose modules the pose detection itself is the "get ready" gate.
+  // No countdown before the hold phase is needed, and holdSeconds must not be
+  // capped by the current budget because the server clock doesn't start until
+  // hold-started is signalled (the server will cap via remaining_seconds).
+  const transition = isSinglePoseModule ? 0 : Math.max(0, Math.min(Number(transitionSeconds || 0), budget));
   const holdBudget = Math.max(0, budget - transition);
-  const holdSeconds = Math.max(0, Math.min(Number(step.target_seconds || 0), holdBudget));
+  const holdSeconds = isSinglePoseModule
+    ? Math.max(0, Number(step.raw_target_seconds || step.target_seconds || 0))
+    : Math.max(0, Math.min(Number(step.target_seconds || 0), holdBudget));
   const sampleWindowStart = 2;
   const sampleWindowEnd = Math.max(sampleWindowStart, holdSeconds - 6);
   const sampleSecond = (!isSinglePoseModule && moduleKey !== "posture_training" && holdSeconds >= 8)
