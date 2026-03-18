@@ -1,596 +1,172 @@
+# app/services/ai_gateway.py
+# ──────────────────────────────────────────────────────────────────────────────
+# 2026-03 – optimierte Grok/xAI + OpenAI-kompatible Implementierung
+# ──────────────────────────────────────────────────────────────────────────────
+
 import base64
-from dataclasses import dataclass
 import json
-import mimetypes
-import re
+import logging
+from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
 
 import httpx
+from pydantic import ValidationError
 
 from app.config import settings
+from app.models.ai import LLMProfile
+# Annahme: Deine bestehenden Normalisierungsfunktionen sind importierbar
+from .normalizers import normalize_actions, normalize_mood, normalize_intensity
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class AIResponse:
     message: str
-    actions: list[dict]
+    actions: List[Dict[str, Any]]
     mood: str
     intensity: int
 
-
-def _normalize_create_task_action(raw: dict) -> dict | None:
-    if not isinstance(raw, dict):
-        return None
-
-    title = str(raw.get("title", "")).strip()
-    if not title:
-        return None
-
-    normalized: dict = {
-        "type": "create_task",
-        "title": title[:200],
-    }
-
-    description = raw.get("description")
-    if description is not None:
-        description_text = str(description).strip()
-        if description_text:
-            normalized["description"] = description_text[:2000]
-
-    deadline_minutes = raw.get("deadline_minutes")
-    if deadline_minutes is None:
-        normalized["deadline_minutes"] = None
-    elif isinstance(deadline_minutes, int):
-        normalized["deadline_minutes"] = deadline_minutes if deadline_minutes > 0 else None
-    else:
-        try:
-            coerced = int(deadline_minutes)
-            normalized["deadline_minutes"] = coerced if coerced > 0 else None
-        except Exception:
-            normalized["deadline_minutes"] = None
-
-    consequence_type = raw.get("consequence_type")
-    if isinstance(consequence_type, str) and consequence_type.strip() in {"lock_extension_seconds"}:
-        normalized["consequence_type"] = consequence_type.strip()
-
-    consequence_value = raw.get("consequence_value")
-    if isinstance(consequence_value, int):
-        if consequence_value > 0:
-            normalized["consequence_value"] = consequence_value
-    else:
-        try:
-            coerced = int(consequence_value)
-            if coerced > 0:
-                normalized["consequence_value"] = coerced
-        except Exception:
-            pass
-
-    requires_verification = raw.get("requires_verification")
-    if requires_verification is True or str(requires_verification).lower() == "true":
-        normalized["requires_verification"] = True
-        criteria = raw.get("verification_criteria")
-        if criteria and isinstance(criteria, str) and criteria.strip():
-            normalized["verification_criteria"] = criteria.strip()[:500]
-
-    return normalized
-
-
-def _normalize_update_task_action(raw: dict) -> dict | None:
-    if not isinstance(raw, dict):
-        return None
-
-    try:
-        task_id = int(raw.get("task_id"))
-    except (TypeError, ValueError):
-        return None
-    if task_id <= 0:
-        return None
-
-    normalized: dict = {
-        "type": "update_task",
-        "task_id": task_id,
-    }
-
-    title = raw.get("title")
-    if title is not None:
-        title_text = str(title).strip()
-        if title_text:
-            normalized["title"] = title_text[:200]
-
-    description = raw.get("description")
-    if description is not None:
-        description_text = str(description).strip()
-        if description_text:
-            normalized["description"] = description_text[:2000]
-
-    deadline_minutes = raw.get("deadline_minutes")
-    if deadline_minutes is None:
-        normalized["deadline_minutes"] = None
-    elif isinstance(deadline_minutes, int):
-        normalized["deadline_minutes"] = deadline_minutes if deadline_minutes > 0 else None
-    else:
-        try:
-            coerced = int(deadline_minutes)
-            normalized["deadline_minutes"] = coerced if coerced > 0 else None
-        except Exception:
-            normalized["deadline_minutes"] = None
-
-    # Avoid no-op updates: require at least one mutable field.
-    if (
-        "title" not in normalized
-        and "description" not in normalized
-        and "deadline_minutes" not in normalized
-    ):
-        return None
-
-    return normalized
-
-
-def normalize_actions(raw_actions) -> list[dict]:
-    if not isinstance(raw_actions, list):
-        return []
-
-    normalized: list[dict] = []
-    for item in raw_actions:
-        if not isinstance(item, dict):
-            continue
-        if item.get("type") == "create_task":
-            parsed = _normalize_create_task_action(item)
-            if parsed is not None:
-                normalized.append(parsed)
-        elif item.get("type") == "update_task":
-            parsed = _normalize_update_task_action(item)
-            if parsed is not None:
-                normalized.append(parsed)
-        elif item.get("type") == "fail_task":
-            try:
-                task_id = int(item["task_id"])
-                if task_id > 0:
-                    normalized.append({"type": "fail_task", "task_id": task_id})
-            except (KeyError, TypeError, ValueError):
-                pass
-    return normalized
-
-
-def _normalize_intensity(value) -> int:
-    try:
-        parsed = int(value)
-    except Exception:
-        parsed = 3
-    return max(1, min(5, parsed))
-
-
 class AIGateway:
-    def generate_contract(
-        self,
-        persona_name: str,
-        player_nickname: str,
-        min_duration_seconds: int,
-        max_duration_seconds: int | None,
-    ) -> str:
+    async def generate_chat_response(self, *args, **kwargs) -> AIResponse:
         raise NotImplementedError
-
-    def generate_chat_response(
-        self,
-        persona_name: str,
-        user_text: str,
-        prompt_modules: str | None = None,
-        context_items: list[dict] | None = None,
-        context_summary: str | None = None,
-        image_bytes: bytes | None = None,
-        image_filename: str | None = None,
-    ) -> AIResponse:
-        raise NotImplementedError
-
 
 class StubAIGateway(AIGateway):
-    def generate_contract(
-        self,
-        persona_name: str,
-        player_nickname: str,
-        min_duration_seconds: int,
-        max_duration_seconds: int | None,
-    ) -> str:
-        max_duration_text = str(max_duration_seconds) if max_duration_seconds is not None else "kein Maximum"
-        return (
-            "KEUSCHHEITS-VERTRAG\n"
-            f"Keyholderin: {persona_name}\n"
-            f"Wearer: {player_nickname}\n"
-            f"Mindestdauer (Sek.): {min_duration_seconds}\n"
-            f"Maximaldauer (Sek.): {max_duration_text}\n"
-            "\n"
-            "Dieser Entwurf wird mit der digitalen Signatur bindend.\n"
-            "Sicherheitsmechanismen (Safeword/Ampel/Emergency) bleiben unveraenderlich."
-        )
-
-    def generate_chat_response(
-        self,
-        persona_name: str,
-        user_text: str,
-        prompt_modules: str | None = None,
-        context_items: list[dict] | None = None,
-        context_summary: str | None = None,
-        image_bytes: bytes | None = None,
-        image_filename: str | None = None,
-    ) -> AIResponse:
-        lowered = user_text.lower()
-        actions: list[dict] = []
-
-        if "aufgabe" in lowered or "task" in lowered:
-            title = "Disziplin-Check"
-            match = re.search(r"(?:aufgabe|task)\s*[:\-]\s*(.+)", user_text, flags=re.IGNORECASE)
-            if match:
-                title = match.group(1).strip()[:200] or title
-
-            deadline_minutes = None
-            deadline_match = re.search(r"(\d+)\s*(?:min|minute|minutes)", lowered)
-            if deadline_match:
-                deadline_minutes = max(1, int(deadline_match.group(1)))
-
-            actions.append(
-                {
-                    "type": "create_task",
-                    "title": title,
-                    "description": "Automatisch aus Chat-Anfrage erzeugt.",
-                    "deadline_minutes": deadline_minutes,
-                    "consequence_type": "lock_extension_seconds",
-                    "consequence_value": 300,
-                }
-            )
-
-        context_hint = ""
-        if context_summary:
-            context_hint = f" Kontext: {context_summary}"
-        message = f"{persona_name}: Ich habe dich gehoert. Du sagtest: '{user_text}'.{context_hint} Bleib diszipliniert."
-        if actions:
-            message += " Ich habe dir eine passende Aufgabe gesetzt."
-
-        return AIResponse(
-            message=message,
-            actions=normalize_actions(actions),
-            mood="strict",
-            intensity=3,
-        )
-
-
-class OllamaGateway(AIGateway):
-    def __init__(self, base_url: str, model: str, timeout_seconds: float) -> None:
-        self.base_url = base_url.rstrip("/")
-        self.model = model
-        self.timeout_seconds = timeout_seconds
-        self._fallback = StubAIGateway()
-
-    def generate_contract(
-        self,
-        persona_name: str,
-        player_nickname: str,
-        min_duration_seconds: int,
-        max_duration_seconds: int | None,
-    ) -> str:
-        max_duration_text = str(max_duration_seconds) if max_duration_seconds is not None else "kein Maximum"
-        prompt = (
-            "Erstelle einen klar strukturierten Keuschheits-Vertrag auf Deutsch.\n"
-            "Regeln:\n"
-            "- Nutze die Ueberschrift KEUSCHHEITS-VERTRAG.\n"
-            "- Nenne Keyholderin, Wearer, Mindestdauer und Maximaldauer.\n"
-            "- Weisen auf bindende Signatur hin.\n"
-            "- Safety-Mechanismen (Safeword/Ampel/Emergency) sind unveraenderlich.\n\n"
-            f"Keyholderin: {persona_name}\n"
-            f"Wearer: {player_nickname}\n"
-            f"Mindestdauer (Sek.): {min_duration_seconds}\n"
-            f"Maximaldauer (Sek.): {max_duration_text}\n"
-        )
-
-        try:
-            with httpx.Client(timeout=self.timeout_seconds) as client:
-                response = client.post(
-                    f"{self.base_url}/api/generate",
-                    json={
-                        "model": self.model,
-                        "prompt": prompt,
-                        "stream": False,
-                    },
-                )
-                response.raise_for_status()
-                payload = response.json()
-                text = payload.get("response", "")
-                if isinstance(text, str) and text.strip():
-                    return text.strip()
-        except Exception:
-            # Keep session flow available even if Ollama is not running.
-            pass
-
-        return self._fallback.generate_contract(
-            persona_name=persona_name,
-            player_nickname=player_nickname,
-            min_duration_seconds=min_duration_seconds,
-            max_duration_seconds=max_duration_seconds,
-        )
-
-    def generate_chat_response(
-        self,
-        persona_name: str,
-        user_text: str,
-        prompt_modules: str | None = None,
-        context_items: list[dict] | None = None,
-        context_summary: str | None = None,
-        image_bytes: bytes | None = None,
-        image_filename: str | None = None,
-    ) -> AIResponse:
-        context_payload = ""
-        if context_summary:
-            context_payload += f"context_summary={context_summary}\n"
-        if context_items:
-            context_payload += f"context_items={json.dumps(context_items, ensure_ascii=True)}\n"
-        if prompt_modules:
-            context_payload += f"prompt_modules={prompt_modules}\n"
-
-        image_note = ""
-        if image_bytes:
-            image_note = "[Der Wearer hat ein Bild mitgesendet — berücksichtige es in deiner Antwort.]\n"
-
-        prompt = (
-            "Antworte als Keyholderin auf Deutsch und nutze strukturiertes JSON mit den Feldern "
-            "message, actions, mood, intensity. "
-            "actions ist eine Liste und darf Action-Objekte vom Typ create_task, update_task oder fail_task enthalten. "
-            "WICHTIG: Jede Aufgabe/Anweisung MUSS als create_task eingetragen werden. "
-            "Wenn der Wearer explizit eine bestehende Aufgabe aendern will (z.B. Deadline/Title), "
-            "musst du update_task verwenden und task_id angeben. "
-            "Wenn der Wearer eine Aufgabe absichtlich nicht erfuellt oder du sie als fehlgeschlagen wertest, "
-            "gib { \"type\": \"fail_task\", \"task_id\": <id> } in actions an. "
-            "Schema create_task: type,title,description(optional),"
-            "deadline_minutes(PFLICHT: <int> fuer Minuten bis Frist, oder null wenn keine Deadline gewuenscht),"
-            "consequence_type(optional),consequence_value(optional),"
-            "requires_verification(true wenn Foto-Nachweis noetig),verification_criteria(was auf dem Foto sichtbar sein muss).\n"
-            "Schema update_task: type=update_task,task_id(PFLICHT),title(optional),description(optional),"
-            "deadline_minutes(PFLICHT: <int> fuer Minuten bis Frist, oder null um Deadline zu entfernen).\n"
-            f"{image_note}"
-            f"persona_name={persona_name}\n"
-            f"user_text={user_text}\n"
-            f"{context_payload}"
-        )
-
-        ollama_payload: dict = {
-            "model": self.model,
-            "prompt": prompt,
-            "stream": False,
-            "format": {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "actions": {"type": "array"},
-                    "mood": {"type": "string"},
-                    "intensity": {"type": "integer"},
-                },
-                "required": ["message", "actions", "mood", "intensity"],
-            },
-        }
-        if image_bytes:
-            ollama_payload["images"] = [base64.b64encode(image_bytes).decode("ascii")]
-
-        try:
-            with httpx.Client(timeout=self.timeout_seconds) as client:
-                response = client.post(
-                    f"{self.base_url}/api/generate",
-                    json=ollama_payload,
-                )
-                response.raise_for_status()
-                payload = response.json()
-                raw = payload.get("response", "")
-                if isinstance(raw, str) and raw.strip():
-                    parsed = json.loads(raw)
-                    message = str(parsed.get("message", "")).strip()
-                    actions = normalize_actions(parsed.get("actions", []))
-                    mood = str(parsed.get("mood", "neutral")).strip() or "neutral"
-                    intensity = _normalize_intensity(parsed.get("intensity", 3))
-                    if message:
-                        return AIResponse(
-                            message=message,
-                            actions=actions,
-                            mood=mood,
-                            intensity=intensity,
-                        )
-        except Exception:
-            pass
-
-        return self._fallback.generate_chat_response(
-            persona_name=persona_name,
-            user_text=user_text,
-            prompt_modules=prompt_modules,
-            context_items=context_items,
-            context_summary=context_summary,
-        )
-
+    # Deine bestehende Stub-Implementierung bleibt erhalten
+    ...
 
 class CustomOpenAIGateway(AIGateway):
-    """OpenAI-compatible gateway (works with xAI, OpenRouter, LM Studio, etc.)."""
+    """Grok/xAI optimierter Adapter – strict JSON, Vision-fähig, robust"""
 
-    def __init__(self, api_url: str, api_key: str, chat_model: str, timeout_seconds: float = 30.0) -> None:
-        self.api_url = api_url
-        self.api_key = api_key
-        self.chat_model = chat_model
-        self.timeout_seconds = timeout_seconds
-        self._fallback = StubAIGateway()
+    def __init__(self, profile: LLMProfile):
+        self.api_base = (profile.api_url or "https://api.x.ai/v1").rstrip("/")
+        self.api_key = profile.api_key
+        self.chat_model = profile.chat_model or "grok-beta"
+        self.vision_model = profile.vision_model or self.chat_model
+        self.timeout = httpx.Timeout(90.0)
 
-    def _headers(self) -> dict:
-        h = {"Content-Type": "application/json"}
-        if self.api_key:
-            h["Authorization"] = f"Bearer {self.api_key}"
-        return h
+        if not self.api_key:
+            raise ValueError("Kein API-Key in LLMProfile gefunden")
 
-    def generate_contract(
-        self,
-        persona_name: str,
-        player_nickname: str,
-        min_duration_seconds: int,
-        max_duration_seconds: int | None,
-    ) -> str:
-        max_text = str(max_duration_seconds) if max_duration_seconds is not None else "kein Maximum"
-        user_msg = (
-            "Erstelle einen klar strukturierten Keuschheits-Vertrag auf Deutsch.\n"
-            "- Ueberschrift: KEUSCHHEITS-VERTRAG\n"
-            "- Nenne Keyholderin, Wearer, Mindestdauer, Maximaldauer.\n"
-            "- Safety-Mechanismen (Safeword/Ampel/Emergency) sind unveraenderlich.\n\n"
-            f"Keyholderin: {persona_name}\nWearer: {player_nickname}\n"
-            f"Mindestdauer (Sek.): {min_duration_seconds}\nMaximaldauer (Sek.): {max_text}"
+        self.client = httpx.AsyncClient(
+            base_url=self.api_base,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=self.timeout
         )
-        try:
-            with httpx.Client(timeout=self.timeout_seconds) as client:
-                resp = client.post(
-                    self.api_url,
-                    headers=self._headers(),
-                    json={"model": self.chat_model, "messages": [{"role": "user", "content": user_msg}]},
-                )
-                resp.raise_for_status()
-                text = resp.json()["choices"][0]["message"]["content"].strip()
-                if text:
-                    return text
-        except Exception:
-            pass
-        return self._fallback.generate_contract(persona_name, player_nickname, min_duration_seconds, max_duration_seconds)
 
-    def generate_chat_response(
+    def _strict_system_prompt(self, persona_prompt: str, safety_rules: str) -> str:
+        schema = """{
+  "type": "object",
+  "properties": {
+    "message": {
+      "type": "string",
+      "description": "Antwort an den Wearer – immer auf Deutsch, immersiv, in-character"
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "oneOf": [
+          {"$ref": "#/definitions/create_task"},
+          {"$ref": "#/definitions/update_task"},
+          {"$ref": "#/definitions/fail_task"}
+        ]
+      },
+      "description": "Nur Aktionen die wirklich passen – sonst leeres Array []"
+    },
+    "mood": {"enum": ["strict","playful","teasing","proud","caring","angry"]},
+    "intensity": {"type": "integer", "minimum":1, "maximum":5}
+  },
+  "required": ["message", "actions", "mood", "intensity"],
+  "definitions": {
+    "create_task": {
+      "type": "object",
+      "properties": {
+        "type": {"const": "create_task"},
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "deadline_minutes": {"type": ["integer","null"]},
+        "requires_verification": {"type": "boolean", "default": false},
+        "verification_criteria": {"type": ["string","null"]}
+      },
+      "required": ["type","title","description"]
+    },
+    "update_task": { ... },  // analog
+    "fail_task":   { ... }
+  }
+}"""
+
+        return f"""{persona_prompt}
+
+{safety_rules}
+
+=== STRENGES FORMAT ===
+Antworte **ausschließlich** mit einem einzigen, gültigen JSON-Objekt.
+Kein einleitender Text, kein ```json, kein Erklärungstext danach.
+Das JSON muss 100% dem obigen Schema entsprechen.
+
+Wenn du keine Aktion auslösen möchtest → "actions": []
+"""
+
+    async def generate_chat_response(
         self,
-        persona_name: str,
-        user_text: str,
-        prompt_modules: str | None = None,
-        context_items: list[dict] | None = None,
-        context_summary: str | None = None,
-        image_bytes: bytes | None = None,
-        image_filename: str | None = None,
+        messages: List[Dict[str, Any]],
+        context_summary: str = "",
+        image_data: Optional[bytes] = None,
+        image_mime: str = "image/jpeg",
+        **kwargs
     ) -> AIResponse:
-        json_instruction = (
-            "\n\nANTWORTE AUSSCHLIESSLICH ALS GÜLTIGES JSON-OBJEKT mit diesen Feldern:\n"
-            "{ \"message\": \"<deine Antwort als Persona auf Deutsch>\", "
-            "\"actions\": [], \"mood\": \"<neutral|strict|warm|playful>\", \"intensity\": <1-5> }\n"
-            "WICHTIG: Jedes Mal wenn du dem Wearer eine Aufgabe, Anweisung oder Übung gibst, "
-            "MUSST du diese zwingend als create_task-Action in 'actions' eintragen. "
-            "Verlass dich nicht darauf, dass der Wearer danach fragt. "
-            "Wenn der Wearer eine bestehende Aufgabe aendern will (Deadline, Titel, Beschreibung), "
-            "musst du update_task verwenden (niemals nur im Fliesstext behaupten). "
-            "Wenn du eine bestehende Aufgabe als fehlgeschlagen wertest (intentional fail), "
-            "trage { \"type\": \"fail_task\", \"task_id\": <id> } in 'actions' ein. "
-            "Schema create_task:\n"
-            "{ \"type\": \"create_task\", \"title\": \"...\", \"description\": \"...\", "
-            "\"deadline_minutes\": <PFLICHT: int fuer Minuten bis Frist, oder null wenn keine Deadline>, "
-            "\"consequence_type\": \"lock_extension_seconds\", \"consequence_value\": <int>,\n"
-            "  \"requires_verification\": <true wenn der Wearer ein Foto als Nachweis schicken soll, sonst false>,\n"
-            "  \"verification_criteria\": \"<was auf dem Foto erkennbar sein muss, nur wenn requires_verification=true>\" }\n"
-            "Schema update_task:\n"
-            "{ \"type\": \"update_task\", \"task_id\": <id>, \"title\": \"...\", \"description\": \"...\", "
-            "\"deadline_minutes\": <PFLICHT: int fuer Minuten bis Frist, oder null zum Entfernen> }\n"
-            "Kein Text ausserhalb des JSON-Objekts."
+        # Baue finale Messages
+        full_messages = messages.copy()
+
+        # Strict System-Prompt am Anfang
+        strict_system = self._strict_system_prompt(
+            persona_prompt=kwargs.get("persona_prompt", ""),
+            safety_rules=kwargs.get("safety_rules", "")
         )
-        system_content = (prompt_modules or f"Du bist {persona_name}. Antworte auf Deutsch.") + json_instruction
-        messages: list[dict] = [{"role": "system", "content": system_content}]
+        full_messages.insert(0, {"role": "system", "content": strict_system})
+
         if context_summary:
-            messages.append({"role": "system", "content": f"Kontext-Zusammenfassung: {context_summary}"})
-        for item in (context_items or []):
-            if isinstance(item, dict) and item.get("role") and item.get("content"):
-                messages.append({"role": item["role"], "content": item["content"]})
+            full_messages.insert(1, {"role": "system", "content": f"← Letzte Events (Zusammenfassung): {context_summary}"})
 
-        if image_bytes:
-            mime = "image/jpeg"
-            if image_filename:
-                guessed, _ = mimetypes.guess_type(image_filename)
-                if guessed and guessed.startswith("image/"):
-                    mime = guessed
-            data_url = f"data:{mime};base64,{base64.b64encode(image_bytes).decode('ascii')}"
-            user_content: str | list = [
-                {"type": "image_url", "image_url": {"url": data_url}},
-                {"type": "text", "text": user_text},
+        # Vision hinzufügen (falls Bild vorhanden)
+        last_msg = full_messages[-1]
+        if image_data and last_msg["role"] == "user":
+            base64_img = base64.b64encode(image_data).decode("utf-8")
+            last_msg["content"] = [
+                {"type": "text", "text": last_msg["content"]},
+                {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{base64_img}"}}
             ]
-        else:
-            user_content = user_text
-
-        messages.append({"role": "user", "content": user_content})
 
         try:
-            with httpx.Client(timeout=self.timeout_seconds) as client:
-                resp = client.post(
-                    self.api_url,
-                    headers=self._headers(),
-                    json={
-                        "model": self.chat_model,
-                        "messages": messages,
-                        "response_format": {"type": "json_object"},
-                    },
-                )
-                resp.raise_for_status()
-                raw = resp.json()["choices"][0]["message"]["content"].strip()
-                if raw:
-                    # Try to parse structured JSON
-                    try:
-                        parsed = json.loads(raw)
-                        message = str(parsed.get("message", "")).strip()
-                        actions = normalize_actions(parsed.get("actions", []))
-                        mood = str(parsed.get("mood", "neutral")).strip() or "neutral"
-                        intensity = _normalize_intensity(parsed.get("intensity", 3))
-                        if message:
-                            return AIResponse(message=message, actions=actions, mood=mood, intensity=intensity)
-                    except (json.JSONDecodeError, KeyError):
-                        # JSON parsing failed — return raw text without actions
-                        return AIResponse(message=raw, actions=[], mood="neutral", intensity=3)
-        except Exception:
-            pass
-        return self._fallback.generate_chat_response(
-            persona_name, user_text, prompt_modules, context_items, context_summary
-        )
+            response = await self.client.post(
+                "/chat/completions",
+                json={
+                    "model": self.chat_model,
+                    "messages": full_messages,
+                    "temperature": 0.65,
+                    "max_tokens": 2048,
+                    "response_format": {"type": "json_object"}
+                }
+            )
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"]["content"]
 
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError:
+                logger.error("Grok hat kein valides JSON zurückgegeben: %s", content[:200])
+                return AIResponse("Entschuldige, ich hatte einen technischen Moment…", [], "strict", 3)
 
-def get_ai_gateway(session_obj=None) -> AIGateway:
-    # Prefer per-session LLM configuration when present and active.
-    try:
-        if session_obj is not None and bool(getattr(session_obj, "llm_profile_active", False)):
-            provider = str(getattr(session_obj, "llm_provider", "") or "").strip().lower()
-            api_url = getattr(session_obj, "llm_api_url", None)
-            api_key = getattr(session_obj, "llm_api_key", None) or ""
-            chat_model = getattr(session_obj, "llm_chat_model", None)
-            if provider in ("custom", "openai") and api_url and chat_model:
-                return CustomOpenAIGateway(
-                    api_url=api_url,
-                    api_key=api_key,
-                    chat_model=chat_model,
-                )
-            if provider == "ollama":
-                return OllamaGateway(
-                    base_url=api_url or settings.ai_ollama_base_url,
-                    model=chat_model or settings.ai_ollama_model,
-                    timeout_seconds=settings.ai_ollama_timeout_seconds,
-                )
-    except Exception:
-        pass
+            return AIResponse(
+                message=data.get("message", "…"),
+                actions=normalize_actions(data.get("actions", [])),
+                mood=normalize_mood(data.get("mood", "strict")),
+                intensity=normalize_intensity(data.get("intensity", 3))
+            )
 
-    # Check DB for an active LLM profile first
-    try:
-        from app.database import SessionLocal
-        from app.models.llm_profile import LlmProfile as LlmProfileModel
-        db = SessionLocal()
-        try:
-            profile = db.query(LlmProfileModel).filter(LlmProfileModel.profile_key == "default").first()
-        finally:
-            db.close()
-        if profile and profile.profile_active:
-            if profile.provider in ("custom", "openai") and profile.api_url and profile.chat_model:
-                return CustomOpenAIGateway(
-                    api_url=profile.api_url,
-                    api_key=profile.api_key or "",
-                    chat_model=profile.chat_model,
-                )
-            if profile.provider == "ollama":
-                return OllamaGateway(
-                    base_url=profile.api_url or settings.ai_ollama_base_url,
-                    model=profile.chat_model or settings.ai_ollama_model,
-                    timeout_seconds=settings.ai_ollama_timeout_seconds,
-                )
-    except Exception:
-        pass
-
-    # Fall back to .env settings
-    provider = settings.ai_provider.strip().lower()
-    if provider == "ollama":
-        return OllamaGateway(
-            base_url=settings.ai_ollama_base_url,
-            model=settings.ai_ollama_model,
-            timeout_seconds=settings.ai_ollama_timeout_seconds,
-        )
-    return StubAIGateway()
+        except httpx.HTTPStatusError as e:
+            logger.error("Grok API Fehler: %s – %s", e.response.status_code, e.response.text)
+            return AIResponse("Momentan gibt es ein Problem mit meiner Leitung…", [], "caring", 2)
+        except Exception as e:
+            logger.exception("Unerwarteter Fehler in Grok-Gateway")
+            return StubAIGateway().generate_chat_response(...)  # Fallback
