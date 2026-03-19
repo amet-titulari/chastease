@@ -230,3 +230,56 @@ def test_chat_update_task_action_updates_deadline(monkeypatch):
             assert "deadline(+270m)" in task_updated_msg.content
         finally:
             db.close()
+
+
+def test_chat_persists_prompt_metadata(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            return AIResponse(
+                message="Verstanden.",
+                actions=[],
+                mood="strict",
+                intensity=3,
+            )
+
+    def _fake_get_ai_gateway(session_obj):
+        _ = session_obj
+        return _DummyAI()
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", _fake_get_ai_gateway)
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Kurzer Check-in."},
+        )
+        assert send_resp.status_code == 200
+        payload = send_resp.json()
+        assert payload["prompt_version"] is not None
+        assert "base_system_prompt.jinja2" in payload["prompt_templates"]
+
+        db = SessionLocal()
+        try:
+            assistant_msg = (
+                db.query(Message)
+                .filter(Message.session_id == session_id, Message.role == "assistant")
+                .order_by(Message.id.desc())
+                .first()
+            )
+            assert assistant_msg is not None
+            assert assistant_msg.prompt_version is not None
+            assert assistant_msg.prompt_templates_json is not None
+
+            list_resp = client.get(f"/api/sessions/{session_id}/messages")
+            assert list_resp.status_code == 200
+            items = list_resp.json()["items"]
+            assistant_rows = [item for item in items if item["role"] == "assistant"]
+            assert assistant_rows
+            assert assistant_rows[-1]["prompt_version"] == assistant_msg.prompt_version
+            assert "base_system_prompt.jinja2" in assistant_rows[-1]["prompt_templates"]
+        finally:
+            db.close()

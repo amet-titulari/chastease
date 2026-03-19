@@ -103,6 +103,18 @@ def _fmt_deadline_for_context(value: datetime | None) -> str:
     )
 
 
+def _message_prompt_templates(row: Message) -> list[str]:
+    if not row.prompt_templates_json:
+        return []
+    try:
+        value = json.loads(row.prompt_templates_json)
+    except Exception:
+        return []
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item).strip()]
+
+
 def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes: bytes | None = None, image_filename: str | None = None) -> Message:
     session_obj = _load_session(db, session_id)
     persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
@@ -286,12 +298,19 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
         hard_limits=hard_limits or None,
         active_phase=active_phase,
         lorebook_entries=matched_lore or None,
-    ).render()
+    )
+    logger.info(
+        "Rendered prompt version=%s templates=%s session_id=%s",
+        prompt_modules.version,
+        ",".join(prompt_modules.templates_used),
+        session_id,
+    )
+    rendered_prompt = prompt_modules.render()
 
     structured = ai.generate_chat_response(
         persona_name=persona_name,
         user_text=user_text,
-        prompt_modules=prompt_modules,
+        prompt_modules=rendered_prompt,
         context_items=context_items,
         context_summary=context_summary,
         image_bytes=image_bytes,
@@ -450,6 +469,8 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
         role="assistant",
         content=reply_text,
         message_type="chat",
+        prompt_version=prompt_modules.version,
+        prompt_templates_json=json.dumps(prompt_modules.templates_used),
     )
 
     if created_task_ids:
@@ -477,7 +498,14 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
     db.add(assistant_msg)
     db.commit()
     db.refresh(assistant_msg)
-    audit_log("chat_turn", session_id=session_id, user_text=user_text[:200], reply_preview=reply_text[:120])
+    audit_log(
+        "chat_turn",
+        session_id=session_id,
+        user_text=user_text[:200],
+        reply_preview=reply_text[:120],
+        prompt_version=assistant_msg.prompt_version,
+        prompt_templates=prompt_modules.templates_used,
+    )
     return assistant_msg
 
 
@@ -549,6 +577,8 @@ def list_messages(session_id: int, db: Session = Depends(get_db)) -> dict:
                 "role": row.role,
                 "content": row.content,
                 "message_type": row.message_type,
+                "prompt_version": row.prompt_version,
+                "prompt_templates": _message_prompt_templates(row),
                 "created_at": str(row.created_at),
             }
             for row in rows
@@ -563,6 +593,8 @@ def send_message(session_id: int, payload: SendMessageRequest, db: Session = Dep
         "session_id": session_id,
         "reply": assistant_msg.content,
         "reply_message_id": assistant_msg.id,
+        "prompt_version": assistant_msg.prompt_version,
+        "prompt_templates": _message_prompt_templates(assistant_msg),
     }
 
 
@@ -677,6 +709,8 @@ async def send_message_with_media(
         "reply": assistant_msg.content,
         "reply_message_id": assistant_msg.id,
         "message_type": response_message_type,
+        "prompt_version": assistant_msg.prompt_version,
+        "prompt_templates": _message_prompt_templates(assistant_msg),
     }
     if media_kind == "audio":
         response["transcription_status"] = transcription_status or "not-requested"
@@ -723,6 +757,8 @@ def regenerate_last_message(
         "reply": assistant_msg.content,
         "reply_message_id": assistant_msg.id,
         "message_type": assistant_msg.message_type,
+        "prompt_version": assistant_msg.prompt_version,
+        "prompt_templates": _message_prompt_templates(assistant_msg),
     }
 
 

@@ -1,0 +1,12 @@
+Persona: {{ persona_name }}. Bleibe konsistent in Stimme, Haltung und Regelklarheit.
+{% if speech_style_tone %}
+Ton: {{ speech_style_tone }}.
+{% endif %}
+{% if speech_style_dominance %}
+Dominanzstil: {{ speech_style_dominance }}.
+{% endif %}
+{% if persona_system_prompt %}
+
+Zusätzliche Persona-Overrides:
+{{ persona_system_prompt }}
+{% endif %}

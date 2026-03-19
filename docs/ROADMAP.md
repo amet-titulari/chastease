@@ -8,10 +8,10 @@
 - Alembic-Migrationen `0001`–`0014`, alle idempotent
 - Session-Lifecycle: Erstellen, Vertrag, Timer, Events, Export (PDF/JSON)
 - KI-Provider: xAI/Grok, OpenRouter, Ollama, Stub – inkl. Action-Normalisierung
-- Modularer System-Prompt (Persona, Wearer, Safety, Session, Style, Scenario)
+- Modularer System-Prompt (Persona, Wearer, Safety, Session, Style, Scenario) mit externen Prompt-Dateien und Versions-Logging
 - Kontextfenster-Management mit Trunkierung und Zusammenfassung
 - Aufgabensystem: CRUD, Konsequenzen, Psychogramm-Multiplikatoren, Overdue-Sweep
-- Task-Actions: create_task, update_task, fail_task inkl. Audit-/System-Events
+- Task-Actions: create_task, update_task, fail_task inkl. Audit-/System-Events und Pydantic-Validierung am KI-Rand
 - Deadline-Robustheit: explizites `deadline_minutes` (int/null), Zeitkontext (UTC + lokal + TZ) im KI-Kontext
 - Spiele-Erweiterung gestartet: API-Basis fuer Posture Training (Programm-Katalog + Session-Start erzeugt Aufgaben)
 - Bildverifikation: heuristische + Vision-API-basierte Plomben-Analyse
@@ -192,6 +192,14 @@
 - [ ] API /api/sessions/{session_id} nur für eigene Sessions des USERS
 - [ ] API /api/games/modules/{module_key}/postures anpassen an Inventar/Postures Logik nur available erforderlich.
 - [ ] Postures Import und export
+
+### v0.3.2 – AI & Modularitaet
+- [x] Prompt-Dateien nach `app/prompts/` ausgelagert (Base, Persona, Safety, Session, Style, Scenario)
+- [x] Prompt-Version und verwendete Templates beim Rendern loggen
+- [x] KI-Task-Actions als Pydantic-Modelle mit zentraler Normalisierung/Validierung
+- [ ] LiteLLM als gemeinsamer LLM-Client evaluieren und Provider-Code darauf konsolidieren
+- [x] Prompt-Metadaten persistent pro Message speichern und per Chat-API ausliefern
+- [ ] Task-Template-Pool fuer reproduzierbare Schwierigkeit und Persona-spezifische Vorschlaege aufbauen
 
 ### v0.4 – Erweiterungen - Schnittstellen
 - [ ] Lovense für Devices

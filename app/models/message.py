@@ -11,4 +11,6 @@ class Message(Base):
     role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
     message_type = Column(String(30), default="chat", nullable=False)
+    prompt_version = Column(String(40), nullable=True)
+    prompt_templates_json = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

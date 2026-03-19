@@ -1,7 +1,8 @@
 import httpx
 import json
+from types import SimpleNamespace
 
-from app.services.ai_gateway import OllamaGateway, StubAIGateway
+from app.services.ai_gateway import CustomOpenAIGateway, OllamaGateway, StubAIGateway
 
 
 def test_stub_gateway_generates_contract_text():
@@ -238,3 +239,37 @@ def test_ollama_chat_response_normalizes_update_task(monkeypatch):
     assert action["task_id"] == 125
     assert action["deadline_minutes"] == 270
     assert action["title"] == "Task 125 neu"
+
+
+def test_custom_gateway_uses_litellm_client(monkeypatch):
+    profile = SimpleNamespace(
+        api_url="https://api.x.ai/v1",
+        api_key="secret",
+        chat_model="grok-4-1-fast-non-reasoning",
+        vision_model="grok-4-1-fast-non-reasoning",
+    )
+
+    def _fake_complete_text(self, provider, model, messages, api_base=None, api_key=None, response_format=None, max_tokens=None):
+        assert provider == "xai"
+        assert model == "grok-4-1-fast-non-reasoning"
+        assert api_base == "https://api.x.ai/v1"
+        assert api_key == "secret"
+        assert response_format == {"type": "json_object"}
+        assert messages[-1]["role"] == "system"
+        return json.dumps(
+            {
+                "message": "Antwort aus LiteLLM.",
+                "actions": [{"type": "create_task", "title": "Task A", "deadline_minutes": "15"}],
+                "mood": "strict",
+                "intensity": "4",
+            }
+        )
+
+    monkeypatch.setattr("app.services.llm_client.LiteLLMClient.complete_text", _fake_complete_text)
+
+    gateway = CustomOpenAIGateway(profile=profile, timeout_seconds=5)
+    response = gateway.generate_chat_response(persona_name="Persona", user_text="Bitte Aufgabe")
+
+    assert response.message == "Antwort aus LiteLLM."
+    assert response.actions == [{"type": "create_task", "title": "Task A", "description": "", "deadline_minutes": 15}]
+    assert response.intensity == 4

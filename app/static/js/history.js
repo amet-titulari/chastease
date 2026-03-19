@@ -1,4 +1,5 @@
 const out = document.getElementById("history-output");
+const messageList = document.getElementById("history-message-list");
 
 function params() {
   const sessionId = Number(document.getElementById("history-session-id").value);
@@ -31,6 +32,65 @@ function write(title, data) {
   out.textContent = `${title}\n${typeof data === "string" ? data : JSON.stringify(data, null, 2)}`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderMessageList(items) {
+  if (!messageList) return;
+  if (!Array.isArray(items) || !items.length) {
+    messageList.innerHTML = '<p class="history-muted">Keine Nachrichten gefunden.</p>';
+    return;
+  }
+
+  messageList.innerHTML = items.map((item) => {
+    const promptTemplates = Array.isArray(item.prompt_templates) ? item.prompt_templates : [];
+    const templateChips = promptTemplates
+      .map((template) => `<span class="history-chip history-chip--prompt">${escapeHtml(template)}</span>`)
+      .join("");
+    return `
+      <article class="history-message-card">
+        <div class="history-message-head">
+          <div class="history-message-title">#${escapeHtml(item.id)} ${escapeHtml(item.role || "unknown")}</div>
+          <div class="history-message-time">${escapeHtml(item.created_at || "")}</div>
+        </div>
+        <div class="history-meta-row">
+          ${item.message_type ? `<span class="history-chip">${escapeHtml(item.message_type)}</span>` : ""}
+          ${item.prompt_version ? `<span class="history-chip history-chip--prompt">Prompt ${escapeHtml(item.prompt_version)}</span>` : ""}
+        </div>
+        ${templateChips ? `<div class="history-meta-row">${templateChips}</div>` : ""}
+        <div class="history-message-content">${escapeHtml(item.content || "")}</div>
+      </article>`;
+  }).join("");
+}
+
+function formatMessageMeta(item) {
+  const bits = [];
+  if (item.message_type) bits.push(`type=${item.message_type}`);
+  if (item.prompt_version) bits.push(`prompt=${item.prompt_version}`);
+  if (Array.isArray(item.prompt_templates) && item.prompt_templates.length) {
+    bits.push(`templates=${item.prompt_templates.join(", ")}`);
+  }
+  return bits.join(" | ");
+}
+
+function formatMessages(items) {
+  if (!Array.isArray(items) || !items.length) return "Keine Nachrichten gefunden.";
+  return items.map((item) => {
+    const meta = formatMessageMeta(item);
+    return [
+      `#${item.id} ${item.role}${item.created_at ? ` @ ${item.created_at}` : ""}`,
+      meta,
+      String(item.content || ""),
+    ].filter(Boolean).join("\n");
+  }).join("\n\n---\n\n");
+}
+
 document.getElementById("history-load-btn").addEventListener("click", async () => {
   try {
     const { sessionId, query } = params();
@@ -40,6 +100,20 @@ document.getElementById("history-load-btn").addEventListener("click", async () =
     write("Events", data);
   } catch (err) {
     write("Fehler", String(err));
+  }
+});
+
+document.getElementById("history-load-messages-btn").addEventListener("click", async () => {
+  try {
+    const { sessionId } = params();
+    const res = await fetch(`/api/sessions/${sessionId}/messages`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(data));
+    renderMessageList(data.items || []);
+    write("Nachrichten", formatMessages(data.items || []));
+  } catch (err) {
+    renderMessageList([]);
+    write("Fehler Nachrichten", String(err));
   }
 });
 

@@ -1,4 +1,19 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
+import re
+
+from jinja2 import Environment, FileSystemLoader
+
+
+PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+PROMPT_VERSION = "2026-03-19.1"
+
+_PROMPT_ENV = Environment(
+    loader=FileSystemLoader(str(PROMPTS_DIR)),
+    autoescape=False,
+    trim_blocks=True,
+    lstrip_blocks=True,
+)
 
 
 @dataclass
@@ -9,18 +24,19 @@ class PromptModules:
     session_module: str
     style_module: str
     scenario_module: str = ""
+    version: str = PROMPT_VERSION
+    templates_used: list[str] = field(default_factory=list)
 
     def render(self) -> str:
-        parts = [
-            self.persona_module,
-            self.wearer_module,
-            self.safety_module,
-            self.session_module,
-            self.style_module,
-        ]
-        if self.scenario_module:
-            parts.append(self.scenario_module)
-        return "\n\n".join(parts)
+        return _render_prompt_template(
+            "base_system_prompt.jinja2",
+            persona_module=self.persona_module,
+            wearer_module=self.wearer_module,
+            safety_module=self.safety_module,
+            session_module=self.session_module,
+            style_module=self.style_module,
+            scenario_module=self.scenario_module,
+        )
 
 
 # Maps strictness_level (1-5) to a German style directive
@@ -31,6 +47,22 @@ _STRICTNESS_STYLE = {
     4: "Antworte präzise, fordernd und strukturiert. Kurze, klare Anweisungen. Lob nur bei erkennbarer Leistung.",
     5: "Antworte knapp, diszipliniert und direkt. Keine Abschweifungen. Klare Befehle und verbindliche Statusmeldungen.",
 }
+
+
+def _render_prompt_template(template_name: str, **context) -> str:
+    return _PROMPT_ENV.get_template(template_name).render(**context).strip()
+
+
+def _slugify_persona_name(value: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", value.strip().lower())
+    return normalized.strip("_") or "default"
+
+
+def _resolve_persona_template(persona_name: str) -> str:
+    template_name = f"personas/{_slugify_persona_name(persona_name)}.md.jinja2"
+    if (PROMPTS_DIR / template_name).exists():
+        return template_name
+    return "personas/default.md.jinja2"
 
 
 def build_prompt_modules(
@@ -51,79 +83,54 @@ def build_prompt_modules(
     active_phase: dict | None = None,
     lorebook_entries: list[dict] | None = None,
 ) -> PromptModules:
-    nickname_part = f"Wearer: {wearer_nickname}." if wearer_nickname else "Wearer: unbekannt."
-    level_part = f"Erfahrungslevel: {experience_level}." if experience_level else ""
-    style_part = f"Bevorzugter Stil: {wearer_style}." if wearer_style else ""
-    goal_part = f"Ziel: {wearer_goal}." if wearer_goal else ""
-    boundary_part = f"Grenzen/Limits: {wearer_boundary}." if wearer_boundary else ""
-    wearer_parts = " ".join(p for p in [nickname_part, level_part, style_part, goal_part, boundary_part] if p)
-
-    # Build persona module: prefer the stored system_prompt, fall back to name
-    if persona_system_prompt:
-        persona_module = persona_system_prompt
-        if speech_style_tone:
-            persona_module += f" Ton: {speech_style_tone}."
-        if speech_style_dominance:
-            persona_module += f" Dominanzstil: {speech_style_dominance}."
-    else:
-        persona_module = f"Persona: {persona_name}. Bleibe konsistent in Stimme, Haltung und Regelklarheit."
-        if speech_style_tone:
-            persona_module += f" Ton: {speech_style_tone}."
-        if speech_style_dominance:
-            persona_module += f" Dominanzstil: {speech_style_dominance}."
-
     clamped = max(1, min(5, strictness_level))
     style_directive = _STRICTNESS_STYLE[clamped]
 
-    safety_module = (
-        f"Safety: mode={safety_mode or 'none'}. "
-        "Bei red/safeword/emergency keine spielbezogenen Eskalationen."
-    )
-    if hard_limits:
-        limits_str = "; ".join(hard_limits)
-        safety_module += (
-            f" HARD LIMITS – ABSOLUT VERBOTEN (niemals in Aufgabentiteln, Beschreibungen "
-            f"oder Verifikationskriterien verwenden): {limits_str}."
-        )
+    persona_template = _resolve_persona_template(persona_name)
+    templates_used = [
+        "base_system_prompt.jinja2",
+        persona_template,
+        "wearer_profile.jinja2",
+        "safety_override.jinja2",
+        "session_context.jinja2",
+        "style_directive.jinja2",
+        "scenario_context.jinja2",
+    ]
 
     return PromptModules(
-        persona_module=persona_module,
-        wearer_module=f"Wearer-Profil: {wearer_parts}" if wearer_parts else "Wearer-Profil: keine Angaben.",
-        safety_module=safety_module,
-        session_module=(
-            f"Session: status={session_status}. "
-            f"Scenario={scenario_title or 'default'}."
+        persona_module=_render_prompt_template(
+            persona_template,
+            persona_name=persona_name,
+            persona_system_prompt=persona_system_prompt,
+            speech_style_tone=speech_style_tone,
+            speech_style_dominance=speech_style_dominance,
         ),
-        style_module=f"Stil: Antworte immer auf Deutsch. {style_directive}",
-        scenario_module=_build_scenario_module(active_phase, lorebook_entries),
+        wearer_module=_render_prompt_template(
+            "wearer_profile.jinja2",
+            wearer_nickname=wearer_nickname,
+            experience_level=experience_level,
+            wearer_style=wearer_style,
+            wearer_goal=wearer_goal,
+            wearer_boundary=wearer_boundary,
+        ),
+        safety_module=_render_prompt_template(
+            "safety_override.jinja2",
+            safety_mode=safety_mode,
+            hard_limits=hard_limits or [],
+        ),
+        session_module=_render_prompt_template(
+            "session_context.jinja2",
+            session_status=session_status,
+            scenario_title=scenario_title,
+        ),
+        style_module=_render_prompt_template(
+            "style_directive.jinja2",
+            style_directive=style_directive,
+        ),
+        scenario_module=_render_prompt_template(
+            "scenario_context.jinja2",
+            active_phase=active_phase or {},
+            lorebook_entries=lorebook_entries or [],
+        ),
+        templates_used=templates_used,
     )
-
-
-def _build_scenario_module(
-    active_phase: dict | None,
-    lorebook_entries: list[dict] | None,
-) -> str:
-    parts: list[str] = []
-
-    if active_phase:
-        phase_title = active_phase.get("title", "")
-        objective = active_phase.get("objective", "")
-        guidance = active_phase.get("guidance", "")
-        line = f"Aktive Phase: {phase_title}."
-        if objective:
-            line += f" Ziel: {objective}"
-        if guidance:
-            line += f" Führung: {guidance}"
-        parts.append(line)
-
-    if lorebook_entries:
-        lore_lines = []
-        for entry in lorebook_entries:
-            key = entry.get("key", "lore")
-            content = entry.get("content", "")
-            if content:
-                lore_lines.append(f"[{key}]: {content}")
-        if lore_lines:
-            parts.append("Lorebook:\n" + "\n".join(lore_lines))
-
-    return "\n\n".join(parts)

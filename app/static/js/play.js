@@ -451,6 +451,16 @@ let _pendingTaskItems = [];
 // Last known message list – used by plInstallInlineTaskCards for re-render without full HTTP reload
 let _lastMessageItems = [];
 
+function plFormatPromptMeta(item) {
+  const bits = [];
+  if (item.message_type) bits.push(item.message_type);
+  if (item.prompt_version) bits.push(`prompt ${item.prompt_version}`);
+  if (Array.isArray(item.prompt_templates) && item.prompt_templates.length) {
+    bits.push(item.prompt_templates.join(", "));
+  }
+  return bits.join(" · ");
+}
+
 // -- Render chat --
 function plRenderChat(items) {
   if (!chatTimeline) return;
@@ -467,6 +477,7 @@ function plRenderChat(items) {
       const cssRole = role === "user" ? "from-user" : "from-ai";
       const content = String(item.content || "").replace(/</g, "&lt;");
       const ts = plFormatMessageTime(item.created_at);
+      const promptMeta = plFormatPromptMeta(item);
       // Store task IDs on task_assigned bubbles so cards can be injected inline
       let taskAttr = "";
       if (item.message_type === "task_assigned") {
@@ -482,7 +493,7 @@ function plRenderChat(items) {
       return `
         <div class="chat-bubble ${cssRole}"${taskAttr}>
           ${bodyRow}
-          <div class="bubble-meta">${role}${ts ? " &middot; " + ts : ""}</div>
+          <div class="bubble-meta">${role}${ts ? " &middot; " + ts : ""}${promptMeta ? " &middot; " + promptMeta : ""}</div>
         </div>`;
     })
     .join("");

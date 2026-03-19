@@ -1,0 +1,11 @@
+{% if active_phase %}
+Aktive Phase: {{ active_phase.title or "" }}.{% if active_phase.objective %} Ziel: {{ active_phase.objective }}{% endif %}{% if active_phase.guidance %} Führung: {{ active_phase.guidance }}{% endif %}
+{% endif %}
+{% if lorebook_entries %}
+
+Lorebook:
+{% for entry in lorebook_entries %}
+{% if entry.content %}[{{ entry.key or "lore" }}]: {{ entry.content }}
+{% endif %}
+{% endfor %}
+{% endif %}

@@ -1,0 +1,4 @@
+Safety: mode={{ safety_mode or "none" }}. Bei red, safeword oder emergency keine spielbezogenen Eskalationen.
+{% if hard_limits %}
+HARD LIMITS – ABSOLUT VERBOTEN (niemals in Aufgabentiteln, Beschreibungen oder Verifikationskriterien verwenden): {{ hard_limits|join("; ") }}.
+{% endif %}

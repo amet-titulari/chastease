@@ -1,33 +1,115 @@
 {% extends "base.html" %}
 
-{% block content %}
-<section class="card full">
-  <h2>Session History</h2>
-  <div class="stack">
-    <label>Session-ID
-      <input id="history-session-id" type="number" min="1" />
-    </label>
-    <label>Source (optional)
-      <input id="history-source" placeholder="message|safety|hygiene|task|verification" />
-    </label>
-    <label>Event-Type (optional)
-      <input id="history-event-type" placeholder="z. B. completed, safeword, chat" />
-    </label>
-    <label>Limit
-      <input id="history-limit" type="number" min="1" max="1000" value="200" />
-    </label>
-    <div class="stack">
-      <button id="history-load-btn" type="button">Events laden</button>
-      <button id="history-export-text-btn" type="button">Export Text</button>
-      <button id="history-export-json-btn" type="button">Export JSON</button>
-    </div>
-  </div>
-</section>
+{% block extra_head %}
+<style>
+  .history-layout {
+    display: grid;
+    gap: 1rem;
+  }
+  .history-actions {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .history-message-list {
+    display: grid;
+    gap: 0.85rem;
+  }
+  .history-message-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 0.9rem 1rem;
+    display: grid;
+    gap: 0.6rem;
+  }
+  .history-message-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .history-message-title {
+    font-weight: 700;
+    color: #eff6ff;
+  }
+  .history-message-time {
+    color: #9eb5cb;
+    font-size: 0.9rem;
+  }
+  .history-message-content {
+    white-space: pre-wrap;
+    color: #dbe8f6;
+    line-height: 1.45;
+  }
+  .history-meta-row {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+  .history-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    border: 1px solid rgba(152, 209, 255, 0.22);
+    background: rgba(78, 130, 182, 0.18);
+    color: #d9edff;
+  }
+  .history-chip.history-chip--prompt {
+    border-color: rgba(255, 219, 140, 0.28);
+    background: rgba(173, 121, 22, 0.18);
+    color: #ffe7b3;
+  }
+  .history-muted {
+    color: #9eb5cb;
+  }
+  .history-raw-output {
+    min-height: 180px;
+  }
+</style>
+{% endblock %}
 
-<section class="card full">
-  <h2>Output</h2>
-  <pre id="history-output">Bereit.</pre>
-</section>
+{% block content %}
+<div class="history-layout">
+  <section class="card full">
+    <h2>Session History</h2>
+    <div class="stack">
+      <label>Session-ID
+        <input id="history-session-id" type="number" min="1" />
+      </label>
+      <label>Source (optional)
+        <input id="history-source" placeholder="message|safety|hygiene|task|verification" />
+      </label>
+      <label>Event-Type (optional)
+        <input id="history-event-type" placeholder="z. B. completed, safeword, chat" />
+      </label>
+      <label>Limit
+        <input id="history-limit" type="number" min="1" max="1000" value="200" />
+      </label>
+      <div class="history-actions">
+        <button id="history-load-btn" type="button">Events laden</button>
+        <button id="history-load-messages-btn" type="button">Nachrichten laden</button>
+        <button id="history-export-text-btn" type="button">Export Text</button>
+        <button id="history-export-json-btn" type="button">Export JSON</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card full">
+    <h2>Nachrichten</h2>
+    <div id="history-message-list" class="history-message-list">
+      <p class="history-muted">Bereit.</p>
+    </div>
+  </section>
+
+  <section class="card full">
+    <h2>Rohdaten / Export</h2>
+    <pre id="history-output" class="history-raw-output">Bereit.</pre>
+  </section>
+</div>
 {% endblock %}
 
 {% block scripts %}
