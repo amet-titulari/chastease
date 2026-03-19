@@ -219,6 +219,29 @@ def test_experience_and_profile_redirect_to_play_when_active_session_exists():
         assert "Zur laufenden Session" in profile.text
 
 
+def test_play_page_uses_versioned_play_script_url():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        created = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Cache Persona",
+                "player_nickname": "Cache Player",
+                "min_duration_seconds": 900,
+            },
+        )
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+
+        signed = client.post(f"/api/sessions/{session_id}/sign-contract")
+        assert signed.status_code == 200
+
+        play = client.get(f"/play/{session_id}", follow_redirects=False)
+        assert play.status_code == 200
+        assert '/static/js/play.js?v=' in play.text
+
+
 def test_settings_summary_includes_total_played_duration_across_owned_sessions():
     with TestClient(app) as client:
         email = f"xp-total-{uuid4().hex[:8]}@example.com"

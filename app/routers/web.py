@@ -2,6 +2,7 @@ import hashlib
 import json
 import secrets
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, Form, Query, Request
@@ -31,6 +32,14 @@ from app.services.games import as_public_module_payload, get_module, list_module
 router = APIRouter(tags=["web"])
 templates = Jinja2Templates(directory="app/templates")
 AUTH_COOKIE_NAME = "chastease_auth"
+
+
+def _asset_version(relative_path: str) -> str:
+    try:
+        target = Path("app/static") / relative_path
+        return str(int(target.stat().st_mtime))
+    except OSError:
+        return "dev"
 
 
 class ExperienceDraftRequest(BaseModel):
@@ -1400,6 +1409,7 @@ def play_page(session_id: int, request: Request, db: Session = Depends(get_db)):
             "player_nickname": player.nickname if player else user.username,
             "lock_end": session_obj.lock_end.isoformat() if session_obj.lock_end else None,
             "ws_debug_enabled": settings.play_ws_debug_enabled,
+            "play_js_version": _asset_version("js/play.js"),
         },
     )
 
