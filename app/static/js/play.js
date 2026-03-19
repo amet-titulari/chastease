@@ -6,6 +6,8 @@ const _shell = document.querySelector(".play-shell");
 const SESSION_ID = Number(_shell?.dataset.sessionId || 0);
 const WS_TOKEN = _shell?.dataset.wsToken || "";
 const LOCK_END = _shell?.dataset.lockEnd || "";
+const PERSONA_NAME = _shell?.dataset.personaName || "Keyholderin";
+const PLAYER_NAME = _shell?.dataset.playerName || "Du";
 
 let plSocket = null;
 let plVoiceSocket = null;
@@ -210,7 +212,7 @@ async function plStartVoiceMode() {
         }
         if (data.type === "conversation.item.input_audio_transcription.completed" && data.transcript) {
           if (chatTimeline) {
-            chatTimeline.innerHTML += `\n<div class="chat-bubble from-user"><div class="bubble-body">${String(data.transcript).replace(/</g, "&lt;")}</div><div class="bubble-meta">voice transcript</div></div>`;
+            chatTimeline.innerHTML += `\n<div class="chat-bubble from-user"><div class="bubble-body">${String(data.transcript).replace(/</g, "&lt;")}</div><div class="bubble-meta">${PLAYER_NAME} · Voice</div></div>`;
             chatTimeline.scrollTop = chatTimeline.scrollHeight;
           }
           return;
@@ -452,13 +454,16 @@ let _pendingTaskItems = [];
 let _lastMessageItems = [];
 
 function plFormatPromptMeta(item) {
-  const bits = [];
-  if (item.message_type) bits.push(item.message_type);
-  if (item.prompt_version) bits.push(`prompt ${item.prompt_version}`);
-  if (Array.isArray(item.prompt_templates) && item.prompt_templates.length) {
-    bits.push(item.prompt_templates.join(", "));
-  }
-  return bits.join(" · ");
+  if (!item || item.role !== "assistant" || !item.prompt_version) return "";
+  return `Prompt ${item.prompt_version}`;
+}
+
+function plFormatSpeakerName(item) {
+  if (item && item.speaker_name) return String(item.speaker_name);
+  const role = String(item?.role || "system").toLowerCase();
+  if (role === "assistant") return PERSONA_NAME;
+  if (role === "user") return PLAYER_NAME;
+  return "System";
 }
 
 // -- Render chat --
@@ -478,6 +483,7 @@ function plRenderChat(items) {
       const content = String(item.content || "").replace(/</g, "&lt;");
       const ts = plFormatMessageTime(item.created_at);
       const promptMeta = plFormatPromptMeta(item);
+      const speakerName = plFormatSpeakerName(item);
       // Store task IDs on task_assigned bubbles so cards can be injected inline
       let taskAttr = "";
       if (item.message_type === "task_assigned") {
@@ -493,7 +499,7 @@ function plRenderChat(items) {
       return `
         <div class="chat-bubble ${cssRole}"${taskAttr}>
           ${bodyRow}
-          <div class="bubble-meta">${role}${ts ? " &middot; " + ts : ""}${promptMeta ? " &middot; " + promptMeta : ""}</div>
+          <div class="bubble-meta">${speakerName}${ts ? " · " + ts : ""}${promptMeta ? " · " + promptMeta : ""}</div>
         </div>`;
     })
     .join("");

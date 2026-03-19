@@ -6,7 +6,7 @@ from jinja2 import Environment, FileSystemLoader
 
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
-PROMPT_VERSION = "2026-03-19.1"
+PROMPT_VERSION = "2026-03-19.2"
 
 _PROMPT_ENV = Environment(
     loader=FileSystemLoader(str(PROMPTS_DIR)),
@@ -23,6 +23,7 @@ class PromptModules:
     safety_module: str
     session_module: str
     style_module: str
+    action_module: str
     scenario_module: str = ""
     version: str = PROMPT_VERSION
     templates_used: list[str] = field(default_factory=list)
@@ -35,6 +36,7 @@ class PromptModules:
             safety_module=self.safety_module,
             session_module=self.session_module,
             style_module=self.style_module,
+            action_module=self.action_module,
             scenario_module=self.scenario_module,
         )
 
@@ -94,6 +96,7 @@ def build_prompt_modules(
         "safety_override.jinja2",
         "session_context.jinja2",
         "style_directive.jinja2",
+        "action_contract.jinja2",
         "scenario_context.jinja2",
     ]
 
@@ -127,6 +130,7 @@ def build_prompt_modules(
             "style_directive.jinja2",
             style_directive=style_directive,
         ),
+        action_module=_render_prompt_template("action_contract.jinja2"),
         scenario_module=_render_prompt_template(
             "scenario_context.jinja2",
             active_phase=active_phase or {},

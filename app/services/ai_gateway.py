@@ -168,7 +168,10 @@ class OllamaGateway(AIGateway):
                 content = item.get("content")
                 if content:
                     prompt_parts.append(str(content))
-        prompt_parts.append("Antworte als JSON mit den Feldern message, actions, mood und intensity.")
+        prompt_parts.append(
+            "Antworte als JSON mit den Feldern message, actions, mood und intensity. "
+            "Wenn du eine Aufgabe vergibst oder der Nutzer explizit nach einer Aufgabe fragt, muss in actions mindestens eine create_task-Action stehen."
+        )
         prompt_parts.append(f"Persona: {persona_name}")
         prompt_parts.append(f"User: {user_text}")
         return "\n\n".join(prompt_parts)
@@ -339,8 +342,16 @@ class CustomOpenAIGateway(AIGateway):
                 },
             ]
 
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "Antworte nur als JSON mit message, actions, mood, intensity. "
+                    "Wenn du eine Aufgabe vergibst oder der Nutzer explizit nach einer Aufgabe fragt, muss in actions mindestens eine create_task-Action stehen."
+                ),
+            }
+        )
         messages.append({"role": "user", "content": user_content})
-        messages.append({"role": "system", "content": "Antworte nur als JSON mit message, actions, mood, intensity."})
         return messages
 
     def generate_contract(

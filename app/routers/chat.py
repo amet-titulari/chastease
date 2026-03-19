@@ -115,6 +115,15 @@ def _message_prompt_templates(row: Message) -> list[str]:
     return [str(item) for item in value if str(item).strip()]
 
 
+def _message_speaker_name(role: str | None, persona_name: str, player_name: str) -> str:
+    normalized = (role or "system").strip().lower()
+    if normalized == "assistant":
+        return persona_name
+    if normalized == "user":
+        return player_name
+    return "System"
+
+
 def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes: bytes | None = None, image_filename: str | None = None) -> Message:
     session_obj = _load_session(db, session_id)
     persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
@@ -567,7 +576,11 @@ def _timer_snapshot(session_obj: SessionModel, now: datetime) -> tuple[int, bool
 
 @router.get("/{session_id}/messages")
 def list_messages(session_id: int, db: Session = Depends(get_db)) -> dict:
-    _load_session(db, session_id)
+    session_obj = _load_session(db, session_id)
+    persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
+    profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+    persona_name = persona.name if persona else "Keyholderin"
+    player_name = profile.nickname if profile and profile.nickname else "Du"
     rows = db.query(Message).filter(Message.session_id == session_id).order_by(Message.id.asc()).all()
     return {
         "session_id": session_id,
@@ -575,6 +588,7 @@ def list_messages(session_id: int, db: Session = Depends(get_db)) -> dict:
             {
                 "id": row.id,
                 "role": row.role,
+                "speaker_name": _message_speaker_name(row.role, persona_name, player_name),
                 "content": row.content,
                 "message_type": row.message_type,
                 "prompt_version": row.prompt_version,

@@ -49,21 +49,17 @@ function renderMessageList(items) {
   }
 
   messageList.innerHTML = items.map((item) => {
-    const promptTemplates = Array.isArray(item.prompt_templates) ? item.prompt_templates : [];
-    const templateChips = promptTemplates
-      .map((template) => `<span class="history-chip history-chip--prompt">${escapeHtml(template)}</span>`)
-      .join("");
+    const roleLabel = escapeHtml(item.speaker_name || item.role || "unknown");
     return `
       <article class="history-message-card">
         <div class="history-message-head">
-          <div class="history-message-title">#${escapeHtml(item.id)} ${escapeHtml(item.role || "unknown")}</div>
+          <div class="history-message-title">#${escapeHtml(item.id)} ${roleLabel}</div>
           <div class="history-message-time">${escapeHtml(item.created_at || "")}</div>
         </div>
         <div class="history-meta-row">
-          ${item.message_type ? `<span class="history-chip">${escapeHtml(item.message_type)}</span>` : ""}
-          ${item.prompt_version ? `<span class="history-chip history-chip--prompt">Prompt ${escapeHtml(item.prompt_version)}</span>` : ""}
+          ${item.message_type && item.message_type !== "chat" ? `<span class="history-chip">${escapeHtml(item.message_type)}</span>` : ""}
+          ${item.role === "assistant" && item.prompt_version ? `<span class="history-chip history-chip--prompt">Prompt ${escapeHtml(item.prompt_version)}</span>` : ""}
         </div>
-        ${templateChips ? `<div class="history-meta-row">${templateChips}</div>` : ""}
         <div class="history-message-content">${escapeHtml(item.content || "")}</div>
       </article>`;
   }).join("");
@@ -71,11 +67,8 @@ function renderMessageList(items) {
 
 function formatMessageMeta(item) {
   const bits = [];
-  if (item.message_type) bits.push(`type=${item.message_type}`);
-  if (item.prompt_version) bits.push(`prompt=${item.prompt_version}`);
-  if (Array.isArray(item.prompt_templates) && item.prompt_templates.length) {
-    bits.push(`templates=${item.prompt_templates.join(", ")}`);
-  }
+  if (item.message_type && item.message_type !== "chat") bits.push(`type=${item.message_type}`);
+  if (item.role === "assistant" && item.prompt_version) bits.push(`prompt=${item.prompt_version}`);
   return bits.join(" | ");
 }
 
@@ -84,7 +77,7 @@ function formatMessages(items) {
   return items.map((item) => {
     const meta = formatMessageMeta(item);
     return [
-      `#${item.id} ${item.role}${item.created_at ? ` @ ${item.created_at}` : ""}`,
+      `#${item.id} ${item.speaker_name || item.role}${item.created_at ? ` @ ${item.created_at}` : ""}`,
       meta,
       String(item.content || ""),
     ].filter(Boolean).join("\n");

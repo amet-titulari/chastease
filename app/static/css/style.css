@@ -55,6 +55,26 @@
   color: #f1f7fd;
 }
 
+.topnav-logout-form {
+  margin: 0;
+}
+
+.topnav-logout-btn {
+  width: auto;
+  padding: 0.5rem 0.78rem;
+  border-radius: 999px;
+  border: 1px solid rgba(221, 122, 139, 0.28);
+  background: rgba(92, 31, 43, 0.22);
+  color: #ffd9df;
+  box-shadow: none;
+}
+
+.topnav-logout-btn:hover {
+  background: rgba(160, 58, 80, 0.28);
+  border-color: rgba(221, 122, 139, 0.42);
+  box-shadow: none;
+}
+
 .topnav details.admin-menu {
   position: relative;
 }

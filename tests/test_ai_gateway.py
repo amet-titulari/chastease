@@ -255,7 +255,8 @@ def test_custom_gateway_uses_litellm_client(monkeypatch):
         assert api_base == "https://api.x.ai/v1"
         assert api_key == "secret"
         assert response_format == {"type": "json_object"}
-        assert messages[-1]["role"] == "system"
+        assert messages[-1]["role"] == "user"
+        assert any(msg["role"] == "system" and "create_task" in str(msg.get("content", "")) for msg in messages)
         return json.dumps(
             {
                 "message": "Antwort aus LiteLLM.",

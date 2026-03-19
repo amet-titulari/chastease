@@ -25,10 +25,12 @@ def test_prompt_builder_uses_external_templates_and_metadata():
     assert prompt_modules.version == PROMPT_VERSION
     assert "base_system_prompt.jinja2" in prompt_modules.templates_used
     assert "personas/default.md.jinja2" in prompt_modules.templates_used
+    assert "action_contract.jinja2" in prompt_modules.templates_used
     assert "Persona: Default Persona." in rendered
     assert "Safety: mode=yellow." in rendered
     assert "Aktive Phase: Warmup." in rendered
     assert "[ritual]: Follow the opening ritual." in rendered
+    assert "create_task" in rendered
 
 
 def test_prompt_builder_uses_persona_specific_template_when_available():

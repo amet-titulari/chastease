@@ -48,7 +48,14 @@
             </div>
           </details>
         {% endif %}
-        <a href="/profile">Profil</a>
+        {% if current_user %}
+          <a href="/profile">Profil</a>
+          <form method="post" action="/auth/logout" class="topnav-logout-form">
+            <button type="submit" class="topnav-logout-btn">Logout</button>
+          </form>
+        {% else %}
+          <a href="/profile">Profil</a>
+        {% endif %}
       </nav>
     </div>
   </header>

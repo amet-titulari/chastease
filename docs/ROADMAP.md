@@ -2,13 +2,14 @@
 
 ## Entwicklungsphasen
 
-## Stand (v0.2.3, März 2026)
+## Stand (v0.3.1+, März 2026)
 
 - FastAPI-Backend mit 14 Routern, 16 Services, 20 DB-Modellen
 - Alembic-Migrationen `0001`–`0014`, alle idempotent
 - Session-Lifecycle: Erstellen, Vertrag, Timer, Events, Export (PDF/JSON)
 - KI-Provider: xAI/Grok, OpenRouter, Ollama, Stub – inkl. Action-Normalisierung
 - Modularer System-Prompt (Persona, Wearer, Safety, Session, Style, Scenario) mit externen Prompt-Dateien und Versions-Logging
+- Expliziter Action-Contract im Prompting für strukturierte Task-Auslösung
 - Kontextfenster-Management mit Trunkierung und Zusammenfassung
 - Aufgabensystem: CRUD, Konsequenzen, Psychogramm-Multiplikatoren, Overdue-Sweep
 - Task-Actions: create_task, update_task, fail_task inkl. Audit-/System-Events und Pydantic-Validierung am KI-Rand
@@ -21,6 +22,7 @@
 - Voice: OpenAI-Realtime-Audio + TTS
 - Web-UI: Landing, Setup-Wizard, Experience-Onboarding, Play-Modus, Profil, History, Contracts, Personas, Scenarios, Inventory
 - Play-Modus: inline Action Cards (mit Task-Nr., Deadline, kontextabhängige Buttons), Tasks-Dropdown mit interaktiven Cards, Persona-Avatar im Chat
+- UI-Refresh: konsolidierte Design-Tokens, modernisierte Navigation und vereinheitlichte Hauptoberflächen
 - Persona-/Scenario-Verwaltung: CRUD, Presets, SillyTavern-Import/Export
 - Inventar: Items, Scenario-Links, Session-Items
 - Media: Avatar-Upload, Content-Serving
@@ -29,7 +31,7 @@
 - Audit-Logger (opt-in, JSON-Lines)
 - Testdaten-Hygiene: automatische DB-Bereinigung nach Testlauf (session-scope cleanup)
 - Docker-Deployment (Dockerfile + docker-compose)
-- Teststatus: 31 Testmodule (lokale automatisierte Tests)
+- Teststatus: 31+ Testmodule (lokale automatisierte Tests, inkl. Prompt-/Action-Metadaten)
 - Offen: Rollen-/Identity-Konzept, Rate-Limits, Gamification
 
 ---
@@ -197,8 +199,10 @@
 - [x] Prompt-Dateien nach `app/prompts/` ausgelagert (Base, Persona, Safety, Session, Style, Scenario)
 - [x] Prompt-Version und verwendete Templates beim Rendern loggen
 - [x] KI-Task-Actions als Pydantic-Modelle mit zentraler Normalisierung/Validierung
-- [ ] LiteLLM als gemeinsamer LLM-Client evaluieren und Provider-Code darauf konsolidieren
+- [x] LiteLLM als gemeinsamer LLM-Client eingeführt und Provider-Code darauf konsolidiert
 - [x] Prompt-Metadaten persistent pro Message speichern und per Chat-API ausliefern
+- [x] Chat-Metadaten im UI reduziert und auf sprechende Namen umgestellt
+- [x] Action-Contract im Prompting ergänzt, damit Aufgaben im Live-Chat zuverlässiger als strukturierte Actions ausgelöst werden
 - [ ] Task-Template-Pool fuer reproduzierbare Schwierigkeit und Persona-spezifische Vorschlaege aufbauen
 
 ### v0.4 – Erweiterungen - Schnittstellen
