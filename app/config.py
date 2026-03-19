@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     session_timer_sweeper_enabled: bool = True
     session_timer_sweeper_interval_seconds: int = 30
     admin_secret: str | None = None
+    secret_encryption_key: str | None = None
     admin_bootstrap_emails: str = ""
     ai_provider: str = "stub"
     ai_api_url: str | None = None

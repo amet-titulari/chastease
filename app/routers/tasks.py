@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.message import Message
 from app.models.session import Session as SessionModel
 from app.models.task import Task
+from app.services.session_access import get_owned_session
 from app.services.task_service import TaskService
 
 router = APIRouter(prefix="/api/sessions", tags=["tasks"])
@@ -37,16 +38,9 @@ class UpdateTaskStatusRequest(BaseModel):
     status: str = Field(pattern="^(completed|failed)$")
 
 
-def _load_session(db: Session, session_id: int) -> SessionModel:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return session_obj
-
-
 @router.post("/{session_id}/tasks")
-def create_task(session_id: int, payload: CreateTaskRequest, db: Session = Depends(get_db)) -> dict:
-    _load_session(db, session_id)
+def create_task(session_id: int, payload: CreateTaskRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    get_owned_session(request, db, session_id)
 
     deadline_at = None
     if payload.deadline_minutes is not None:
@@ -74,8 +68,8 @@ def create_task(session_id: int, payload: CreateTaskRequest, db: Session = Depen
 
 
 @router.get("/{session_id}/tasks")
-def list_tasks(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = _load_session(db, session_id)
+def list_tasks(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
     TaskService.evaluate_overdue_tasks(db, session_obj)
     rows = db.query(Task).filter(Task.session_id == session_id).order_by(Task.id.asc()).all()
     return {
@@ -99,8 +93,8 @@ def list_tasks(session_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/{session_id}/tasks/evaluate-overdue")
-def evaluate_overdue_tasks(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = _load_session(db, session_id)
+def evaluate_overdue_tasks(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
     changed, overdue_ids = TaskService.evaluate_overdue_tasks(db, session_obj)
     return {
         "session_id": session_id,
@@ -114,9 +108,10 @@ def update_task_status(
     session_id: int,
     task_id: int,
     payload: UpdateTaskStatusRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    session_obj = _load_session(db, session_id)
+    session_obj = get_owned_session(request, db, session_id)
     task = db.query(Task).filter(Task.id == task_id, Task.session_id == session_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")

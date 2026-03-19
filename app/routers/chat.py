@@ -3,7 +3,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,8 @@ from app.services.ai_gateway import get_ai_gateway
 from app.services.audit_logger import audit_log
 from app.services.context_window import build_context_window
 from app.services.prompt_builder import build_prompt_modules
+from app.services.session_access import get_owned_session
+from app.services.task_template_pool import build_template_task_action, select_task_template, user_requested_task
 from app.services.task_service import TaskService
 from app.services.transcription_service import transcribe_audio
 
@@ -124,8 +126,15 @@ def _message_speaker_name(role: str | None, persona_name: str, player_name: str)
     return "System"
 
 
-def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes: bytes | None = None, image_filename: str | None = None) -> Message:
-    session_obj = _load_session(db, session_id)
+def _persist_chat_turn(
+    db: Session,
+    session_id: int,
+    user_text: str,
+    image_bytes: bytes | None = None,
+    image_filename: str | None = None,
+    session_obj: SessionModel | None = None,
+) -> Message:
+    session_obj = session_obj or _load_session(db, session_id)
     persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
     persona_name = persona.name if persona else "Keyholderin"
     safety_mode = _latest_safety_mode(db, session_id)
@@ -217,6 +226,7 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
         )
         context_items = [{"role": "system", "content": tasks_summary, "message_type": "task_context"}] + (context_items or [])
 
+    template_rows: list[PersonaTaskTemplate] = []
     if persona:
         template_rows = (
             db.query(PersonaTaskTemplate)
@@ -342,8 +352,16 @@ def _persist_chat_turn(db: Session, session_id: int, user_text: str, image_bytes
     created_task_ids: list[int] = []
     created_task_details: list[str] = []
     updated_task_details: list[str] = []
+    actions = list(structured.actions or [])
+    if user_requested_task(user_text) and not any(
+        isinstance(action, dict) and action.get("type") == "create_task"
+        for action in actions
+    ):
+        selected_template = select_task_template(template_rows, user_text)
+        if selected_template is not None:
+            actions.append(build_template_task_action(selected_template))
     if reply_text == structured.message:
-        for action in structured.actions:
+        for action in actions:
             if not isinstance(action, dict):
                 continue
 
@@ -575,8 +593,8 @@ def _timer_snapshot(session_obj: SessionModel, now: datetime) -> tuple[int, bool
 
 
 @router.get("/{session_id}/messages")
-def list_messages(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = _load_session(db, session_id)
+def list_messages(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
     persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
     profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
     persona_name = persona.name if persona else "Keyholderin"
@@ -601,8 +619,9 @@ def list_messages(session_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/{session_id}/messages")
-def send_message(session_id: int, payload: SendMessageRequest, db: Session = Depends(get_db)) -> dict:
-    assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=payload.content)
+def send_message(session_id: int, payload: SendMessageRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
+    assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=payload.content, session_obj=session_obj)
     return {
         "session_id": session_id,
         "reply": assistant_msg.content,
@@ -679,14 +698,15 @@ async def send_message_with_media(
     session_id: int,
     content: str = Form(default=""),
     file: UploadFile | None = File(default=None),
+    request: Request = None,
     db: Session = Depends(get_db),
 ) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
     user_text, image_bytes, image_filename, media_kind, audio_bytes, audio_filename, audio_mime = await _build_chat_media_payload(content=content, file=file)
     transcript_text = None
     transcription_status = None
 
     if media_kind == "audio" and audio_bytes is not None:
-        session_obj = _load_session(db, session_id)
         result = transcribe_audio(
             db=db,
             audio_bytes=audio_bytes,
@@ -712,6 +732,7 @@ async def send_message_with_media(
         user_text=user_text,
         image_bytes=image_bytes,
         image_filename=image_filename,
+        session_obj=session_obj,
     )
     response_message_type = "chat"
     if media_kind == "image":
@@ -737,19 +758,21 @@ async def send_message_with_image(
     session_id: int,
     content: str = Form(default=""),
     file: UploadFile | None = File(default=None),
+    request: Request = None,
     db: Session = Depends(get_db),
 ) -> dict:
     # Backward-compatible alias for older frontend clients.
-    return await send_message_with_media(session_id=session_id, content=content, file=file, db=db)
+    return await send_message_with_media(session_id=session_id, content=content, file=file, request=request, db=db)
 
 
 @router.post("/{session_id}/messages/regenerate")
 def regenerate_last_message(
     session_id: int,
     payload: RegenerateMessageRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    _load_session(db, session_id)
+    session_obj = get_owned_session(request, db, session_id)
     user_text = payload.user_text
     if not user_text:
         row = (
@@ -762,7 +785,7 @@ def regenerate_last_message(
             raise HTTPException(status_code=400, detail="No user message available for regeneration")
         user_text = row.content
 
-    assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=user_text)
+    assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=user_text, session_obj=session_obj)
     assistant_msg.message_type = "chat_regenerated"
     db.commit()
     db.refresh(assistant_msg)

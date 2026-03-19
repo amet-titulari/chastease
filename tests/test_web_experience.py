@@ -1,8 +1,13 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi.testclient import TestClient
 from uuid import uuid4
 
 from app.config import settings
+from app.database import SessionLocal
 from app.main import app
+from app.models.auth_user import AuthUser
+from app.models.session import Session as SessionModel
 
 
 def _register_and_finish_setup(client: TestClient, email: str = "xp-user@example.com"):
@@ -212,6 +217,63 @@ def test_experience_and_profile_redirect_to_play_when_active_session_exists():
         assert profile.status_code == 200
         assert "Audio Gateway" in profile.text
         assert "Zur laufenden Session" in profile.text
+
+
+def test_settings_summary_includes_total_played_duration_across_owned_sessions():
+    with TestClient(app) as client:
+        email = f"xp-total-{uuid4().hex[:8]}@example.com"
+        _register_and_finish_setup(client, email=email)
+
+        first = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Total Persona One",
+                "player_nickname": "Player One",
+                "min_duration_seconds": 3600,
+            },
+        )
+        assert first.status_code == 200
+        first_session_id = first.json()["session_id"]
+
+        second = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Total Persona Two",
+                "player_nickname": "Player Two",
+                "min_duration_seconds": 3600,
+            },
+        )
+        assert second.status_code == 200
+        second_session_id = second.json()["session_id"]
+
+        db = SessionLocal()
+        try:
+            user = db.query(AuthUser).filter(AuthUser.email == email).first()
+            assert user is not None
+
+            first_session = db.query(SessionModel).filter(SessionModel.id == first_session_id).first()
+            second_session = db.query(SessionModel).filter(SessionModel.id == second_session_id).first()
+            assert first_session is not None
+            assert second_session is not None
+
+            first_session.lock_start = datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc)
+            first_session.lock_end_actual = first_session.lock_start + timedelta(hours=10)
+            second_session.lock_start = datetime(2026, 3, 3, 9, 30, 0, tzinfo=timezone.utc)
+            second_session.lock_end_actual = second_session.lock_start + timedelta(hours=26, minutes=15)
+            user.active_session_id = second_session_id
+
+            db.add(first_session)
+            db.add(second_session)
+            db.add(user)
+            db.commit()
+        finally:
+            db.close()
+
+        summary = client.get(f"/api/settings/summary?session_id={second_session_id}")
+        assert summary.status_code == 200
+        payload = summary.json()
+        session_payload = payload.get("session") or {}
+        assert session_payload.get("total_played_seconds") == (10 * 3600) + (26 * 3600) + (15 * 60)
 
 
 def test_games_page_renders_game_cards_and_current_session_entrypoint():

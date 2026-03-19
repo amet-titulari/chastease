@@ -9,54 +9,30 @@
   {% block extra_head %}{% endblock %}
 </head>
 <body>
+  {% set current_path = request.url.path if request else '' %}
+  {% set admin_active = current_path.startswith('/admin') or current_path in ['/personas', '/scenarios', '/inventory', '/contracts', '/history'] or current_path.startswith('/games/module-settings') or current_path.startswith('/games/postures') %}
   <header class="topbar">
     <div class="container">
       <a class="brand-link" href="/"><h1 class="brand">Chastease</h1></a>
-      <nav class="topnav">
+      <nav class="topnav" aria-label="Hauptnavigation">
         {% if current_user %}
-          <a href="/experience">Experience</a>
-          <a href="/games">Games</a>
+          <a href="/experience" class="nav-link{% if current_path == '/experience' %} nav-link--active{% endif %}">Experience</a>
+          <a href="/games" class="nav-link{% if current_path == '/games' or current_path.startswith('/games/') %} nav-link--active{% endif %}">Games</a>
         {% else %}
-          <a href="/">Start</a>
+          <a href="/" class="nav-link{% if current_path == '/' %} nav-link--active{% endif %}">Start</a>
         {% endif %}
         {% if current_user and current_user.is_admin %}
-          <details class="admin-menu" id="admin-menu">
-            <summary>Admin</summary>
-            <div class="admin-menu-panel">
-              <div class="admin-menu-group">
-                <p class="admin-menu-label">Uebersicht</p>
-                <a href="/admin">Admin Center</a>
-              </div>
-              <hr class="admin-menu-divider" />
-              <div class="admin-menu-group">
-                <p class="admin-menu-label">Verwaltung</p>
-                <a href="/personas">Personas</a>
-                <a href="/scenarios">Scenarios</a>
-                <a href="/inventory">Inventar</a>
-                <a href="/games">Games</a>
-                <a href="/games/module-settings?module_key=dont_move">Spiele Konfiguration</a>
-                <a href="/games/postures?module_key=posture_training">Posture Library</a>
-                <a href="/admin/postures/matrix">Posture Matrix</a>
-              </div>
-              <hr class="admin-menu-divider" />
-              <div class="admin-menu-group">
-                <p class="admin-menu-label">Operations</p>
-                <a href="/admin/operations">Operations Hub</a>
-                <a href="/contracts">Vertraege</a>
-                <a href="/history">Historie</a>
-              </div>
-            </div>
-          </details>
+          <a href="/admin" id="admin-menu" class="nav-link{% if admin_active %} nav-link--active{% endif %}">Admin</a>
         {% endif %}
+      </nav>
+      <div class="topnav-account">
+        <a href="/profile" class="nav-link nav-link--subtle{% if current_path == '/profile' or current_path.startswith('/profile/') %} nav-link--active{% endif %}">Profil</a>
         {% if current_user %}
-          <a href="/profile">Profil</a>
           <form method="post" action="/auth/logout" class="topnav-logout-form">
             <button type="submit" class="topnav-logout-btn">Logout</button>
           </form>
-        {% else %}
-          <a href="/profile">Profil</a>
         {% endif %}
-      </nav>
+      </div>
     </div>
   </header>
   <main class="container main-grid">

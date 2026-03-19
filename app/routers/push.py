@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -6,6 +6,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.push_subscription import PushSubscription
 from app.models.session import Session as SessionModel
+from app.services.session_access import get_owned_session
 from app.services.web_push_service import dispatch_web_push
 
 router = APIRouter(tags=["push"])
@@ -27,12 +28,6 @@ class PushTestRequest(BaseModel):
     body: str = Field(default="Bleib fokussiert. Bitte gib einen kurzen Statusbericht.", min_length=1, max_length=400)
 
 
-def _ensure_session(db: Session, session_id: int) -> None:
-    row = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-
 @router.get("/api/push/config")
 def get_push_config() -> dict:
     return {
@@ -42,8 +37,8 @@ def get_push_config() -> dict:
 
 
 @router.get("/api/sessions/{session_id}/push/subscriptions")
-def list_push_subscriptions(session_id: int, db: Session = Depends(get_db)) -> dict:
-    _ensure_session(db, session_id)
+def list_push_subscriptions(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    get_owned_session(request, db, session_id)
     rows = (
         db.query(PushSubscription)
         .filter(PushSubscription.session_id == session_id)
@@ -70,9 +65,10 @@ def list_push_subscriptions(session_id: int, db: Session = Depends(get_db)) -> d
 def upsert_push_subscription(
     session_id: int,
     payload: PushSubscribeRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    _ensure_session(db, session_id)
+    get_owned_session(request, db, session_id)
 
     row = db.query(PushSubscription).filter(PushSubscription.endpoint == payload.endpoint).first()
     if row is None:
@@ -103,8 +99,8 @@ def upsert_push_subscription(
 
 
 @router.delete("/api/sessions/{session_id}/push/subscriptions/{subscription_id}")
-def delete_push_subscription(session_id: int, subscription_id: int, db: Session = Depends(get_db)) -> dict:
-    _ensure_session(db, session_id)
+def delete_push_subscription(session_id: int, subscription_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    get_owned_session(request, db, session_id)
     row = (
         db.query(PushSubscription)
         .filter(PushSubscription.id == subscription_id, PushSubscription.session_id == session_id)
@@ -122,8 +118,8 @@ def delete_push_subscription(session_id: int, subscription_id: int, db: Session 
 
 
 @router.post("/api/sessions/{session_id}/push/test")
-def send_push_test(session_id: int, payload: PushTestRequest, db: Session = Depends(get_db)) -> dict:
-    _ensure_session(db, session_id)
+def send_push_test(session_id: int, payload: PushTestRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    get_owned_session(request, db, session_id)
     rows = (
         db.query(PushSubscription)
         .filter(PushSubscription.session_id == session_id, PushSubscription.enabled.is_(True))

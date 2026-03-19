@@ -1294,11 +1294,12 @@ async function plLoadSettingsSummary() {
     const fmtSecs = (secs) => {
       if (secs === null || secs === undefined || Number.isNaN(Number(secs))) return "—";
       const total = Math.max(0, Number(secs));
-      const h = Math.floor(total / 3600);
+      const d = Math.floor(total / 86400);
+      const hRemainder = Math.floor((total % 86400) / 3600);
       const m = Math.floor((total % 3600) / 60);
       const s = Math.floor(total % 60);
-      if (h > 0) return `${h}h ${m}m ${s}s`;
-      return `${m}m ${s}s`;
+      const parts = [`${d}d`, `${hRemainder}h`, `${m}m`, `${s}s`];
+      return parts.join(" ");
     };
 
     if (data.session) {
@@ -1320,6 +1321,7 @@ async function plLoadSettingsSummary() {
       set("psd-task-stats", `Gesamt: ${s.task_total ?? 0} | pending: ${s.task_pending ?? 0} | completed: ${s.task_completed ?? 0} | overdue: ${s.task_overdue ?? 0} | failed: ${s.task_failed ?? 0}`);
       set("psd-task-penalty", fmtSecs(s.task_penalty_total_seconds));
       set("psd-hygiene-penalty", `${fmtSecs(s.hygiene_penalty_total_seconds)} (Overrun: ${fmtSecs(s.hygiene_overrun_total_seconds)})`);
+      set("psd-total-played", fmtSecs(s.total_played_seconds));
 
       const rulesEl = document.getElementById("psd-hygiene-rules");
       if (rulesEl) {

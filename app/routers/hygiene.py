@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,7 @@ from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
 from app.config import settings
 from app.services.hygiene_service import HygieneService
+from app.services.session_access import get_owned_session
 
 router = APIRouter(prefix="/api/sessions", tags=["hygiene"])
 
@@ -126,10 +127,8 @@ def _effective_hygiene_overdue_penalty_seconds(db: Session, session_obj: Session
 
 
 @router.get("/{session_id}/hygiene/quota")
-def get_hygiene_quota(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def get_hygiene_quota(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
 
     now = datetime.now(timezone.utc)
     return {
@@ -142,11 +141,10 @@ def get_hygiene_quota(session_id: int, db: Session = Depends(get_db)) -> dict:
 def request_hygiene_opening(
     session_id: int,
     payload: HygieneOpenRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session_obj = get_owned_session(request, db, session_id)
     if session_obj.status != "active":
         raise HTTPException(status_code=400, detail="Session must be active")
 
@@ -207,8 +205,10 @@ def request_hygiene_opening(
 def hygiene_opening_status(
     session_id: int,
     opening_id: int,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
+    get_owned_session(request, db, session_id)
     opening = (
         db.query(HygieneOpening)
         .filter(HygieneOpening.session_id == session_id, HygieneOpening.id == opening_id)
@@ -251,8 +251,10 @@ def relock_hygiene_opening(
     session_id: int,
     opening_id: int,
     payload: RelockRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
+    get_owned_session(request, db, session_id)
     opening = (
         db.query(HygieneOpening)
         .filter(HygieneOpening.session_id == session_id, HygieneOpening.id == opening_id)

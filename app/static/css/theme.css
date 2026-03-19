@@ -24,6 +24,11 @@
   box-sizing: border-box;
 }
 
+html {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -32,6 +37,8 @@ body {
   font-family: "Space Grotesk", "Segoe UI", sans-serif;
   line-height: 1.5;
   letter-spacing: 0.01em;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body::before {
@@ -67,6 +74,7 @@ h4 {
 p {
   color: var(--muted);
   margin: 0 0 0.7rem;
+  overflow-wrap: anywhere;
 }
 
 label {
@@ -81,6 +89,7 @@ input,
 select,
 textarea {
   width: 100%;
+  max-width: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 0.7rem 0.8rem;
@@ -89,6 +98,14 @@ textarea {
   color: var(--ink);
   font: inherit;
   transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+img,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
 }
 
 input:hover,

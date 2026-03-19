@@ -1,7 +1,7 @@
 import base64
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -10,6 +10,7 @@ from app.models.llm_profile import LlmProfile
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
 from app.models.session import Session as SessionModel
+from app.services.session_access import get_owned_session
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 
@@ -47,10 +48,8 @@ def _build_realtime_instructions(db: Session, session_obj: SessionModel) -> str:
 
 
 @router.get("/realtime/{session_id}/status")
-def realtime_status(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def realtime_status(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
     key = _resolve_xai_key(db=db, session_obj=session_obj)
     return {
         "session_id": session_id,
@@ -63,10 +62,8 @@ def realtime_status(session_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/realtime/{session_id}/client-secret")
-def create_realtime_client_secret(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def create_realtime_client_secret(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
 
     if not settings.voice_realtime_enabled:
         raise HTTPException(status_code=409, detail="Realtime voice mode is disabled")

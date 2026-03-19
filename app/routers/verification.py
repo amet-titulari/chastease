@@ -2,7 +2,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import re
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from app.models.task import Task
 from app.models.message import Message
 from app.models.verification import Verification
 from app.services.image_stamp import stamp_verification_proof
+from app.services.session_access import get_owned_session
 from app.services.task_service import TaskService
 from app.services.verification_analysis import analyze_verification
 
@@ -23,13 +24,6 @@ class VerificationRequest(BaseModel):
     requested_seal_number: str | None = None
     linked_task_id: int | None = None
     verification_criteria: str | None = None
-
-
-def _load_session(db: Session, session_id: int) -> SessionModel:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return session_obj
 
 
 def _timestamp_slug(value: datetime | None = None) -> str:
@@ -128,8 +122,8 @@ def _detected_proof_text(status: str, analysis: str | None, observed_seal_number
 
 
 @router.post("/{session_id}/verifications/request")
-def request_verification(session_id: int, payload: VerificationRequest, db: Session = Depends(get_db)) -> dict:
-    _load_session(db, session_id)
+def request_verification(session_id: int, payload: VerificationRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    get_owned_session(request, db, session_id)
     record = Verification(
         session_id=session_id,
         requested_seal_number=payload.requested_seal_number,
@@ -149,9 +143,10 @@ async def upload_verification(
     verification_id: int,
     file: UploadFile = File(...),
     observed_seal_number: str | None = Form(default=None),
+    request: Request = None,
     db: Session = Depends(get_db),
 ) -> dict:
-    _load_session(db, session_id)
+    session_obj = get_owned_session(request, db, session_id)
     record = (
         db.query(Verification)
         .filter(Verification.id == verification_id, Verification.session_id == session_id)
@@ -204,7 +199,7 @@ async def upload_verification(
                 ))
             else:
                 task.status = "failed"
-                TaskService.apply_task_consequence(db=db, session_obj=_load_session(db, session_id), task=task, now=now)
+                TaskService.apply_task_consequence(db=db, session_obj=session_obj, task=task, now=now)
                 content = f"⚠ Verifikation abgelehnt – Task '{task.title}' fehlgeschlagen."
                 if analysis:
                     content += f" {analysis}"
@@ -242,8 +237,8 @@ async def upload_verification(
 
 
 @router.get("/{session_id}/verifications")
-def list_verifications(session_id: int, db: Session = Depends(get_db)) -> dict:
-    _load_session(db, session_id)
+def list_verifications(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    get_owned_session(request, db, session_id)
     rows = (
         db.query(Verification)
         .filter(Verification.session_id == session_id)

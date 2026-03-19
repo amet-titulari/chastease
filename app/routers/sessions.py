@@ -2,7 +2,7 @@ import json
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
@@ -26,6 +26,7 @@ from app.services.contract_service import build_contract_text
 from app.services.pdf_export import build_simple_text_pdf
 from app.services.session_service import SessionService
 from app.services.audit_logger import audit_log
+from app.services.session_access import bind_session_profile_to_user, get_accessible_session, get_current_session_user, get_owned_session
 from app.security import verify_admin_secret
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
@@ -155,14 +156,18 @@ def _session_blueprint(db: Session, session_obj: SessionModel) -> dict:
 
 
 @router.get("/blueprints/completed")
-def list_completed_blueprints(db: Session = Depends(get_db)) -> dict:
-    rows = (
+def list_completed_blueprints(request: Request, db: Session = Depends(get_db)) -> dict:
+    current_user = get_current_session_user(request, db)
+    query = (
         db.query(SessionModel)
+        .join(PlayerProfile, PlayerProfile.id == SessionModel.player_profile_id)
         .filter(SessionModel.status == "completed")
-        .order_by(SessionModel.id.desc())
-        .limit(50)
-        .all()
     )
+    if current_user is not None:
+        query = query.filter(PlayerProfile.auth_user_id == current_user.id)
+    else:
+        query = query.filter(PlayerProfile.auth_user_id.is_(None))
+    rows = query.order_by(SessionModel.id.desc()).limit(50).all()
     items = []
     for row in rows:
         persona = db.query(Persona).filter(Persona.id == row.persona_id).first()
@@ -177,20 +182,16 @@ def list_completed_blueprints(db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/blueprints/{session_id}")
-def get_completed_blueprint(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def get_completed_blueprint(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
     if session_obj.status != "completed":
         raise HTTPException(status_code=409, detail="Blueprint nur fuer abgeschlossene Sessions verfuegbar")
     return _session_blueprint(db, session_obj)
 
 
 @router.get("/{session_id}")
-def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def get_session(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
 
     contract = db.query(Contract).filter(Contract.session_id == session_id).first()
     if not session_obj.ws_auth_token:
@@ -239,11 +240,10 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> dict:
 def update_player_profile(
     session_id: int,
     payload: UpdatePlayerProfileRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session_obj = get_owned_session(request, db, session_id)
 
     profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
     if not profile:
@@ -287,10 +287,8 @@ def update_player_profile(
 
 
 @router.get("/{session_id}/seal-history")
-def get_seal_history(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def get_seal_history(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    get_owned_session(request, db, session_id)
 
     entries = (
         db.query(SealHistory)
@@ -420,14 +418,13 @@ def _collect_session_events(db: Session, session_id: int) -> list[tuple[datetime
 @router.get("/{session_id}/events")
 def get_session_events(
     session_id: int,
+    request: Request,
     source: str | None = Query(default=None),
     event_type: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
     db: Session = Depends(get_db),
 ) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session_obj = get_owned_session(request, db, session_id)
 
     events = [item for _, item in _collect_session_events(db, session_id)]
     if source:
@@ -446,6 +443,7 @@ def get_session_events(
 @router.get("/{session_id}/events/export")
 def export_session_events(
     session_id: int,
+    request: Request,
     format: str = Query(default="text", pattern="^(text|json)$"),
     source: str | None = Query(default=None),
     event_type: str | None = Query(default=None),
@@ -454,6 +452,7 @@ def export_session_events(
 ):
     payload = get_session_events(
         session_id=session_id,
+        request=request,
         source=source,
         event_type=event_type,
         limit=limit,
@@ -488,11 +487,12 @@ def _session_export_lines(payload: dict) -> list[str]:
 @router.get("/{session_id}/export")
 def export_session_snapshot(
     session_id: int,
+    request: Request,
     format: str = Query(default="text", pattern="^(text|json|pdf)$"),
     limit: int = Query(default=1000, ge=1, le=5000),
     db: Session = Depends(get_db),
 ):
-    payload = get_session_events(session_id=session_id, source=None, event_type=None, limit=limit, db=db)
+    payload = get_session_events(session_id=session_id, request=request, source=None, event_type=None, limit=limit, db=db)
 
     if format == "json":
         return payload
@@ -512,10 +512,8 @@ def export_session_snapshot(
 
 
 @router.get("/{session_id}/contract")
-def get_contract(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def get_contract(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    get_owned_session(request, db, session_id)
 
     contract = db.query(Contract).filter(Contract.session_id == session_id).first()
     if not contract:
@@ -555,10 +553,11 @@ def get_contract(session_id: int, db: Session = Depends(get_db)) -> dict:
 @router.get("/{session_id}/contract/export")
 def export_contract(
     session_id: int,
+    request: Request,
     format: str = Query(default="text", pattern="^(text|json)$"),
     db: Session = Depends(get_db),
 ):
-    payload = get_contract(session_id=session_id, db=db)
+    payload = get_contract(session_id=session_id, request=request, db=db)
     if format == "json":
         return payload
 
@@ -582,14 +581,13 @@ def export_contract(
 
 
 @router.post("")
-def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db)) -> dict:
+def create_session(payload: CreateSessionRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    current_user = get_current_session_user(request, db)
     template_session = None
     template_persona = None
     template_profile = None
     if payload.template_session_id:
-        template_session = db.query(SessionModel).filter(SessionModel.id == payload.template_session_id).first()
-        if not template_session:
-            raise HTTPException(status_code=404, detail="Template session not found")
+        template_session = get_accessible_session(db, payload.template_session_id, current_user)
         if template_session.status != "completed":
             raise HTTPException(status_code=409, detail="Template session is not completed")
         template_persona = db.query(Persona).filter(Persona.id == template_session.persona_id).first()
@@ -638,6 +636,7 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
     experience_level = payload.experience_level or (template_profile.experience_level if template_profile else "beginner")
 
     player = PlayerProfile(
+        auth_user_id=current_user.id if current_user else None,
         nickname=player_nickname,
         experience_level=experience_level,
         preferences_json=json.dumps(prefs),
@@ -694,6 +693,12 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
     db.add(session_obj)
     db.flush()
 
+    if current_user is not None:
+        if current_user.default_player_profile_id is None:
+            current_user.default_player_profile_id = player.id
+        current_user.active_session_id = session_obj.id
+        db.add(current_user)
+
     contract = Contract(
         session_id=session_obj.id,
         content_text=build_contract_text(
@@ -735,16 +740,19 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
 
 
 @router.post("/{session_id}/sign-contract")
-def sign_contract(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def sign_contract(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
+    current_user = get_current_session_user(request, db)
 
     contract = db.query(Contract).filter(Contract.session_id == session_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
 
     if contract.signed_at:
+        if current_user is not None:
+            bind_session_profile_to_user(db, session_obj, current_user)
+            current_user.active_session_id = session_obj.id
+            db.add(current_user)
         if not session_obj.ws_auth_token:
             _ensure_ws_auth_token(session_obj)
             db.add(session_obj)
@@ -758,6 +766,12 @@ def sign_contract(session_id: int, db: Session = Depends(get_db)) -> dict:
         }
 
     updated = SessionService.sign_contract_and_start(db=db, session_obj=session_obj, contract_obj=contract)
+    if current_user is not None:
+        bind_session_profile_to_user(db, updated, current_user)
+        if current_user.default_player_profile_id is None:
+            current_user.default_player_profile_id = updated.player_profile_id
+        current_user.active_session_id = updated.id
+        db.add(current_user)
     _ensure_ws_auth_token(updated)
     db.add(updated)
     db.commit()
@@ -793,10 +807,8 @@ def rotate_chat_ws_token(
 
 
 @router.get("/{session_id}/timer")
-def get_timer_state(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def get_timer_state(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
 
     now = datetime.now(timezone.utc)
     return {
@@ -809,10 +821,8 @@ def get_timer_state(session_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/{session_id}/timer/add")
-def add_timer_time(session_id: int, payload: TimerAdjustRequest, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def add_timer_time(session_id: int, payload: TimerAdjustRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
     if session_obj.lock_end is None:
         raise HTTPException(status_code=400, detail="Session timer not initialized")
 
@@ -829,10 +839,8 @@ def add_timer_time(session_id: int, payload: TimerAdjustRequest, db: Session = D
 
 
 @router.post("/{session_id}/timer/remove")
-def remove_timer_time(session_id: int, payload: TimerAdjustRequest, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def remove_timer_time(session_id: int, payload: TimerAdjustRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
     if session_obj.lock_end is None:
         raise HTTPException(status_code=400, detail="Session timer not initialized")
 
@@ -851,10 +859,8 @@ def remove_timer_time(session_id: int, payload: TimerAdjustRequest, db: Session 
 
 
 @router.post("/{session_id}/timer/freeze")
-def freeze_timer(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def freeze_timer(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
     if session_obj.lock_end is None:
         raise HTTPException(status_code=400, detail="Session timer not initialized")
 
@@ -873,10 +879,8 @@ def freeze_timer(session_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/{session_id}/timer/unfreeze")
-def unfreeze_timer(session_id: int, db: Session = Depends(get_db)) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+def unfreeze_timer(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
     if session_obj.lock_end is None:
         raise HTTPException(status_code=400, detail="Session timer not initialized")
 
@@ -902,11 +906,10 @@ def unfreeze_timer(session_id: int, db: Session = Depends(get_db)) -> dict:
 def propose_contract_addendum(
     session_id: int,
     payload: ProposeAddendumRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session_obj = get_owned_session(request, db, session_id)
 
     contract = db.query(Contract).filter(Contract.session_id == session_id).first()
     if not contract:
@@ -937,11 +940,10 @@ def consent_contract_addendum(
     session_id: int,
     addendum_id: int,
     payload: AddendumConsentRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session_obj = get_owned_session(request, db, session_id)
 
     contract = db.query(Contract).filter(Contract.session_id == session_id).first()
     if not contract:

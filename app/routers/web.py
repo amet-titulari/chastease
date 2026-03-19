@@ -958,6 +958,26 @@ def settings_summary(
         "api_key_stored": bool(llm_default.api_key),
     } if llm_default else None
 
+    def _as_utc(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    total_played_seconds = 0
+    owned_profiles = db.query(PlayerProfile.id).filter(PlayerProfile.auth_user_id == user.id).all()
+    owned_profile_ids = [row.id for row in owned_profiles]
+    if owned_profile_ids:
+        owned_sessions = db.query(SessionModel).filter(SessionModel.player_profile_id.in_(owned_profile_ids)).all()
+        now_utc = datetime.now(timezone.utc)
+        for owned_session in owned_sessions:
+            lock_start = _as_utc(owned_session.lock_start)
+            if lock_start is None:
+                continue
+            end_anchor = _as_utc(owned_session.lock_end_actual) or now_utc
+            total_played_seconds += max(0, int((end_anchor - lock_start).total_seconds()))
+
     session_summary = None
     target_session_id = session_id or user.active_session_id
     if target_session_id:
@@ -1085,6 +1105,7 @@ def settings_summary(
                 "hygiene_penalty_total_seconds": hygiene_penalty_total_seconds,
                 "hygiene_overrun_total_seconds": hygiene_overrun_total_seconds,
                 "hygiene_overdue_penalty_min_seconds": effective_hygiene_min_penalty,
+                "total_played_seconds": total_played_seconds,
                 "hygiene_opening_max_duration_seconds": (
                     session_obj.hygiene_opening_max_duration_seconds
                     if session_obj.hygiene_opening_max_duration_seconds is not None

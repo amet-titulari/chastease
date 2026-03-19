@@ -4,6 +4,8 @@ from app.config import settings
 from app.database import SessionLocal
 from app.main import app
 from app.models.message import Message
+from app.models.persona import Persona
+from app.models.persona_task_template import PersonaTaskTemplate
 from app.models.task import Task
 from app.services.transcription_service import TranscriptionResult
 
@@ -258,6 +260,79 @@ def test_chat_persists_prompt_metadata(monkeypatch):
             json={"content": "Kurzer Check-in."},
         )
         assert send_resp.status_code == 200
+
+
+def test_chat_falls_back_to_persona_task_template_when_ai_returns_no_task(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message="In Ordnung.",
+                actions=[],
+                mood="strict",
+                intensity=3,
+            )
+
+    def _fake_get_ai_gateway(session_obj):
+        _ = session_obj
+        return _DummyAI()
+
+    db = SessionLocal()
+    try:
+        persona = Persona(name="Pool Persona", description="Template pool test")
+        db.add(persona)
+        db.flush()
+        db.add(
+            PersonaTaskTemplate(
+                persona_id=persona.id,
+                title="Abendlicher Foto-Check-in",
+                description="Schicke einen kurzen Status mit aktuellem Foto.",
+                deadline_minutes=180,
+                requires_verification=True,
+                verification_criteria="Plombe und Uhrzeit sichtbar",
+                category="checkin",
+                tags_json='["abend", "foto", "checkin"]',
+                is_active=True,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", _fake_get_ai_gateway)
+
+    with TestClient(app) as client:
+        create_resp = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Pool Persona",
+                "player_nickname": "Wearer",
+                "min_duration_seconds": 300,
+            },
+        )
+        assert create_resp.status_code == 200
+        session_id = create_resp.json()["session_id"]
+
+        sign_resp = client.post(f"/api/sessions/{session_id}/sign-contract")
+        assert sign_resp.status_code == 200
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Bitte gib mir eine Aufgabe fuer heute Abend mit Foto."},
+        )
+        assert send_resp.status_code == 200
+
+        db = SessionLocal()
+        try:
+            task = db.query(Task).filter(Task.session_id == session_id).order_by(Task.id.desc()).first()
+            assert task is not None
+            assert task.title == "Abendlicher Foto-Check-in"
+            assert task.requires_verification is True
+            assert task.verification_criteria == "Plombe und Uhrzeit sichtbar"
+        finally:
+            db.close()
         payload = send_resp.json()
         assert payload["prompt_version"] is not None
         assert "base_system_prompt.jinja2" in payload["prompt_templates"]
