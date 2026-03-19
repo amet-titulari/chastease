@@ -12,10 +12,13 @@
 }
 
 .xp-shell {
-  background: var(--xp-bg);
-  border: 1px solid #1f2b3a;
-  border-radius: 20px;
-  padding: 1.1rem;
+  background:
+    radial-gradient(circle at 100% 0, rgba(124, 180, 224, 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(11, 18, 27, 0.98), rgba(9, 15, 23, 0.96));
+  border: 1px solid rgba(127, 163, 194, 0.16);
+  border-radius: 28px;
+  padding: 1.35rem;
+  box-shadow: var(--shadow-lg);
   animation: xp-in 400ms ease-out;
 }
 
@@ -36,7 +39,7 @@
 .xp-subline {
   max-width: 64ch;
   font-size: 1.08rem;
-  line-height: 1.35;
+  line-height: 1.45;
   color: #9eb0c3;
 }
 
@@ -59,9 +62,9 @@
 .xp-card {
   background: linear-gradient(180deg, var(--xp-card), var(--xp-card-soft));
   border: 1px solid var(--xp-border);
-  border-radius: 16px;
-  padding: 1rem;
-  box-shadow: inset 0 0 0 1px rgba(139, 181, 216, 0.04), 0 22px 48px rgba(0, 0, 0, 0.35);
+  border-radius: 22px;
+  padding: 1.15rem;
+  box-shadow: inset 0 0 0 1px rgba(139, 181, 216, 0.04), var(--shadow-md);
 }
 
 .xp-card.onboarding {
@@ -70,10 +73,10 @@
 
 .xp-gate {
   border: 1px solid rgba(88, 124, 156, 0.35);
-  border-radius: 12px;
+  border-radius: 18px;
   background: linear-gradient(180deg, rgba(17, 28, 41, 0.9), rgba(12, 20, 30, 0.78));
-  padding: 0.9rem;
-  margin-bottom: 0.9rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
 }
 
 .xp-gate.is-hidden,
@@ -152,23 +155,28 @@
 .step-tabs {
   display: flex;
   flex-wrap: nowrap;
-  gap: 0.3rem;
-  margin-bottom: 0.8rem;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+  padding: 0.3rem;
+  border: 1px solid rgba(127, 163, 194, 0.14);
+  border-radius: 18px;
+  background: rgba(7, 12, 18, 0.46);
+  overflow-x: auto;
 }
 
 .step-tab {
   flex: 1 1 0;
   min-width: 0;
-  border: 1px solid var(--xp-border);
-  background: #101a26;
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--xp-muted);
-  padding: 0.44rem 0.3rem;
-  border-radius: 10px;
+  padding: 0.58rem 0.4rem;
+  border-radius: 14px;
   font-weight: 620;
   font-size: 0.84rem;
   text-align: center;
   cursor: pointer;
-  transition: background 140ms, color 140ms, border-color 140ms;
+  transition: background 140ms, color 140ms, border-color 140ms, transform 140ms;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -177,8 +185,13 @@
 .step-tab.is-active {
   background: linear-gradient(120deg, #1f3147, #253c56);
   color: var(--xp-ink);
-  border-color: #3f678f;
+  border-color: rgba(139, 185, 212, 0.38);
   box-shadow: 0 0 0 1px var(--xp-glow);
+}
+
+.step-tab:hover {
+  transform: translateY(-1px);
+  color: #dce9f4;
 }
 
 .step-pane {
@@ -189,9 +202,9 @@
 .step-pane.is-active {
   display: block;
   border-left: 3px solid #3f678f;
-  background: linear-gradient(180deg, rgba(17, 27, 40, 0.68), rgba(13, 21, 32, 0.52));
-  border-radius: 10px;
-  padding: 0.8rem 0.9rem 0.9rem;
+  background: linear-gradient(180deg, rgba(17, 27, 40, 0.78), rgba(13, 21, 32, 0.58));
+  border-radius: 16px;
+  padding: 1rem;
 }
 
 .step-pane[data-step="1"].is-active {
@@ -218,10 +231,10 @@ select,
 button,
 textarea {
   width: 100%;
-  margin-top: 0.3rem;
+  margin-top: 0.36rem;
   border: 1px solid var(--xp-border);
-  border-radius: 10px;
-  padding: 0.58rem 0.65rem;
+  border-radius: 12px;
+  padding: 0.7rem 0.78rem;
   font: inherit;
   background: #0b121a;
   color: #e8f0fa;
@@ -238,6 +251,7 @@ button {
   color: #fff;
   border: none;
   font-weight: 700;
+  box-shadow: 0 12px 28px rgba(60, 105, 139, 0.2);
 }
 
 .inline-actions {
@@ -384,9 +398,10 @@ button {
 }
 
 .xp-btn-secondary {
-  background: #1a2a3a !important;
+  background: rgba(26, 42, 58, 0.84) !important;
   color: #7d9db8 !important;
   border: 1px solid var(--xp-border) !important;
+  box-shadow: none !important;
 }
 
 /* Persona select row with inline + button */
@@ -416,8 +431,8 @@ button {
 .xp-scenario-detail {
   background: rgba(11, 18, 26, 0.6);
   border: 1px solid var(--xp-border);
-  border-radius: 10px;
-  padding: 0.7rem 0.85rem;
+  border-radius: 16px;
+  padding: 0.85rem 0.95rem;
   margin: 0.4rem 0 0.8rem;
   min-height: 60px;
 }
@@ -547,9 +562,9 @@ button {
 }
 
 .step-actions {
-  margin-top: 0.6rem;
+  margin-top: 0.85rem;
   display: flex;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
 .step-actions button {
@@ -723,8 +738,8 @@ button {
   overflow: auto;
   background: #071017;
   color: #cde1f5;
-  border-radius: 12px;
-  padding: 0.7rem;
+  border-radius: 16px;
+  padding: 0.85rem;
   border: 1px solid #223548;
 }
 
@@ -735,13 +750,37 @@ button {
   overflow-y: auto;
   background: #071017;
   color: #cde1f5;
-  border-radius: 12px;
-  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  padding: 1rem 1.05rem;
   border: 1px solid #223548;
   font-size: 0.83rem;
   line-height: 1.6;
   word-break: break-word;
   white-space: normal;
+}
+
+@media (max-width: 760px) {
+  .xp-shell {
+    border-radius: 22px;
+    padding: 1rem;
+  }
+
+  .xp-card {
+    border-radius: 18px;
+    padding: 0.95rem;
+  }
+
+  .step-tabs {
+    padding: 0.22rem;
+  }
+
+  .step-pane.is-active {
+    padding: 0.85rem;
+  }
+
+  .step-actions {
+    flex-direction: column;
+  }
 }
 
 .xp-contract-body h2,

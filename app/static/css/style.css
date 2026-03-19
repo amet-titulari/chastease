@@ -1,63 +1,164 @@
 .topbar {
-  border-bottom: 1px solid var(--line);
-  background: rgba(10, 17, 25, 0.82);
-  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid rgba(127, 163, 194, 0.12);
+  background: rgba(7, 12, 18, 0.78);
+  backdrop-filter: blur(16px);
 }
 
 .topbar .container {
   display: flex;
   align-items: center;
-  gap: 1.2rem;
+  justify-content: space-between;
+  gap: 1rem;
   margin: 0 auto;
-  padding: 0.5rem 1rem;
+  padding: 0.8rem 1rem;
 }
 
 .brand {
   margin: 0;
-  font-size: 1.2rem;
-  color: #d8e8f8;
+  font-size: 1.22rem;
+  color: #e7f2fc;
   white-space: nowrap;
   flex-shrink: 0;
+  letter-spacing: -0.03em;
+}
+
+.brand-link {
+  text-decoration: none;
 }
 
 .topnav {
   display: flex;
-  gap: 0.5rem;
+  justify-content: flex-end;
+  gap: 0.55rem;
   flex-wrap: wrap;
   align-items: center;
 }
 
 .topnav a {
-  color: #b4c8dc;
+  color: #cbdded;
   text-decoration: none;
   font-weight: 600;
-  padding: 0.32rem 0.52rem;
-  border-radius: 8px;
-  border: 1px solid transparent;
+  padding: 0.5rem 0.78rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;
 }
 
 .topnav a:hover {
-  border-color: var(--line);
-  background: #0d1622;
+  transform: translateY(-1px);
+  border-color: rgba(127, 163, 194, 0.26);
+  background: rgba(110, 163, 197, 0.1);
+  color: #f1f7fd;
+}
+
+.topnav details.admin-menu {
+  position: relative;
+}
+
+.topnav details.admin-menu > summary {
+  list-style: none;
+  cursor: pointer;
+  font-weight: 700;
+  color: #e5f3ff;
+  padding: 0.52rem 0.86rem;
+  border: 1px solid rgba(139, 185, 212, 0.34);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(65, 105, 136, 0.28), rgba(33, 54, 74, 0.62));
+  user-select: none;
+  transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.topnav details.admin-menu[open] > summary,
+.topnav details.admin-menu > summary:hover {
+  transform: translateY(-1px);
+  border-color: rgba(139, 185, 212, 0.5);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.24);
+}
+
+.topnav details.admin-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.topnav .admin-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  min-width: 300px;
+  padding: 0.7rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(14, 24, 35, 0.98), rgba(9, 16, 24, 0.96));
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: 0.45rem;
+  z-index: 30;
+  backdrop-filter: blur(18px);
+}
+
+.topnav .admin-menu-group {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.topnav .admin-menu-label {
+  margin: 0.2rem 0 0.05rem;
+  color: #86a6c3;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+}
+
+.topnav .admin-menu-divider {
+  height: 1px;
+  border: none;
+  margin: 0.2rem 0 0.1rem;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.topnav .admin-menu-panel a {
+  padding: 0.6rem 0.72rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  color: #e7f3ff;
+}
+
+.topnav .admin-menu-panel a:hover {
+  background: rgba(110, 163, 197, 0.13);
+  border-color: rgba(110, 163, 197, 0.24);
 }
 
 .container {
-  max-width: 1100px;
-  margin: 1.2rem auto;
-  padding: 1rem;
+  max-width: 1180px;
+  margin: 1.35rem auto;
+  padding: 0 1rem;
 }
 
 .main-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1rem;
+  gap: 1.15rem;
+  padding-bottom: 1.3rem;
 }
 
 .card {
-  padding: 1.1rem;
-  border-radius: 18px;
-  background: var(--card);
-  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.35);
+  padding: 1.25rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
 .card h2 {
@@ -70,18 +171,10 @@
 
 .stack {
   display: grid;
-  gap: 0.7rem;
+  gap: 0.85rem;
 }
 
 label {
-}
-
-button {
-  width: 100%;
-}
-
-button:hover {
-  filter: brightness(1.04);
 }
 
 pre {
@@ -89,8 +182,8 @@ pre {
   background: #0a1119;
   color: #d5e4f5;
   border: 1px solid var(--line);
-  padding: 0.9rem;
-  border-radius: 10px;
+  padding: 1rem;
+  border-radius: 14px;
   min-height: 180px;
   overflow-x: auto;
 }
@@ -113,8 +206,8 @@ code {
 
 @media (max-width: 900px) {
   .container {
-    margin: 1.2rem auto;
-    padding: 0.8rem;
+    margin: 1rem auto;
+    padding: 0 0.8rem;
   }
 
   .main-grid {
@@ -124,8 +217,9 @@ code {
 
 @media (max-width: 680px) {
   .topbar .container {
-    gap: 0.6rem;
-    padding: 0.4rem 0.65rem;
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.7rem 0.65rem;
   }
 
   .brand {
@@ -134,11 +228,12 @@ code {
 
   .topnav {
     gap: 0.35rem;
+    justify-content: flex-start;
   }
 
   .container {
-    margin: 0.6rem auto;
-    padding: 0.65rem;
+    margin: 0.7rem auto;
+    padding: 0 0.65rem;
   }
 
   .main-grid {
@@ -148,6 +243,12 @@ code {
 
   .card {
     padding: 1rem;
+  }
+
+  .topnav .admin-menu-panel {
+    right: auto;
+    left: 0;
+    min-width: min(88vw, 300px);
   }
 
   pre {

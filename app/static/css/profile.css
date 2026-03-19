@@ -1,38 +1,42 @@
 :root {
-  --warn: #9f4052;
+  --warn: #b55f71;
 }
 
 .profile-shell {
-  width: min(760px, 100%);
+  width: min(880px, 100%);
   margin: 0;
 }
 
 .profile-card {
-  border-radius: 18px;
-  padding: 1rem;
-  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.35);
+  border-radius: 24px;
+  padding: 1.35rem;
+  box-shadow: var(--shadow-lg);
+  background:
+    radial-gradient(circle at 100% 0, rgba(110, 163, 197, 0.12), transparent 26%),
+    linear-gradient(180deg, rgba(14, 24, 34, 0.96), rgba(12, 20, 30, 0.94));
 }
 
-h1 {
+.profile-shell h1 {
   margin: 0.3rem 0 0.45rem;
-  font-size: clamp(1.3rem, 3vw, 1.85rem);
+  font-size: clamp(1.55rem, 3vw, 2.2rem);
 }
 
 .section-divider {
   border: none;
   border-top: 1px solid rgba(255,255,255,0.08);
-  margin: 1.25rem 0;
+  margin: 1.5rem 0;
 }
 
 .llm-section summary {
   cursor: pointer;
   user-select: none;
-  padding: 0.4rem 0;
+  padding: 0.65rem 0;
   font-size: 0.8rem;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--color-text-muted, #8899aa);
   list-style: none;
+  font-weight: 700;
 }
 
 .llm-section summary::-webkit-details-marker { display: none; }
@@ -48,9 +52,9 @@ h1 {
 
 .llm-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
-  margin-top: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 0.9rem;
 }
 
 @media (max-width: 560px) {
@@ -66,30 +70,71 @@ h1 {
 .subline {
   margin-top: 0;
   color: var(--muted);
+  max-width: 62ch;
 }
 
 .stack {
   display: grid;
-  gap: 0.7rem;
+  gap: 0.85rem;
+}
+
+.profile-card form.stack {
+  margin-top: 1rem;
+}
+
+.profile-card .status {
+  margin-top: 0.8rem;
 }
 
 button.warn {
-  border-color: #904556;
+  border-color: rgba(181, 95, 113, 0.4);
   background: linear-gradient(120deg, #7f3142, var(--warn));
 }
 
 .ghost-btn {
   border-color: var(--line);
-  background: #101b26;
+  background: rgba(15, 24, 35, 0.78);
   color: #c2d3e5;
 }
 
 .action-row {
-  margin-top: 0.9rem;
+  margin-top: 1.15rem;
   display: flex;
-  gap: 0.55rem;
+  gap: 0.65rem;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.action-row form {
+  margin: 0;
+}
+
+.action-row .ghost,
+.action-row button,
+.llm-actions button {
+  min-height: 44px;
+}
+
+.llm-section {
+  border: 1px solid rgba(127, 163, 194, 0.14);
+  border-radius: 18px;
+  padding: 0 1rem 1rem;
+  background: rgba(7, 14, 22, 0.28);
+}
+
+.llm-actions {
+  display: flex;
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.logout-row {
+  margin-top: 1rem;
+}
+
+.logout-row .ghost-btn {
+  width: 100%;
 }
 
 .logout-row {
@@ -97,6 +142,10 @@ button.warn {
 }
 
 @media (max-width: 680px) {
+  .profile-card {
+    padding: 1rem;
+  }
+
   .action-row {
     display: grid;
     grid-template-columns: 1fr;
@@ -107,5 +156,9 @@ button.warn {
   .ghost,
   .ghost-btn {
     width: 100%;
+  }
+
+  .llm-section {
+    padding: 0 0.85rem 0.85rem;
   }
 }
