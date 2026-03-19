@@ -2,18 +2,24 @@
 
 ## Ziel
 
-Diese Datei beschreibt die aktuelle API-Sicherheitsmatrix (Stand v0.2.1).
+Diese Datei beschreibt die aktuelle API-Sicherheitsmatrix und die wichtigsten Schutzmechanismen (Stand März 2026).
 
 ## Authentifizierung
 
-Zwei Schutzstufen:
+Mehrere Schutzschichten greifen zusammen:
 
-1. **Cookie-Auth** (`access_token`, httpOnly, SameSite=Lax): Alle Web-Routen und die meisten API-Endpunkte erfordern einen gueltigen Login-Cookie. Registrierung und Login sind unauthentifiziert.
-2. **Admin-Secret** (`CHASTEASE_ADMIN_SECRET`): Optionaler zusaetzlicher Shared-Secret-Schutz fuer besonders sensible Steuer-Endpunkte.
+1. **Cookie-Auth** (`chastease_auth`, httpOnly, SameSite=Lax, optional `Secure`): Web-Routen und benutzergebundene API-Endpunkte nutzen ein Session-Cookie.
+2. **Session-Ownership-Scoping**: Session-nahe API-Endpunkte prufen zusaetzlich, ob die angeforderte Session dem eingeloggten Nutzer gehoert.
+3. **Admin-Session-Checks**: Admin-Oberflaechen und Admin-APIs erfordern eine eingeloggte Session mit `AuthUser.is_admin=true`.
+4. **CSRF-Schutz fuer Browser-Flows**: Mutierende Browser-Requests werden per Same-Origin-Pruefung und CSRF-Header/Browser-Token abgesichert.
+5. **Admin-Secret** (`CHASTEASE_ADMIN_SECRET`): Optionaler zusaetzlicher Shared-Secret-Schutz fuer besonders sensible Steuer-Endpunkte.
    - Wenn leer/nicht gesetzt: geschuetzte Endpunkte sind ohne Header erreichbar (Dev/Local-Modus).
    - Wenn gesetzt: geschuetzte Endpunkte erfordern Header `X-Admin-Secret: <value>`.
+6. **Passwortspeicherung**: Neue Passwort-Hashes werden mit `pwdlib` + Argon2-Backend gespeichert; alte SHA-256-Salt-Hashes werden beim Login automatisch auf das moderne Format migriert.
 
-## Endpoint-Matrix (Stand v0.2.1)
+Fuer besonders sensible Steuer-Endpunkte gilt jetzt bewusst ein Zwei-Layer-Modell: Admin-Session ist Pflicht, das Admin-Secret bleibt optional als zusaetzlicher Hardening-Layer.
+
+## Endpoint-Matrix (Stand März 2026)
 
 ### Unauthentifiziert (kein Cookie noetig)
 
@@ -22,7 +28,7 @@ Zwei Schutzstufen:
 - `GET /` (Landingpage)
 - `GET /api/health`
 
-### Cookie-Auth (Login erforderlich)
+### Cookie-Auth + Ownership/Role-Checks
 
 **Sessions:**
 - `POST /api/sessions`
@@ -39,6 +45,8 @@ Zwei Schutzstufen:
 - `POST /api/sessions/{id}/contract/addenda/{addendum_id}/consent`
 - `GET /api/sessions/blueprints/completed`
 - `GET /api/sessions/blueprints/{id}`
+
+Hinweis: Session-bezogene Endpunkte sind auf den Session-Eigentuemer gescoped. Legacy-Sessions ohne Besitzer koennen weiterhin anonym zugreifbar sein, bis sie einem User zugeordnet sind.
 
 **Timer:**
 - `GET /api/sessions/{id}/timer`
@@ -149,12 +157,18 @@ Zwei Schutzstufen:
 - `GET /testconsole`
 - `POST /auth/logout`
 
+### Admin-Session erforderlich
+
+- Persona-, Scenario-, Inventory-Posture- und grosse Teile der Games-Admin-APIs verlangen eine Admin-Session (`is_admin=true`).
+- Die zugehoerigen Web-Seiten `/admin`, `/personas`, `/scenarios`, `/inventory`, `/history`, `/contracts` und Games-Admin-Oberflaechen werden ebenfalls per Admin-Session geschuetzt.
+
 ### Optional geschuetzt (bei gesetztem `CHASTEASE_ADMIN_SECRET`)
 
-- `POST /api/sessions/{id}/chat/ws-token/rotate`
-- `POST /api/sessions/{id}/safety/traffic-light`
-- `POST /api/sessions/{id}/safety/emergency-release`
-- `POST /api/sessions/{id}/verifications/{verification_id}/upload`
+- `POST /api/sessions/{id}/chat/ws-token/rotate` (zusaetzlich immer Admin-Session erforderlich)
+- `POST /api/sessions/{id}/safety/traffic-light` (zusaetzlich immer Admin-Session erforderlich)
+- `POST /api/sessions/{id}/safety/emergency-release` (zusaetzlich immer Admin-Session erforderlich)
+
+`POST /api/sessions/{id}/verifications/{verification_id}/upload` ist bewusst **keine** Admin-Aktion, sondern eine Wearer-/Session-Aktion und bleibt owner-gescoped.
 
 ### WebSocket
 
@@ -174,18 +188,21 @@ Zwei Schutzstufen:
 ## Bedrohungsmodell (Kurz)
 
 - Fokus: Schutz vor unbeabsichtigter/unerwuenschter Steuerung durch fremde Clients im lokalen Netz.
-- Cookie-Auth stellt sicher, dass nur eingeloggte Benutzer auf Session-Daten zugreifen koennen.
+- Cookie-Auth plus Session-Scoping stellt sicher, dass Nutzer nicht auf fremde Sessions zugreifen koennen.
+- Browser-Mutationen sollen nicht per Cross-Site-Request aus fremden Origins ausgelöst werden.
 - Admin-Secret ist ein zusaetzlicher pragmatischer Mechanismus fuer besonders sensible Aktionen.
 
 ## Naechste Schritte
 
-- Rollen- und Nutzerkonzept (Multi-User) statt globalem Shared Secret.
+- Rollen- und Nutzerkonzept weiter ausbauen und Shared-Secret-Abhaengigkeit reduzieren.
 - Rate-Limits fuer sensible Endpunkte.
-- Optional: Ende-zu-Ende Session-Binding fuer Browser-Clients.
+- Optional: strengere CSRF-Policy fuer nicht-browserbasierte Mutationen.
 
 ## Betriebs-Checklist (Empfehlung)
 
 - `CHASTEASE_ADMIN_SECRET` in produktionsnahen Setups setzen.
+- `CHASTEASE_COOKIE_SECURE=true` setzen, sobald der Zugriff ueber HTTPS oder einen sicheren Reverse Proxy erfolgt.
+- `CHASTEASE_SECRET_ENCRYPTION_KEY` explizit setzen, damit verschluesselte API-Keys nicht nur auf abgeleiteten Defaults beruhen.
 - Secret nur ueber sichere Umgebungskonfiguration verteilen (nicht in VCS).
 - Regelmaessige Rotation des Admin-Secrets einplanen.
 - Reverse-Proxy/VPN-Setup so konfigurieren, dass der Server nicht direkt im Internet exponiert ist.

@@ -8,6 +8,8 @@ python-multipart==0.0.20
 httpx==0.28.1
 litellm==1.82.4
 cryptography==45.0.7
+pwdlib==0.3.0
+argon2-cffi==25.1.0
 pytest==8.4.2
 apscheduler==3.10.4
 pywebpush==2.0.3

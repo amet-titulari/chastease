@@ -40,6 +40,7 @@ from app.models import (  # noqa: F401
     verification,
 )
 from app.routers import chat, games, health, hygiene, inventory, inventory_postures, media, personas, push, safety, scenarios, sessions, tasks, verification as verification_router, voice, web
+from app.security import CSRF_COOKIE_NAME, SAFE_HTTP_METHODS, csrf_tokens_match, extract_csrf_token, generate_csrf_token, is_cookie_secure, is_same_origin_request
 from app.services.proactive_messaging import sweep_proactive_messages_for_active_sessions
 from app.services.session_timer_sweeper import sweep_expired_active_sessions
 from app.services.task_sweeper import sweep_overdue_tasks_for_active_sessions
@@ -91,6 +92,35 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def csrf_middleware(request: Request, call_next):
+    csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)
+    request.state.csrf_token = csrf_cookie or generate_csrf_token()
+
+    if request.method.upper() not in SAFE_HTTP_METHODS:
+        request_token = await extract_csrf_token(request)
+        if request_token:
+            if not csrf_tokens_match(csrf_cookie, request_token):
+                return _error_response(status_code=403, code="csrf_failed", message="CSRF validation failed")
+        else:
+            same_origin = is_same_origin_request(request)
+            if same_origin is False:
+                return _error_response(status_code=403, code="csrf_failed", message="CSRF validation failed")
+
+    response = await call_next(request)
+
+    if request.method.upper() in SAFE_HTTP_METHODS and not csrf_cookie:
+        response.set_cookie(
+            key=CSRF_COOKIE_NAME,
+            value=request.state.csrf_token,
+            httponly=False,
+            max_age=60 * 60 * 24 * 30,
+            samesite="lax",
+            secure=is_cookie_secure(),
+        )
+    return response
 
 
 def _error_response(status_code: int, code: str, message: str, details=None) -> JSONResponse:

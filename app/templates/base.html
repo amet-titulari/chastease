@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="csrf-token" content="{{ request.state.csrf_token if request else '' }}" />
   <title>{{ title }}</title>
   <link rel="stylesheet" href="/static/css/theme.css" />
   <link rel="stylesheet" href="/static/css/style.css" />
@@ -38,6 +39,53 @@
   <main class="container main-grid">
     {% block content %}{% endblock %}
   </main>
+  <script>
+  (() => {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+    if (!csrfToken) return;
+
+    const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+    const addCsrfFields = () => {
+      document.querySelectorAll("form").forEach((form) => {
+        const method = String(form.getAttribute("method") || "GET").toUpperCase();
+        if (!unsafeMethods.has(method)) return;
+        if (form.querySelector('input[name="csrf_token"]')) return;
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "csrf_token";
+        input.value = csrfToken;
+        form.appendChild(input);
+      });
+    };
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", addCsrfFields, { once: true });
+    } else {
+      addCsrfFields();
+    }
+
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init = {}) => {
+      const nextInit = { ...init };
+      const method = String(nextInit.method || (typeof input !== "string" ? input?.method : "") || "GET").toUpperCase();
+      const rawUrl = typeof input === "string" ? input : input?.url || window.location.href;
+      const targetUrl = new URL(rawUrl, window.location.origin);
+
+      if (unsafeMethods.has(method) && targetUrl.origin === window.location.origin) {
+        const headers = new Headers(nextInit.headers || (typeof input !== "string" ? input?.headers : undefined) || {});
+        if (!headers.has("X-CSRF-Token")) {
+          headers.set("X-CSRF-Token", csrfToken);
+        }
+        nextInit.headers = headers;
+        if (nextInit.credentials === undefined) {
+          nextInit.credentials = "same-origin";
+        }
+      }
+
+      return originalFetch(input, nextInit);
+    };
+  })();
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

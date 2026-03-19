@@ -22,6 +22,8 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Benachrichtigungen** – Timer, Erinnerungen, Nachrichten der Keyholderin
 - **Web Push** – Browser-Subscriptions und Test-Dispatch über Web Push API
 - **Multi-Device-Login** – Bestehende Sessions bleiben erhalten; kein gegenseitiges Ausloggen
+- **Moderne Passwort-Hashes** – Passwortspeicherung via `pwdlib` mit Argon2-Backend; Legacy-SHA-256-Hashes werden beim nächsten Login migriert
+- **CSRF-Schutz für Browser-Flows** – Same-Origin-Prüfung plus CSRF-Header für mutierende Browser-Requests
 - **Responsive UI** – Optimiert für Desktop und Mobile (100dvh, kompakte Aktionskarten)
 
 ## Dokumentation
@@ -43,6 +45,7 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Backend**: Python 3.12+ / FastAPI
 - **Frontend**: Jinja2 + Vanilla JavaScript
 - **Datenbank**: SQLite (lokal)
+- **Auth/Security**: Cookie-Auth, CSRF-Middleware, Argon2-gestützte Passwort-Hashes über `pwdlib`
 - **KI**: Abstraktionsschicht – Standard xAI (Grok), erweiterbar auf lokale LLMs (`ollama`, `stub`)
 - **KI-Actions**: `create_task`, `fail_task`, `add_time` – normalisiert und serverseitig validiert
 
@@ -114,6 +117,11 @@ Wichtige API-Endpunkte:
 - `DELETE /api/sessions/{id}/push/subscriptions/{subscription_id}`
 - `POST /api/sessions/{id}/push/test`
 
+Sicherheitsrelevante Laufzeitoptionen:
+
+- `CHASTEASE_COOKIE_SECURE=true|false` – setzt Auth- und CSRF-Cookies auf `Secure` für HTTPS-nahe Setups
+- `CHASTEASE_SECRET_ENCRYPTION_KEY=<secret>` – zusätzlicher Schlüssel für die Verschlüsselung gespeicherter API-Keys
+
 Automatischer Task-Overdue-Sweep:
 
 - Hintergrundjob (APScheduler) prueft periodisch alle aktiven Sessions auf ueberfaellige Tasks.
@@ -169,8 +177,11 @@ Fehlerformat (API):
 Sicherheit (Kurzfassung):
 
 - Chat-WebSocket ist token-pflichtig (`ws_auth_token` pro Session).
+- Passwort-Hashes laufen über `pwdlib` + Argon2; ältere SHA-256-Salt-Hashes werden beim Login aufgewertet.
+- Browser-Mutationen werden über Same-Origin-Prüfung plus CSRF-Header abgesichert.
+- Session-nahe API-Endpunkte sind auf Session-Eigentümer gescoped; Admin-Bereiche erfordern Admin-Session.
 - WS-Token-Rotation invalidiert alte Verbindungen serverseitig.
-- Sensible Steuer-Endpunkte koennen optional mit `CHASTEASE_ADMIN_SECRET` + Header `X-Admin-Secret` geschuetzt werden.
+- Sensible Steuer-Endpunkte koennen optional mit `CHASTEASE_ADMIN_SECRET` + Header `X-Admin-Secret` zusaetzlich geschuetzt werden.
 - Vollstaendige Matrix: `docs/SECURITY.md`.
 
 Operations-Hinweise:

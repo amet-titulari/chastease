@@ -16,11 +16,11 @@ Deployment-Empfehlung:
 - Zugriff im LAN direkt.
 - Zugriff von extern nur über VPN (z.B. WireGuard/Tailscale), kein direktes Exposing ins Internet.
 
-## Aktueller Architektur-Stand (v0.2.1)
+## Aktueller Architektur-Stand (März 2026)
 
 ### Application-Layer
 
-- `app/main.py`: App-Bootstrap, Router-Registrierung (14 Router), Scheduler-Setup, globale Fehlerbehandlung, `init_app_storage()` (Verzeichnisse + Alembic-Migration auf Startup).
+- `app/main.py`: App-Bootstrap, Router-Registrierung, Scheduler-Setup, globale Fehlerbehandlung, CSRF-Middleware, `init_app_storage()` (Verzeichnisse + Alembic-Migration auf Startup).
 - Router:
   - `app/routers/health.py`: Health-Check (`/health`), LLM-Verbindungstest.
   - `app/routers/sessions.py`: Session-Lifecycle, Blueprints, Contract/Addenda/Consent, Player-Profile, Seal-History, Timer (add/remove/freeze/unfreeze), WS-Token-Rotation, Event-Log/Export.
@@ -32,6 +32,7 @@ Deployment-Empfehlung:
   - `app/routers/personas.py`: Persona-CRUD, Presets, Scenario-Presets, Card-Schema, externe Card-Imports (SillyTavern-kompatibel), Export/Import.
   - `app/routers/scenarios.py`: Scenario-CRUD, Presets, Export/Import.
   - `app/routers/inventory.py`: Items-CRUD, Export/Import, Scenario-Item-Links, Session-Items.
+  - `app/routers/inventory_postures.py`: modulbezogene Posture-Verwaltung und Matrix-Endpunkte im Inventar-Kontext.
   - `app/routers/media.py`: Avatar-Upload, Media-CRUD, Content-Serving.
   - `app/routers/push.py`: Web-Push-Config, Subscriptions, Test-Push.
   - `app/routers/voice.py`: Realtime-Voice-Status, Client-Secret (Ephemeral Key), TTS.
@@ -40,8 +41,12 @@ Deployment-Empfehlung:
 ### Domain-/Service-Layer
 
 - `app/services/ai_gateway.py`: KI-Provider-Abstraktion (`CustomOpenAI`, `Ollama`, `Stub`); Action-Normalisierung (`normalize_actions()`).
+- `app/services/auth_password.py`: moderne Passwort-Hashes via `pwdlib`/Argon2 plus Legacy-Migrationspfad fuer alte SHA-256-Salt-Hashes.
 - `app/services/prompt_builder.py`: Modularer System-Prompt (Persona, Wearer, Safety, Session, Style, Scenario); Strictness-Level-basierte deutsche Stil-Direktiven.
 - `app/services/context_window.py`: Kontextfenster-Management (Nachrichtenhistorie, Trunkierung, Zusammenfassung älterer Nachrichten).
+- `app/services/session_access.py`: zentrale Session-Ownership-Pruefungen fuer benutzergebundene APIs.
+- `app/services/secret_crypto.py`: verschluesselte Speicherung sensibler API-Keys via `EncryptedText`.
+- `app/services/task_template_pool.py`: reproduzierbare Task-Auswahl fuer persona-spezifische Fallbacks im Chat.
 - `app/services/task_service.py`: Task-Logik inkl. Konsequenzen (Zeitstrafe, Zeitbonus), Psychogramm-basierte Multiplikatoren.
 - `app/services/task_sweeper.py`: automatische Overdue-Auswertung für aktive Sessions (APScheduler-Job).
 - `app/services/timer_service.py`: Zustandsloser Timer-Service (add/remove/freeze/unfreeze) mit `TimerState`-Dataclass.
@@ -78,7 +83,7 @@ Offene (pending) Tasks werden bei jedem Chat-Request als Kontext-Block in den Sy
 
 ### Frontend-Layer
 
-**Templates** (Jinja2, 13 Seiten):
+**Templates** (Jinja2):
 
 | Template | Zweck |
 |---|---|
@@ -88,16 +93,17 @@ Offene (pending) Tasks werden bei jedem Chat-Request als Kontext-Block in den Sy
 | `experience.html` | Experience-Onboarding / Session-Draft |
 | `play.html` | Play-Modus (Chat + Aktionskarten) |
 | `profile.html` | Profil-Settings (LLM, Audio, Setup-Neustart) |
-| `dashboard.html` | Dashboard / Testkonsole |
+| `games.html` | Spieleinstieg und Modul-Auswahl |
+| `game_posture.html` / `game_posture_manage.html` / `game_module_settings.html` | Spiele- und Posture-Management |
 | `history.html` | Session-History |
 | `contracts.html` / `contract_view.html` | Vertragsübersicht / Vertrags-Detail |
 | `personas.html` | Persona-Verwaltung |
 | `scenarios.html` | Scenario-Verwaltung |
 | `inventory.html` | Inventar-Verwaltung |
 
-**JavaScript** (8 Dateien): `play.js`, `experience.js`, `dashboard.js`, `history.js`, `contracts.js`, `landing.js`, `setup.js`, `sw.js` (Service Worker).
+**JavaScript**: Zentrale Browserlogik liegt in `play.js`, `experience.js`, `history.js`, `landing.js` und `setup.js`; weitere Admin-/Games-Skripte sind direkt in Templates eingebettet.
 
-**CSS** (7 Dateien): `style.css`, `theme.css`, `play.css`, `experience.css`, `profile.css`, `landing.css`, `setup.css`.
+**CSS**: Globale Tokens in `theme.css`, Layout/Navigation in `style.css`, modulbezogene Styles in `play.css`, `experience.css`, `profile.css`, `landing.css`, `setup.css`.
 
 **Play-Modus (play.html / play.js)**:
 - Single-Column-Layout, vollständig responsive (`100dvh`).
@@ -113,20 +119,24 @@ Offene (pending) Tasks werden bei jedem Chat-Request als Kontext-Block in den Sy
 - Alembic-Migrationen: `0001` (Initial Schema) bis `0014` (Drop Scenarios Character Ref).
   - Alle Migrationen sind idempotent gestaltet (Existenz von Tabellen/Spalten/Indizes wird geprüft).
 - Entitäten (20 Tabellen): `AuthUser`, `Session`, `Message`, `Task`, `Contract`, `ContractAddendum`, `SafetyLog`, `Verification`, `HygieneOpening`, `SealHistory`, `PlayerProfile`, `LlmProfile`, `Persona`, `Scenario`, `Item`, `ScenarioItem`, `SessionItem`, `MediaAsset`, `PushSubscription`.
-- `AuthUser.session_token`: einmaliges, dauerhaftes Auth-Token (httpOnly-Cookie `chastease_auth`, 30 Tage); wird nur beim ersten Login erzeugt.
+- `AuthUser.session_token`: dauerhaftes Auth-Token (httpOnly-Cookie `chastease_auth`, 30 Tage).
+- `AuthUser.password_hash`: moderner Passwort-Hash via `pwdlib`/Argon2; ältere SHA-256-Salt-Hashes werden beim Login migriert.
 - `AuthUser.active_session_id`: FK zu aktiver Session (Play-Redirect nach Login).
 - `AuthUser.default_player_profile_id`: FK zu Standard-Spielerprofil.
 - `PlayerProfile.preferences_json`: enthält `wearer_boundary`, `wearer_style`, `wearer_goal`, `scenario_preset` – direkt in den AI-Prompt übertragen.
 - `Persona.avatar_media_id`: FK zu `MediaAsset` (Avatar-Bild).
 - `Session`: enthält pro-Session LLM-Config (`llm_provider`, `llm_api_url`, `llm_chat_model`, `llm_vision_model`).
+- `Session.llm_api_key` und `LlmProfile.api_key`: verschluesselt via `EncryptedText`.
 
 ## Security-by-Design (aktueller Stand)
 
-- Optionales `CHASTEASE_ADMIN_SECRET` für sensible Steuer-Endpoints.
+- Cookie-basierte Auth (`chastease_auth`, httpOnly, optional `Secure`, 30 Tage Gültigkeit).
+- Browserbasierter CSRF-Schutz ueber Same-Origin-Pruefung plus CSRF-Header fuers Fetch-Layer.
+- Session-Ownership-Scoping fuer benutzergebundene Session-APIs.
+- Optionales `CHASTEASE_ADMIN_SECRET` als Zusatzschutz fuer besonders sensible Steuer-Endpoints.
 - Geschützte Steuer-Endpunkte validieren `X-Admin-Secret`, falls gesetzt.
 - WebSocket-Verbindung erfordert gültiges Session-Token.
 - Einheitliches API-Fehlerformat mit `request_id` und strukturiertem Fehlerobjekt.
-- Cookie-basierte Auth (`chastease_auth`, httpOnly, 30 Tage Gültigkeit).
 - Optionaler Audit-Logger (JSON-Lines, opt-in).
 
 Details siehe `docs/SECURITY.md`.
@@ -173,7 +183,6 @@ FastAPI Backend
 
 ## Offene Architektur-Themen
 
-- Rollen-/Identity-Konzept statt globalem Shared Secret.
+- Rollen-/Identity-Konzept statt Rest-Abhaengigkeit von globalem Shared Secret.
 - Rate-Limits und Audit-Trails für sensible Endpunkte.
-- Aufgaben-Bibliothek (vordefinierte Tasks pro Persona).
 - Gamification-Layer (Achievements, Streaks, Statistiken).

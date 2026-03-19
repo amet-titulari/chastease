@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from uuid import uuid4
 
 from app.config import settings
 from app.database import SessionLocal
@@ -13,6 +14,27 @@ from app.services.transcription_service import TranscriptionResult
 def _admin_headers() -> dict:
     s = settings.admin_secret
     return {"X-Admin-Secret": s} if s else {}
+
+
+def _register_user(client: TestClient, prefix: str, make_admin: bool) -> None:
+    unique = uuid4().hex[:8]
+    email = f"{prefix}-{unique}@example.com"
+
+    if make_admin:
+        existing = settings.admin_bootstrap_emails or ""
+        settings.admin_bootstrap_emails = ",".join([item for item in [existing, email] if item])
+
+    resp = client.post(
+        "/auth/register",
+        data={
+            "username": f"{prefix}-{unique}",
+            "email": email,
+            "password": "verysecure1",
+            "password_confirm": "verysecure1",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
 
 
 def _create_and_sign(client: TestClient) -> int:
@@ -51,6 +73,7 @@ def test_chat_message_roundtrip():
 
 def test_chat_reply_switches_to_care_mode_on_yellow():
     with TestClient(app) as client:
+        _register_user(client, prefix="chat-admin-yellow", make_admin=True)
         session_id = _create_and_sign(client)
 
         yellow = client.post(
@@ -70,6 +93,7 @@ def test_chat_reply_switches_to_care_mode_on_yellow():
 
 def test_chat_reply_respects_pause_on_red():
     with TestClient(app) as client:
+        _register_user(client, prefix="chat-admin-red", make_admin=True)
         session_id = _create_and_sign(client)
 
         red = client.post(

@@ -32,6 +32,7 @@ def _normalize_local_path(path_value: str) -> str:
 class Settings(BaseSettings):
     app_name: str = "Chastease"
     debug: bool = True
+    cookie_secure: bool = False
     database_url: str = "sqlite:///./data/chastease.db"
     media_dir: str = "./data/media"
     hygiene_overdue_penalty_seconds: int = 600

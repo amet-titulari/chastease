@@ -1,4 +1,3 @@
-import hashlib
 import json
 import secrets
 from datetime import datetime, timezone
@@ -27,11 +26,12 @@ from app.models.scenario import Scenario
 from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
 from app.models.task import Task
+from app.security import AUTH_COOKIE_NAME, is_cookie_secure
+from app.services.auth_password import hash_password, is_legacy_password_hash, verify_legacy_password, verify_password_and_update
 from app.services.games import as_public_module_payload, get_module, list_modules
 
 router = APIRouter(tags=["web"])
 templates = Jinja2Templates(directory="app/templates")
-AUTH_COOKIE_NAME = "chastease_auth"
 
 
 def _asset_version(relative_path: str) -> str:
@@ -73,10 +73,6 @@ class ExperienceDraftRequest(BaseModel):
     llm_active: bool | None = None
 
 
-def _hash_password(password: str, salt: str) -> str:
-    return hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
-
-
 def _get_current_user(request: Request, db: Session) -> AuthUser | None:
     token = request.cookies.get(AUTH_COOKIE_NAME)
     if not token:
@@ -91,6 +87,7 @@ def _set_auth_cookie(response: RedirectResponse, token: str) -> None:
         httponly=True,
         max_age=60 * 60 * 24 * 30,
         samesite="lax",
+        secure=is_cookie_secure(),
     )
 
 
@@ -381,7 +378,6 @@ def register(
             status_code=400,
         )
 
-    salt = secrets.token_hex(16)
     bootstrap_emails = _admin_bootstrap_emails()
     existing_admin = db.query(AuthUser.id).filter(AuthUser.is_admin == True).first()  # noqa: E712
     should_be_admin = existing_admin is None or normalized_email in bootstrap_emails
@@ -389,8 +385,8 @@ def register(
     user = AuthUser(
         username=normalized_username,
         email=normalized_email,
-        password_salt=salt,
-        password_hash=_hash_password(password, salt),
+        password_salt="",
+        password_hash=hash_password(password),
         session_token=secrets.token_urlsafe(32),
         is_admin=should_be_admin,
         setup_completed=False,
@@ -433,7 +429,22 @@ def login(
         user = db.query(AuthUser).filter(AuthUser.username == normalized_username).first()
     elif normalized_email:
         user = db.query(AuthUser).filter(AuthUser.email == normalized_email).first()
-    if user is None or user.password_hash != _hash_password(password, user.password_salt):
+    password_valid = False
+    password_upgraded = False
+    if user is not None:
+        if is_legacy_password_hash(user.password_hash):
+            password_valid = verify_legacy_password(password, user.password_hash, user.password_salt)
+            if password_valid:
+                user.password_hash = hash_password(password)
+                user.password_salt = ""
+                password_upgraded = True
+        else:
+            password_valid, updated_hash = verify_password_and_update(password, user.password_hash)
+            if password_valid and updated_hash:
+                user.password_hash = updated_hash
+                password_upgraded = True
+
+    if user is None or not password_valid:
         return templates.TemplateResponse(
             request=request,
             name="landing.html",
@@ -447,6 +458,9 @@ def login(
 
     if not user.session_token:
         user.session_token = secrets.token_urlsafe(32)
+        password_upgraded = True
+
+    if password_upgraded:
         db.commit()
 
     target = "/experience"
@@ -465,7 +479,7 @@ def logout(request: Request, db: Session = Depends(get_db)):
         user.session_token = None
         db.commit()
     response = RedirectResponse(url="/", status_code=303)
-    response.delete_cookie(AUTH_COOKIE_NAME)
+    response.delete_cookie(AUTH_COOKIE_NAME, samesite="lax", secure=is_cookie_secure())
     return response
 
 

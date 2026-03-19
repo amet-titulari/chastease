@@ -109,6 +109,50 @@ button.warn {
   margin: 0;
 }
 
+.profile-session-section {
+  margin-top: 1.4rem;
+  border: 1px solid rgba(127, 163, 194, 0.14);
+  border-radius: 18px;
+  padding: 1rem;
+  background: rgba(7, 14, 22, 0.28);
+}
+
+.profile-session-head {
+  display: flex;
+  gap: 0.8rem;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.profile-session-head h2 {
+  margin: 0.2rem 0 0;
+  font-size: 1.05rem;
+}
+
+.profile-session-grid {
+  display: grid;
+  grid-template-columns: minmax(130px, 180px) minmax(0, 1fr);
+  gap: 0.5rem 1rem;
+  margin: 0.9rem 0 0;
+}
+
+.profile-session-grid dt {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.profile-session-grid dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.is-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 .action-row .ghost,
 .action-row button,
 .llm-actions button {
@@ -144,6 +188,15 @@ button.warn {
 @media (max-width: 680px) {
   .profile-card {
     padding: 1rem;
+  }
+
+  .profile-session-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .profile-session-grid {
+    grid-template-columns: 1fr;
   }
 
   .action-row {

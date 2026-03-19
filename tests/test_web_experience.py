@@ -217,6 +217,8 @@ def test_experience_and_profile_redirect_to_play_when_active_session_exists():
         assert profile.status_code == 200
         assert "Audio Gateway" in profile.text
         assert "Zur laufenden Session" in profile.text
+        assert "Session-Uebersicht" in profile.text
+        assert "profile-session-status" in profile.text
 
 
 def test_play_page_uses_versioned_play_script_url():

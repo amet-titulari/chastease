@@ -27,7 +27,7 @@ from app.services.pdf_export import build_simple_text_pdf
 from app.services.session_service import SessionService
 from app.services.audit_logger import audit_log
 from app.services.session_access import bind_session_profile_to_user, get_accessible_session, get_current_session_user, get_owned_session
-from app.security import verify_admin_secret
+from app.security import require_admin_session_user, verify_admin_secret
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -788,6 +788,7 @@ def sign_contract(session_id: int, request: Request, db: Session = Depends(get_d
 @router.post("/{session_id}/chat/ws-token/rotate")
 def rotate_chat_ws_token(
     session_id: int,
+    _admin_user = Depends(require_admin_session_user),
     _: None = Depends(verify_admin_secret),
     db: Session = Depends(get_db),
 ) -> dict:

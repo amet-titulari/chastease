@@ -6,6 +6,7 @@ from app.main import app
 from app.models.auth_user import AuthUser
 from app.models.llm_profile import LlmProfile
 from app.models.player_profile import PlayerProfile
+from app.services.auth_password import is_legacy_password_hash, legacy_hash_password
 
 
 def _register(client: TestClient, email: str = "setup-user@example.com"):
@@ -32,6 +33,23 @@ def test_register_redirects_to_experience():
         experience_resp = client.get("/experience")
         assert experience_resp.status_code == 200
         assert "Onboarding" in experience_resp.text
+
+
+def test_register_stores_modern_password_hash():
+    with TestClient(app) as client:
+        email = f"hash-{uuid4().hex[:8]}@example.com"
+        register_resp = _register(client, email=email)
+        assert register_resp.status_code == 303
+
+        db = SessionLocal()
+        try:
+            user = db.query(AuthUser).filter(AuthUser.email == email).first()
+            assert user is not None
+            assert user.password_hash.startswith("$argon2")
+            assert user.password_salt == ""
+            assert is_legacy_password_hash(user.password_hash) is False
+        finally:
+            db.close()
 
 
 def test_setup_completion_redirects_to_experience():
@@ -79,6 +97,42 @@ def test_login_for_incomplete_setup_redirects_to_experience():
         )
         assert login_resp.status_code == 303
         assert login_resp.headers["location"] == "/experience"
+
+
+def test_login_upgrades_legacy_password_hash_to_modern_hash():
+    with TestClient(app) as client:
+        email = f"legacy-{uuid4().hex[:8]}@example.com"
+        register_resp = _register(client, email=email)
+        assert register_resp.status_code == 303
+
+        db = SessionLocal()
+        try:
+            user = db.query(AuthUser).filter(AuthUser.email == email).first()
+            assert user is not None
+            user.password_salt = "legacy-salt"
+            user.password_hash = legacy_hash_password("verysecure1", user.password_salt)
+            user.session_token = None
+            db.add(user)
+            db.commit()
+        finally:
+            db.close()
+
+        login_resp = client.post(
+            "/auth/login",
+            data={"email": email, "password": "verysecure1"},
+            follow_redirects=False,
+        )
+        assert login_resp.status_code == 303
+
+        db = SessionLocal()
+        try:
+            user = db.query(AuthUser).filter(AuthUser.email == email).first()
+            assert user is not None
+            assert user.password_hash.startswith("$argon2")
+            assert user.password_salt == ""
+            assert user.session_token
+        finally:
+            db.close()
 
 
 def test_experience_redirects_to_landing_when_logged_out():
@@ -168,6 +222,24 @@ def test_profile_audio_test_requires_authentication():
         resp = client.post("/profile/audio/test")
         assert resp.status_code == 401
         assert resp.json()["ok"] is False
+
+
+def test_cross_origin_profile_update_is_rejected_by_csrf_protection():
+    with TestClient(app) as client:
+        register_resp = _register(client, email=f"csrf-{uuid4().hex[:8]}@example.com")
+        assert register_resp.status_code == 303
+
+        resp = client.post(
+            "/profile/setup",
+            data={
+                "role_style": "supportive",
+                "primary_goal": "CSRF Test",
+                "boundary_note": "Keine Cross-Origin Requests",
+            },
+            headers={"Origin": "https://evil.example"},
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error"]["code"] == "csrf_failed"
 
 
 def test_profile_llm_falls_back_to_active_session_config_when_default_missing():

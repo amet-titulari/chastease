@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.safety_log import SafetyLog
 from app.models.session import Session as SessionModel
-from app.security import verify_admin_secret
+from app.security import require_admin_session_user, verify_admin_secret
 from app.services.audit_logger import audit_log
 from app.services.session_access import get_owned_session
 
@@ -24,6 +24,7 @@ class EmergencyReleaseRequest(BaseModel):
 def traffic_light(
     session_id: int,
     payload: TrafficLightRequest,
+    _admin_user = Depends(require_admin_session_user),
     _: None = Depends(verify_admin_secret),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -71,6 +72,7 @@ def safeword(session_id: int, request: Request, db: Session = Depends(get_db)) -
 def emergency_release(
     session_id: int,
     payload: EmergencyReleaseRequest,
+    _admin_user = Depends(require_admin_session_user),
     _: None = Depends(verify_admin_secret),
     db: Session = Depends(get_db),
 ) -> dict:

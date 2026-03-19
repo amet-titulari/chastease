@@ -5,6 +5,19 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Hinzugefuegt
+
+- Browserorientierter CSRF-Schutz fuer mutierende Requests via Same-Origin-Pruefung und CSRF-Header im Frontend-Basislayout.
+- Moderne Passwort-Hashes via `pwdlib` mit Argon2-Backend fuer neue Accounts.
+- Login-Migrationspfad: bestehende Legacy-SHA-256-Salt-Hashes werden beim erfolgreichen Login automatisch auf das neue Format umgestellt.
+
+### Geaendert
+
+- Auth- und CSRF-Cookies koennen jetzt ueber `CHASTEASE_COOKIE_SECURE` fuer HTTPS-nahe Setups auf `Secure` gesetzt werden.
+- Dokumentation (README, Architektur, Security) auf den aktuellen Sicherheits- und Feature-Stand synchronisiert.
+
 ## [0.2.7] - 2026-03-16
 
 ### Geaendert

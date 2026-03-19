@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from uuid import uuid4
 
 from app.config import settings
 from app.main import app
@@ -7,6 +8,27 @@ from app.main import app
 def _admin_headers() -> dict:
     s = settings.admin_secret
     return {"X-Admin-Secret": s} if s else {}
+
+
+def _register_user(client: TestClient, prefix: str, make_admin: bool) -> None:
+    unique = uuid4().hex[:8]
+    email = f"{prefix}-{unique}@example.com"
+
+    if make_admin:
+        existing = settings.admin_bootstrap_emails or ""
+        settings.admin_bootstrap_emails = ",".join([item for item in [existing, email] if item])
+
+    resp = client.post(
+        "/auth/register",
+        data={
+            "username": f"{prefix}-{unique}",
+            "email": email,
+            "password": "verysecure1",
+            "password_confirm": "verysecure1",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
 
 
 def _create_and_sign_session(client: TestClient) -> int:
@@ -26,6 +48,7 @@ def _create_and_sign_session(client: TestClient) -> int:
 
 def test_traffic_light_and_emergency_logging():
     with TestClient(app) as client:
+        _register_user(client, prefix="safety-admin", make_admin=True)
         session_id = _create_and_sign_session(client)
 
         yellow = client.post(
@@ -65,6 +88,7 @@ def test_admin_secret_protects_control_actions_when_configured():
     settings.admin_secret = "safety-secret"
     try:
         with TestClient(app) as client:
+            _register_user(client, prefix="safety-admin-secret", make_admin=True)
             session_id = _create_and_sign_session(client)
 
             blocked_traffic = client.post(
@@ -97,3 +121,21 @@ def test_admin_secret_protects_control_actions_when_configured():
             assert safeword.status_code == 200
     finally:
         settings.admin_secret = previous
+
+
+def test_sensitive_safety_actions_require_admin_session():
+    with TestClient(app) as client:
+        _register_user(client, prefix="safety-user", make_admin=False)
+        session_id = _create_and_sign_session(client)
+
+        traffic = client.post(
+            f"/api/sessions/{session_id}/safety/traffic-light",
+            json={"color": "yellow"},
+        )
+        assert traffic.status_code == 403
+
+        emergency = client.post(
+            f"/api/sessions/{session_id}/safety/emergency-release",
+            json={"reason": "Physical discomfort detected"},
+        )
+        assert emergency.status_code == 403

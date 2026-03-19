@@ -9,7 +9,7 @@ class AuthUser(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(80), nullable=False, unique=True, index=True)
     email = Column(String(200), nullable=False, unique=True, index=True)
-    password_hash = Column(String(64), nullable=False)
+    password_hash = Column(String(255), nullable=False)
     password_salt = Column(String(32), nullable=False)
     session_token = Column(String(128), nullable=True, unique=True, index=True)
     is_admin = Column(Boolean, nullable=False, default=False)
