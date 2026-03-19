@@ -12,7 +12,7 @@ import zipfile
 from uuid import uuid4
 import re
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
 from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
@@ -86,6 +86,26 @@ SINGLE_POSE_STRICT_MODULE_KEYS = {"dont_move", "tiptoeing"}
 
 def _is_single_pose_strict_module(module_key: str) -> bool:
     return module_key in SINGLE_POSE_STRICT_MODULE_KEYS
+
+
+def _legacy_posture_successor_path(module_key: str, suffix: str = "") -> str:
+    cleaned_suffix = suffix if suffix.startswith("/") or not suffix else f"/{suffix}"
+    return f"/api/inventory/postures/modules/{module_key}{cleaned_suffix}"
+
+
+def _mark_legacy_posture_route(
+    response: Response,
+    module_key: str,
+    *,
+    suffix: str = "",
+) -> None:
+    response.headers["Deprecation"] = "true"
+    response.headers["X-Chastease-Legacy-Route"] = "true"
+    response.headers["Link"] = f'<{_legacy_posture_successor_path(module_key, suffix)}>; rel="successor-version"'
+
+
+def _is_legacy_posture_route_request(request: Request) -> bool:
+    return request.url.path.startswith("/api/games/modules/")
 
 
 class StartGameRunRequest(BaseModel):
@@ -1476,8 +1496,15 @@ async def upload_module_mask(
 
 
 @router.get("/modules/{module_key}/postures")
-def list_module_postures(module_key: str, request: Request, db: Session = Depends(get_db)) -> dict:
+def list_module_postures(
+    module_key: str,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> dict:
     require_admin_session_user(request, db)
+    if _is_legacy_posture_route_request(request):
+        _mark_legacy_posture_route(response, module_key)
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -1491,7 +1518,14 @@ def list_module_postures(module_key: str, request: Request, db: Session = Depend
 
 
 @router.get("/modules/{module_key}/postures/available")
-def list_available_module_postures(module_key: str, db: Session = Depends(get_db)) -> dict:
+def list_available_module_postures(
+    module_key: str,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> dict:
+    if _is_legacy_posture_route_request(request):
+        _mark_legacy_posture_route(response, module_key, suffix="/available")
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -1564,10 +1598,13 @@ def update_posture_matrix(payload: PostureMatrixBulkUpdateRequest, request: Requ
 async def upload_module_posture_image(
     module_key: str,
     request: Request,
+    response: Response,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> dict:
     user = require_admin_session_user(request, db)
+    if _is_legacy_posture_route_request(request):
+        _mark_legacy_posture_route(response, module_key, suffix="/upload-image")
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -1582,7 +1619,11 @@ async def upload_module_posture_image(
 
 
 @router.get("/modules/{module_key}/postures/export")
-def export_module_postures_zip(module_key: str, request: Request, db: Session = Depends(get_db)):
+def export_module_postures_zip(
+    module_key: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     require_admin_session_user(request, db)
     module = get_module(module_key)
     if not module:
@@ -1633,21 +1674,27 @@ def export_module_postures_zip(module_key: str, request: Request, db: Session = 
     archive_io.seek(0)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"postures_{module_key}_{stamp}.zip"
-    return StreamingResponse(
+    response = StreamingResponse(
         archive_io,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+    if _is_legacy_posture_route_request(request):
+        _mark_legacy_posture_route(response, module_key, suffix="/export")
+    return response
 
 
 @router.post("/modules/{module_key}/postures/import-zip")
 async def import_module_postures_zip(
     module_key: str,
     request: Request,
+    response: Response,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> dict:
     user = require_admin_session_user(request, db)
+    if _is_legacy_posture_route_request(request):
+        _mark_legacy_posture_route(response, module_key, suffix="/import-zip")
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -1879,9 +1926,12 @@ def create_module_posture(
     module_key: str,
     payload: PostureTemplateCreateRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> dict:
     user = require_admin_session_user(request, db)
+    if _is_legacy_posture_route_request(request):
+        _mark_legacy_posture_route(response, module_key)
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -1926,9 +1976,12 @@ def update_module_posture(
     posture_id: int,
     payload: PostureTemplateUpdateRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> dict:
     user = require_admin_session_user(request, db)
+    if _is_legacy_posture_route_request(request):
+        _mark_legacy_posture_route(response, module_key, suffix=f"/{posture_id}")
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -1989,8 +2042,16 @@ def update_module_posture(
 
 
 @router.delete("/modules/{module_key}/postures/{posture_id}")
-def delete_module_posture(module_key: str, posture_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+def delete_module_posture(
+    module_key: str,
+    posture_id: int,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> dict:
     user = require_admin_session_user(request, db)
+    if _is_legacy_posture_route_request(request):
+        _mark_legacy_posture_route(response, module_key, suffix=f"/{posture_id}")
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -2025,9 +2086,12 @@ def update_module_posture_reference_pose(
     posture_id: int,
     payload: PostureReferencePoseUpdateRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> dict:
     user = require_admin_session_user(request, db)
+    if _is_legacy_posture_route_request(request):
+        _mark_legacy_posture_route(response, module_key, suffix=f"/{posture_id}/reference-pose")
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -2080,9 +2144,12 @@ def update_module_posture_reference_pose_manual(
     posture_id: int,
     payload: PostureReferencePoseManualUpdateRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> dict:
     user = require_admin_session_user(request, db)
+    if _is_legacy_posture_route_request(request):
+        _mark_legacy_posture_route(response, module_key, suffix=f"/{posture_id}/reference-pose/manual")
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")
@@ -2143,10 +2210,13 @@ async def upload_module_posture_reference_pose_image(
     module_key: str,
     posture_id: int,
     request: Request,
+    response: Response,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> dict:
     user = require_admin_session_user(request, db)
+    if _is_legacy_posture_route_request(request):
+        _mark_legacy_posture_route(response, module_key, suffix=f"/{posture_id}/reference-pose/upload-image")
     module = get_module(module_key)
     if not module:
         raise HTTPException(status_code=404, detail="Game module not found")

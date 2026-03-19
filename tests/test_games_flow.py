@@ -223,6 +223,61 @@ def test_posture_allowed_module_keys_roundtrip():
         assert updated["allowed_module_keys"] == ["dont_move"]
 
 
+def test_legacy_games_posture_routes_are_marked_deprecated():
+    with TestClient(app) as client:
+        _register_admin(client)
+
+        created = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": f"legacy_flag_{uuid4().hex[:8]}",
+                "title": "Legacy Header Test",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "Legacy route.",
+                "target_seconds": 90,
+                "sort_order": 1,
+                "is_active": True,
+                "allowed_module_keys": ["posture_training"],
+            },
+        )
+        assert created.status_code == 200
+        assert created.headers.get("deprecation") == "true"
+        assert created.headers.get("x-chastease-legacy-route") == "true"
+        assert "/api/inventory/postures/modules/posture_training" in (created.headers.get("link") or "")
+
+        listed = client.get("/api/games/modules/posture_training/postures")
+        assert listed.status_code == 200
+        assert listed.headers.get("deprecation") == "true"
+        assert listed.headers.get("x-chastease-legacy-route") == "true"
+
+
+def test_inventory_posture_routes_are_canonical_without_legacy_header():
+    with TestClient(app) as client:
+        _register_admin(client)
+
+        created = client.post(
+            "/api/inventory/postures/modules/posture_training",
+            json={
+                "posture_key": f"inventory_canonical_{uuid4().hex[:8]}",
+                "title": "Canonical Inventory Route",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "Inventory route.",
+                "target_seconds": 90,
+                "sort_order": 1,
+                "is_active": True,
+                "allowed_module_keys": ["posture_training"],
+            },
+        )
+        assert created.status_code == 200
+        assert created.headers.get("deprecation") is None
+        assert created.headers.get("x-chastease-legacy-route") is None
+
+        listed = client.get("/api/inventory/postures/modules/posture_training")
+        assert listed.status_code == 200
+        assert listed.headers.get("deprecation") is None
+        assert listed.headers.get("x-chastease-legacy-route") is None
+
+
 def test_posture_matrix_bulk_update_endpoint():
     with TestClient(app) as client:
         _register_admin(client)

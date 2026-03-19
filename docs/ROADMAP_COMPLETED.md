@@ -25,11 +25,16 @@ Archiv der bereits erledigten Roadmap-Punkte. Die offene Planung liegt in [ROADM
 - UI-Refresh: konsolidierte Design-Tokens, modernisierte Navigation und vereinheitlichte Hauptoberflächen
 - Persona-/Scenario-Verwaltung: CRUD, Presets, SillyTavern-Import/Export
 - Inventar: Items, Scenario-Links, Session-Items
+- Persistenter Roleplay-State pro Session: Relationship, Protocol und Scene inkl. Prompt-Integration
+- Director-Schicht im Prompting ergänzt, getrennt von Persona-/Session-Kontext
+- Session-Status im Play-UI als diskretes Popup statt als großer Chat-Block
+- HTMX-Partials für Profil-Sessionübersicht sowie Listen in Personas, Scenarios und Inventory
 - Media: Avatar-Upload, Content-Serving
 - Browser Push Notifications (Web Push + VAPID)
 - Auth: Register/Login, moderne Passwort-Hashes via `pwdlib`/Argon2, httpOnly-Cookie, Multi-Device-Support
 - Audit-Logger (opt-in, JSON-Lines)
 - Testdaten-Hygiene: automatische DB-Bereinigung nach Testlauf (session-scope cleanup)
+- Frische virtuelle Umgebung aus `requirements.txt` validiert und als Projekt-`.venv` neu aufgebaut
 - Docker-Deployment (Dockerfile + docker-compose)
 - Teststatus: 31+ Testmodule (lokale automatisierte Tests, inkl. Prompt-/Action-Metadaten)
 
@@ -174,6 +179,10 @@ Deliverable erreicht: MVP – vollständig funktionsfähig.
 - [x] API-Key-Verschlüsselung (Fernet)
 - [x] API `/api/sessions/blueprints` nur für eigenen User ermöglichen
 - [x] API `/api/sessions/{session_id}` nur für eigene Sessions des Users
+- [x] API-Absicherung für Admin-/Pflege-Endpunkte via Login und Rollenprüfung
+- [x] Postures Import/Export als ZIP-Workflow inkl. Referenzdaten und Medien
+- [x] Spiel-UI auf `available`-Posture-Endpoints im Inventar-Modul umgestellt
+- [x] Verbliebene Legacy-Posture-Routen unter `/api/games/...` explizit als deprecated markiert und auf das Inventar-Modul verwiesen
 
 ### v0.3.2 – AI & Modularität
 - [x] Prompt-Dateien nach `app/prompts/` ausgelagert (Base, Persona, Safety, Session, Style, Scenario)
@@ -184,3 +193,13 @@ Deliverable erreicht: MVP – vollständig funktionsfähig.
 - [x] Chat-Metadaten im UI reduziert und auf sprechende Namen umgestellt
 - [x] Action-Contract im Prompting ergänzt, damit Aufgaben im Live-Chat zuverlässiger als strukturierte Actions ausgelöst werden
 - [x] Task-Template-Pool für reproduzierbare Schwierigkeit und Persona-spezifische Vorschläge aufgebaut
+- [x] Persistenter Roleplay-State für Relationship / Protocol / Scene eingeführt
+- [x] `update_roleplay_state`-Action für KI-seitige Session-State-Updates ergänzt
+- [x] Director-Guidance im Prompting ergänzt
+
+### v0.3.3 – HTMX & Backoffice-UX
+- [x] HTMX für Profil-Sessionübersicht eingeführt
+- [x] HTMX-Partials für Persona-Liste eingeführt
+- [x] HTMX-Partials für Scenario-Liste eingeführt
+- [x] HTMX-Partials für Inventory-Liste eingeführt
+- [x] Frische `.venv` aus `requirements.txt` aufgebaut und validiert
