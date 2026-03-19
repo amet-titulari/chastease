@@ -1,0 +1,57 @@
+{% set session = session or None %}
+<section
+  class="profile-session-section"
+  id="profile-session-section"
+  hx-get="/profile/partials/session-summary"
+  hx-trigger="load, every 30s"
+  hx-swap="outerHTML"
+>
+  <div class="profile-session-head">
+    <div>
+      <p class="eyebrow">Session</p>
+      <h2>Session-Uebersicht</h2>
+    </div>
+    <div class="profile-session-actions">
+      <button
+        type="button"
+        class="ghost"
+        hx-get="/profile/partials/session-summary"
+        hx-target="#profile-session-section"
+        hx-swap="outerHTML"
+      >
+        Aktualisieren
+      </button>
+      <a
+        id="profile-session-link"
+        class="ghost{% if not session %} is-disabled{% endif %}"
+        href="{% if session %}/play/{{ session.session_id }}{% else %}/experience{% endif %}"
+      >
+        Zur Session
+      </a>
+    </div>
+  </div>
+
+  {% if not session %}
+  <p id="profile-session-feedback" class="hint">Keine aktive oder zugeordnete Session gefunden.</p>
+  {% else %}
+  <p id="profile-session-feedback" class="hint">Aktive Session und Verlauf der Session-Dauer.</p>
+  <dl class="profile-session-grid">
+    <dt>Wearer</dt><dd>{{ session.player_nickname or "—" }}</dd>
+    <dt>Keyholderin</dt><dd>{{ session.persona_name or "—" }}</dd>
+    <dt>Session-ID</dt><dd>{% if session.session_id %}#{{ session.session_id }}{% else %}&mdash;{% endif %}</dd>
+    <dt>Start</dt><dd>{{ session.lock_start_display }}</dd>
+    <dt>Freigabe</dt><dd>{{ session.lock_end_display }}</dd>
+    <dt>Verbleibend</dt><dd>{{ session.remaining_display }}</dd>
+    <dt>Status</dt><dd>{{ session.status or "—" }}</dd>
+    <dt>Timer</dt><dd>{{ "eingefroren" if session.timer_frozen else "laufend" }}</dd>
+    <dt>Mindestdauer</dt><dd>{{ session.min_duration_display }}</dd>
+    <dt>Maximaldauer</dt><dd>{{ session.max_duration_display }}</dd>
+    <dt>Aktive Plombe</dt><dd>{{ session.active_seal_number or "—" }}</dd>
+    <dt>Hygiene zuletzt</dt><dd>{% if session.last_opening_status %}{{ session.last_opening_status }}{% if session.last_opening_due_back_display %} (Rueckgabe: {{ session.last_opening_due_back_display }}){% endif %}{% else %}—{% endif %}</dd>
+    <dt>Task-Statistik</dt><dd>Gesamt: {{ session.task_total or 0 }} | pending: {{ session.task_pending or 0 }} | completed: {{ session.task_completed or 0 }} | overdue: {{ session.task_overdue or 0 }} | failed: {{ session.task_failed or 0 }}</dd>
+    <dt>Task-Strafen</dt><dd>{{ session.task_penalty_display }}</dd>
+    <dt>Hygiene-Strafen</dt><dd>{{ session.hygiene_penalty_display }} (Overrun: {{ session.hygiene_overrun_display }})</dd>
+    <dt>Gesamtdauer</dt><dd>{{ session.total_played_display }}</dd>
+  </dl>
+  {% endif %}
+</section>

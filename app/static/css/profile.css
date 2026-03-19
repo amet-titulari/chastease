@@ -129,6 +129,13 @@ button.warn {
   font-size: 1.05rem;
 }
 
+.profile-session-actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .profile-session-grid {
   display: grid;
   grid-template-columns: minmax(130px, 180px) minmax(0, 1fr);
@@ -193,6 +200,10 @@ button.warn {
   .profile-session-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .profile-session-actions {
+    width: 100%;
   }
 
   .profile-session-grid {

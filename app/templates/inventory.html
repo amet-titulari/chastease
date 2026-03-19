@@ -2,6 +2,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/css/profile.css" />
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
 <style>
   .inventory-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
 
@@ -117,7 +118,7 @@
       </label>
     </div>
 
-    <div class="inventory-list" id="im-list">
+    <div class="inventory-list" id="im-list" hx-get="/inventory/partials/list" hx-trigger="load" hx-swap="outerHTML">
       <div class="empty-hint">Wird geladen…</div>
     </div>
 
@@ -213,39 +214,16 @@ function imAutoKey() {
     .replace(/^_|_$/g, "");
 }
 
-function imRenderList(items) {
-  const list = document.getElementById("im-list");
-  if (!Array.isArray(items) || !items.length) {
-    list.innerHTML = '<div class="empty-hint">Noch keine Items gespeichert.</div>';
+function imReloadList() {
+  if (window.htmx) {
+    window.htmx.ajax("GET", "/inventory/partials/list", {
+      target: "#im-list",
+      swap: "outerHTML",
+    });
     return;
   }
-  list.innerHTML = items.map((item) => {
-    const tags = (item.tags || []).map((tag) => `<span class="inventory-tag">${imEscHtml(tag)}</span>`).join("");
-    const statePill = item.is_active ? '<span class="active-pill">Aktiv</span>' : '<span class="inactive-pill">Inaktiv</span>';
-    return `
-      <div class="inventory-card" data-id="${item.id}">
-        <div class="inventory-card-info">
-          <p class="inventory-card-title">${imEscHtml(item.name)} ${statePill}</p>
-          <p class="inventory-card-meta">Key: <code>${imEscHtml(item.key)}</code>${item.category ? ` · Kategorie: ${imEscHtml(item.category)}` : ""}</p>
-          <p class="inventory-card-meta">${imEscHtml(item.description || "")}</p>
-          <div class="inventory-card-tags">${tags}</div>
-        </div>
-        <div class="inventory-card-actions">
-          <button type="button" onclick="imStartEdit(${item.id})" class="ghost">Bearbeiten</button>
-          <button type="button" onclick="imExportOne(${item.id}, '${imEscHtml(item.name)}')">&#8659; Export</button>
-          <button type="button" onclick="imDelete(${item.id}, '${imEscHtml(item.name)}')" class="warn">Loeschen</button>
-        </div>
-      </div>`;
-  }).join("");
-}
-
-async function imLoadList() {
-  try {
-    const data = await imFetch("/api/inventory/items?include_inactive=true");
-    imRenderList(data.items || []);
-  } catch (err) {
-    document.getElementById("im-list").innerHTML = `<div class="empty-hint">Fehler beim Laden: ${imEscHtml(err.message)}</div>`;
-  }
+  const list = document.getElementById("im-list");
+  if (list) list.innerHTML = `<div class="empty-hint">Liste konnte nicht aktualisiert werden.</div>`;
 }
 
 async function imStartEdit(itemId) {
@@ -288,7 +266,7 @@ async function imDelete(id, name) {
   try {
     await imFetch(`/api/inventory/items/${id}`, { method: "DELETE" });
     imStatus(`Item "${name}" geloescht.`);
-    imLoadList();
+    imReloadList();
   } catch (err) {
     imStatus("Fehler beim Loeschen: " + err.message, true);
   }
@@ -343,7 +321,7 @@ imImportInput.addEventListener("change", async () => {
   imImportInput.value = "";
   if (total > 0) {
     imStatus(`${total} Item(s) importiert.`);
-    imLoadList();
+    imReloadList();
   }
 });
 
@@ -359,7 +337,7 @@ imImportZone.addEventListener("drop", async (e) => {
   }
   if (total > 0) {
     imStatus(`${total} Item(s) importiert.`);
-    imLoadList();
+    imReloadList();
   }
 });
 
@@ -386,7 +364,7 @@ document.getElementById("im-form").addEventListener("submit", async (e) => {
       imStatus(`Item "${payload.name}" erstellt.`);
     }
     imResetForm();
-    imLoadList();
+    imReloadList();
   } catch (err) {
     imStatus("Fehler: " + err.message, true);
   } finally {
@@ -401,6 +379,5 @@ document.getElementById("im-new-btn").addEventListener("click", () => {
   document.getElementById("im-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
-imLoadList();
 </script>
 {% endblock %}

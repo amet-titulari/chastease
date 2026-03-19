@@ -2,6 +2,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/css/profile.css" />
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
 <style>
   .persona-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
 
@@ -233,7 +234,7 @@
     </div>
 
     <!-- ── Persona-Liste ── -->
-    <div class="persona-list" id="pm-list">
+    <div class="persona-list" id="pm-list" hx-get="/personas/partials/list" hx-trigger="load" hx-swap="outerHTML">
       <div class="empty-hint">Wird geladen…</div>
     </div>
 
@@ -473,33 +474,6 @@ async function pmFetch(url, options = {}) {
   return res.json();
 }
 
-// ── Render list ──
-function pmRenderList(items) {
-  const container = document.getElementById("pm-list");
-  if (!items.length) {
-    container.innerHTML = `<div class="empty-hint">Noch keine Personas gespeichert. Erstelle deine erste unten.</div>`;
-    return;
-  }
-  container.innerHTML = items.map(p => `
-    <div class="persona-card" data-id="${p.id}">
-      ${p.avatar_url ? `<img class="persona-avatar" src="${escHtml(p.avatar_url)}" alt="Avatar" />` : ""}
-      <div class="persona-card-info">
-        <p class="persona-card-name">${escHtml(p.name)}</p>
-        <p class="persona-card-meta">
-          ${[p.speech_style_tone, p.speech_style_dominance].filter(Boolean).map(escHtml).join(" · ") || ""}
-          ${(p.speech_style_tone || p.speech_style_dominance) ? " · " : ""}
-          Strenge ${p.strictness_level} – ${STRICTNESS_LABELS[p.strictness_level] || ""}
-        </p>
-      </div>
-      <div class="persona-card-actions">
-        <button onclick="pmStartEdit(${p.id})" class="ghost">Bearbeiten</button>
-        <button onclick="pmExportOne(${p.id}, '${escHtml(p.name)}')">&#8659; Export</button>
-        <button onclick="pmDelete(${p.id}, '${escHtml(p.name)}')" class="warn">L&ouml;schen</button>
-      </div>
-    </div>
-  `).join("");
-}
-
 function pmBoolBadge(label, val) {
   return `<span class="tpl-chip">${escHtml(label)}: ${val ? "Ja" : "Nein"}</span>`;
 }
@@ -601,14 +575,18 @@ async function pmTplDelete(templateId, title) {
   }
 }
 
-// ── Load list ──
-async function pmLoadList() {
-  try {
-    const data = await pmFetch("/api/personas");
-    pmRenderList(data.items);
-  } catch (e) {
-    document.getElementById("pm-list").innerHTML =
-      `<div class="empty-hint">Fehler beim Laden: ${e.message}</div>`;
+// ── Refresh list via HTMX partial ──
+function pmReloadList() {
+  if (window.htmx) {
+    window.htmx.ajax("GET", "/personas/partials/list", {
+      target: "#pm-list",
+      swap: "outerHTML",
+    });
+    return;
+  }
+  const container = document.getElementById("pm-list");
+  if (container) {
+    container.innerHTML = `<div class="empty-hint">Liste konnte nicht aktualisiert werden.</div>`;
   }
 }
 
@@ -679,7 +657,7 @@ async function pmDelete(id, name) {
   try {
     await pmFetch(`/api/personas/${id}`, { method: "DELETE" });
     pmStatus(`Persona "${name}" gelöscht.`);
-    pmLoadList();
+    pmReloadList();
   } catch (e) {
     pmStatus("Fehler beim Löschen: " + e.message, true);
   }
@@ -710,7 +688,7 @@ document.getElementById("pm-form").addEventListener("submit", async (e) => {
       pmStatus(`Persona "${payload.name}" erstellt.`);
     }
     pmResetForm();
-    pmLoadList();
+    pmReloadList();
   } catch (e) {
     pmStatus("Fehler: " + e.message, true);
   } finally {
@@ -818,7 +796,7 @@ pmImportInput.addEventListener("change", async () => {
   pmImportInput.value = "";
   if (total > 0) {
     pmStatus(`${total} Persona(s) importiert.`);
-    pmLoadList();
+    pmReloadList();
   }
 });
 
@@ -830,7 +808,7 @@ pmImportZone.addEventListener("drop", async (e) => {
   const files = [...(e.dataTransfer?.files || [])].filter(f => f.name.endsWith(".json"));
   let total = 0;
   for (const file of files) total += await pmImportFile(file);
-  if (total > 0) { pmStatus(`${total} Persona(s) importiert.`); pmLoadList(); }
+  if (total > 0) { pmStatus(`${total} Persona(s) importiert.`); pmReloadList(); }
 });
 
 document.getElementById("pm-avatar-upload")?.addEventListener("click", pmUploadAvatar);
@@ -972,7 +950,6 @@ document.getElementById("pm-tpl-form")?.addEventListener("submit", async (e) => 
 });
 
 // ── Init ──
-pmLoadList();
 pmLoadPresets();
 </script>
 {% endblock %}

@@ -2,6 +2,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/css/profile.css" />
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
 <style>
   .scenario-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
 
@@ -207,7 +208,7 @@
     </div>
 
     <!-- ── Scenario-Liste ── -->
-    <div class="scenario-list" id="sm-list">
+    <div class="scenario-list" id="sm-list" hx-get="/scenarios/partials/list" hx-trigger="load" hx-swap="outerHTML">
       <div class="empty-hint">Wird geladen…</div>
     </div>
 
@@ -505,42 +506,16 @@ function escHtml(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
-// ── Render list ──
-function smRenderList(items) {
-  const list = document.getElementById("sm-list");
-  if (!items.length) {
-    list.innerHTML = '<div class="empty-hint">Noch keine Scenarios gespeichert.</div>';
+// ── Refresh list via HTMX partial ──
+function smReloadList() {
+  if (window.htmx) {
+    window.htmx.ajax("GET", "/scenarios/partials/list", {
+      target: "#sm-list",
+      swap: "outerHTML",
+    });
     return;
   }
-  list.innerHTML = items.map(s => {
-    const tags = (s.tags || []).map(t => `<span class="scenario-tag">${escHtml(t)}</span>`).join("");
-    const phases = (s.phases || []).length;
-    const lore = (s.lorebook || []).length;
-    return `
-      <div class="scenario-card" data-id="${s.id}">
-        <div class="scenario-card-info">
-          <p class="scenario-card-title">${escHtml(s.title)}</p>
-          <p class="scenario-card-meta">${escHtml(s.summary || "")}</p>
-          <p class="scenario-card-meta">${phases} Phase(n) · ${lore} Lore-Eintrag/-Einträge · Key: <code>${escHtml(s.key)}</code></p>
-          <div class="scenario-card-tags">${tags}</div>
-        </div>
-        <div class="scenario-card-actions">
-          <button type="button" onclick="smStartEdit(${s.id})">Bearbeiten</button>
-          <button type="button" onclick="smExport(${s.id})">&#8659;</button>
-          <button type="button" onclick="smDelete(${s.id})" class="ghost">Löschen</button>
-        </div>
-      </div>`;
-  }).join("");
-}
-
-// ── Load list ──
-async function smLoadList() {
-  try {
-    const data = await smFetch("/api/scenarios");
-    smRenderList(data.items || []);
-  } catch (err) {
-    smStatus("Fehler beim Laden: " + err.message, true);
-  }
+  smStatus("Scenario-Liste konnte nicht aktualisiert werden.", true);
 }
 
 // ── Load presets ──
@@ -614,7 +589,7 @@ async function smDelete(id) {
   try {
     await smFetch(`/api/scenarios/${id}`, { method: "DELETE" });
     smStatus("Scenario gelöscht.");
-    smLoadList();
+    smReloadList();
   } catch (err) {
     smStatus("Fehler: " + err.message, true);
   }
@@ -656,7 +631,7 @@ document.getElementById("sm-form").addEventListener("submit", async (e) => {
       smStatus("Scenario erstellt.");
     }
     smReset();
-    smLoadList();
+    smReloadList();
   } catch (err) {
     smStatus("Fehler: " + err.message, true);
   } finally {
@@ -686,7 +661,7 @@ document.getElementById("sm-import-input").addEventListener("change", async (e) 
       smStatus(`Fehler bei "${file.name}": ${err.message}`, true);
     }
   }
-  smLoadList();
+  smReloadList();
   e.target.value = "";
 });
 
@@ -707,11 +682,10 @@ importZone.addEventListener("drop", async e => {
       smStatus(`Fehler bei "${file.name}": ${err.message}`, true);
     }
   }
-  smLoadList();
+  smReloadList();
 });
 
 // ── Init ──
-smLoadList();
 smLoadPresets();
 smLoadInventoryCatalog();
 </script>

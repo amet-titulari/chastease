@@ -215,6 +215,19 @@ def test_profile_page_renders_audio_gateway_section():
         assert "/profile/audio/test" in resp.text
         assert "Voice Modus" not in resp.text
         assert "Voice Agent ID" not in resp.text
+        assert "https://unpkg.com/htmx.org@1.9.12" in resp.text
+        assert 'hx-get="/profile/partials/session-summary"' in resp.text
+
+
+def test_profile_session_summary_partial_renders_for_authenticated_user():
+    with TestClient(app) as client:
+        register_resp = _register(client, email=f"profile-partial-{uuid4().hex[:8]}@example.com")
+        assert register_resp.status_code == 303
+
+        resp = client.get("/profile/partials/session-summary", follow_redirects=False)
+        assert resp.status_code == 200
+        assert "Session-Uebersicht" in resp.text
+        assert 'hx-trigger="load, every 30s"' in resp.text
 
 
 def test_profile_audio_test_requires_authentication():

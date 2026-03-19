@@ -1,0 +1,33 @@
+<div
+  class="persona-list"
+  id="pm-list"
+  hx-get="/personas/partials/list"
+  hx-trigger="load"
+  hx-swap="outerHTML"
+>
+  {% if not items %}
+  <div class="empty-hint">Noch keine Personas gespeichert. Erstelle deine erste unten.</div>
+  {% else %}
+  {% for p in items %}
+  <div class="persona-card" data-id="{{ p.id }}">
+    {% if p.avatar_media_id %}
+    <img class="persona-avatar" src="/api/media/{{ p.avatar_media_id }}/content" alt="Avatar" />
+    {% endif %}
+    <div class="persona-card-info">
+      <p class="persona-card-name">{{ p.name }}</p>
+      <p class="persona-card-meta">
+        {% set meta_parts = [] %}
+        {% if p.speech_style_tone %}{% set _ = meta_parts.append(p.speech_style_tone) %}{% endif %}
+        {% if p.speech_style_dominance %}{% set _ = meta_parts.append(p.speech_style_dominance) %}{% endif %}
+        {{ meta_parts | join(" · ") }}{% if meta_parts %} · {% endif %}Strenge {{ p.strictness_level }}
+      </p>
+    </div>
+    <div class="persona-card-actions">
+      <button type="button" onclick="pmStartEdit({{ p.id }})" class="ghost">Bearbeiten</button>
+      <button type="button" onclick="pmExportOne({{ p.id }}, {{ p.name|tojson }})">&#8659; Export</button>
+      <button type="button" onclick="pmDelete({{ p.id }}, {{ p.name|tojson }})" class="warn">L&ouml;schen</button>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>

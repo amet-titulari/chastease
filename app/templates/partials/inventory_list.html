@@ -1,0 +1,38 @@
+<div
+  class="inventory-list"
+  id="im-list"
+  hx-get="/inventory/partials/list"
+  hx-trigger="load"
+  hx-swap="outerHTML"
+>
+  {% if not items %}
+  <div class="empty-hint">Noch keine Items gespeichert.</div>
+  {% else %}
+  {% for item in items %}
+  <div class="inventory-card" data-id="{{ item.id }}">
+    <div class="inventory-card-info">
+      <p class="inventory-card-title">
+        {{ item.name }}
+        {% if item.is_active %}
+        <span class="active-pill">Aktiv</span>
+        {% else %}
+        <span class="inactive-pill">Inaktiv</span>
+        {% endif %}
+      </p>
+      <p class="inventory-card-meta">Key: <code>{{ item.key }}</code>{% if item.category %} · Kategorie: {{ item.category }}{% endif %}</p>
+      <p class="inventory-card-meta">{{ item.description or "" }}</p>
+      <div class="inventory-card-tags">
+        {% for tag in item.tags %}
+        <span class="inventory-tag">{{ tag }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="inventory-card-actions">
+      <button type="button" onclick="imStartEdit({{ item.id }})" class="ghost">Bearbeiten</button>
+      <button type="button" onclick="imExportOne({{ item.id }}, {{ item.name|tojson }})">&#8659; Export</button>
+      <button type="button" onclick="imDelete({{ item.id }}, {{ item.name|tojson }})" class="warn">Loeschen</button>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>

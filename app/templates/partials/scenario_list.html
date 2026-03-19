@@ -1,0 +1,31 @@
+<div
+  class="scenario-list"
+  id="sm-list"
+  hx-get="/scenarios/partials/list"
+  hx-trigger="load"
+  hx-swap="outerHTML"
+>
+  {% if not items %}
+  <div class="empty-hint">Noch keine Scenarios gespeichert.</div>
+  {% else %}
+  {% for s in items %}
+  <div class="scenario-card" data-id="{{ s.id }}">
+    <div class="scenario-card-info">
+      <p class="scenario-card-title">{{ s.title }}</p>
+      <p class="scenario-card-meta">{{ s.summary or "" }}</p>
+      <p class="scenario-card-meta">{{ s.phases_count }} Phase(n) · {{ s.lorebook_count }} Lore-Eintrag/-Einträge · Key: <code>{{ s.key }}</code></p>
+      <div class="scenario-card-tags">
+        {% for tag in s.tags %}
+        <span class="scenario-tag">{{ tag }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="scenario-card-actions">
+      <button type="button" onclick="smStartEdit({{ s.id }})">Bearbeiten</button>
+      <button type="button" onclick="smExport({{ s.id }})">&#8659;</button>
+      <button type="button" onclick="smDelete({{ s.id }})" class="ghost">Löschen</button>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>

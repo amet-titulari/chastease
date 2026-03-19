@@ -302,6 +302,210 @@ def _render_profile_page(
     )
 
 
+def _build_settings_summary_payload(
+    request: Request,
+    user: AuthUser,
+    db: Session,
+    session_id: int | None = None,
+) -> dict:
+    llm_default = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
+    default_profile = _resolve_default_player_profile(user, db, create_if_missing=True)
+    default_setup = _setup_context_from_user_and_profile(user, default_profile)
+    db.commit()
+    profile_experience = None
+    profile_style = None
+    profile_goal = None
+    profile_limits = None
+    llm_payload = {
+        "provider": llm_default.provider,
+        "api_url": llm_default.api_url or "",
+        "chat_model": llm_default.chat_model or "",
+        "vision_model": llm_default.vision_model or "",
+        "profile_active": llm_default.profile_active,
+        "api_key_stored": bool(llm_default.api_key),
+    } if llm_default else None
+
+    def _as_utc(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    total_played_seconds = 0
+    owned_profiles = db.query(PlayerProfile.id).filter(PlayerProfile.auth_user_id == user.id).all()
+    owned_profile_ids = [row.id for row in owned_profiles]
+    if owned_profile_ids:
+        owned_sessions = db.query(SessionModel).filter(SessionModel.player_profile_id.in_(owned_profile_ids)).all()
+        now_utc = datetime.now(timezone.utc)
+        for owned_session in owned_sessions:
+            lock_start = _as_utc(owned_session.lock_start)
+            if lock_start is None:
+                continue
+            end_anchor = _as_utc(owned_session.lock_end_actual) or now_utc
+            total_played_seconds += max(0, int((end_anchor - lock_start).total_seconds()))
+
+    session_summary = None
+    target_session_id = session_id or user.active_session_id
+    if target_session_id:
+        session_obj = db.query(SessionModel).filter(SessionModel.id == target_session_id).first()
+        if session_obj:
+            persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
+            player = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+            prefs = {}
+            reaction = {}
+            hard_limits: list[str] = []
+            if player:
+                try:
+                    parsed_prefs = json.loads(player.preferences_json or "{}")
+                    if isinstance(parsed_prefs, dict):
+                        prefs = parsed_prefs
+                except Exception:
+                    prefs = {}
+                try:
+                    parsed_limits = json.loads(player.hard_limits_json or "[]")
+                    if isinstance(parsed_limits, list):
+                        hard_limits = [str(x) for x in parsed_limits if str(x).strip()]
+                except Exception:
+                    hard_limits = []
+                try:
+                    parsed_reaction = json.loads(player.reaction_patterns_json or "{}")
+                    if isinstance(parsed_reaction, dict):
+                        reaction = parsed_reaction
+                except Exception:
+                    reaction = {}
+
+            effective_hygiene_min_penalty = settings.hygiene_overdue_penalty_seconds
+            if isinstance(reaction.get("default_penalty_seconds"), (int, float)) and int(reaction.get("default_penalty_seconds")) > 0:
+                effective_hygiene_min_penalty = int(reaction.get("default_penalty_seconds"))
+
+            if player:
+                profile_experience = player.experience_level or default_setup["experience_level"]
+                profile_style = prefs.get("wearer_style") or default_setup["style"]
+                profile_goal = prefs.get("wearer_goal") or default_setup["goal"]
+                boundary = prefs.get("wearer_boundary")
+                if boundary and hard_limits:
+                    hard_limits_str = ", ".join(hard_limits)
+                    if str(boundary).strip().lower() == hard_limits_str.strip().lower():
+                        profile_limits = hard_limits_str
+                    else:
+                        profile_limits = f"{boundary} | Hard Limits: {hard_limits_str}"
+                elif boundary:
+                    profile_limits = boundary
+                elif hard_limits:
+                    profile_limits = ", ".join(hard_limits)
+            else:
+                profile_experience = default_setup["experience_level"]
+                profile_style = default_setup["style"]
+                profile_goal = default_setup["goal"]
+                profile_limits = default_setup["hard_limits"] or default_setup["boundary"]
+
+            llm_payload = {
+                "provider": session_obj.llm_provider or (llm_default.provider if llm_default else ""),
+                "api_url": session_obj.llm_api_url or (llm_default.api_url if llm_default else ""),
+                "chat_model": session_obj.llm_chat_model or (llm_default.chat_model if llm_default else ""),
+                "vision_model": session_obj.llm_vision_model or (llm_default.vision_model if llm_default else ""),
+                "profile_active": bool(session_obj.llm_profile_active),
+                "api_key_stored": bool(session_obj.llm_api_key or (llm_default.api_key if llm_default else None)),
+            }
+
+            active_seal = (
+                db.query(SealHistory)
+                .filter(SealHistory.session_id == session_obj.id, SealHistory.status == "active")
+                .order_by(SealHistory.applied_at.desc())
+                .first()
+            )
+            last_opening = (
+                db.query(HygieneOpening)
+                .filter(HygieneOpening.session_id == session_obj.id)
+                .order_by(HygieneOpening.id.desc())
+                .first()
+            )
+
+            task_rows = db.query(Task).filter(Task.session_id == session_obj.id).all()
+            task_total = len(task_rows)
+            task_pending = sum(1 for t in task_rows if t.status == "pending")
+            task_completed = sum(1 for t in task_rows if t.status == "completed")
+            task_overdue = sum(1 for t in task_rows if t.status == "overdue")
+            task_failed = sum(1 for t in task_rows if t.status == "failed")
+            task_penalty_total_seconds = sum(int(t.consequence_applied_seconds or 0) for t in task_rows)
+
+            opening_rows = db.query(HygieneOpening).filter(HygieneOpening.session_id == session_obj.id).all()
+            hygiene_penalty_total_seconds = sum(int(item.penalty_seconds or 0) for item in opening_rows)
+            hygiene_overrun_total_seconds = sum(int(item.overrun_seconds or 0) for item in opening_rows)
+
+            remaining_seconds = None
+            if session_obj.lock_end is not None:
+                lock_end = session_obj.lock_end
+                if lock_end.tzinfo is None:
+                    lock_end = lock_end.replace(tzinfo=timezone.utc)
+                remaining_seconds = max(0, int((lock_end - datetime.now(timezone.utc)).total_seconds()))
+
+            session_summary = {
+                "session_id": session_obj.id,
+                "persona_name": persona.name if persona else "Keyholderin",
+                "persona_avatar_media_id": persona.avatar_media_id if persona else None,
+                "persona_avatar_url": (f"/api/media/{persona.avatar_media_id}/content" if (persona and persona.avatar_media_id) else None),
+                "player_nickname": player.nickname if player else None,
+                "player_avatar_media_id": player.avatar_media_id if player else None,
+                "player_avatar_url": (f"/api/media/{player.avatar_media_id}/content" if (player and player.avatar_media_id) else None),
+                "status": session_obj.status,
+                "lock_start": str(session_obj.lock_start) if session_obj.lock_start else None,
+                "lock_end": str(session_obj.lock_end) if session_obj.lock_end else None,
+                "remaining_seconds": remaining_seconds,
+                "timer_frozen": bool(session_obj.timer_frozen),
+                "min_duration_seconds": session_obj.min_duration_seconds,
+                "max_duration_seconds": session_obj.max_duration_seconds,
+                "hygiene_limit_daily": session_obj.hygiene_limit_daily,
+                "hygiene_limit_weekly": session_obj.hygiene_limit_weekly,
+                "hygiene_limit_monthly": session_obj.hygiene_limit_monthly,
+                "active_seal_number": active_seal.seal_number if active_seal else None,
+                "last_opening_status": last_opening.status if last_opening else None,
+                "last_opening_due_back_at": str(last_opening.due_back_at) if (last_opening and last_opening.due_back_at) else None,
+                "task_total": task_total,
+                "task_pending": task_pending,
+                "task_completed": task_completed,
+                "task_overdue": task_overdue,
+                "task_failed": task_failed,
+                "task_penalty_total_seconds": task_penalty_total_seconds,
+                "hygiene_penalty_total_seconds": hygiene_penalty_total_seconds,
+                "hygiene_overrun_total_seconds": hygiene_overrun_total_seconds,
+                "hygiene_overdue_penalty_min_seconds": effective_hygiene_min_penalty,
+                "total_played_seconds": total_played_seconds,
+                "hygiene_opening_max_duration_seconds": (
+                    session_obj.hygiene_opening_max_duration_seconds
+                    if session_obj.hygiene_opening_max_duration_seconds is not None
+                    else (
+                        (
+                            prefs.get("hygiene_opening_max_duration_seconds")
+                            if isinstance(prefs.get("hygiene_opening_max_duration_seconds"), (int, float))
+                            and int(prefs.get("hygiene_opening_max_duration_seconds")) > 0
+                            else settings.hygiene_opening_max_duration_seconds
+                        )
+                    )
+                ),
+            }
+
+    if profile_experience is None:
+        profile_experience = default_setup["experience_level"]
+    if profile_style is None:
+        profile_style = default_setup["style"]
+    if profile_goal is None:
+        profile_goal = default_setup["goal"]
+    if profile_limits is None:
+        profile_limits = default_setup["hard_limits"] or default_setup["boundary"]
+
+    return {
+        "username": user.username,
+        "experience_level": profile_experience,
+        "style": profile_style,
+        "goal": profile_goal,
+        "boundary": profile_limits,
+        "session": session_summary,
+        "llm": llm_payload,
+    }
+
+
 @router.get("/", response_class=HTMLResponse)
 def landing_page(request: Request, db: Session = Depends(get_db)):
     current_user = _get_current_user(request, db)
@@ -930,6 +1134,23 @@ def personas_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/personas/partials/list", response_class=HTMLResponse)
+def personas_list_partial(request: Request, db: Session = Depends(get_db)):
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+    rows = db.query(Persona).order_by(Persona.id.asc()).all()
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/persona_list.html",
+        context={
+            "title": f"{settings.app_name} – Personas",
+            "current_user": user,
+            "items": rows,
+        },
+    )
+
+
 @router.get("/scenarios", response_class=HTMLResponse)
 def scenarios_page(request: Request, db: Session = Depends(get_db)):
     user = _require_admin_user(request, db)
@@ -939,6 +1160,52 @@ def scenarios_page(request: Request, db: Session = Depends(get_db)):
         request=request,
         name="scenarios.html",
         context={"title": f"{settings.app_name} – Scenarios", "current_user": user},
+    )
+
+
+@router.get("/scenarios/partials/list", response_class=HTMLResponse)
+def scenarios_list_partial(request: Request, db: Session = Depends(get_db)):
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+    rows = db.query(Scenario).order_by(Scenario.id.asc()).all()
+    items = []
+    for row in rows:
+        try:
+            tags = json.loads(row.tags_json or "[]")
+            if not isinstance(tags, list):
+                tags = []
+        except Exception:
+            tags = []
+        try:
+            phases = json.loads(row.phases_json or "[]")
+            if not isinstance(phases, list):
+                phases = []
+        except Exception:
+            phases = []
+        try:
+            lorebook = json.loads(row.lorebook_json or "[]")
+            if not isinstance(lorebook, list):
+                lorebook = []
+        except Exception:
+            lorebook = []
+        items.append({
+            "id": row.id,
+            "title": row.title,
+            "summary": row.summary,
+            "key": row.key,
+            "tags": tags,
+            "phases_count": len(phases),
+            "lorebook_count": len(lorebook),
+        })
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/scenario_list.html",
+        context={
+            "title": f"{settings.app_name} – Scenarios",
+            "current_user": user,
+            "items": items,
+        },
     )
 
 
@@ -954,6 +1221,45 @@ def inventory_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/inventory/partials/list", response_class=HTMLResponse)
+def inventory_list_partial(request: Request, db: Session = Depends(get_db)):
+    user = _require_admin_user(request, db)
+    if isinstance(user, RedirectResponse):
+        return user
+    rows = (
+        db.query(Item)
+        .filter(Item.owner_user_id == user.id)
+        .order_by(Item.name.asc())
+        .all()
+    )
+    items = []
+    for row in rows:
+        try:
+            tags = json.loads(row.tags_json or "[]")
+            if not isinstance(tags, list):
+                tags = []
+        except Exception:
+            tags = []
+        items.append({
+            "id": row.id,
+            "key": row.key,
+            "name": row.name,
+            "category": row.category,
+            "description": row.description,
+            "tags": tags,
+            "is_active": bool(row.is_active),
+        })
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/inventory_list.html",
+        context={
+            "title": f"{settings.app_name} – Inventory",
+            "current_user": user,
+            "items": items,
+        },
+    )
+
+
 @router.get("/api/settings/summary")
 def settings_summary(
     request: Request,
@@ -963,204 +1269,59 @@ def settings_summary(
     user = _get_current_user(request, db)
     if user is None:
         return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse(_build_settings_summary_payload(request=request, user=user, db=db, session_id=session_id))
 
-    llm_default = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
-    default_profile = _resolve_default_player_profile(user, db, create_if_missing=True)
-    default_setup = _setup_context_from_user_and_profile(user, default_profile)
-    db.commit()
-    profile_experience = None
-    profile_style = None
-    profile_goal = None
-    profile_limits = None
-    llm_payload = {
-        "provider": llm_default.provider,
-        "api_url": llm_default.api_url or "",
-        "chat_model": llm_default.chat_model or "",
-        "vision_model": llm_default.vision_model or "",
-        "profile_active": llm_default.profile_active,
-        "api_key_stored": bool(llm_default.api_key),
-    } if llm_default else None
 
-    def _as_utc(value: datetime | None) -> datetime | None:
+@router.get("/profile/partials/session-summary", response_class=HTMLResponse)
+def profile_session_summary_partial(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return HTMLResponse("<p class='hint'>Bitte zuerst anmelden.</p>", status_code=401)
+
+    payload = _build_settings_summary_payload(request=request, user=user, db=db, session_id=None)
+    session = payload.get("session")
+
+    def _fmt_date(value: str | None) -> str:
+        if not value:
+            return "—"
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone().strftime("%d.%m.%Y, %H:%M:%S")
+        except Exception:
+            return str(value)
+
+    def _fmt_secs(value: int | None) -> str:
         if value is None:
-            return None
-        if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
+            return "—"
+        total = max(0, int(value))
+        d = total // 86400
+        h = (total % 86400) // 3600
+        m = (total % 3600) // 60
+        s = total % 60
+        return f"{d}d {h}h {m}m {s}s"
 
-    total_played_seconds = 0
-    owned_profiles = db.query(PlayerProfile.id).filter(PlayerProfile.auth_user_id == user.id).all()
-    owned_profile_ids = [row.id for row in owned_profiles]
-    if owned_profile_ids:
-        owned_sessions = db.query(SessionModel).filter(SessionModel.player_profile_id.in_(owned_profile_ids)).all()
-        now_utc = datetime.now(timezone.utc)
-        for owned_session in owned_sessions:
-            lock_start = _as_utc(owned_session.lock_start)
-            if lock_start is None:
-                continue
-            end_anchor = _as_utc(owned_session.lock_end_actual) or now_utc
-            total_played_seconds += max(0, int((end_anchor - lock_start).total_seconds()))
+    session_view = None
+    if session:
+        session_view = dict(session)
+        session_view["lock_start_display"] = _fmt_date(session.get("lock_start"))
+        session_view["lock_end_display"] = _fmt_date(session.get("lock_end"))
+        session_view["remaining_display"] = _fmt_secs(session.get("remaining_seconds"))
+        session_view["min_duration_display"] = _fmt_secs(session.get("min_duration_seconds"))
+        session_view["max_duration_display"] = _fmt_secs(session.get("max_duration_seconds")) if session.get("max_duration_seconds") is not None else "—"
+        session_view["task_penalty_display"] = _fmt_secs(session.get("task_penalty_total_seconds"))
+        session_view["hygiene_penalty_display"] = _fmt_secs(session.get("hygiene_penalty_total_seconds"))
+        session_view["hygiene_overrun_display"] = _fmt_secs(session.get("hygiene_overrun_total_seconds"))
+        session_view["total_played_display"] = _fmt_secs(session.get("total_played_seconds"))
+        session_view["last_opening_due_back_display"] = _fmt_date(session.get("last_opening_due_back_at")) if session.get("last_opening_due_back_at") else None
 
-    session_summary = None
-    target_session_id = session_id or user.active_session_id
-    if target_session_id:
-        session_obj = db.query(SessionModel).filter(SessionModel.id == target_session_id).first()
-        if session_obj:
-            persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
-            player = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
-            prefs = {}
-            reaction = {}
-            hard_limits: list[str] = []
-            if player:
-                try:
-                    parsed_prefs = json.loads(player.preferences_json or "{}")
-                    if isinstance(parsed_prefs, dict):
-                        prefs = parsed_prefs
-                except Exception:
-                    prefs = {}
-                try:
-                    parsed_limits = json.loads(player.hard_limits_json or "[]")
-                    if isinstance(parsed_limits, list):
-                        hard_limits = [str(x) for x in parsed_limits if str(x).strip()]
-                except Exception:
-                    hard_limits = []
-                try:
-                    parsed_reaction = json.loads(player.reaction_patterns_json or "{}")
-                    if isinstance(parsed_reaction, dict):
-                        reaction = parsed_reaction
-                except Exception:
-                    reaction = {}
-
-            effective_hygiene_min_penalty = settings.hygiene_overdue_penalty_seconds
-            if isinstance(reaction.get("default_penalty_seconds"), (int, float)) and int(reaction.get("default_penalty_seconds")) > 0:
-                effective_hygiene_min_penalty = int(reaction.get("default_penalty_seconds"))
-
-            if player:
-                profile_experience = player.experience_level or default_setup["experience_level"]
-                profile_style = prefs.get("wearer_style") or default_setup["style"]
-                profile_goal = prefs.get("wearer_goal") or default_setup["goal"]
-                boundary = prefs.get("wearer_boundary")
-                if boundary and hard_limits:
-                    hard_limits_str = ", ".join(hard_limits)
-                    if str(boundary).strip().lower() == hard_limits_str.strip().lower():
-                        profile_limits = hard_limits_str
-                    else:
-                        profile_limits = f"{boundary} | Hard Limits: {hard_limits_str}"
-                elif boundary:
-                    profile_limits = boundary
-                elif hard_limits:
-                    profile_limits = ", ".join(hard_limits)
-            else:
-                profile_experience = default_setup["experience_level"]
-                profile_style = default_setup["style"]
-                profile_goal = default_setup["goal"]
-                profile_limits = default_setup["hard_limits"] or default_setup["boundary"]
-
-            # For play mode, session-specific LLM config is the source of truth.
-            llm_payload = {
-                "provider": session_obj.llm_provider or (llm_default.provider if llm_default else ""),
-                "api_url": session_obj.llm_api_url or (llm_default.api_url if llm_default else ""),
-                "chat_model": session_obj.llm_chat_model or (llm_default.chat_model if llm_default else ""),
-                "vision_model": session_obj.llm_vision_model or (llm_default.vision_model if llm_default else ""),
-                "profile_active": bool(session_obj.llm_profile_active),
-                "api_key_stored": bool(session_obj.llm_api_key or (llm_default.api_key if llm_default else None)),
-            }
-
-            active_seal = (
-                db.query(SealHistory)
-                .filter(SealHistory.session_id == session_obj.id, SealHistory.status == "active")
-                .order_by(SealHistory.applied_at.desc())
-                .first()
-            )
-            last_opening = (
-                db.query(HygieneOpening)
-                .filter(HygieneOpening.session_id == session_obj.id)
-                .order_by(HygieneOpening.id.desc())
-                .first()
-            )
-
-            task_rows = db.query(Task).filter(Task.session_id == session_obj.id).all()
-            task_total = len(task_rows)
-            task_pending = sum(1 for t in task_rows if t.status == "pending")
-            task_completed = sum(1 for t in task_rows if t.status == "completed")
-            task_overdue = sum(1 for t in task_rows if t.status == "overdue")
-            task_failed = sum(1 for t in task_rows if t.status == "failed")
-            task_penalty_total_seconds = sum(int(t.consequence_applied_seconds or 0) for t in task_rows)
-
-            opening_rows = db.query(HygieneOpening).filter(HygieneOpening.session_id == session_obj.id).all()
-            hygiene_penalty_total_seconds = sum(int(item.penalty_seconds or 0) for item in opening_rows)
-            hygiene_overrun_total_seconds = sum(int(item.overrun_seconds or 0) for item in opening_rows)
-
-            remaining_seconds = None
-            if session_obj.lock_end is not None:
-                lock_end = session_obj.lock_end
-                if lock_end.tzinfo is None:
-                    lock_end = lock_end.replace(tzinfo=timezone.utc)
-                remaining_seconds = max(0, int((lock_end - datetime.now(timezone.utc)).total_seconds()))
-
-            session_summary = {
-                "session_id": session_obj.id,
-                "persona_name": persona.name if persona else "Keyholderin",
-                "persona_avatar_media_id": persona.avatar_media_id if persona else None,
-                "persona_avatar_url": (f"/api/media/{persona.avatar_media_id}/content" if (persona and persona.avatar_media_id) else None),
-                "player_nickname": player.nickname if player else None,
-                "player_avatar_media_id": player.avatar_media_id if player else None,
-                "player_avatar_url": (f"/api/media/{player.avatar_media_id}/content" if (player and player.avatar_media_id) else None),
-                "status": session_obj.status,
-                "lock_start": str(session_obj.lock_start) if session_obj.lock_start else None,
-                "lock_end": str(session_obj.lock_end) if session_obj.lock_end else None,
-                "remaining_seconds": remaining_seconds,
-                "timer_frozen": bool(session_obj.timer_frozen),
-                "min_duration_seconds": session_obj.min_duration_seconds,
-                "max_duration_seconds": session_obj.max_duration_seconds,
-                "hygiene_limit_daily": session_obj.hygiene_limit_daily,
-                "hygiene_limit_weekly": session_obj.hygiene_limit_weekly,
-                "hygiene_limit_monthly": session_obj.hygiene_limit_monthly,
-                "active_seal_number": active_seal.seal_number if active_seal else None,
-                "last_opening_status": last_opening.status if last_opening else None,
-                "last_opening_due_back_at": str(last_opening.due_back_at) if (last_opening and last_opening.due_back_at) else None,
-                "task_total": task_total,
-                "task_pending": task_pending,
-                "task_completed": task_completed,
-                "task_overdue": task_overdue,
-                "task_failed": task_failed,
-                "task_penalty_total_seconds": task_penalty_total_seconds,
-                "hygiene_penalty_total_seconds": hygiene_penalty_total_seconds,
-                "hygiene_overrun_total_seconds": hygiene_overrun_total_seconds,
-                "hygiene_overdue_penalty_min_seconds": effective_hygiene_min_penalty,
-                "total_played_seconds": total_played_seconds,
-                "hygiene_opening_max_duration_seconds": (
-                    session_obj.hygiene_opening_max_duration_seconds
-                    if session_obj.hygiene_opening_max_duration_seconds is not None
-                    else (
-                        (
-                            prefs.get("hygiene_opening_max_duration_seconds")
-                            if isinstance(prefs.get("hygiene_opening_max_duration_seconds"), (int, float))
-                            and int(prefs.get("hygiene_opening_max_duration_seconds")) > 0
-                            else settings.hygiene_opening_max_duration_seconds
-                        )
-                    )
-                ),
-            }
-
-    if profile_experience is None:
-        profile_experience = default_setup["experience_level"]
-    if profile_style is None:
-        profile_style = default_setup["style"]
-    if profile_goal is None:
-        profile_goal = default_setup["goal"]
-    if profile_limits is None:
-        profile_limits = default_setup["hard_limits"] or default_setup["boundary"]
-
-    return JSONResponse({
-        "username": user.username,
-        "experience_level": profile_experience,
-        "style": profile_style,
-        "goal": profile_goal,
-        "boundary": profile_limits,
-        "session": session_summary,
-        "llm": llm_payload,
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/profile_session_summary.html",
+        context={
+            "request": request,
+            "current_user": user,
+            "session": session_view,
+        },
+    )
 
 
 @router.post("/api/settings/llm")

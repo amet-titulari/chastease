@@ -2,6 +2,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/css/profile.css" />
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
 {% endblock %}
 
 {% block content %}
@@ -68,33 +69,20 @@
         <a class="ghost" href="/">Zur Landing</a>
       </div>
 
-      <section class="profile-session-section" id="profile-session-section">
+      <section
+        class="profile-session-section"
+        id="profile-session-section"
+        hx-get="/profile/partials/session-summary"
+        hx-trigger="load"
+        hx-swap="outerHTML"
+      >
         <div class="profile-session-head">
           <div>
             <p class="eyebrow">Session</p>
             <h2>Session-Uebersicht</h2>
           </div>
-          <a id="profile-session-link" class="ghost{% if not active_play_url %} is-disabled{% endif %}" href="{{ active_play_url or '/experience' }}">Zur Session</a>
         </div>
         <p id="profile-session-feedback" class="hint">Session-Daten werden geladen...</p>
-        <dl class="profile-session-grid">
-          <dt>Wearer</dt><dd id="profile-session-wearer">&mdash;</dd>
-          <dt>Keyholderin</dt><dd id="profile-session-keyholder">&mdash;</dd>
-          <dt>Session-ID</dt><dd id="profile-session-id">&mdash;</dd>
-          <dt>Start</dt><dd id="profile-session-lock-start">&mdash;</dd>
-          <dt>Freigabe</dt><dd id="profile-session-lock-end">&mdash;</dd>
-          <dt>Verbleibend</dt><dd id="profile-session-remaining">&mdash;</dd>
-          <dt>Status</dt><dd id="profile-session-status">&mdash;</dd>
-          <dt>Timer</dt><dd id="profile-session-timer">&mdash;</dd>
-          <dt>Mindestdauer</dt><dd id="profile-session-min-duration">&mdash;</dd>
-          <dt>Maximaldauer</dt><dd id="profile-session-max-duration">&mdash;</dd>
-          <dt>Aktive Plombe</dt><dd id="profile-session-active-seal">&mdash;</dd>
-          <dt>Hygiene zuletzt</dt><dd id="profile-session-last-opening">&mdash;</dd>
-          <dt>Task-Statistik</dt><dd id="profile-session-task-stats">&mdash;</dd>
-          <dt>Task-Strafen</dt><dd id="profile-session-task-penalty">&mdash;</dd>
-          <dt>Hygiene-Strafen</dt><dd id="profile-session-hygiene-penalty">&mdash;</dd>
-          <dt>Gesamtdauer</dt><dd id="profile-session-total-played">&mdash;</dd>
-        </dl>
       </section>
 
       <hr class="section-divider" />
@@ -239,75 +227,6 @@
 
 {% block scripts %}
 <script>
-async function loadProfileSessionSummary() {
-  const feedbackEl = document.getElementById("profile-session-feedback");
-  const set = (id, val) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val || "—";
-  };
-  const fmtDate = (val) => {
-    if (!val) return "—";
-    try {
-      return new Date(val).toLocaleString("de-DE");
-    } catch (_) {
-      return String(val);
-    }
-  };
-  const fmtSecs = (secs) => {
-    if (secs === null || secs === undefined || Number.isNaN(Number(secs))) return "—";
-    const total = Math.max(0, Number(secs));
-    const d = Math.floor(total / 86400);
-    const hRemainder = Math.floor((total % 86400) / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = Math.floor(total % 60);
-    return [`${d}d`, `${hRemainder}h`, `${m}m`, `${s}s`].join(" ");
-  };
-
-  try {
-    const resp = await fetch("/api/settings/summary");
-    const data = await resp.json();
-    const session = data.session;
-    if (!session) {
-      if (feedbackEl) feedbackEl.textContent = "Keine aktive oder zugeordnete Session gefunden.";
-      return;
-    }
-
-    set("profile-session-wearer", session.player_nickname);
-    set("profile-session-keyholder", session.persona_name);
-    set("profile-session-id", session.session_id ? `#${session.session_id}` : "—");
-    set("profile-session-lock-start", fmtDate(session.lock_start));
-    set("profile-session-lock-end", fmtDate(session.lock_end));
-    set("profile-session-remaining", fmtSecs(session.remaining_seconds));
-    set("profile-session-status", session.status || "—");
-    set("profile-session-timer", session.timer_frozen ? "eingefroren" : "laufend");
-    set("profile-session-min-duration", fmtSecs(session.min_duration_seconds));
-    set("profile-session-max-duration", session.max_duration_seconds ? fmtSecs(session.max_duration_seconds) : "—");
-    set("profile-session-active-seal", session.active_seal_number || "—");
-    set(
-      "profile-session-last-opening",
-      session.last_opening_status
-        ? `${session.last_opening_status}${session.last_opening_due_back_at ? ` (Rueckgabe: ${fmtDate(session.last_opening_due_back_at)})` : ""}`
-        : "—"
-    );
-    set(
-      "profile-session-task-stats",
-      `Gesamt: ${session.task_total ?? 0} | pending: ${session.task_pending ?? 0} | completed: ${session.task_completed ?? 0} | overdue: ${session.task_overdue ?? 0} | failed: ${session.task_failed ?? 0}`
-    );
-    set("profile-session-task-penalty", fmtSecs(session.task_penalty_total_seconds));
-    set(
-      "profile-session-hygiene-penalty",
-      `${fmtSecs(session.hygiene_penalty_total_seconds)} (Overrun: ${fmtSecs(session.hygiene_overrun_total_seconds)})`
-    );
-    set("profile-session-total-played", fmtSecs(session.total_played_seconds));
-
-    if (feedbackEl) feedbackEl.textContent = "Aktive Session und Verlauf der Session-Dauer.";
-  } catch (error) {
-    if (feedbackEl) feedbackEl.textContent = `Session-Daten konnten nicht geladen werden: ${error}`;
-  }
-}
-
-loadProfileSessionSummary();
-
 document.getElementById("llm-test-btn")?.addEventListener("click", async () => {
   const btn = document.getElementById("llm-test-btn");
   const result = document.getElementById("llm-test-result");
