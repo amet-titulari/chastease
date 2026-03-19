@@ -18,6 +18,9 @@ def test_prompt_builder_uses_external_templates_and_metadata():
         hard_limits=["blood", "breathplay"],
         active_phase={"title": "Warmup", "objective": "Focus", "guidance": "Steady breathing"},
         lorebook_entries=[{"key": "ritual", "content": "Follow the opening ritual."}],
+        relationship_state={"trust": 61, "obedience": 74, "resistance": 12, "favor": 48, "strictness": 70, "frustration": 18, "attachment": 52, "control_level": "ritual"},
+        protocol_state={"active_rules": ["Hands visible"], "blocked_actions": ["Keine Freigabe"], "open_orders": ["Knie nieder"], "reward_focus": "Lob", "consequence_focus": "enger fuehren"},
+        scene_state={"title": "Inspection", "arc": "Ametara", "objective": "Pose pruefen", "pressure": "mittel", "last_consequence": "strenger Ton", "next_beat": "naechste Order"},
     )
 
     rendered = prompt_modules.render()
@@ -28,6 +31,9 @@ def test_prompt_builder_uses_external_templates_and_metadata():
     assert "action_contract.jinja2" in prompt_modules.templates_used
     assert "Persona: Default Persona." in rendered
     assert "Safety: mode=yellow." in rendered
+    assert "Director-Modus:" in rendered
+    assert "Szene: Inspection." in rendered
+    assert "Offene Orders: Knie nieder." in rendered
     assert "Aktive Phase: Warmup." in rendered
     assert "[ritual]: Follow the opening ritual." in rendered
     assert "create_task" in rendered

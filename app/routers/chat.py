@@ -23,6 +23,7 @@ from app.services.ai_gateway import get_ai_gateway
 from app.services.audit_logger import audit_log
 from app.services.context_window import build_context_window
 from app.services.prompt_builder import build_prompt_modules
+from app.services.roleplay_state import build_roleplay_state, merge_roleplay_state, serialize_roleplay_state, summarize_roleplay_state_changes
 from app.services.session_access import get_owned_session
 from app.services.task_template_pool import build_template_task_action, select_task_template, user_requested_task
 from app.services.task_service import TaskService
@@ -176,7 +177,6 @@ def _persist_chat_turn(
             _preset = next((p for p in _SP if p.get("key") == scenario_key), None)
             _phases = _preset.get("phases", []) if _preset else []
             _lorebook = _preset.get("lorebook", []) if _preset else []
-
         # Active phase: from prefs or default to first
         phase_id = prefs.get("scenario_phase_id") if prefs else None
         if phase_id:
@@ -191,6 +191,14 @@ def _persist_chat_turn(
                 matched_lore.append(entry)
             if len(matched_lore) >= 3:
                 break
+
+    roleplay_state = build_roleplay_state(
+        relationship_json=session_obj.relationship_state_json,
+        protocol_json=session_obj.protocol_state_json,
+        scene_json=session_obj.scene_state_json,
+        scenario_title=scenario_title,
+        active_phase=active_phase,
+    )
 
     context_rows = (
         db.query(Message)
@@ -317,6 +325,9 @@ def _persist_chat_turn(
         hard_limits=hard_limits or None,
         active_phase=active_phase,
         lorebook_entries=matched_lore or None,
+        relationship_state=roleplay_state["relationship"],
+        protocol_state=roleplay_state["protocol"],
+        scene_state=roleplay_state["scene"],
     )
     logger.info(
         "Rendered prompt version=%s templates=%s session_id=%s",
@@ -435,6 +446,29 @@ def _persist_chat_turn(
                         f"#{target_task.id} '{target_task.title}' ({', '.join(changed_fields)}; "
                         f"Deadline: {_fmt_deadline_for_context(target_task.deadline_at)})"
                     )
+                continue
+
+            if action.get("type") == "update_roleplay_state":
+                next_state = merge_roleplay_state(
+                    current_state=roleplay_state,
+                    patch=action,
+                    scenario_title=scenario_title,
+                    active_phase=active_phase,
+                )
+                serialized = serialize_roleplay_state(next_state)
+                session_obj.relationship_state_json = serialized["relationship_state_json"]
+                session_obj.protocol_state_json = serialized["protocol_state_json"]
+                session_obj.scene_state_json = serialized["scene_state_json"]
+                db.add(session_obj)
+                db.add(
+                    Message(
+                        session_id=session_id,
+                        role="system",
+                        content=summarize_roleplay_state_changes(roleplay_state, next_state),
+                        message_type="session_state_updated",
+                    )
+                )
+                roleplay_state = next_state
                 continue
 
             if action.get("type") != "create_task":

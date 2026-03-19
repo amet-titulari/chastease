@@ -170,7 +170,8 @@ class OllamaGateway(AIGateway):
                     prompt_parts.append(str(content))
         prompt_parts.append(
             "Antworte als JSON mit den Feldern message, actions, mood und intensity. "
-            "Wenn du eine Aufgabe vergibst oder der Nutzer explizit nach einer Aufgabe fragt, muss in actions mindestens eine create_task-Action stehen."
+            "Wenn du eine Aufgabe vergibst oder der Nutzer explizit nach einer Aufgabe fragt, muss in actions mindestens eine create_task-Action stehen. "
+            "Wenn sich Szene, Beziehungsdynamik oder Protokollregeln merklich veraendern, darfst du zusaetzlich eine update_roleplay_state-Action senden."
         )
         prompt_parts.append(f"Persona: {persona_name}")
         prompt_parts.append(f"User: {user_text}")
@@ -347,7 +348,8 @@ class CustomOpenAIGateway(AIGateway):
                 "role": "system",
                 "content": (
                     "Antworte nur als JSON mit message, actions, mood, intensity. "
-                    "Wenn du eine Aufgabe vergibst oder der Nutzer explizit nach einer Aufgabe fragt, muss in actions mindestens eine create_task-Action stehen."
+                    "Wenn du eine Aufgabe vergibst oder der Nutzer explizit nach einer Aufgabe fragt, muss in actions mindestens eine create_task-Action stehen. "
+                    "Wenn sich Szene, Beziehung oder Protokollaenderungen ergeben, darfst du eine update_roleplay_state-Action mitsenden."
                 ),
             }
         )

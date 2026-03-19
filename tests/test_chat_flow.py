@@ -286,6 +286,75 @@ def test_chat_persists_prompt_metadata(monkeypatch):
         assert send_resp.status_code == 200
 
 
+def test_chat_can_update_roleplay_state(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message="Bleib in der Inspection und melde Haltung.",
+                actions=[
+                    {
+                        "type": "update_roleplay_state",
+                        "scene": {
+                            "title": "Inspection",
+                            "objective": "Haltung, Gehorsam und Praesenz pruefen",
+                            "last_consequence": "Ton wurde verschaerft",
+                            "next_beat": "Statusmeldung in Pose",
+                        },
+                        "relationship": {
+                            "obedience": 77,
+                            "strictness": 74,
+                            "control_level": "inspection",
+                        },
+                        "protocol": {
+                            "active_rules": ["Haende hinter den Kopf", "Beine gespreizt stehen"],
+                            "open_orders": ["Pose halten und still melden"],
+                        },
+                    }
+                ],
+                mood="strict",
+                intensity=4,
+            )
+
+    def _fake_get_ai_gateway(session_obj):
+        _ = session_obj
+        return _DummyAI()
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", _fake_get_ai_gateway)
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Ich bin bereit."},
+        )
+        assert send_resp.status_code == 200
+
+        detail_resp = client.get(f"/api/sessions/{session_id}")
+        assert detail_resp.status_code == 200
+        state = detail_resp.json()["roleplay_state"]
+        assert state["scene"]["title"] == "Inspection"
+        assert state["relationship"]["obedience"] == 77
+        assert state["relationship"]["control_level"] == "inspection"
+        assert state["protocol"]["open_orders"] == ["Pose halten und still melden"]
+
+        db = SessionLocal()
+        try:
+            update_msg = (
+                db.query(Message)
+                .filter(Message.session_id == session_id, Message.message_type == "session_state_updated")
+                .order_by(Message.id.desc())
+                .first()
+            )
+            assert update_msg is not None
+            assert "Inspection" in update_msg.content
+        finally:
+            db.close()
+
+
 def test_chat_falls_back_to_persona_task_template_when_ai_returns_no_task(monkeypatch):
     class _DummyAI:
         def generate_chat_response(self, **kwargs):

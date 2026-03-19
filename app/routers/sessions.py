@@ -24,6 +24,7 @@ from app.models.task import Task
 from app.models.verification import Verification
 from app.services.contract_service import build_contract_text
 from app.services.pdf_export import build_simple_text_pdf
+from app.services.roleplay_state import build_roleplay_state, initialize_roleplay_state
 from app.services.session_service import SessionService
 from app.services.audit_logger import audit_log
 from app.services.session_access import bind_session_profile_to_user, get_accessible_session, get_current_session_user, get_owned_session
@@ -152,6 +153,13 @@ def _session_blueprint(db: Session, session_obj: SessionModel) -> dict:
             "active": bool(session_obj.llm_profile_active),
             "api_key_stored": bool(session_obj.llm_api_key),
         },
+        "roleplay_state": build_roleplay_state(
+            relationship_json=session_obj.relationship_state_json,
+            protocol_json=session_obj.protocol_state_json,
+            scene_json=session_obj.scene_state_json,
+            scenario_title=prefs.get("scenario_preset"),
+            active_phase=None,
+        ),
     }
 
 
@@ -200,6 +208,14 @@ def get_session(session_id: int, request: Request, db: Session = Depends(get_db)
         db.commit()
         db.refresh(session_obj)
     profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+    prefs = json.loads(profile.preferences_json) if profile else {}
+    roleplay_state = build_roleplay_state(
+        relationship_json=session_obj.relationship_state_json,
+        protocol_json=session_obj.protocol_state_json,
+        scene_json=session_obj.scene_state_json,
+        scenario_title=prefs.get("scenario_preset"),
+        active_phase=None,
+    )
 
     return {
         "session_id": session_obj.id,
@@ -222,6 +238,7 @@ def get_session(session_id: int, request: Request, db: Session = Depends(get_db)
         "lock_end": str(session_obj.lock_end) if session_obj.lock_end else None,
         "ws_auth_token": session_obj.ws_auth_token,
         "contract_signed": bool(contract and contract.signed_at),
+        "roleplay_state": roleplay_state,
         "player_profile": {
             "id": profile.id,
             "experience_level": profile.experience_level,
@@ -671,6 +688,17 @@ def create_session(payload: CreateSessionRequest, request: Request, db: Session 
     llm_chat_model = payload.llm_chat_model if payload.llm_chat_model is not None else (template_session.llm_chat_model if template_session else (default_llm.chat_model if default_llm else None))
     llm_vision_model = payload.llm_vision_model if payload.llm_vision_model is not None else (template_session.llm_vision_model if template_session else (default_llm.vision_model if default_llm else None))
     llm_active = payload.llm_active if payload.llm_active is not None else (bool(template_session.llm_profile_active) if template_session else bool(default_llm.profile_active if default_llm else False))
+    initial_roleplay_state = initialize_roleplay_state(scenario_title=prefs.get("scenario_preset"))
+    if template_session and any([
+        template_session.relationship_state_json,
+        template_session.protocol_state_json,
+        template_session.scene_state_json,
+    ]):
+        initial_roleplay_state = {
+            "relationship_state_json": template_session.relationship_state_json,
+            "protocol_state_json": template_session.protocol_state_json,
+            "scene_state_json": template_session.scene_state_json,
+        }
 
     session_obj = SessionModel(
         persona_id=persona.id,
@@ -687,6 +715,9 @@ def create_session(payload: CreateSessionRequest, request: Request, db: Session 
         llm_chat_model=llm_chat_model,
         llm_vision_model=llm_vision_model,
         llm_profile_active=bool(llm_active),
+        relationship_state_json=initial_roleplay_state["relationship_state_json"],
+        protocol_state_json=initial_roleplay_state["protocol_state_json"],
+        scene_state_json=initial_roleplay_state["scene_state_json"],
         status="draft",
     )
     _ensure_ws_auth_token(session_obj)

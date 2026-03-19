@@ -32,6 +32,10 @@ const wsBtn = document.getElementById("play-connect-ws");
 const voiceStatusEl = document.getElementById("play-voice-status");
 const voiceToggleBtn = document.getElementById("play-voice-toggle");
 
+function plEscapeHtml(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function plIsVoiceRunning() {
   return Boolean(
     plVoiceSocket && (plVoiceSocket.readyState === WebSocket.OPEN || plVoiceSocket.readyState === WebSocket.CONNECTING)
@@ -466,6 +470,61 @@ function plFormatSpeakerName(item) {
   return "System";
 }
 
+function plRenderRoleplayState(roleplayState) {
+  const relationship = roleplayState?.relationship || {};
+  const protocol = roleplayState?.protocol || {};
+  const scene = roleplayState?.scene || {};
+
+  const setText = (id, value, fallback = "—") => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(value || fallback);
+  };
+  const setHtml = (id, html, fallback = "—") => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html || fallback;
+  };
+  const metric = (label, value) => {
+    const num = Number(value);
+    const safe = Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : 0;
+    return `
+      <div class="roleplay-meter">
+        <div class="roleplay-meter-top">
+          <span>${plEscapeHtml(label)}</span>
+          <strong>${safe}</strong>
+        </div>
+        <div class="roleplay-meter-track"><span style="width:${safe}%"></span></div>
+      </div>
+    `;
+  };
+  const pillList = (items, emptyText) => {
+    const list = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (!list.length) return `<span class="roleplay-empty">${plEscapeHtml(emptyText)}</span>`;
+    return list.map((item) => `<span class="roleplay-pill">${plEscapeHtml(item)}</span>`).join("");
+  };
+
+  setText("play-scene-pressure", scene.pressure || "—");
+  setText("play-scene-title", scene.title || "Einstimmung");
+  setText("play-scene-objective", scene.objective || "—");
+  setText("play-scene-next-beat", scene.next_beat || "—");
+  setText("play-scene-consequence", scene.last_consequence || "keine");
+  setText("play-control-level", relationship.control_level || "structured");
+  setText("play-roleplay-scene-mini", scene.title || "Szene");
+  setText("play-roleplay-mini-chip", relationship.control_level || scene.pressure || "Status");
+
+  setHtml(
+    "play-relationship-meters",
+    [
+      metric("Trust", relationship.trust),
+      metric("Obedience", relationship.obedience),
+      metric("Strictness", relationship.strictness),
+      metric("Resistance", relationship.resistance),
+    ].join("")
+  );
+  setHtml("play-active-rules", pillList(protocol.active_rules, "Keine aktiven Regeln"));
+  setHtml("play-open-orders", pillList(protocol.open_orders, "Keine offenen Orders"));
+}
+
 // -- Render chat --
 function plRenderChat(items) {
   if (!chatTimeline) return;
@@ -792,6 +851,16 @@ async function plListTasks() {
   }
 }
 
+async function plLoadSessionState() {
+  if (!SESSION_ID) return;
+  try {
+    const data = await plGet(`/api/sessions/${SESSION_ID}`);
+    if (data.roleplay_state) plRenderRoleplayState(data.roleplay_state);
+  } catch (err) {
+    plWrite("Fehler Roleplay-State", { error: String(err) });
+  }
+}
+
 // -- WebSocket --
 function plConnectWs() {
   if (!SESSION_ID || !WS_TOKEN) return plWrite("WS", { error: "Session/Token fehlt." });
@@ -808,6 +877,7 @@ function plConnectWs() {
     try {
       const payload = JSON.parse(event.data);
       if (payload.message_type && payload.message_type !== "timer_tick") {
+        await plLoadSessionState();
         await plLoadChat();   // chat first so AI message appears before task card
         await plListTasks();
       }
@@ -893,6 +963,7 @@ document.getElementById("play-send")?.addEventListener("click", async () => {
       data = await plPost(`/api/sessions/${SESSION_ID}/messages`, { content });
     }
     plWrite("Chat Reply", data);
+    await plLoadSessionState();
     await plLoadChat();
     await plListTasks();
   } catch (err) {
@@ -917,6 +988,7 @@ document.getElementById("play-regenerate")?.addEventListener("click", async () =
   try {
     const data = await plPost(`/api/sessions/${SESSION_ID}/messages/regenerate`, {});
     plWrite("Regenerate", data);
+    await plLoadSessionState();
     await plLoadChat();
     await plListTasks();
   } catch (err) {
@@ -946,24 +1018,44 @@ document.getElementById("play-resume-session")?.addEventListener("click", async 
 
 // -- Tasks dropdown toggle --
 const tasksDropdown = document.getElementById("play-tasks-dropdown");
+const roleplayToggle = document.getElementById("play-roleplay-toggle");
+const roleplayDropdown = document.getElementById("play-roleplay-dropdown");
 
 function closeTasksDropdown() {
   tasksDropdown?.classList.remove("is-open");
   document.getElementById("play-tasks-toggle")?.setAttribute("aria-expanded", "false");
 }
 
+function closeRoleplayDropdown() {
+  roleplayDropdown?.classList.remove("is-open");
+  roleplayToggle?.setAttribute("aria-expanded", "false");
+}
+
 document.getElementById("play-tasks-toggle")?.addEventListener("click", (e) => {
   e.stopPropagation();
+  closeRoleplayDropdown();
   const open = tasksDropdown.classList.toggle("is-open");
   document.getElementById("play-tasks-toggle").setAttribute("aria-expanded", String(open));
 });
 
+roleplayToggle?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  closeTasksDropdown();
+  closeSafetyDropdown();
+  const open = roleplayDropdown.classList.toggle("is-open");
+  roleplayToggle.setAttribute("aria-expanded", String(open));
+});
+
 document.addEventListener("click", (e) => {
   if (!e.target.closest("#play-tasks-menu")) closeTasksDropdown();
+  if (!e.target.closest("#play-roleplay-menu")) closeRoleplayDropdown();
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeTasksDropdown();
+  if (e.key === "Escape") {
+    closeTasksDropdown();
+    closeRoleplayDropdown();
+  }
 });
 
 // -- Safety dropdown toggle --
@@ -977,6 +1069,7 @@ function closeSafetyDropdown() {
 
 safetyToggle?.addEventListener("click", (e) => {
   e.stopPropagation();
+  closeRoleplayDropdown();
   const open = safetyDropdown.classList.toggle("is-open");
   safetyToggle.setAttribute("aria-expanded", String(open));
 });
@@ -1230,6 +1323,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const summary = await plGet(`/api/settings/summary?session_id=${SESSION_ID}`);
     _personaAvatarUrl = summary?.session?.persona_avatar_url || null;
   } catch (_) {}
+  await plLoadSessionState();
   await plLoadChat();
   await plListTasks();
   await plLoadVerifications();
@@ -1351,4 +1445,3 @@ async function plLoadSettingsSummary() {
     plWrite("Settings load error", { error: String(err) });
   }
 }
-

@@ -6,7 +6,7 @@ from jinja2 import Environment, FileSystemLoader
 
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
-PROMPT_VERSION = "2026-03-19.2"
+PROMPT_VERSION = "2026-03-19.3"
 
 _PROMPT_ENV = Environment(
     loader=FileSystemLoader(str(PROMPTS_DIR)),
@@ -19,6 +19,7 @@ _PROMPT_ENV = Environment(
 @dataclass
 class PromptModules:
     persona_module: str
+    director_module: str
     wearer_module: str
     safety_module: str
     session_module: str
@@ -32,6 +33,7 @@ class PromptModules:
         return _render_prompt_template(
             "base_system_prompt.jinja2",
             persona_module=self.persona_module,
+            director_module=self.director_module,
             wearer_module=self.wearer_module,
             safety_module=self.safety_module,
             session_module=self.session_module,
@@ -84,6 +86,9 @@ def build_prompt_modules(
     hard_limits: list[str] | None = None,
     active_phase: dict | None = None,
     lorebook_entries: list[dict] | None = None,
+    relationship_state: dict | None = None,
+    protocol_state: dict | None = None,
+    scene_state: dict | None = None,
 ) -> PromptModules:
     clamped = max(1, min(5, strictness_level))
     style_directive = _STRICTNESS_STYLE[clamped]
@@ -92,6 +97,7 @@ def build_prompt_modules(
     templates_used = [
         "base_system_prompt.jinja2",
         persona_template,
+        "director_guidance.jinja2",
         "wearer_profile.jinja2",
         "safety_override.jinja2",
         "session_context.jinja2",
@@ -107,6 +113,12 @@ def build_prompt_modules(
             persona_system_prompt=persona_system_prompt,
             speech_style_tone=speech_style_tone,
             speech_style_dominance=speech_style_dominance,
+        ),
+        director_module=_render_prompt_template(
+            "director_guidance.jinja2",
+            relationship_state=relationship_state or {},
+            protocol_state=protocol_state or {},
+            scene_state=scene_state or {},
         ),
         wearer_module=_render_prompt_template(
             "wearer_profile.jinja2",

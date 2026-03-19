@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="/static/css/play.css?v=20260313e" />
+<link rel="stylesheet" href="/static/css/play.css?v=20260319-roleplay" />
 {% endblock %}
 
 {% block content %}
@@ -23,6 +23,53 @@
     <div class="play-header-right">
       <span class="play-timer-label">Verbleibend</span>
       <code id="play-countdown" class="play-countdown">—</code>
+
+      <div class="play-roleplay-menu" id="play-roleplay-menu">
+        <button id="play-roleplay-toggle" class="play-roleplay-toggle" type="button" title="Session-Status" aria-haspopup="true" aria-expanded="false">
+          <span id="play-roleplay-scene-mini" class="roleplay-mini-scene">Szene</span>
+          <span id="play-roleplay-mini-chip" class="roleplay-mini-chip">lade...</span>
+        </button>
+        <div class="play-roleplay-dropdown" id="play-roleplay-dropdown" role="dialog" aria-label="Session-Status">
+          <div class="roleplay-card">
+            <div class="roleplay-card-head">
+              <span class="roleplay-label">Szene</span>
+              <span id="play-scene-pressure" class="roleplay-pressure">lade...</span>
+            </div>
+            <div id="play-scene-title" class="roleplay-scene-title">Roleplay-State wird geladen...</div>
+            <p id="play-scene-objective" class="roleplay-scene-objective">—</p>
+            <div class="roleplay-meta-grid">
+              <div>
+                <span class="roleplay-meta-label">Naechster Beat</span>
+                <span id="play-scene-next-beat" class="roleplay-meta-value">—</span>
+              </div>
+              <div>
+                <span class="roleplay-meta-label">Letzte Konsequenz</span>
+                <span id="play-scene-consequence" class="roleplay-meta-value">—</span>
+              </div>
+            </div>
+          </div>
+          <div class="roleplay-card roleplay-card--compact">
+            <div class="roleplay-card-head">
+              <span class="roleplay-label">Beziehung</span>
+              <span id="play-control-level" class="roleplay-chip">—</span>
+            </div>
+            <div id="play-relationship-meters" class="roleplay-meter-list"></div>
+          </div>
+          <div class="roleplay-card roleplay-card--compact">
+            <div class="roleplay-card-head">
+              <span class="roleplay-label">Protokoll</span>
+            </div>
+            <div class="roleplay-list-block">
+              <span class="roleplay-meta-label">Aktive Regeln</span>
+              <div id="play-active-rules" class="roleplay-pill-list"></div>
+            </div>
+            <div class="roleplay-list-block">
+              <span class="roleplay-meta-label">Offene Orders</span>
+              <div id="play-open-orders" class="roleplay-pill-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div class="play-header-chat-actions">
         <button id="play-regenerate" type="button" class="play-head-action">Regenerate</button>

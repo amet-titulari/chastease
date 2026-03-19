@@ -98,7 +98,26 @@ class FailTaskAction(_BaseActionModel):
         return _parse_positive_int(value)
 
 
-AIAction = Annotated[CreateTaskAction | UpdateTaskAction | FailTaskAction, Field(discriminator="type")]
+class UpdateRoleplayStateAction(_BaseActionModel):
+    type: Literal["update_roleplay_state"]
+    relationship: dict[str, Any] | None = None
+    protocol: dict[str, Any] | None = None
+    scene: dict[str, Any] | None = None
+
+    @field_validator("relationship", "protocol", "scene", mode="before")
+    @classmethod
+    def _validate_optional_dict(cls, value: Any) -> dict[str, Any] | None:
+        if value in (None, ""):
+            return None
+        if not isinstance(value, dict):
+            raise ValueError("must be an object when provided")
+        return value
+
+
+AIAction = Annotated[
+    CreateTaskAction | UpdateTaskAction | FailTaskAction | UpdateRoleplayStateAction,
+    Field(discriminator="type"),
+]
 
 _ACTION_ADAPTER = TypeAdapter(AIAction)
 
@@ -119,6 +138,9 @@ def normalize_action_payloads(value: Any) -> list[dict[str, Any]]:
         payload = action.model_dump(exclude_none=True)
         if payload.get("type") == "update_task":
             if not any(key in payload for key in ("title", "description", "deadline_minutes")):
+                continue
+        if payload.get("type") == "update_roleplay_state":
+            if not any(key in payload for key in ("relationship", "protocol", "scene")):
                 continue
         normalized.append(payload)
 
