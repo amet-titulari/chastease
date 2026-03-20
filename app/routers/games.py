@@ -62,9 +62,9 @@ POSE_SIMILARITY_THRESHOLD_BY_DIFFICULTY = {
 }
 DEFAULT_MOVEMENT_THRESHOLDS_BY_MODULE = {
     "dont_move": {
-        "easy": {"pose_deviation": 0.40, "stillness": 0.0400},
-        "medium": {"pose_deviation": 0.37, "stillness": 0.0360},
-        "hard": {"pose_deviation": 0.32, "stillness": 0.0300},
+        "easy": {"pose_deviation": 0.28, "stillness": 0.0450},
+        "medium": {"pose_deviation": 0.25, "stillness": 0.0380},
+        "hard": {"pose_deviation": 0.22, "stillness": 0.0320},
     },
     "tiptoeing": {
         # Tiptoeing uses these fields as mask color thresholds:
@@ -129,12 +129,12 @@ class ModuleSettingsUpdateRequest(BaseModel):
     hard_target_multiplier: float = Field(default=DEFAULT_HARD_TARGET_MULTIPLIER, gt=0.1, le=3.0)
     target_randomization_percent: int = Field(default=DEFAULT_TARGET_RANDOMIZATION_PERCENT, ge=0, le=60)
     start_countdown_seconds: int = Field(default=DEFAULT_STRICT_START_COUNTDOWN_SECONDS, ge=0, le=60)
-    movement_easy_pose_deviation: float = Field(default=0.40, ge=0.01, le=1.0)
-    movement_easy_stillness: float = Field(default=0.040, ge=0.0005, le=1.0)
-    movement_medium_pose_deviation: float = Field(default=0.37, ge=0.01, le=1.0)
-    movement_medium_stillness: float = Field(default=0.036, ge=0.0005, le=1.0)
-    movement_hard_pose_deviation: float = Field(default=0.32, ge=0.01, le=1.0)
-    movement_hard_stillness: float = Field(default=0.030, ge=0.0005, le=1.0)
+    movement_easy_pose_deviation: float = Field(default=0.28, ge=0.01, le=1.0)
+    movement_easy_stillness: float = Field(default=0.045, ge=0.0005, le=1.0)
+    movement_medium_pose_deviation: float = Field(default=0.25, ge=0.01, le=1.0)
+    movement_medium_stillness: float = Field(default=0.038, ge=0.0005, le=1.0)
+    movement_hard_pose_deviation: float = Field(default=0.22, ge=0.01, le=1.0)
+    movement_hard_stillness: float = Field(default=0.032, ge=0.0005, le=1.0)
     pose_similarity_min_score_easy: float = Field(default=62.0, ge=0.0, le=100.0)
     pose_similarity_min_score_medium: float = Field(default=74.0, ge=0.0, le=100.0)
     pose_similarity_min_score_hard: float = Field(default=84.0, ge=0.0, le=100.0)

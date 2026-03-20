@@ -267,9 +267,9 @@ const MOVEMENT_PRESETS = {
       hard: { pose: 0.52, still: 0.095 },
     },
     balanced: {
-      easy: { pose: 0.40, still: 0.0400 },
-      medium: { pose: 0.37, still: 0.0360 },
-      hard: { pose: 0.32, still: 0.0300 },
+      easy: { pose: 0.28, still: 0.0450 },
+      medium: { pose: 0.25, still: 0.0380 },
+      hard: { pose: 0.22, still: 0.0320 },
     },
     strict: {
       easy: { pose: 0.36, still: 0.0360 },
@@ -360,18 +360,18 @@ function applyMovementFields(moduleKey, data) {
   if (!(hardPoseEl instanceof HTMLInputElement)) return;
   if (!(hardStillEl instanceof HTMLInputElement)) return;
 
-  easyPoseEl.value = formatPercent(decimalToPercent(data.movement_easy_pose_deviation ?? 0.40));
-  easyStillEl.value = formatPercent(decimalToPercent(data.movement_easy_stillness ?? 0.040));
-  mediumPoseEl.value = formatPercent(decimalToPercent(data.movement_medium_pose_deviation ?? 0.37));
-  mediumStillEl.value = formatPercent(decimalToPercent(data.movement_medium_stillness ?? 0.036));
-  hardPoseEl.value = formatPercent(decimalToPercent(data.movement_hard_pose_deviation ?? 0.32));
-  hardStillEl.value = formatPercent(decimalToPercent(data.movement_hard_stillness ?? 0.030));
+  easyPoseEl.value = formatPercent(decimalToPercent(data.movement_easy_pose_deviation ?? 0.28));
+  easyStillEl.value = formatPercent(decimalToPercent(data.movement_easy_stillness ?? 0.045));
+  mediumPoseEl.value = formatPercent(decimalToPercent(data.movement_medium_pose_deviation ?? 0.25));
+  mediumStillEl.value = formatPercent(decimalToPercent(data.movement_medium_stillness ?? 0.038));
+  hardPoseEl.value = formatPercent(decimalToPercent(data.movement_hard_pose_deviation ?? 0.22));
+  hardStillEl.value = formatPercent(decimalToPercent(data.movement_hard_stillness ?? 0.032));
 }
 
 function defaultPoseSimilarityThreshold(moduleKey, difficultyKey) {
   const byModule = {
     posture_training: { easy: 62, medium: 74, hard: 84 },
-    dont_move: { easy: 45, medium: 55, hard: 65 },
+    dont_move: { easy: 58, medium: 64, hard: 72 },
     tiptoeing: { easy: 8, medium: 10, hard: 12 },
   };
   const defaults = byModule[moduleKey] || { easy: 0, medium: 0, hard: 0 };
@@ -416,12 +416,12 @@ async function loadModuleSettings(moduleKey) {
 
 function movementPayloadFromInputs(moduleKey) {
   return {
-    movement_easy_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "easy-pose"), 40.0), 0.40),
-    movement_easy_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "easy-still"), 4.0), 0.040),
-    movement_medium_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "medium-pose"), 37.0), 0.37),
-    movement_medium_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "medium-still"), 3.6), 0.036),
-    movement_hard_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "hard-pose"), 32.0), 0.32),
-    movement_hard_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "hard-still"), 3.0), 0.030),
+    movement_easy_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "easy-pose"), 28.0), 0.28),
+    movement_easy_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "easy-still"), 4.5), 0.045),
+    movement_medium_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "medium-pose"), 25.0), 0.25),
+    movement_medium_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "medium-still"), 3.8), 0.038),
+    movement_hard_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "hard-pose"), 22.0), 0.22),
+    movement_hard_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "hard-still"), 3.2), 0.032),
   };
 }
 

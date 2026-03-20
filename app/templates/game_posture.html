@@ -585,16 +585,67 @@ const cameraDeviceStorageKey = "game_posture_camera_device_id";
 const movementWatchIndices = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 const movementPoseCompareIndices = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 const dontMoveCoreReferenceParts = [
-  "nose",
+  "left_shoulder",
+  "right_shoulder",
+  "left_hip",
+  "right_hip",
+];
+const dontMoveCoreAngleTriplets = [
+  ["left_shoulder", "left_hip", "right_hip"],
+  ["right_shoulder", "right_hip", "left_hip"],
+];
+const dontMoveArmReferenceParts = [
   "left_shoulder",
   "right_shoulder",
   "left_elbow",
   "right_elbow",
   "left_wrist",
   "right_wrist",
+];
+const dontMoveLegReferenceParts = [
   "left_hip",
   "right_hip",
+  "left_knee",
+  "right_knee",
+  "left_ankle",
+  "right_ankle",
 ];
+const dontMoveZonePartMap = {
+  core: dontMoveCoreReferenceParts,
+  arms: dontMoveArmReferenceParts,
+  legs: dontMoveLegReferenceParts,
+};
+const dontMoveArmAngleTriplets = [
+  ["left_shoulder", "left_elbow", "left_wrist"],
+  ["right_shoulder", "right_elbow", "right_wrist"],
+  ["left_elbow", "left_shoulder", "left_hip"],
+  ["right_elbow", "right_shoulder", "right_hip"],
+];
+const dontMoveLegAngleTriplets = [
+  ["left_hip", "left_knee", "left_ankle"],
+  ["right_hip", "right_knee", "right_ankle"],
+  ["left_shoulder", "left_hip", "left_knee"],
+  ["right_shoulder", "right_hip", "right_knee"],
+];
+const dontMoveReferenceEdges = [
+  ["left_shoulder", "right_shoulder"],
+  ["left_shoulder", "left_elbow"],
+  ["left_elbow", "left_wrist"],
+  ["right_shoulder", "right_elbow"],
+  ["right_elbow", "right_wrist"],
+  ["left_shoulder", "left_hip"],
+  ["right_shoulder", "right_hip"],
+  ["left_hip", "right_hip"],
+  ["left_hip", "left_knee"],
+  ["left_knee", "left_ankle"],
+  ["right_hip", "right_knee"],
+  ["right_knee", "right_ankle"],
+];
+const dontMoveZoneWeights = {
+  core: 0.42,
+  arms: 0.38,
+  legs: 0.20,
+};
 const postureReferencePointToIndex = {
   left_shoulder: 11,
   right_shoulder: 12,
@@ -626,9 +677,9 @@ const postureSkeletonConnections = [
 ];
 const movementDefaults = {
   dont_move: {
-    easy: { poseDeviation: 0.40, stillness: 0.0400 },
-    medium: { poseDeviation: 0.37, stillness: 0.0360 },
-    hard: { poseDeviation: 0.32, stillness: 0.0300 },
+    easy: { poseDeviation: 0.28, stillness: 0.0450 },
+    medium: { poseDeviation: 0.25, stillness: 0.0380 },
+    hard: { poseDeviation: 0.22, stillness: 0.0320 },
   },
   tiptoeing: {
     easy: { poseDeviation: 0.14, stillness: 0.22 },
@@ -1045,15 +1096,35 @@ function drawMotionOverlay(marker = null, forceAlert = false) {
     : movementOverlayMode === "positioning"
       ? "rgba(88, 178, 255, 0.08)"
       : "rgba(56, 221, 112, 0.05)";
+  const zoneFeedback = currentDontMoveZoneFeedback();
+  const startFeedback = currentDontMoveStartOverlayFeedback();
 
-  ctx.fillStyle = fill;
+  let effectiveStroke = stroke;
+  let effectiveFill = fill;
+  if (isDontMoveModule && startFeedback && !isAlert) {
+    if (startFeedback.tone === "blocked") {
+      effectiveStroke = "rgba(255, 124, 124, 0.96)";
+      effectiveFill = "rgba(255, 92, 92, 0.07)";
+    } else if (startFeedback.tone === "stabilizing") {
+      effectiveStroke = "rgba(255, 194, 82, 0.96)";
+      effectiveFill = "rgba(255, 194, 82, 0.08)";
+    } else if (startFeedback.tone === "countdown" || startFeedback.tone === "ready") {
+      effectiveStroke = "rgba(56, 221, 112, 0.96)";
+      effectiveFill = "rgba(56, 221, 112, 0.06)";
+    }
+  }
+
+  ctx.fillStyle = effectiveFill;
   ctx.fillRect(0, 0, w, h);
   if (currentReferenceLandmarksJson) {
-    drawReferenceSkeletonOnCanvas(ctx, w, h, currentReferenceLandmarksJson);
+    drawReferenceSkeletonOnCanvas(ctx, w, h, currentReferenceLandmarksJson, zoneFeedback);
+  }
+  if (isDontMoveModule && Array.isArray(movementLatestPoseLandmarks) && movementLatestPoseLandmarks.length > 0) {
+    drawDontMoveLiveSkeleton(ctx, w, h, movementLatestPoseLandmarks, zoneFeedback);
   }
 
   ctx.lineWidth = Math.max(4, Math.floor(Math.min(w, h) * 0.012));
-  ctx.strokeStyle = stroke;
+  ctx.strokeStyle = effectiveStroke;
   ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth);
 
   if (marker && Number.isFinite(marker.x) && Number.isFinite(marker.y)) {
@@ -1073,21 +1144,62 @@ function drawMotionOverlay(marker = null, forceAlert = false) {
     ctx.stroke();
   }
 
-  if (movementOverlayMode === "positioning" && strictStartDebugText) {
-    const lines = String(strictStartDebugText).split("\n").slice(0, 3);
-    const fontSize = Math.max(12, Math.floor(Math.min(w, h) * 0.026));
-    const lineHeight = fontSize + 6;
-    const boxWidth = Math.min(w - 24, Math.max(220, Math.floor(w * 0.56)));
-    const boxHeight = (lines.length * lineHeight) + 18;
-    const boxX = 12;
-    const boxY = Math.max(12, h - boxHeight - 12);
-    ctx.fillStyle = "rgba(0, 0, 0, 0.62)";
+  if (isDontMoveModule && zoneFeedback?.zones) {
+    const zoneEntries = [
+      ["Kern", zoneFeedback.zones.core],
+      ["Arme", zoneFeedback.zones.arms],
+      ["Beine", zoneFeedback.zones.legs],
+    ];
+    const fontSize = Math.max(12, Math.floor(Math.min(w, h) * 0.024));
+    const rowHeight = fontSize + 6;
+    const boxWidth = Math.min(240, Math.max(170, Math.floor(w * 0.34)));
+    const boxHeight = (zoneEntries.length * rowHeight) + 18;
+    const boxX = Math.max(12, w - boxWidth - 12);
+    const boxY = 12;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.58)";
     ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-    ctx.fillStyle = "rgba(230, 244, 255, 0.98)";
-    ctx.font = `600 ${fontSize}px sans-serif`;
+    ctx.font = `700 ${fontSize}px sans-serif`;
+    ctx.textBaseline = "top";
+    zoneEntries.forEach(([label, zone], idx) => {
+      const zoneBad = Boolean(zone?.bad);
+      ctx.fillStyle = zoneBad ? "rgba(255, 182, 182, 0.98)" : "rgba(204, 244, 220, 0.98)";
+      ctx.fillText(`${label}: ${Number(zone?.score || 0).toFixed(0)}`, boxX + 10, boxY + 9 + (idx * rowHeight), boxWidth - 20);
+    });
+  }
+
+  if (isDontMoveModule && startFeedback) {
+    const messageSize = Math.max(22, Math.floor(Math.min(w, h) * 0.044));
+    const boxWidth = Math.min(w - 24, Math.max(320, Math.floor(w * 0.72)));
+    const boxHeight = messageSize + 26;
+    const boxX = Math.max(12, Math.floor((w - boxWidth) / 2));
+    const boxY = Math.max(12, h - boxHeight - 16);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.74)";
+    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+    ctx.textBaseline = "top";
+    ctx.font = `800 ${messageSize}px sans-serif`;
+    ctx.fillStyle = startFeedback.tone === "blocked"
+      ? "rgba(255, 190, 190, 0.98)"
+      : startFeedback.tone === "stabilizing"
+        ? "rgba(255, 225, 160, 0.98)"
+        : "rgba(204, 244, 220, 0.98)";
+    ctx.fillText(startFeedback.message, boxX + 12, boxY + 10, boxWidth - 24);
+  }
+
+  if (movementOverlayMode === "positioning" && strictStartDebugText) {
+    const lines = String(strictStartDebugText).split("\n").slice(0, 2);
+    const fontSize = Math.max(14, Math.floor(Math.min(w, h) * 0.028));
+    const lineHeight = fontSize + 7;
+    const boxWidth = Math.min(260, Math.max(180, Math.floor(w * 0.32)));
+    const boxHeight = (lines.length * lineHeight) + 16;
+    const boxX = 12;
+    const boxY = Math.max(12, h - boxHeight - 16);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+    ctx.fillStyle = "rgba(230, 244, 255, 0.96)";
+    ctx.font = `700 ${fontSize}px sans-serif`;
     ctx.textBaseline = "top";
     lines.forEach((line, idx) => {
-      ctx.fillText(line, boxX + 10, boxY + 9 + (idx * lineHeight), boxWidth - 20);
+      ctx.fillText(line, boxX + 10, boxY + 8 + (idx * lineHeight), boxWidth - 20);
     });
   }
 }
@@ -1143,7 +1255,90 @@ function livePoseFrameFromLandmarks(landmarks) {
   return { centerX, centerY, scale };
 }
 
-function drawReferenceSkeletonOnCanvas(ctx, width, height, referenceJson) {
+function dontMoveZoneForReferencePart(name) {
+  if (dontMoveZonePartMap.arms.includes(name)) return "arms";
+  if (dontMoveZonePartMap.legs.includes(name)) return "legs";
+  if (dontMoveZonePartMap.core.includes(name)) return "core";
+  return "core";
+}
+
+function dontMoveZoneOverlayColor(zoneName, isBad = false) {
+  if (zoneName === "arms") {
+    return isBad ? "rgba(255, 170, 70, 0.98)" : "rgba(90, 205, 255, 0.96)";
+  }
+  if (zoneName === "legs") {
+    return isBad ? "rgba(255, 110, 110, 0.98)" : "rgba(150, 220, 140, 0.96)";
+  }
+  return isBad ? "rgba(255, 88, 88, 0.98)" : "rgba(216, 236, 255, 0.96)";
+}
+
+function currentDontMoveZoneFeedback() {
+  if (!isDontMoveModule || !currentReferenceLandmarksJson || !Array.isArray(movementLatestPoseLandmarks)) {
+    return null;
+  }
+  const score = scoreLivePoseAgainstReference(currentReferenceLandmarksJson, movementLatestPoseLandmarks);
+  const threshold = movementOverlayMode === "active" ? strictHoldPoseThreshold() : strictStartReadyThreshold();
+  const visibilityMetrics = dontMoveVisibilityMetrics(currentReferenceLandmarksJson, movementLatestPoseLandmarks);
+  const readiness = evaluateDontMoveReadiness(score, visibilityMetrics, threshold);
+  if (!score || !score.zones || !readiness) return null;
+  return {
+    threshold,
+    zones: {
+      core: {
+        score: Number(score.zones.core ?? 0),
+        bad: !readiness.coreOk,
+      },
+      arms: {
+        score: Number(score.zones.arms ?? 0),
+        bad: !readiness.armsOk,
+      },
+      legs: {
+        score: Number(score.zones.legs ?? 0),
+        bad: !readiness.legsOk,
+      },
+    },
+  };
+}
+
+function currentDontMoveStartOverlayFeedback() {
+  if (!isDontMoveModule || movementOverlayMode !== "positioning" || !Array.isArray(movementLatestPoseLandmarks)) {
+    return null;
+  }
+  const verdict = strictStartVerdict(movementLatestPoseLandmarks);
+  const stableTarget = strictStartStableFrameTarget();
+  const stableFrames = Math.max(0, Number(strictStartStableFrames || 0));
+  if (!verdict?.ready) {
+    const lines = String(verdict?.debug || "").split("\n").map((line) => String(line || "").trim()).filter(Boolean);
+    const compactDetail = String(lines[2] || lines[1] || verdict?.analysis || "Pose weiter ausrichten.")
+      .replace(/^Sichtbar:\s*/i, "")
+      .replace(/^Pose\s+\d+(?:\.\d+)?\/100,\s*Start ab\s+\d+(?:\.\d+)?\s*/i, "")
+      .trim();
+    return {
+      tone: "blocked",
+      message: compactDetail || "Pose weiter ausrichten",
+    };
+  }
+  if (stableFrames < stableTarget) {
+    return {
+      tone: "stabilizing",
+      message: `Stabilisiere ${stableFrames}/${stableTarget}`,
+    };
+  }
+  const debugText = String(strictStartDebugText || "");
+  const countdownMatch = debugText.match(/Countdown:\s*(\d+)/i);
+  if (countdownMatch) {
+    return {
+      tone: "countdown",
+      message: `Countdown ${countdownMatch[1]}`,
+    };
+  }
+  return {
+    tone: "ready",
+    message: "Startbereit",
+  };
+}
+
+function drawReferenceSkeletonOnCanvas(ctx, width, height, referenceJson, zoneFeedback = null) {
   const points = referencePointsFromJson(referenceJson);
   if (!points) return;
 
@@ -1173,22 +1368,7 @@ function drawReferenceSkeletonOnCanvas(ctx, width, height, referenceJson) {
   ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
   ctx.lineWidth = Math.max(3, Math.floor(Math.min(width, height) * 0.008));
 
-  const referenceEdges = [
-    ["left_shoulder", "right_shoulder"],
-    ["left_shoulder", "left_elbow"],
-    ["left_elbow", "left_wrist"],
-    ["right_shoulder", "right_elbow"],
-    ["right_elbow", "right_wrist"],
-    ["left_shoulder", "left_hip"],
-    ["right_shoulder", "right_hip"],
-    ["left_hip", "right_hip"],
-    ["left_hip", "left_knee"],
-    ["left_knee", "left_ankle"],
-    ["right_hip", "right_knee"],
-    ["right_knee", "right_ankle"],
-  ];
-
-  for (const [fromName, toName] of referenceEdges) {
+  for (const [fromName, toName] of dontMoveReferenceEdges) {
     const fromRef = points[fromName];
     const toRef = points[toName];
     const from = fromRef ? {
@@ -1203,15 +1383,22 @@ function drawReferenceSkeletonOnCanvas(ctx, width, height, referenceJson) {
     } : null;
     if (!from || !to) continue;
     if (Number(from.visibility ?? 1) < 0.35 || Number(to.visibility ?? 1) < 0.35) continue;
+    const zoneName = dontMoveZoneForReferencePart(fromName);
+    const zoneBad = Boolean(zoneFeedback?.zones?.[zoneName]?.bad);
     ctx.beginPath();
     ctx.moveTo(Number(from.x || 0) * width, Number(from.y || 0) * height);
     ctx.lineTo(Number(to.x || 0) * width, Number(to.y || 0) * height);
+    if (zoneBad) {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+      ctx.lineWidth = Math.max(5, Math.floor(Math.min(width, height) * 0.011));
+    } else {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
+      ctx.lineWidth = Math.max(4, Math.floor(Math.min(width, height) * 0.009));
+    }
     ctx.stroke();
   }
 
-  ctx.strokeStyle = "rgba(12, 12, 12, 0.9)";
-  ctx.lineWidth = Math.max(1.5, Math.floor(Math.min(width, height) * 0.005));
-  for (const [fromName, toName] of referenceEdges) {
+  for (const [fromName, toName] of dontMoveReferenceEdges) {
     const fromRef = points[fromName];
     const toRef = points[toName];
     const from = fromRef ? {
@@ -1226,15 +1413,20 @@ function drawReferenceSkeletonOnCanvas(ctx, width, height, referenceJson) {
     } : null;
     if (!from || !to) continue;
     if (Number(from.visibility ?? 1) < 0.35 || Number(to.visibility ?? 1) < 0.35) continue;
+    const zoneName = dontMoveZoneForReferencePart(fromName);
+    const zoneBad = Boolean(zoneFeedback?.zones?.[zoneName]?.bad);
     ctx.beginPath();
     ctx.moveTo(Number(from.x || 0) * width, Number(from.y || 0) * height);
     ctx.lineTo(Number(to.x || 0) * width, Number(to.y || 0) * height);
+    ctx.strokeStyle = dontMoveZoneOverlayColor(zoneName, zoneBad);
+    ctx.lineWidth = zoneBad
+      ? Math.max(3, Math.floor(Math.min(width, height) * 0.007))
+      : Math.max(2, Math.floor(Math.min(width, height) * 0.0055));
     ctx.stroke();
   }
 
   ctx.setLineDash([]);
-  const radius = Math.max(3, Math.floor(Math.min(width, height) * 0.009));
-  Object.values(points).forEach((pointRef) => {
+  Object.entries(points).forEach(([name, pointRef]) => {
     const point = pointRef ? {
       x: frame.centerX + (Number(pointRef.x || 0) * frame.scale),
       y: frame.centerY + (Number(pointRef.y || 0) * frame.scale),
@@ -1243,13 +1435,18 @@ function drawReferenceSkeletonOnCanvas(ctx, width, height, referenceJson) {
     if (!point || Number(point.visibility ?? 1) < 0.35) return;
     const px = Number(point.x || 0) * width;
     const py = Number(point.y || 0) * height;
+    const zoneName = dontMoveZoneForReferencePart(name);
+    const zoneBad = Boolean(zoneFeedback?.zones?.[zoneName]?.bad);
+    const radius = zoneBad
+      ? Math.max(5, Math.floor(Math.min(width, height) * 0.012))
+      : Math.max(4, Math.floor(Math.min(width, height) * 0.01));
     ctx.beginPath();
-    ctx.arc(px, py, radius + 1, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+    ctx.arc(px, py, radius + 2, 0, Math.PI * 2);
+    ctx.fillStyle = zoneBad ? "rgba(255, 255, 255, 0.92)" : "rgba(255, 255, 255, 0.75)";
     ctx.fill();
     ctx.beginPath();
     ctx.arc(px, py, radius, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(12, 12, 12, 0.88)";
+    ctx.fillStyle = zoneBad ? dontMoveZoneOverlayColor(zoneName, true) : "rgba(12, 12, 12, 0.88)";
     ctx.fill();
   });
   ctx.restore();
@@ -1278,6 +1475,54 @@ function postureOverlayPalette(status, hasPose) {
     joint: "rgba(176, 244, 204, 0.96)",
     fill: "rgba(56, 221, 112, 0.07)",
   };
+}
+
+function drawDontMoveLiveSkeleton(ctx, width, height, landmarks, zoneFeedback = null) {
+  const visibleLandmarks = Array.isArray(landmarks)
+    ? landmarks.filter((item) => item && Number(item.visibility ?? 1) >= 0.45)
+    : [];
+  if (visibleLandmarks.length < 6) return;
+
+  ctx.save();
+  ctx.lineCap = "round";
+  for (const [fromIdx, toIdx] of postureSkeletonConnections) {
+    const from = landmarks[fromIdx];
+    const to = landmarks[toIdx];
+    if (!from || !to) continue;
+    if (Number(from.visibility ?? 1) < 0.45 || Number(to.visibility ?? 1) < 0.45) continue;
+    const fromName = Object.keys(postureReferencePointToIndex).find((key) => postureReferencePointToIndex[key] === fromIdx) || "";
+    const zoneName = dontMoveZoneForReferencePart(fromName);
+    const zoneBad = Boolean(zoneFeedback?.zones?.[zoneName]?.bad);
+    ctx.beginPath();
+    ctx.moveTo(Number(from.x || 0) * width, Number(from.y || 0) * height);
+    ctx.lineTo(Number(to.x || 0) * width, Number(to.y || 0) * height);
+    ctx.strokeStyle = zoneBad ? "rgba(255, 120, 120, 0.98)" : "rgba(120, 235, 180, 0.94)";
+    ctx.lineWidth = zoneBad
+      ? Math.max(5, Math.floor(Math.min(width, height) * 0.0105))
+      : Math.max(4, Math.floor(Math.min(width, height) * 0.008));
+    ctx.stroke();
+  }
+
+  Object.entries(postureReferencePointToIndex).forEach(([name, idx]) => {
+    const item = landmarks[idx];
+    if (!item || Number(item.visibility ?? 1) < 0.45) return;
+    const zoneName = dontMoveZoneForReferencePart(name);
+    const zoneBad = Boolean(zoneFeedback?.zones?.[zoneName]?.bad);
+    const px = Number(item.x || 0) * width;
+    const py = Number(item.y || 0) * height;
+    const radius = zoneBad
+      ? Math.max(7, Math.floor(Math.min(width, height) * 0.014))
+      : Math.max(5, Math.floor(Math.min(width, height) * 0.011));
+    ctx.beginPath();
+    ctx.arc(px, py, radius + 2, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.58)";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(px, py, radius, 0, Math.PI * 2);
+    ctx.fillStyle = zoneBad ? dontMoveZoneOverlayColor(zoneName, true) : "rgba(190, 255, 230, 0.96)";
+    ctx.fill();
+  });
+  ctx.restore();
 }
 
 function drawSkeletonOnCanvas(landmarks = null) {
@@ -1350,15 +1595,18 @@ function strictStartReadyThreshold() {
   const diff = activeDifficultyKey();
   const raw = Number(moduleSettings?.[`pose_similarity_min_score_${diff}`]);
   const fallback = isDontMoveModule
-    ? (diff === "easy" ? 45 : (diff === "hard" ? 60 : 52))
+    ? (diff === "easy" ? 58 : (diff === "hard" ? 72 : 64))
     : (diff === "easy" ? 45 : (diff === "hard" ? 65 : 55));
+  if (isDontMoveModule) {
+    return Math.max(fallback, Number.isFinite(raw) && raw > 0 ? raw : 0);
+  }
   return Number.isFinite(raw) && raw > 0 ? raw : fallback;
 }
 
 function strictHoldPoseThreshold() {
   const startThreshold = strictStartReadyThreshold();
   if (!isDontMoveModule) return startThreshold;
-  return Math.max(34, startThreshold - 8);
+  return Math.max(48, startThreshold - 6);
 }
 
 function strictStartStableFrameTarget() {
@@ -1483,35 +1731,38 @@ function normalizePoseLandmarksForReference(landmarks) {
   return { points: normalized, visibleCount };
 }
 
-function scoreLivePoseAgainstReference(referenceJson, landmarks) {
-  const reference = referencePointsFromJson(referenceJson);
-  const current = normalizePoseLandmarksForReference(landmarks);
-  if (!reference || !current) return null;
+function scoreReferenceZone(reference, currentPoints, partNames, angleTriplets = []) {
+  if (!reference || !currentPoints || !Array.isArray(partNames) || partNames.length === 0) {
+    return null;
+  }
 
   let posWeightSum = 0;
   let posErrorSum = 0;
-  Object.keys(postureReferencePointToIndex).forEach((name) => {
+  let visibleCount = 0;
+  let visibilitySum = 0;
+
+  partNames.forEach((name) => {
     const rp = reference[name];
-    const cp = current.points[name];
+    const cp = currentPoints[name];
     if (!rp || !cp) return;
     const weight = Math.min(Number(rp.visibility ?? 0), Number(cp.visibility ?? 0));
     if (weight < 0.2) return;
     const dist = Math.hypot(Number(rp.x || 0) - Number(cp.x || 0), Number(rp.y || 0) - Number(cp.y || 0));
     posErrorSum += weight * dist;
     posWeightSum += weight;
+    visibleCount += 1;
+    visibilitySum += weight;
   });
-  if (posWeightSum <= 1e-9) return null;
 
-  const ePos = posErrorSum / posWeightSum;
   let angWeightSum = 0;
   let angErrorSum = 0;
-  referenceAngleTriplets.forEach(([aName, bName, cName]) => {
+  angleTriplets.forEach(([aName, bName, cName]) => {
     const ra = reference[aName];
     const rb = reference[bName];
     const rc = reference[cName];
-    const ca = current.points[aName];
-    const cb = current.points[bName];
-    const cc = current.points[cName];
+    const ca = currentPoints[aName];
+    const cb = currentPoints[bName];
+    const cc = currentPoints[cName];
     if (!ra || !rb || !rc || !ca || !cb || !cc) return;
     const weight = Math.min(
       Number(ra.visibility ?? 0),
@@ -1528,17 +1779,57 @@ function scoreLivePoseAgainstReference(referenceJson, landmarks) {
     angWeightSum += weight;
   });
 
+  if (posWeightSum <= 1e-9 && angWeightSum <= 1e-9) {
+    return null;
+  }
+
+  const ePos = posWeightSum > 1e-9 ? (posErrorSum / posWeightSum) : 0;
   const eAng = angWeightSum > 1e-9 ? (angErrorSum / angWeightSum / 180) : 0;
-  const visValues = Object.keys(postureReferencePointToIndex)
-    .map((name) => Math.min(Number(reference[name]?.visibility ?? 0), Number(current.points[name]?.visibility ?? 0)))
-    .filter((value) => Number.isFinite(value) && value > 0);
-  const meanVis = visValues.length ? (visValues.reduce((sum, value) => sum + value, 0) / visValues.length) : 0;
-  const eVis = Math.max(0, 0.6 - meanVis);
-  const combinedError = Math.max(0, Math.min(1, (0.75 * ePos) + (0.20 * eAng) + (0.05 * eVis)));
+  const meanVisibility = visibleCount > 0 ? (visibilitySum / visibleCount) : 0;
+  const eVis = Math.max(0, 0.62 - meanVisibility);
+  const combinedError = Math.max(0, Math.min(1, (0.68 * ePos) + (0.24 * eAng) + (0.08 * eVis)));
+
   return {
     score: 100 * (1 - combinedError),
-    visibleCount: current.visibleCount,
-    meanVisibility: meanVis,
+    visibleCount,
+    meanVisibility,
+  };
+}
+
+function scoreLivePoseAgainstReference(referenceJson, landmarks) {
+  const reference = referencePointsFromJson(referenceJson);
+  const current = normalizePoseLandmarksForReference(landmarks);
+  if (!reference || !current) return null;
+  const coreZone = scoreReferenceZone(reference, current.points, dontMoveZonePartMap.core, dontMoveCoreAngleTriplets);
+  const armZone = scoreReferenceZone(reference, current.points, dontMoveZonePartMap.arms, dontMoveArmAngleTriplets);
+  const legZone = scoreReferenceZone(reference, current.points, dontMoveZonePartMap.legs, dontMoveLegAngleTriplets);
+  const zones = { core: coreZone, arms: armZone, legs: legZone };
+
+  let weightedScoreSum = 0;
+  let weightedZoneSum = 0;
+  Object.entries(dontMoveZoneWeights).forEach(([zoneName, zoneWeight]) => {
+    const zone = zones[zoneName];
+    if (!zone) return;
+    weightedScoreSum += zone.score * zoneWeight;
+    weightedZoneSum += zoneWeight;
+  });
+  if (weightedZoneSum <= 1e-9) return null;
+
+  const overallScore = weightedScoreSum / weightedZoneSum;
+  const zoneScores = Object.fromEntries(
+    Object.entries(zones).map(([zoneName, zone]) => [zoneName, zone ? zone.score : null])
+  );
+  const visibleCount = Object.values(zones).reduce((sum, zone) => sum + Number(zone?.visibleCount || 0), 0);
+  const visibleZoneCount = Object.values(zones).filter(Boolean).length;
+  const meanVisibility = visibleZoneCount > 0
+    ? (Object.values(zones).reduce((sum, zone) => sum + Number(zone?.meanVisibility || 0), 0) / visibleZoneCount)
+    : 0;
+
+  return {
+    score: overallScore,
+    visibleCount,
+    meanVisibility,
+    zones: zoneScores,
   };
 }
 
@@ -1562,7 +1853,10 @@ function dontMoveVisibilityMetrics(referenceJson, landmarks) {
   const totalRatio = requiredParts.length > 0 ? (visibleParts.length / requiredParts.length) : 0;
   const requiredCoreParts = requiredParts.filter((name) => dontMoveCoreReferenceParts.includes(name));
   const visibleCoreParts = visibleParts.filter((name) => dontMoveCoreReferenceParts.includes(name));
+  const requiredArmParts = requiredParts.filter((name) => dontMoveArmReferenceParts.includes(name));
+  const visibleArmParts = visibleParts.filter((name) => dontMoveArmReferenceParts.includes(name));
   const coreRatio = requiredCoreParts.length > 0 ? (visibleCoreParts.length / requiredCoreParts.length) : totalRatio;
+  const armRatio = requiredArmParts.length > 0 ? (visibleArmParts.length / requiredArmParts.length) : totalRatio;
   return {
     requiredParts,
     visibleParts,
@@ -1570,6 +1864,59 @@ function dontMoveVisibilityMetrics(referenceJson, landmarks) {
     requiredCoreParts,
     visibleCoreParts,
     coreRatio,
+    requiredArmParts,
+    visibleArmParts,
+    armRatio,
+    requiredLegParts: requiredParts.filter((name) => dontMoveLegReferenceParts.includes(name)),
+    visibleLegParts: visibleParts.filter((name) => dontMoveLegReferenceParts.includes(name)),
+    legRatio: requiredParts.filter((name) => dontMoveLegReferenceParts.includes(name)).length > 0
+      ? (visibleParts.filter((name) => dontMoveLegReferenceParts.includes(name)).length / requiredParts.filter((name) => dontMoveLegReferenceParts.includes(name)).length)
+      : totalRatio,
+  };
+}
+
+function evaluateDontMoveReadiness(score, visibilityMetrics, threshold) {
+  if (!score || !visibilityMetrics) return null;
+  const visibleCoreCount = visibilityMetrics.visibleCoreParts.length;
+  const visibleArmCount = visibilityMetrics.visibleArmParts.length;
+  const visibleLegCount = visibilityMetrics.visibleLegParts.length;
+  const coreZoneScore = Number(score.zones?.core ?? 0);
+  const armZoneScore = Number(score.zones?.arms ?? 0);
+  const legZoneScore = Number(score.zones?.legs ?? 0);
+  const coverageOk = Math.max(
+    visibilityMetrics.totalRatio,
+    visibilityMetrics.coreRatio,
+    visibilityMetrics.armRatio,
+    visibilityMetrics.legRatio
+  ) >= 0.56;
+  const coreOk = visibleCoreCount >= 4 && coreZoneScore >= (threshold - 6);
+  const armsOk = visibleArmCount >= 4 && armZoneScore >= (threshold - 2);
+  const legsOk = visibleLegCount >= 2 && legZoneScore >= (threshold - 10);
+  const visibilityOk = score.visibleCount >= 7 && score.meanVisibility >= 0.40 && coverageOk;
+  const ready = score.score >= threshold && visibilityOk && coreOk && armsOk && legsOk;
+  let blocker = "";
+  if (!coverageOk) blocker = `Abdeckung zu klein (${Math.round(100 * Math.max(visibilityMetrics.totalRatio, visibilityMetrics.coreRatio, visibilityMetrics.armRatio, visibilityMetrics.legRatio))}%)`;
+  else if (visibleCoreCount < 4) blocker = `Kern nicht voll sichtbar (${visibleCoreCount}/${visibilityMetrics.requiredCoreParts.length})`;
+  else if (visibleArmCount < 4) blocker = `Arme nicht voll sichtbar (${visibleArmCount}/${visibilityMetrics.requiredArmParts.length})`;
+  else if (visibleLegCount < 2) blocker = `Beine nicht genug sichtbar (${visibleLegCount}/${visibilityMetrics.requiredLegParts.length})`;
+  else if (coreZoneScore < (threshold - 6)) blocker = `Kern noch nicht korrekt (${coreZoneScore.toFixed(0)})`;
+  else if (armZoneScore < (threshold - 2)) blocker = `Arme noch nicht korrekt (${armZoneScore.toFixed(0)})`;
+  else if (legZoneScore < (threshold - 10)) blocker = `Beine noch nicht korrekt (${legZoneScore.toFixed(0)})`;
+  else if (score.score < threshold) blocker = `Pose ${score.score.toFixed(1)}/100, Start ab ${threshold.toFixed(1)}`;
+  return {
+    ready,
+    coverageOk,
+    coreOk,
+    armsOk,
+    legsOk,
+    visibilityOk,
+    blocker,
+    visibleCoreCount,
+    visibleArmCount,
+    visibleLegCount,
+    coreZoneScore,
+    armZoneScore,
+    legZoneScore,
   };
 }
 
@@ -1718,20 +2065,18 @@ function strictStartVerdict(poseLandmarks) {
     const visibilityMetrics = dontMoveVisibilityMetrics(currentReferenceLandmarksJson, poseLandmarks);
     const requiredParts = visibilityMetrics.requiredParts;
     const visibleParts = visibilityMetrics.visibleParts;
-    const minVisibleCount = isDontMoveModule ? 7 : 10;
-    const minMeanVisibility = isDontMoveModule ? 0.40 : 0.52;
-    const minVisibilityRatio = isDontMoveModule ? 0.56 : 0.78;
+    const readiness = isDontMoveModule ? evaluateDontMoveReadiness(score, visibilityMetrics, threshold) : null;
+    const coreZoneScore = Number(score.zones?.core ?? 0);
+    const armZoneScore = Number(score.zones?.arms ?? 0);
+    const legZoneScore = Number(score.zones?.legs ?? 0);
     const visibleCoreCount = visibilityMetrics.visibleCoreParts.length;
-    const minCoreVisibleCount = isDontMoveModule ? 5 : 0;
-    const effectiveCoverageRatio = isDontMoveModule
-      ? Math.max(visibilityMetrics.totalRatio, visibilityMetrics.coreRatio)
-      : visibilityMetrics.totalRatio;
-    const ready = (
+    const visibleArmCount = visibilityMetrics.visibleArmParts.length;
+    const visibleLegCount = visibilityMetrics.visibleLegParts.length;
+    const ready = isDontMoveModule ? Boolean(readiness?.ready) : (
       score.score >= threshold
-      && score.visibleCount >= minVisibleCount
-      && score.meanVisibility >= minMeanVisibility
-      && effectiveCoverageRatio >= minVisibilityRatio
-      && visibleCoreCount >= minCoreVisibleCount
+      && score.visibleCount >= 10
+      && score.meanVisibility >= 0.52
+      && visibilityMetrics.totalRatio >= 0.78
     );
     return {
       ready,
@@ -1742,7 +2087,7 @@ function strictStartVerdict(poseLandmarks) {
         : `Noch ausrichten: Pose ${score.score.toFixed(1)}/100, Start ab ${threshold.toFixed(1)}.`,
       debug: ready
         ? `Start bereit\nPose ${score.score.toFixed(1)}/100\nStabile Frames: ${strictStartStableFrames + 1}/${strictStartStableFrameTarget()}`
-        : `Start blockiert\nPose ${score.score.toFixed(1)}/100, Start ab ${threshold.toFixed(1)}\nSichtbar: ${visibleParts.length}/${requiredParts.length}${isDontMoveModule ? ` · Kern: ${visibleCoreCount}/${visibilityMetrics.requiredCoreParts.length}` : ""}`,
+        : `Start blockiert\nPose ${score.score.toFixed(1)}/100, Start ab ${threshold.toFixed(1)}\n${isDontMoveModule ? `${readiness?.blocker || "Pose weiter ausrichten."} · Kern: ${coreZoneScore.toFixed(0)} (${visibleCoreCount}/${visibilityMetrics.requiredCoreParts.length}) · Arme: ${armZoneScore.toFixed(0)} (${visibleArmCount}/${visibilityMetrics.requiredArmParts.length}) · Beine: ${legZoneScore.toFixed(0)} (${visibleLegCount}/${visibilityMetrics.requiredLegParts.length})` : `Sichtbar: ${visibleParts.length}/${requiredParts.length}`}`,
     };
   }
 
@@ -1944,7 +2289,15 @@ function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
     const score = scoreLivePoseAgainstReference(currentReferenceLandmarksJson, poseLandmarks);
     const threshold = strictHoldPoseThreshold();
     const visibilityMetrics = dontMoveVisibilityMetrics(currentReferenceLandmarksJson, poseLandmarks);
-    const visibilityRatio = Math.max(visibilityMetrics.totalRatio, visibilityMetrics.coreRatio);
+    const visibilityRatio = Math.max(
+      visibilityMetrics.totalRatio,
+      visibilityMetrics.coreRatio,
+      visibilityMetrics.armRatio,
+      visibilityMetrics.legRatio
+    );
+    const coreZoneScore = Number(score?.zones?.core ?? 0);
+    const armZoneScore = Number(score?.zones?.arms ?? 0);
+    const legZoneScore = Number(score?.zones?.legs ?? 0);
     if (
       !score
       || score.score < threshold
@@ -1952,6 +2305,11 @@ function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
       || score.meanVisibility < 0.38
       || visibilityRatio < 0.5
       || visibilityMetrics.visibleCoreParts.length < 4
+      || visibilityMetrics.visibleArmParts.length < 4
+      || visibilityMetrics.visibleLegParts.length < 2
+      || coreZoneScore < (threshold - 4)
+      || armZoneScore < (threshold - 2)
+      || legZoneScore < (threshold - 12)
     ) {
       poseOk = false;
       if (!marker) {
@@ -2040,8 +2398,9 @@ function describeMovementReason(verdict) {
     const region = String(verdict?.markerLabel || "Koerper");
     return `${String(verdict.reason).trim()} (${region})`;
   }
-  if (isDontMoveModule && verdict?.poseOk === false && verdict?.stillOk === true && currentReferenceLandmarksJson) {
-    return "Sollpose nicht mehr korrekt gehalten (Referenzpose unterschritten)";
+  if (isDontMoveModule && verdict?.poseOk === false && currentReferenceLandmarksJson) {
+    const posePart = `pose=${Number(verdict?.poseScore || 0).toFixed(4)}/${Number(movementProfile().poseDeviation).toFixed(4)}`;
+    return `Sollpose nicht korrekt gehalten (${posePart})`;
   }
   const profile = movementProfile();
   const movePart = `movement=${Number(verdict?.movementScore || 0).toFixed(4)}/${Number(profile.stillness).toFixed(4)}`;

@@ -110,13 +110,13 @@ def _draw_text_box(
     if not label and not value:
         return
 
-    title_font = _load_font(max(16, int(min(image_width, image_height) * 0.026)), bold=True)
-    body_font = _load_font(max(15, int(min(image_width, image_height) * 0.021)))
-    pad_x = max(12, int(image_width * 0.016))
-    pad_y = max(10, int(image_height * 0.012))
-    line_gap = max(4, int(image_height * 0.005))
-    max_box_width = max(220, int(image_width * (0.36 if anchor.startswith("top") else 0.78)))
-    content_max_lines = 2 if anchor.startswith("top") else 3
+    title_font = _load_font(max(22, int(min(image_width, image_height) * 0.034)), bold=True)
+    body_font = _load_font(max(20, int(min(image_width, image_height) * 0.029)))
+    pad_x = max(16, int(image_width * 0.02))
+    pad_y = max(13, int(image_height * 0.016))
+    line_gap = max(6, int(image_height * 0.007))
+    max_box_width = max(300, int(image_width * (0.48 if anchor.startswith("top") else 0.86)))
+    content_max_lines = 3 if anchor.startswith("top") else 4
     content_lines = _fit_text_lines(
         draw,
         value,
@@ -161,7 +161,7 @@ def _draw_text_box(
     for index, line in enumerate(lines):
         font = fonts[min(index, len(fonts) - 1)]
         fill = (255, 221, 158, 255) if index == 0 and label else (255, 255, 255, 252)
-        draw.text((x1 + pad_x, y), line, fill=(0, 0, 0, 190), font=font, stroke_width=2, stroke_fill=(0, 0, 0, 190))
+        draw.text((x1 + pad_x, y), line, fill=(0, 0, 0, 190), font=font, stroke_width=3, stroke_fill=(0, 0, 0, 190))
         draw.text((x1 + pad_x, y), line, fill=fill, font=font)
         y += line_heights[index] + line_gap
 
