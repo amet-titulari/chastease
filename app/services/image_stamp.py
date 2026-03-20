@@ -103,6 +103,7 @@ def _draw_text_box(
     image_height: int,
     title: str,
     body: str,
+    font=None,
 ) -> None:
     label = str(title or "").strip()
     value = str(body or "").strip()

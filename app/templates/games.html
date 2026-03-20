@@ -201,6 +201,31 @@
   }
   .greport-check .meta .ok { color: #9de2bf; font-weight: 700; }
   .greport-check .meta .fail { color: #ffb4b4; font-weight: 700; }
+  .greport-note-warn {
+    color: #ffb4b4;
+    font-size: 0.82rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid rgba(255, 107, 107, 0.22);
+    border-radius: 8px;
+    background: rgba(255, 107, 107, 0.08);
+  }
+  .greport-steps {
+    display: grid;
+    gap: 0.4rem;
+  }
+  .greport-step {
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 0.45rem 0.55rem;
+    background: rgba(255,255,255,0.02);
+    display: grid;
+    gap: 0.18rem;
+    font-size: 0.79rem;
+    color: #c6d8ea;
+  }
+  .greport-step .ok { color: #9de2bf; font-weight: 700; }
+  .greport-step .fail { color: #ffb4b4; font-weight: 700; }
+  .greport-step .pending { color: #ffc94a; font-weight: 700; }
 </style>
 {% endblock %}
 
@@ -270,7 +295,9 @@ function fmtDate(iso) {
 }
 
 function fmtDuration(secs) {
-  if (!secs) return "–";
+  if (secs == null || Number.isNaN(Number(secs))) return "–";
+  if (Number(secs) <= 0) return "0s";
+  secs = Number(secs);
   const m = Math.floor(secs / 60);
   const s = secs % 60;
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
@@ -318,8 +345,8 @@ async function loadRunHistory() {
           <div class="greport-head-meta">
             <h4>${escH(moduleName(r.module_key))}</h4>
             ${statusBadge}
-            <span style="font-size:0.78rem;color:#9db1c7;">${escH(diffLabel(r.difficulty_key))} &middot; ${escH(fmtDate(r.started_at))}</span>
-            <span style="font-size:0.78rem;color:#9db1c7;">${escH(fmtDuration(r.total_duration_seconds))}</span>
+            <span style="font-size:0.78rem;color:#9db1c7;">${escH(diffLabel(r.difficulty_key))} &middot; ${escH(fmtDate(r.effective_started_at || r.started_at))}</span>
+            <span style="font-size:0.78rem;color:#9db1c7;">${escH(fmtDuration(r.elapsed_duration_seconds))}</span>
           </div>
           <span class="greport-toggle">&#9660;</span>
         </div>
@@ -351,6 +378,7 @@ async function loadRunReportInto(runId, bodyEl) {
     const run = await resp.json();
     const summary = run.summary || {};
     const checks = Array.isArray(summary.checks) ? summary.checks : [];
+    const steps = Array.isArray(run.steps) ? run.steps : [];
 
     const total = Number(summary.total_steps || 0);
     const scheduled = Number(summary.scheduled_steps || total);
@@ -360,12 +388,17 @@ async function loadRunReportInto(runId, bodyEl) {
     const misses = Number(summary.miss_count || run.miss_count || 0);
     const penaltyApplied = Boolean(summary.session_penalty_applied);
     const endReason = summary.end_reason === "time_elapsed" ? "Zeit abgelaufen" : "Alle Schritte abgeschlossen";
+    const checksWithImages = checks.filter(c => c && c.capture_url);
+    const checksWithoutImages = checks.filter(c => c && !c.capture_url);
 
     let html = `<div class="greport-stats">
       <span>Beendigung: <strong>${escH(endReason)}</strong></span>
       <span>Gespielt: <strong class="${passed === total && failed === 0 ? 'greport-stat-ok' : 'greport-stat-fail'}">${passed}/${total}</strong></span>
       <span>Fehler: <strong class="${failed > 0 ? 'greport-stat-fail' : 'greport-stat-ok'}">${failed}</strong></span>
-      <span>Verfehlungen: <strong class="${misses > 0 ? 'greport-stat-fail' : 'greport-stat-ok'}">${misses}</strong></span>`;
+      <span>Verfehlungen: <strong class="${misses > 0 ? 'greport-stat-fail' : 'greport-stat-ok'}">${misses}</strong></span>
+      <span>Checks: <strong>${checks.length}</strong></span>
+      <span>Checks mit Bild: <strong>${checksWithImages.length}</strong></span>
+      <span>Checks ohne Bild: <strong>${checksWithoutImages.length}</strong></span>`;
     if (unplayed > 0) html += `<span>Nicht gespielt: <strong>${unplayed}/${scheduled}</strong></span>`;
     if (penaltyApplied) html += `<span><strong class="greport-stat-fail">Session-Penalty ausgeloest</strong></span>`;
     html += `</div>`;
@@ -373,8 +406,26 @@ async function loadRunReportInto(runId, bodyEl) {
     const ai = escH(summary.ai_assessment || "");
     if (ai) html += `<div class="greport-ai">${ai}</div>`;
 
-    const realChecks = checks.filter(c => c.capture_url);
-    const checksWithoutImage = checks.filter(c => !c.capture_url);
+    if (failed > 0 && misses === 0 && checks.length === 0) {
+      html += `<div class="greport-note-warn">Der Run ist fehlgeschlagen, aber es wurde kein serverseitiger Verstoss- oder Check-Eintrag gespeichert. Das spricht fuer ein Upload-/Persistenzproblem im Live-Run.</div>`;
+    }
+
+    if (steps.length > 0) {
+      html += `<p class="greport-checks-label">Schritte</p><div class="greport-steps">`;
+      steps.forEach((step, idx) => {
+        const stepStatus = String(step.status || "").toLowerCase();
+        const cls = stepStatus === "passed" ? "ok" : stepStatus === "failed" ? "fail" : "pending";
+        html += `<article class="greport-step">
+          <div><strong>${idx + 1}. ${escH(step.posture_name || "Pose")}</strong> · <span class="${cls}">${escH(stepStatus || "unknown")}</span></div>
+          <div>Verifikationen: ${Number(step.verification_count || 0)}</div>
+          <div>${escH(step.last_analysis || "Keine serverseitige Analyse gespeichert.")}</div>
+        </article>`;
+      });
+      html += `</div>`;
+    }
+
+    const realChecks = checksWithImages;
+    const checksWithoutImage = checksWithoutImages;
     if (realChecks.length > 0) {
       html += `<p class="greport-checks-label">${realChecks.length} Kontrollbild${realChecks.length === 1 ? "" : "er"}</p>`;
       html += `<div class="greport-checks">`;

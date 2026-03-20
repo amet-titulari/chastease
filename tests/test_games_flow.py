@@ -8,6 +8,7 @@ from uuid import uuid4
 import zipfile
 
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app.config import settings
 from app.database import SessionLocal
@@ -15,6 +16,7 @@ from app.main import app
 from app.models.game_posture_template import GamePostureTemplate
 from app.models.game_run import GameRun
 from app.models.game_run_step import GameRunStep
+from app.models.message import Message
 from app.models.session import Session as SessionModel
 from app.routers.games import _verification_criteria_for_step
 
@@ -23,6 +25,12 @@ def _ppm_bytes(width: int, height: int, rgb: tuple[int, int, int] = (128, 128, 1
     header = f"P6\n{width} {height}\n255\n".encode("ascii")
     pixel = bytes([rgb[0], rgb[1], rgb[2]])
     return header + (pixel * (width * height))
+
+
+def _jpeg_bytes(width: int = 320, height: int = 240, rgb: tuple[int, int, int] = (128, 128, 128)) -> bytes:
+    out = io.BytesIO()
+    Image.new("RGB", (width, height), rgb).save(out, format="JPEG", quality=88)
+    return out.getvalue()
 
 
 def _register_admin(client: TestClient) -> None:
@@ -560,7 +568,7 @@ def test_dont_move_movement_event_endpoint_registers_violation_and_capture():
 
         movement_resp = client.post(
             f"/api/games/runs/{run_id}/steps/{step_id}/movement-event",
-            files={"file": ("movement.jpg", b"fakejpegbytes", "image/jpeg")},
+            files={"file": ("movement.jpg", _jpeg_bytes(), "image/jpeg")},
             data={
                 "marker_x": "0.52",
                 "marker_y": "0.74",
@@ -576,6 +584,33 @@ def test_dont_move_movement_event_endpoint_registers_violation_and_capture():
         assert payload["step"]["status"] == "pending"
         assert int(payload["run"]["miss_count"]) == 1
         assert str(payload["step"]["capture_url"]).startswith("/media/verifications/games/")
+
+        db = SessionLocal()
+        try:
+            saved_run = db.query(GameRun).filter(GameRun.id == run_id).first()
+            assert saved_run is not None
+            summary = json.loads(saved_run.summary_json or "{}")
+            checks = summary.get("checks") or []
+            assert len(checks) == 1
+            assert checks[0]["verification_status"] == "suspicious"
+            assert checks[0]["violation_detected"] is True
+            assert str(checks[0]["capture_url"]).startswith("/media/verifications/games/")
+            assert "Lokale Bewegung erkannt" in str(checks[0]["analysis"])
+
+            step_messages = (
+                db.query(Message)
+                .filter(
+                    Message.session_id == session_id,
+                    Message.message_type.in_(["game_step_fail", "game_step_sample_fail"]),
+                )
+                .order_by(Message.id.asc())
+                .all()
+            )
+            assert len(step_messages) == 2
+            assert "Bewegungsverstoss erkannt" in step_messages[0].content
+            assert "Echtzeit erkannt" in step_messages[1].content
+        finally:
+            db.close()
 
 
 def test_dont_move_complete_endpoint_passes_without_creating_capture():
@@ -622,6 +657,88 @@ def test_dont_move_complete_endpoint_passes_without_creating_capture():
         assert payload["step"]["capture_path"] is None
         assert payload["step"]["capture_url"] is None
         assert payload["step"]["verification_count"] == 0
+
+
+def test_dont_move_movement_event_is_still_recorded_after_timeout_completion():
+    with TestClient(app) as client:
+        _register_admin(client)
+        posture_key = f"test_dm_timeout_motion_pose_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "DM Timeout Motion Pose",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "No movement.",
+                "target_seconds": 120,
+                "sort_order": 7,
+                "is_active": True,
+                "allowed_module_keys": ["dont_move"],
+            },
+        )
+        assert create_resp.status_code == 200
+
+        session_id = _create_and_sign(client)
+        start_resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "dont_move",
+                "difficulty": "medium",
+                "duration_minutes": 1,
+                "selected_posture_key": posture_key,
+                "session_penalty_seconds": 0,
+            },
+        )
+        assert start_resp.status_code == 200
+        run = start_resp.json()
+        run_id = int(run["id"])
+        step_id = int(run["current_step"]["id"])
+
+        db = SessionLocal()
+        try:
+            run_row = db.query(GameRun).filter(GameRun.id == run_id).first()
+            assert run_row is not None
+            run_row.summary_json = json.dumps({
+                "hold_started_at": (datetime.now(timezone.utc) - timedelta(seconds=75)).isoformat(),
+            })
+            db.add(run_row)
+            db.commit()
+        finally:
+            db.close()
+
+        timed_out = client.get(f"/api/games/runs/{run_id}")
+        assert timed_out.status_code == 200
+        assert timed_out.json()["status"] == "completed"
+        assert (timed_out.json().get("summary") or {}).get("end_reason") == "time_elapsed"
+
+        movement_resp = client.post(
+            f"/api/games/runs/{run_id}/steps/{step_id}/movement-event",
+            files={"file": ("movement.jpg", _jpeg_bytes(rgb=(180, 100, 100)), "image/jpeg")},
+            data={
+                "marker_x": "0.52",
+                "marker_y": "0.74",
+                "reason": "Lokale Bewegung erkannt kurz vor Ablauf",
+            },
+        )
+        assert movement_resp.status_code == 200
+
+        payload = movement_resp.json()
+        assert payload["run"]["status"] == "completed"
+        assert int(payload["run"]["miss_count"]) == 1
+        assert payload["step"]["verification_status"] == "suspicious"
+        assert str(payload["step"]["capture_url"]).startswith("/media/verifications/games/")
+
+        db = SessionLocal()
+        try:
+            saved_run = db.query(GameRun).filter(GameRun.id == run_id).first()
+            assert saved_run is not None
+            summary = json.loads(saved_run.summary_json or "{}")
+            checks = summary.get("checks") or []
+            assert len(checks) == 1
+            assert int(summary.get("miss_count") or 0) == 1
+            assert str(checks[0]["capture_url"]).startswith("/media/verifications/games/")
+        finally:
+            db.close()
 
 
 def test_tiptoeing_complete_endpoint_passes_without_creating_capture():
@@ -1458,6 +1575,117 @@ def test_current_step_target_seconds_is_capped_by_remaining_budget():
         max_hold_budget = max(0, int(payload["remaining_seconds"]) - int(payload["transition_seconds"]))
         assert int(step["target_seconds"]) <= max_hold_budget
         assert int(step["raw_target_seconds"]) >= int(step["target_seconds"])
+
+
+def test_strict_run_timer_does_not_start_before_hold_started():
+    with TestClient(app) as client:
+        _register_admin(client)
+        posture_key = f"test_dm_timer_gate_pose_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "DM Timer Gate Pose",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "No movement.",
+                "target_seconds": 120,
+                "sort_order": 5,
+                "is_active": True,
+                "allowed_module_keys": ["dont_move"],
+            },
+        )
+        assert create_resp.status_code == 200
+
+        session_id = _create_and_sign(client)
+        start_resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "dont_move",
+                "difficulty": "medium",
+                "duration_minutes": 1,
+                "selected_posture_key": posture_key,
+                "start_countdown_seconds": 5,
+                "session_penalty_seconds": 0,
+            },
+        )
+        assert start_resp.status_code == 200
+        run_id = int(start_resp.json()["id"])
+
+        db = SessionLocal()
+        try:
+            run = db.query(GameRun).filter(GameRun.id == run_id).first()
+            assert run is not None
+            run.started_at = datetime.now(timezone.utc) - timedelta(seconds=120)
+            db.add(run)
+            db.commit()
+        finally:
+            db.close()
+
+        detail = client.get(f"/api/games/runs/{run_id}")
+        assert detail.status_code == 200
+        payload = detail.json()
+        assert payload["status"] == "active"
+        assert payload["hold_started"] is False
+        assert int(payload["remaining_seconds"]) == 60
+        assert int(payload["elapsed_duration_seconds"]) == 0
+        step = payload.get("current_step")
+        assert step is not None
+        assert int(step["target_seconds"]) == 60
+        assert int(step["raw_target_seconds"]) == 60
+
+
+def test_strict_run_timer_counts_down_from_hold_started_at():
+    with TestClient(app) as client:
+        _register_admin(client)
+        posture_key = f"test_dm_timer_started_pose_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "DM Timer Started Pose",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "No movement.",
+                "target_seconds": 120,
+                "sort_order": 5,
+                "is_active": True,
+                "allowed_module_keys": ["dont_move"],
+            },
+        )
+        assert create_resp.status_code == 200
+
+        session_id = _create_and_sign(client)
+        start_resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "dont_move",
+                "difficulty": "medium",
+                "duration_minutes": 1,
+                "selected_posture_key": posture_key,
+                "session_penalty_seconds": 0,
+            },
+        )
+        assert start_resp.status_code == 200
+        run_id = int(start_resp.json()["id"])
+
+        db = SessionLocal()
+        try:
+            run = db.query(GameRun).filter(GameRun.id == run_id).first()
+            assert run is not None
+            run.summary_json = json.dumps({
+                "hold_started_at": (datetime.now(timezone.utc) - timedelta(seconds=18)).isoformat(),
+            })
+            db.add(run)
+            db.commit()
+        finally:
+            db.close()
+
+        detail = client.get(f"/api/games/runs/{run_id}")
+        assert detail.status_code == 200
+        payload = detail.json()
+        assert payload["hold_started"] is True
+        assert 40 <= int(payload["remaining_seconds"]) <= 42
+        assert 18 <= int(payload["elapsed_duration_seconds"]) <= 20
+        assert payload["effective_started_at"] is not None
 
 
 def test_posture_management_crud_and_run_uses_managed_postures():

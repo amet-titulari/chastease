@@ -461,6 +461,7 @@
       <div class="verify-preview">
         <img id="gm-verify-thumb" class="verify-thumb" alt="Letztes Pruefungsbild" style="display:none;" />
       </div>
+      <p id="gm-upload-debug" class="game-meta"></p>
       <p id="gm-analysis" class="game-meta"></p>
       <p class="game-meta"><span id="gm-miss-label">Misses</span>: <span id="gm-miss-count">0</span> · Retry +Zeit: <span id="gm-retry-time">0s</span></p>
       <div id="gm-capture-gallery" class="capture-gallery"></div>
@@ -504,6 +505,8 @@ let movementEventInFlight = false;
 let movementMonitorActive = false;
 let movementLastMarker = null;
 let movementPendingViolation = null;
+let movementLocalPreviewUrl = null;
+let movementPendingLocalCaptureUrls = [];
 let movementPoseMissingFrames = 0;
 let movementOverlayMode = "idle";
 let tiptoeingMaskImage = null;
@@ -552,6 +555,7 @@ const totalTimerEl = document.getElementById("gm-total-timer");
 const missCountEl = document.getElementById("gm-miss-count");
 const retryTimeEl = document.getElementById("gm-retry-time");
 const analysisEl = document.getElementById("gm-analysis");
+const uploadDebugEl = document.getElementById("gm-upload-debug");
 const verifyThumbEl = document.getElementById("gm-verify-thumb");
 const captureGalleryEl = document.getElementById("gm-capture-gallery");
 const finalReportEl = document.getElementById("gm-final-report");
@@ -579,7 +583,18 @@ const cameraStartBtnEl = document.getElementById("gm-cam-start");
 const cameraDeviceStorageKey = "game_posture_camera_device_id";
 
 const movementWatchIndices = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
-const movementPoseCompareIndices = [11, 12, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+const movementPoseCompareIndices = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+const dontMoveCoreReferenceParts = [
+  "nose",
+  "left_shoulder",
+  "right_shoulder",
+  "left_elbow",
+  "right_elbow",
+  "left_wrist",
+  "right_wrist",
+  "left_hip",
+  "right_hip",
+];
 const postureReferencePointToIndex = {
   left_shoulder: 11,
   right_shoulder: 12,
@@ -611,9 +626,9 @@ const postureSkeletonConnections = [
 ];
 const movementDefaults = {
   dont_move: {
-    easy: { poseDeviation: 0.24, stillness: 0.0130 },
-    medium: { poseDeviation: 0.21, stillness: 0.0100 },
-    hard: { poseDeviation: 0.17, stillness: 0.0080 },
+    easy: { poseDeviation: 0.40, stillness: 0.0400 },
+    medium: { poseDeviation: 0.37, stillness: 0.0360 },
+    hard: { poseDeviation: 0.32, stillness: 0.0300 },
   },
   tiptoeing: {
     easy: { poseDeviation: 0.14, stillness: 0.22 },
@@ -660,6 +675,66 @@ async function ensureVisionLoaded() {
 function setStatus(msg, warn = false) {
   statusEl.textContent = msg || "";
   statusEl.className = warn ? "game-meta warn" : "game-meta";
+}
+
+function setUploadDebug(msg, warn = false) {
+  if (!uploadDebugEl) return;
+  uploadDebugEl.textContent = msg || "";
+  uploadDebugEl.className = warn ? "game-meta warn" : "game-meta";
+}
+
+function revokeMovementLocalPreview() {
+  if (!movementLocalPreviewUrl) return;
+  try {
+    URL.revokeObjectURL(movementLocalPreviewUrl);
+  } catch {
+    // Ignore object URL cleanup failures.
+  }
+  movementLocalPreviewUrl = null;
+}
+
+function clearPendingLocalCaptureGallery() {
+  if (!captureGalleryEl) return;
+  captureGalleryEl.querySelectorAll('[data-local-pending="true"]').forEach((node) => {
+    const url = node.getAttribute("data-object-url");
+    if (url) {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // Ignore object URL cleanup failures.
+      }
+    }
+    node.remove();
+  });
+  movementPendingLocalCaptureUrls = [];
+}
+
+function appendPendingLocalCaptureThumbnail(objectUrl) {
+  if (!captureGalleryEl || !objectUrl) return;
+  const alreadyPresent = Array.from(captureGalleryEl.querySelectorAll("[data-object-url]"))
+    .some((node) => node.getAttribute("data-object-url") === objectUrl);
+  if (alreadyPresent) return;
+  const img = document.createElement("img");
+  img.src = objectUrl;
+  img.alt = "Lokales Kontrollbild";
+  img.className = "capture-thumb fail";
+  img.setAttribute("data-local-pending", "true");
+  img.setAttribute("data-object-url", objectUrl);
+  captureGalleryEl.prepend(img);
+  movementPendingLocalCaptureUrls.unshift(objectUrl);
+  while (captureGalleryEl.children.length > 60) {
+    const last = captureGalleryEl.lastElementChild;
+    if (!last) break;
+    const url = last.getAttribute("data-object-url");
+    if (url) {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // Ignore object URL cleanup failures.
+      }
+    }
+    captureGalleryEl.removeChild(last);
+  }
 }
 
 function loadStoredCameraDeviceId() {
@@ -1274,11 +1349,40 @@ function strictStartReadyThreshold() {
   if (isTiptoeingModule) return 1;
   const diff = activeDifficultyKey();
   const raw = Number(moduleSettings?.[`pose_similarity_min_score_${diff}`]);
-  // dont_move requires stricter pose matching so that arm/body position must be clearly correct
   const fallback = isDontMoveModule
-    ? (diff === "easy" ? 62 : (diff === "hard" ? 78 : 70))
+    ? (diff === "easy" ? 45 : (diff === "hard" ? 60 : 52))
     : (diff === "easy" ? 45 : (diff === "hard" ? 65 : 55));
   return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+}
+
+function strictHoldPoseThreshold() {
+  const startThreshold = strictStartReadyThreshold();
+  if (!isDontMoveModule) return startThreshold;
+  return Math.max(34, startThreshold - 8);
+}
+
+function strictStartStableFrameTarget() {
+  if (isDontMoveModule) return 4;
+  if (isTiptoeingModule) return 5;
+  return 6;
+}
+
+function movementViolationStrikeTarget() {
+  const diff = activeDifficultyKey();
+  if (isDontMoveModule) {
+    if (diff === "easy") return 12;
+    if (diff === "hard") return 8;
+    return 10;
+  }
+  return 4;
+}
+
+function movementPoseMissingFrameTarget() {
+  const diff = activeDifficultyKey();
+  if (!isDontMoveModule) return 7;
+  if (diff === "easy") return 12;
+  if (diff === "hard") return 8;
+  return 10;
 }
 
 function movementProfile() {
@@ -1452,6 +1556,23 @@ function visibleReferencePoseParts(landmarks, names) {
   return names.filter((name) => Number(normalized.points?.[name]?.visibility ?? 0) >= 0.45);
 }
 
+function dontMoveVisibilityMetrics(referenceJson, landmarks) {
+  const requiredParts = requiredReferencePoseParts(referenceJson);
+  const visibleParts = visibleReferencePoseParts(landmarks, requiredParts);
+  const totalRatio = requiredParts.length > 0 ? (visibleParts.length / requiredParts.length) : 0;
+  const requiredCoreParts = requiredParts.filter((name) => dontMoveCoreReferenceParts.includes(name));
+  const visibleCoreParts = visibleParts.filter((name) => dontMoveCoreReferenceParts.includes(name));
+  const coreRatio = requiredCoreParts.length > 0 ? (visibleCoreParts.length / requiredCoreParts.length) : totalRatio;
+  return {
+    requiredParts,
+    visibleParts,
+    totalRatio,
+    requiredCoreParts,
+    visibleCoreParts,
+    coreRatio,
+  };
+}
+
 function copyLandmarks(landmarks) {
   if (!Array.isArray(landmarks)) return null;
   return landmarks.map((item) => ({
@@ -1492,6 +1613,17 @@ function bodyRegionLabelForIndex(idx) {
   if (idx === 29 || idx === 30) return "Sprunggelenk";
   if (idx === 31 || idx === 32) return "Fuss";
   return "Koerper";
+}
+
+function uploadCaptureDimensions() {
+  const sourceW = Math.max(1, Number(playVideoEl?.videoWidth || 0), 640);
+  const sourceH = Math.max(1, Number(playVideoEl?.videoHeight || 0), 360);
+  const maxEdge = 1280;
+  const scale = Math.min(1, maxEdge / Math.max(sourceW, sourceH));
+  return {
+    width: Math.max(640, Math.round(sourceW * scale)),
+    height: Math.max(360, Math.round(sourceH * scale)),
+  };
 }
 
 function tiptoeingFootState(poseLandmarks, side) {
@@ -1576,21 +1708,30 @@ function strictStartVerdict(poseLandmarks) {
       marker: null,
       markerLabel: "Tiptoeing bereit",
       analysis: "Pose erkannt. Halte Gruen und Zehenspitzen stabil.",
-      debug: `Start bereit\nStabile Frames: ${strictStartStableFrames + 1}/6`,
+      debug: `Start bereit\nStabile Frames: ${strictStartStableFrames + 1}/${strictStartStableFrameTarget()}`,
     };
   }
 
   const score = scoreLivePoseAgainstReference(currentReferenceLandmarksJson, poseLandmarks);
   if (score) {
     const threshold = strictStartReadyThreshold();
-    const requiredParts = requiredReferencePoseParts(currentReferenceLandmarksJson);
-    const visibleParts = visibleReferencePoseParts(poseLandmarks, requiredParts);
-    const visibilityRatio = requiredParts.length > 0 ? (visibleParts.length / requiredParts.length) : 0;
+    const visibilityMetrics = dontMoveVisibilityMetrics(currentReferenceLandmarksJson, poseLandmarks);
+    const requiredParts = visibilityMetrics.requiredParts;
+    const visibleParts = visibilityMetrics.visibleParts;
+    const minVisibleCount = isDontMoveModule ? 7 : 10;
+    const minMeanVisibility = isDontMoveModule ? 0.40 : 0.52;
+    const minVisibilityRatio = isDontMoveModule ? 0.56 : 0.78;
+    const visibleCoreCount = visibilityMetrics.visibleCoreParts.length;
+    const minCoreVisibleCount = isDontMoveModule ? 5 : 0;
+    const effectiveCoverageRatio = isDontMoveModule
+      ? Math.max(visibilityMetrics.totalRatio, visibilityMetrics.coreRatio)
+      : visibilityMetrics.totalRatio;
     const ready = (
       score.score >= threshold
-      && score.visibleCount >= 10
-      && score.meanVisibility >= 0.52
-      && visibilityRatio >= 0.78
+      && score.visibleCount >= minVisibleCount
+      && score.meanVisibility >= minMeanVisibility
+      && effectiveCoverageRatio >= minVisibilityRatio
+      && visibleCoreCount >= minCoreVisibleCount
     );
     return {
       ready,
@@ -1600,8 +1741,8 @@ function strictStartVerdict(poseLandmarks) {
         ? `Sollpose erkannt (${score.score.toFixed(1)}/100).`
         : `Noch ausrichten: Pose ${score.score.toFixed(1)}/100, Start ab ${threshold.toFixed(1)}.`,
       debug: ready
-        ? `Start bereit\nPose ${score.score.toFixed(1)}/100\nStabile Frames: ${strictStartStableFrames + 1}/6`
-        : `Start blockiert\nPose ${score.score.toFixed(1)}/100, Start ab ${threshold.toFixed(1)}\nTeile sichtbar: ${visibleParts.length}/${requiredParts.length}`,
+        ? `Start bereit\nPose ${score.score.toFixed(1)}/100\nStabile Frames: ${strictStartStableFrames + 1}/${strictStartStableFrameTarget()}`
+        : `Start blockiert\nPose ${score.score.toFixed(1)}/100, Start ab ${threshold.toFixed(1)}\nSichtbar: ${visibleParts.length}/${requiredParts.length}${isDontMoveModule ? ` · Kern: ${visibleCoreCount}/${visibilityMetrics.requiredCoreParts.length}` : ""}`,
     };
   }
 
@@ -1726,7 +1867,7 @@ function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
       movementPoseMissingFrames += 1;
       const fallbackMarker = fallbackMarkerFromPoseLandmarks(poseLandmarks) || movementLastMarker || null;
       return {
-        violation: movementPoseMissingFrames >= 7,
+        violation: movementPoseMissingFrames >= movementPoseMissingFrameTarget(),
         marker: fallbackMarker,
         markerIndex: null,
         markerLabel: "Koerper nicht stabil erfasst",
@@ -1793,22 +1934,24 @@ function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
     poseVisiblePoints += 1;
   }
 
-  const avgPoseDeviation = poseVisiblePoints > 0 ? (poseDeviation / poseVisiblePoints) : 999;
-  let poseOk = avgPoseDeviation < Number(profile.poseDeviation);
+  const avgPoseDeviation = poseVisiblePoints > 0 ? (poseDeviation / poseVisiblePoints) : 0;
+  let poseOk = poseVisiblePoints < (isDontMoveModule ? 4 : 1)
+    ? true
+    : avgPoseDeviation < Number(profile.poseDeviation);
   const stillOk = maxMovement < Number(profile.stillness);
 
   if (isDontMoveModule && currentReferenceLandmarksJson) {
     const score = scoreLivePoseAgainstReference(currentReferenceLandmarksJson, poseLandmarks);
-    const threshold = strictStartReadyThreshold();
-    const requiredParts = requiredReferencePoseParts(currentReferenceLandmarksJson);
-    const visibleParts = visibleReferencePoseParts(poseLandmarks, requiredParts);
-    const visibilityRatio = requiredParts.length > 0 ? (visibleParts.length / requiredParts.length) : 0;
+    const threshold = strictHoldPoseThreshold();
+    const visibilityMetrics = dontMoveVisibilityMetrics(currentReferenceLandmarksJson, poseLandmarks);
+    const visibilityRatio = Math.max(visibilityMetrics.totalRatio, visibilityMetrics.coreRatio);
     if (
       !score
       || score.score < threshold
-      || score.visibleCount < 10
-      || score.meanVisibility < 0.5
-      || visibilityRatio < 0.72
+      || score.visibleCount < 7
+      || score.meanVisibility < 0.38
+      || visibilityRatio < 0.5
+      || visibilityMetrics.visibleCoreParts.length < 4
     ) {
       poseOk = false;
       if (!marker) {
@@ -1826,10 +1969,10 @@ function evaluatePoseMovement(worldLandmarks, poseLandmarks) {
 
   movementLastWorldLandmarks = copyLandmarks(worldLandmarks);
   const now = Date.now();
-  const violation = movementStrikeCount >= 4 && now >= movementCooldownUntil;
+  const violation = movementStrikeCount >= movementViolationStrikeTarget() && now >= movementCooldownUntil;
   if (violation) {
     movementStrikeCount = 0;
-    movementCooldownUntil = now + 2200;
+    movementCooldownUntil = now + (isDontMoveModule ? 4200 : 2200);
   }
   return {
     violation,
@@ -1910,8 +2053,9 @@ function describeMovementReason(verdict) {
 async function captureViolationFrameBlob(marker = null, markerMeta = null) {
   if (!cameraStream) return null;
   const canvas = document.createElement("canvas");
-  const w = Math.max(640, Number(playVideoEl.videoWidth || 0));
-  const h = Math.max(360, Number(playVideoEl.videoHeight || 0));
+  const dims = uploadCaptureDimensions();
+  const w = dims.width;
+  const h = dims.height;
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d");
@@ -1999,11 +2143,27 @@ async function submitMovementViolation(token, marker, verdict) {
     const markerLabel = String(verdict?.markerLabel || "Bewegung");
     const markerStrength = Number(verdict?.markerStrength || verdict?.movementScore || 0);
 
-    const blob = await captureViolationFrameBlob(effectiveMarker, {
-      label: markerLabel,
-      strength: markerStrength,
-    });
+    // Use a direct camera capture for uploads. The server already annotates the
+    // stored image with marker metadata, so relying on a client-side canvas here
+    // only adds a browser-specific failure point.
+    let blob = await captureFrameBlob();
+    if (!blob) {
+      blob = await captureViolationFrameBlob(effectiveMarker, {
+        label: markerLabel,
+        strength: markerStrength,
+      });
+    }
     if (!blob) throw new Error("Kontrollbild fuer Bewegung konnte nicht erzeugt werden");
+
+    revokeMovementLocalPreview();
+    movementLocalPreviewUrl = URL.createObjectURL(blob);
+    verifyThumbEl.src = movementLocalPreviewUrl;
+    verifyThumbEl.style.display = "";
+    verifyThumbEl.classList.remove("ok");
+    verifyThumbEl.classList.add("fail");
+    appendPendingLocalCaptureThumbnail(movementLocalPreviewUrl);
+    setStatus("Verstoss erkannt. Kontrollbild wird gespeichert …", true);
+    setUploadDebug(`Upload startet: run=${runId}, step=${activeRun.current_step.id}, size=${blob.size || 0} bytes`, true);
 
     const form = new FormData();
     form.append("file", blob, "movement_violation.jpg");
@@ -2021,6 +2181,10 @@ async function submitMovementViolation(token, marker, verdict) {
     });
 
     analysisEl.textContent = `Bewegung erkannt: ${result.step.analysis || "Verstoss registriert."}`;
+    setStatus("Verstoss protokolliert und Kontrollbild gespeichert.", true);
+    setUploadDebug(`Upload erfolgreich: miss_count=${result.run?.miss_count ?? "?"}, image=${result.step?.capture_url || "-"}`, false);
+    revokeMovementLocalPreview();
+    clearPendingLocalCaptureGallery();
     renderRun(result.run);
     // Ensure violation thumbnail is always visible after gallery rebuild
     updateVerificationPreview(result.step, true);
@@ -2029,15 +2193,17 @@ async function submitMovementViolation(token, marker, verdict) {
     }
   } catch (err) {
     setStatus(`Lokale Bewegungserfassung fehlgeschlagen: ${err.message}`, true);
+    setUploadDebug(`Upload fehlgeschlagen: ${err.message}`, true);
     const attempts = Number(verdict?.attempts || 0);
     if (attempts < 2 && token === sequenceToken && activeRun && activeRun.current_step) {
-      const retryVerdict = {
+      movementPendingViolation = {
+        token,
+        marker,
+        verdict: {
         ...verdict,
         attempts: attempts + 1,
+        },
       };
-      window.setTimeout(() => {
-        submitMovementViolation(token, marker, retryVerdict).catch(() => {});
-      }, 400);
     }
   } finally {
     movementEventInFlight = false;
@@ -2054,6 +2220,39 @@ async function submitMovementViolation(token, marker, verdict) {
       }, 0);
     }
   }
+}
+
+async function waitForMovementViolationsToSettle(token, timeoutMs = 2600) {
+  const startedAt = Date.now();
+  while (token === sequenceToken) {
+    const hasQueuedViolation = Boolean(movementPendingViolation);
+    if (!movementEventInFlight && !hasQueuedViolation) {
+      return true;
+    }
+    if ((Date.now() - startedAt) >= timeoutMs) {
+      return false;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 80));
+  }
+  return false;
+}
+
+async function finalizeStrictCompletionAfterSettledViolations(token) {
+  if (token !== sequenceToken) return;
+
+  const flushed = await waitForMovementViolationsToSettle(token, 5000);
+  if (token !== sequenceToken) return;
+
+  if (!flushed && (movementEventInFlight || movementPendingViolation)) {
+    setStatus("Verstoss-Upload braucht laenger. Abschluss wartet auf Speicherung.", true);
+    window.setTimeout(() => {
+      finalizeStrictCompletionAfterSettledViolations(token).catch(() => {});
+    }, 300);
+    return;
+  }
+
+  stopMovementMonitor();
+  completeStrictStepWithoutCapture(token).catch(() => {});
 }
 
 function bestEffortMovementMarker() {
@@ -2200,8 +2399,9 @@ function stopMovementMonitor() {
   movementCooldownUntil = 0;
   movementRedFlashUntil = 0;
   movementLastMarker = null;
-  movementPendingViolation = null;
   movementPoseMissingFrames = 0;
+  revokeMovementLocalPreview();
+  clearPendingLocalCaptureGallery();
   movementOverlayMode = "idle";
   strictStartStableFrames = 0;
   strictStartDebugText = "";
@@ -2287,11 +2487,12 @@ async function startStrictStartAlignment(token, readyCountdownSeconds, onReady) 
       }
 
       strictStartStableFrames += 1;
+      const stableFrameTarget = strictStartStableFrameTarget();
       // Keep "positioning" (blue) during stabilisation — only startMovementMonitor sets "active" (green)
-      strictStartDebugText = String(verdict?.debug || `Start bereit\nStabile Frames: ${strictStartStableFrames}/6`);
+      strictStartDebugText = String(verdict?.debug || `Start bereit\nStabile Frames: ${strictStartStableFrames}/${stableFrameTarget}`);
       drawMotionOverlay(verdict.marker || null);
 
-      if (strictStartStableFrames < 6) {
+      if (strictStartStableFrames < stableFrameTarget) {
         updatePhase("POSITIONIEREN", "--");
         analysisEl.textContent = `${verdict.analysis || "Pose erkannt."} Stabilisiere die Haltung kurz.`;
         return;
@@ -2553,6 +2754,8 @@ function syncLiveCaptureUiFromSummary(summary) {
   [...withImages].reverse().slice(0, 60).forEach((entry) => {
     appendCaptureThumbnail(entry);
   });
+
+  movementPendingLocalCaptureUrls.forEach((url) => appendPendingLocalCaptureThumbnail(url));
 }
 
 function startTotalTimer(seconds, isActive) {
@@ -2578,7 +2781,8 @@ function renderRun(run) {
   runStatusEl.textContent = run.status;
   missCountEl.textContent = String(run.miss_count || 0);
   retryTimeEl.textContent = isSinglePoseModule ? "0s" : `${run.retry_extension_seconds || 0}s`;
-  startTotalTimer(run.remaining_seconds, run.status === "active");
+  const totalTimerActive = run.status === "active" && (!isSinglePoseModule || Boolean(run.hold_started));
+  startTotalTimer(run.remaining_seconds, totalTimerActive);
   syncLiveCaptureUiFromSummary(summary);
 
   const step = run.current_step;
@@ -2643,6 +2847,10 @@ function renderRun(run) {
     stopCamera();
   } else {
     finalReportEl.innerHTML = "";
+  }
+
+  if (run.status !== "active" && !movementEventInFlight && !movementPendingViolation) {
+    setUploadDebug("", false);
   }
 
   if (run.status === "active" && !cameraStream) {
@@ -2713,6 +2921,9 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
   // No countdown before the hold phase is needed, and holdSeconds must not be
   // capped by the current budget because the server clock doesn't start until
   // hold-started is signalled (the server will cap via remaining_seconds).
+  const readyCountdownSeconds = isSinglePoseModule
+    ? Math.max(0, Number(transitionSeconds || 0))
+    : 0;
   const transition = isSinglePoseModule ? 0 : Math.max(0, Math.min(Number(transitionSeconds || 0), budget));
   const holdBudget = Math.max(0, budget - transition);
   const holdSeconds = isSinglePoseModule
@@ -2770,13 +2981,13 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
           verifyCurrentStepWithMode(token, { sampleOnly: true }).catch(() => {});
         }
       },
-      onFinished: () => {
+      onFinished: async () => {
         stopPostureScoreMonitor();
         stopSkeletonMonitor();
-        stopMovementMonitor();
         if (isSinglePoseModule) {
-          completeStrictStepWithoutCapture(token).catch(() => {});
+          finalizeStrictCompletionAfterSettledViolations(token).catch(() => {});
         } else {
+          stopMovementMonitor();
           verifyCurrentStepWithMode(token, { sampleOnly: false });
         }
       },
@@ -2784,7 +2995,7 @@ function startStepSequence(step, transitionSeconds, runRemainingSeconds) {
   };
 
   if (isSinglePoseModule) {
-    startStrictStartAlignment(token, transition, beginHold);
+    startStrictStartAlignment(token, readyCountdownSeconds, beginHold);
     return;
   }
 
@@ -3084,42 +3295,16 @@ function stopCamera() {
 
 async function captureFrameBlob() {
   if (!cameraStream) return null;
-  const track = cameraStream.getVideoTracks()[0];
-  if (!track) return null;
-
-  let photoBlob = null;
-  if (typeof ImageCapture !== "undefined") {
-    try {
-      const imageCapture = new ImageCapture(track);
-      photoBlob = await imageCapture.takePhoto();
-    } catch {
-      photoBlob = null;
-    }
-  }
-
-  if (!photoBlob) {
-    const settings = typeof track.getSettings === "function" ? track.getSettings() : {};
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(
-      1280,
-      Number(settings.width || 0),
-      Number(playVideoEl.videoWidth || 0),
-      640
-    );
-    canvas.height = Math.max(
-      720,
-      Number(settings.height || 0),
-      Number(playVideoEl.videoHeight || 0),
-      360
-    );
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(playVideoEl, 0, 0, canvas.width, canvas.height);
-    photoBlob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.94));
-  }
-
+  const dims = uploadCaptureDimensions();
+  const canvas = document.createElement("canvas");
+  canvas.width = dims.width;
+  canvas.height = dims.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(playVideoEl, 0, 0, canvas.width, canvas.height);
+  const photoBlob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.88));
   return photoBlob || null;
 }
 
@@ -3193,6 +3378,18 @@ async function verifyCurrentStepWithMode(token, options = {}) {
     const blob = await captureFrameBlob();
     if (!blob) throw new Error("Kein Kamerabild verfuegbar");
 
+    revokeMovementLocalPreview();
+    movementLocalPreviewUrl = URL.createObjectURL(blob);
+    verifyThumbEl.src = movementLocalPreviewUrl;
+    verifyThumbEl.style.display = "";
+    verifyThumbEl.classList.remove("ok", "fail");
+    verifyThumbEl.classList.add(sampleOnly ? "fail" : "ok");
+    appendPendingLocalCaptureThumbnail(movementLocalPreviewUrl);
+    setUploadDebug(
+      `Upload startet: run=${runId}, step=${activeRun.current_step.id}, mode=${monitorOnly ? "monitor" : sampleOnly ? "sample" : "final"}, size=${blob.size || 0} bytes`,
+      monitorOnly || sampleOnly
+    );
+
     const form = new FormData();
     form.append("file", blob, "autocap.jpg");
     form.append("observed_posture", activeRun.current_step.posture_name || "");
@@ -3210,6 +3407,15 @@ async function verifyCurrentStepWithMode(token, options = {}) {
       method: "POST",
       body: form,
     });
+
+    setUploadDebug(
+      `Upload erfolgreich: status=${result.step?.verification_status || "?"}, image=${result.step?.capture_url || "-"}`,
+      false
+    );
+    revokeMovementLocalPreview();
+    if (result.step && result.step.capture_url) {
+      clearPendingLocalCaptureGallery();
+    }
 
     const livePoseStatus = String(
       result?.step?.pose_similarity_status || result?.step?.verification_status || ""
@@ -3264,6 +3470,7 @@ async function verifyCurrentStepWithMode(token, options = {}) {
       updatePhase("FERTIG", "--");
     }
   } catch (err) {
+    setUploadDebug(`Upload fehlgeschlagen: ${err.message}`, true);
     if (!monitorOnly) {
       analysisEl.textContent = `Pruefung fehlgeschlagen: ${err.message}`;
       setStatus(`Verifikation fehlgeschlagen: ${err.message}`, true);

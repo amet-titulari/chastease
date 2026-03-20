@@ -268,13 +268,13 @@ const MOVEMENT_PRESETS = {
     },
     balanced: {
       easy: { pose: 0.40, still: 0.0400 },
-      medium: { pose: 0.35, still: 0.0300 },
-      hard: { pose: 0.225, still: 0.0200 },
+      medium: { pose: 0.37, still: 0.0360 },
+      hard: { pose: 0.32, still: 0.0300 },
     },
     strict: {
-      easy: { pose: 0.30, still: 0.0300 },
-      medium: { pose: 0.2625, still: 0.0225 },
-      hard: { pose: 0.16875, still: 0.0150 },
+      easy: { pose: 0.36, still: 0.0360 },
+      medium: { pose: 0.32, still: 0.0300 },
+      hard: { pose: 0.28, still: 0.0250 },
     },
   },
   tiptoeing: {
@@ -304,7 +304,7 @@ function movementPresetFor(moduleKeyValue, level) {
 function recommendationFor(moduleKey) {
   const tips = {
     posture_training: "Empfehlung: Hier zaehlt nur der Pose-Score. Deviation und Stillness sind in diesem Modul deaktiviert.",
-    dont_move: "Empfehlung: Balanced fuer den Alltag. Bei zu vielen False Positives -> Tolerant, bei zu lascher Erkennung -> Strict.",
+    dont_move: "Empfehlung: Mit Balanced starten. Strict erst nutzen, wenn Kamera, Licht und Ausschnitt wirklich stabil sind.",
     tiptoeing: "Empfehlung: Tolerant bis Kameraausschnitt und Licht stabil sind, danach auf Balanced wechseln.",
   };
   return tips[moduleKey] || "Empfehlung: Mit Balanced starten und nur bei Bedarf in kleinen Schritten anpassen.";
@@ -362,10 +362,10 @@ function applyMovementFields(moduleKey, data) {
 
   easyPoseEl.value = formatPercent(decimalToPercent(data.movement_easy_pose_deviation ?? 0.40));
   easyStillEl.value = formatPercent(decimalToPercent(data.movement_easy_stillness ?? 0.040));
-  mediumPoseEl.value = formatPercent(decimalToPercent(data.movement_medium_pose_deviation ?? 0.35));
-  mediumStillEl.value = formatPercent(decimalToPercent(data.movement_medium_stillness ?? 0.030));
-  hardPoseEl.value = formatPercent(decimalToPercent(data.movement_hard_pose_deviation ?? 0.225));
-  hardStillEl.value = formatPercent(decimalToPercent(data.movement_hard_stillness ?? 0.020));
+  mediumPoseEl.value = formatPercent(decimalToPercent(data.movement_medium_pose_deviation ?? 0.37));
+  mediumStillEl.value = formatPercent(decimalToPercent(data.movement_medium_stillness ?? 0.036));
+  hardPoseEl.value = formatPercent(decimalToPercent(data.movement_hard_pose_deviation ?? 0.32));
+  hardStillEl.value = formatPercent(decimalToPercent(data.movement_hard_stillness ?? 0.030));
 }
 
 function defaultPoseSimilarityThreshold(moduleKey, difficultyKey) {
@@ -418,10 +418,10 @@ function movementPayloadFromInputs(moduleKey) {
   return {
     movement_easy_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "easy-pose"), 40.0), 0.40),
     movement_easy_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "easy-still"), 4.0), 0.040),
-    movement_medium_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "medium-pose"), 35.0), 0.35),
-    movement_medium_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "medium-still"), 3.0), 0.030),
-    movement_hard_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "hard-pose"), 22.5), 0.225),
-    movement_hard_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "hard-still"), 2.0), 0.020),
+    movement_medium_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "medium-pose"), 37.0), 0.37),
+    movement_medium_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "medium-still"), 3.6), 0.036),
+    movement_hard_pose_deviation: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "hard-pose"), 32.0), 0.32),
+    movement_hard_stillness: percentToDecimal(numberInputValue(moduleFieldId(moduleKey, "hard-still"), 3.0), 0.030),
   };
 }
 
@@ -499,7 +499,7 @@ function moduleCardHtml(module) {
     dont_move: {
       easy: "Stabiler Einstieg, wenig False Positives",
       medium: "Empfohlener Alltagssweetspot",
-      hard: "Hohe Disziplin, sehr strenge Erkennung",
+      hard: "Strenger, aber noch mobil tauglich",
     },
     tiptoeing: {
       easy: "Fuer Setup- und Lichtphase",

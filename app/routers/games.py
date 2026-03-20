@@ -63,8 +63,8 @@ POSE_SIMILARITY_THRESHOLD_BY_DIFFICULTY = {
 DEFAULT_MOVEMENT_THRESHOLDS_BY_MODULE = {
     "dont_move": {
         "easy": {"pose_deviation": 0.40, "stillness": 0.0400},
-        "medium": {"pose_deviation": 0.35, "stillness": 0.0300},
-        "hard": {"pose_deviation": 0.225, "stillness": 0.0200},
+        "medium": {"pose_deviation": 0.37, "stillness": 0.0360},
+        "hard": {"pose_deviation": 0.32, "stillness": 0.0300},
     },
     "tiptoeing": {
         # Tiptoeing uses these fields as mask color thresholds:
@@ -131,10 +131,10 @@ class ModuleSettingsUpdateRequest(BaseModel):
     start_countdown_seconds: int = Field(default=DEFAULT_STRICT_START_COUNTDOWN_SECONDS, ge=0, le=60)
     movement_easy_pose_deviation: float = Field(default=0.40, ge=0.01, le=1.0)
     movement_easy_stillness: float = Field(default=0.040, ge=0.0005, le=1.0)
-    movement_medium_pose_deviation: float = Field(default=0.35, ge=0.01, le=1.0)
-    movement_medium_stillness: float = Field(default=0.030, ge=0.0005, le=1.0)
-    movement_hard_pose_deviation: float = Field(default=0.225, ge=0.01, le=1.0)
-    movement_hard_stillness: float = Field(default=0.020, ge=0.0005, le=1.0)
+    movement_medium_pose_deviation: float = Field(default=0.37, ge=0.01, le=1.0)
+    movement_medium_stillness: float = Field(default=0.036, ge=0.0005, le=1.0)
+    movement_hard_pose_deviation: float = Field(default=0.32, ge=0.01, le=1.0)
+    movement_hard_stillness: float = Field(default=0.030, ge=0.0005, le=1.0)
     pose_similarity_min_score_easy: float = Field(default=62.0, ge=0.0, le=100.0)
     pose_similarity_min_score_medium: float = Field(default=74.0, ge=0.0, le=100.0)
     pose_similarity_min_score_hard: float = Field(default=84.0, ge=0.0, le=100.0)
@@ -1079,21 +1079,12 @@ def _active_step(db: Session, run_id: int) -> GameRunStep | None:
 
 def _remaining_seconds_for_run(run: GameRun, now: datetime | None = None) -> int:
     anchor = now or datetime.now(timezone.utc)
-    # For single-pose modules the hold_started_at is set when the player
-    # successfully enters the required position.  Positioning time must not
-    # count against the game timer, so we measure elapsed time from that
-    # moment rather than from run.started_at.
-    meta = _load_run_summary_meta(run)
-    hold_started_raw = meta.get("hold_started_at")
-    if hold_started_raw:
-        try:
-            hold_started = datetime.fromisoformat(hold_started_raw)
-            if hold_started.tzinfo is None:
-                hold_started = hold_started.replace(tzinfo=timezone.utc)
-            elapsed_seconds = max(0, int((anchor - hold_started).total_seconds()))
-            return max(0, int(run.total_duration_seconds) - elapsed_seconds)
-        except (ValueError, TypeError):
-            pass
+    if _is_single_pose_strict_module(run.module_key):
+        hold_started = _hold_started_at_for_run(run)
+        if hold_started is None:
+            return max(0, int(run.total_duration_seconds))
+        elapsed_seconds = max(0, int((anchor - hold_started).total_seconds()))
+        return max(0, int(run.total_duration_seconds) - elapsed_seconds)
     started = _as_utc(run.started_at) or anchor
     elapsed_seconds = max(0, int((anchor - started).total_seconds()))
     return max(0, int(run.total_duration_seconds) - elapsed_seconds)
@@ -1107,6 +1098,35 @@ def _load_run_summary_meta(run: GameRun) -> dict:
     except json.JSONDecodeError:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _hold_started_at_for_run(run: GameRun) -> datetime | None:
+    meta = _load_run_summary_meta(run)
+    hold_started_raw = meta.get("hold_started_at")
+    if not hold_started_raw:
+        return None
+    try:
+        hold_started = datetime.fromisoformat(str(hold_started_raw))
+    except (ValueError, TypeError):
+        return None
+    if hold_started.tzinfo is None:
+        hold_started = hold_started.replace(tzinfo=timezone.utc)
+    return hold_started.astimezone(timezone.utc)
+
+
+def _effective_started_at_for_run(run: GameRun) -> datetime | None:
+    if _is_single_pose_strict_module(run.module_key):
+        return _hold_started_at_for_run(run)
+    return _as_utc(run.started_at) if run.started_at else None
+
+
+def _elapsed_duration_seconds_for_run(run: GameRun, now: datetime | None = None) -> int:
+    anchor = now or datetime.now(timezone.utc)
+    effective_started = _effective_started_at_for_run(run)
+    if effective_started is None:
+        return 0
+    finished = _as_utc(run.finished_at) if run.finished_at else anchor
+    return max(0, int((finished - effective_started).total_seconds()))
 
 
 def _append_run_check_entry(
@@ -1155,6 +1175,8 @@ def _append_run_check_entry(
     )
 
     meta["checks"] = checks
+    meta["miss_count"] = int(run.miss_count or 0)
+    meta["session_penalty_applied"] = bool(run.session_penalty_applied)
     run.summary_json = json.dumps(meta, ensure_ascii=True)
 
 
@@ -1261,6 +1283,9 @@ def _run_payload(db: Session, run: GameRun) -> dict:
     now = datetime.now(timezone.utc)
     started = _as_utc(run.started_at) or now
     remaining_seconds = _remaining_seconds_for_run(run, now)
+    effective_started = _effective_started_at_for_run(run)
+    elapsed_duration_seconds = _elapsed_duration_seconds_for_run(run, now)
+    hold_started = _hold_started_at_for_run(run)
 
     current_step = None if run.status == "completed" else _active_step(db, run.id)
     summary_payload = None
@@ -1273,7 +1298,7 @@ def _run_payload(db: Session, run: GameRun) -> dict:
     current_step_payload = None
     if current_step:
         transition_seconds = max(0, int(run.transition_seconds or 0))
-        max_hold_seconds = max(0, remaining_seconds - transition_seconds)
+        max_hold_seconds = remaining_seconds if _is_single_pose_strict_module(run.module_key) else max(0, remaining_seconds - transition_seconds)
         effective_target_seconds = min(int(current_step.target_seconds), max_hold_seconds)
         current_step_payload = {
             "id": current_step.id,
@@ -1303,7 +1328,10 @@ def _run_payload(db: Session, run: GameRun) -> dict:
         "total_duration_seconds": run.total_duration_seconds,
         "retry_extension_seconds": run.retry_extension_seconds,
         "remaining_seconds": remaining_seconds,
+        "elapsed_duration_seconds": elapsed_duration_seconds,
+        "hold_started": bool(hold_started),
         "started_at": started.isoformat(),
+        "effective_started_at": effective_started.isoformat() if effective_started else None,
         "finished_at": _as_utc(run.finished_at).isoformat() if run.finished_at else None,
         "summary": summary_payload,
         "current_step": current_step_payload,
@@ -2391,7 +2419,9 @@ def list_session_game_runs(session_id: int, db: Session = Depends(get_db)) -> di
                 "retry_extension_seconds": run.retry_extension_seconds,
                 "session_penalty_applied": bool(run.session_penalty_applied),
                 "started_at": _as_utc(run.started_at).isoformat() if run.started_at else None,
+                "effective_started_at": _effective_started_at_for_run(run).isoformat() if _effective_started_at_for_run(run) else None,
                 "finished_at": _as_utc(run.finished_at).isoformat() if run.finished_at else None,
+                "elapsed_duration_seconds": _elapsed_duration_seconds_for_run(run),
                 "passed_steps": int(summary.get("passed_steps") or 0),
                 "failed_steps": int(summary.get("failed_steps") or 0),
                 "total_steps": int(summary.get("total_steps") or 0),
@@ -2780,8 +2810,6 @@ async def register_movement_event(
     run = db.query(GameRun).filter(GameRun.id == run_id).first()
     if not run:
         raise HTTPException(status_code=404, detail="Game run not found")
-    if run.status != "active":
-        raise HTTPException(status_code=409, detail="Game run is not active")
     if not _is_single_pose_strict_module(run.module_key):
         raise HTTPException(status_code=409, detail="Movement events are only supported for strict single-pose modules")
 
@@ -2792,25 +2820,65 @@ async def register_movement_event(
     )
     if not step:
         raise HTTPException(status_code=404, detail="Game step not found")
-    if step.status != "pending":
+
+    summary = _load_run_summary_meta(run)
+    allow_timeout_grace = (
+        run.status == "completed"
+        and step.status == "failed"
+        and summary.get("end_reason") == "time_elapsed"
+    )
+    if run.status != "active" and not allow_timeout_grace:
+        raise HTTPException(status_code=409, detail="Game run is not active")
+    if step.status != "pending" and not allow_timeout_grace:
         raise HTTPException(status_code=409, detail="Game step is not pending")
 
-    data = await file.read()
-    annotated = _annotate_movement_capture(
-        data,
-        marker_x=marker_x,
-        marker_y=marker_y,
-        marker_label=marker_label,
-        marker_strength=marker_strength,
+    audit_log(
+        "game_movement_violation_upload_received",
+        session_id=run.session_id,
+        run_id=run.id,
+        step_id=step.id,
+        module_key=run.module_key,
+        step_status=step.status,
+        run_status=run.status,
+        file_name=file.filename,
+        content_type=file.content_type,
+        allow_timeout_grace=allow_timeout_grace,
     )
-    capture_rel_path = _store_game_verification_capture(
-        run,
-        annotated,
-        file.filename,
-        run_number=int(step.verification_count or 0) + 1,
-        required_text=_required_proof_text_for_step(step),
-        detected_text=f"Verfehlung: {(reason or 'Lokale Bewegungserkennung hat eine Abweichung erkannt.').strip()}"[:420],
-    )
+
+    try:
+        data = await file.read()
+        audit_log(
+            "game_movement_violation_upload_read",
+            session_id=run.session_id,
+            run_id=run.id,
+            step_id=step.id,
+            bytes_read=len(data or b""),
+        )
+        annotated = _annotate_movement_capture(
+            data,
+            marker_x=marker_x,
+            marker_y=marker_y,
+            marker_label=marker_label,
+            marker_strength=marker_strength,
+        )
+        capture_rel_path = _store_game_verification_capture(
+            run,
+            annotated,
+            file.filename,
+            run_number=int(step.verification_count or 0) + 1,
+            required_text=_required_proof_text_for_step(step),
+            detected_text=f"Verfehlung: {(reason or 'Lokale Bewegungserkennung hat eine Abweichung erkannt.').strip()}"[:420],
+        )
+    except Exception as exc:
+        audit_log(
+            "game_movement_violation_upload_failed",
+            session_id=run.session_id,
+            run_id=run.id,
+            step_id=step.id,
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        raise
     now = datetime.now(timezone.utc)
 
     marker_note = ""
@@ -2862,6 +2930,24 @@ async def register_movement_event(
         )
     )
 
+    audit_log(
+        "game_movement_violation_registered",
+        session_id=run.session_id,
+        run_id=run.id,
+        step_id=step.id,
+        module_key=run.module_key,
+        posture_key=step.posture_key,
+        posture_name=step.posture_name,
+        miss_count=run.miss_count,
+        verification_count=step.verification_count,
+        capture_path=capture_rel_path,
+        marker_x=marker_x,
+        marker_y=marker_y,
+        marker_label=marker_label,
+        marker_strength=marker_strength,
+        reason=analysis,
+    )
+
     _append_run_check_entry(
         run,
         step=step,
@@ -2873,7 +2959,8 @@ async def register_movement_event(
 
     db.add(step)
     db.add(run)
-    _finish_run_if_done(db, run)
+    if run.status == "active":
+        _finish_run_if_done(db, run)
     db.commit()
     db.refresh(run)
     db.refresh(step)
