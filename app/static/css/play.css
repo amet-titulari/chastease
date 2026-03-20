@@ -573,6 +573,89 @@ body:has(.play-shell) main.container {
   }
 }
 
+@media (max-width: 720px) {
+  .play-shell {
+    height: auto;
+    min-height: calc(100dvh - 56px);
+  }
+
+  .play-header-right {
+    width: 100%;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 0.45rem;
+  }
+
+  .play-header-chat-actions {
+    width: auto;
+    order: initial;
+    margin-left: auto;
+  }
+
+  .play-roleplay-menu {
+    position: static;
+    min-width: 0;
+    flex: 1 1 100%;
+    order: 6;
+  }
+
+  .play-roleplay-toggle {
+    width: 100%;
+    min-width: 0;
+    justify-content: space-between;
+  }
+
+  .roleplay-mini-scene {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .play-roleplay-dropdown {
+    position: fixed;
+    top: auto;
+    right: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+    max-width: none;
+    max-height: min(72dvh, 680px);
+    overflow: auto;
+    padding: 0.7rem;
+    grid-template-columns: 1fr;
+    gap: 0.6rem;
+    z-index: 120;
+  }
+
+  .roleplay-card {
+    padding: 0.75rem 0.78rem;
+  }
+
+  .roleplay-card-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .roleplay-scene-title {
+    font-size: 0.94rem;
+  }
+
+  .roleplay-scene-objective,
+  .roleplay-meta-value,
+  .roleplay-meter-top {
+    font-size: 0.78rem;
+  }
+
+  .roleplay-pill-list {
+    gap: 0.35rem;
+  }
+
+  .roleplay-pill {
+    font-size: 0.74rem;
+    line-height: 1.35;
+  }
+}
+
 /* Chat message bubbles (shared with experience.js style) */
 .chat-bubble {
   display: flex;
@@ -1653,8 +1736,18 @@ body:has(.play-shell) main.container {
     gap: 0.4rem;
   }
 
+  .play-header-right {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 0.35rem;
+  }
+
   .play-persona {
     font-size: 0.9rem;
+    max-width: calc(100vw - 8.5rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Hide session label on mobile — pill conveys status */
@@ -1671,6 +1764,40 @@ body:has(.play-shell) main.container {
   .play-countdown {
     font-size: 0.8rem;
     padding: 0.12rem 0.45rem;
+  }
+
+  .play-header-chat-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .play-head-action {
+    font-size: 0.74rem;
+    padding: 0.28rem 0.58rem;
+  }
+
+  .play-roleplay-menu {
+    flex-basis: 100%;
+  }
+
+  .play-roleplay-toggle {
+    padding: 0.28rem 0.62rem;
+    border-radius: 9px;
+  }
+
+  .roleplay-mini-chip {
+    max-width: 46vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .play-roleplay-dropdown {
+    left: 0.5rem;
+    right: 0.5rem;
+    max-height: min(68dvh, 620px);
+    padding: 0.6rem;
   }
 
   /* Tasks/Safety smaller */

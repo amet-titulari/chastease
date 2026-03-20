@@ -28,9 +28,9 @@
       </div>
     </div>
     <div class="inventory-card-actions">
-      <button type="button" onclick="imStartEdit({{ item.id }})" class="ghost">Bearbeiten</button>
-      <button type="button" onclick="imExportOne({{ item.id }}, {{ item.name|tojson }})">&#8659; Export</button>
-      <button type="button" onclick="imDelete({{ item.id }}, {{ item.name|tojson }})" class="warn">Loeschen</button>
+      <button type="button" data-im-action="edit" data-item-id="{{ item.id }}" class="ghost">Bearbeiten</button>
+      <button type="button" data-im-action="export" data-item-id="{{ item.id }}" data-item-name="{{ item.name|e }}">&#8659; Export</button>
+      <button type="button" data-im-action="delete" data-item-id="{{ item.id }}" data-item-name="{{ item.name|e }}" class="warn">Loeschen</button>
     </div>
   </div>
   {% endfor %}

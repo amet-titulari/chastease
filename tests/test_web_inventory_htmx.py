@@ -42,6 +42,31 @@ def test_inventory_partial_renders_for_admin():
         assert 'hx-get="/inventory/partials/list"' in resp.text
 
 
+def test_inventory_partial_escapes_item_name_inside_onclick_actions():
+    with TestClient(app) as client:
+        _register_admin(client)
+        created = client.post(
+            "/api/inventory/items",
+            json={
+                "key": "quote_test",
+                "name": 'Foo "Bar"',
+                "category": "test",
+                "description": "desc",
+                "tags": [],
+                "is_active": True,
+            },
+        )
+        assert created.status_code == 200
+        item_id = created.json()["id"]
+
+        resp = client.get("/inventory/partials/list", follow_redirects=False)
+        assert resp.status_code == 200
+        assert f'data-im-action="export"' in resp.text
+        assert f'data-item-id="{item_id}"' in resp.text
+        assert 'onclick=' not in resp.text
+        assert 'Foo &#34;Bar&#34;' in resp.text or 'Foo "Bar"' in resp.text
+
+
 def test_inventory_partial_redirects_for_non_admin():
     with TestClient(app) as client:
         resp = client.get("/inventory/partials/list", follow_redirects=False)

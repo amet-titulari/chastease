@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
+import re
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
@@ -104,6 +105,74 @@ def _fmt_deadline_for_context(value: datetime | None) -> str:
         f"utc={utc_value.isoformat(timespec='seconds')}; "
         f"local={local_value.isoformat(timespec='seconds')}"
     )
+
+
+_ASSISTANT_TASK_MARKERS = (
+    "aktuelle pflicht",
+    "deine aufgabe",
+    "dein auftrag",
+    "neue pflicht",
+    "neuer auftrag",
+    "heutige pflicht",
+)
+_VERIFICATION_MARKERS = ("verifizierung", "verification", "foto", "bild", "beweis", "nachweis")
+
+
+def _infer_task_action_from_reply(reply_text: str) -> dict | None:
+    text = str(reply_text or "").strip()
+    if not text:
+        return None
+
+    lowered = text.lower()
+    marker_index = -1
+    marker_value = ""
+    for marker in _ASSISTANT_TASK_MARKERS:
+        idx = lowered.find(marker)
+        if idx >= 0 and (marker_index < 0 or idx < marker_index):
+            marker_index = idx
+            marker_value = marker
+    if marker_index < 0:
+        return None
+
+    segment = text[marker_index:]
+    colon_index = segment.find(":")
+    if colon_index >= 0:
+        detail = segment[colon_index + 1 :].strip()
+    else:
+        detail = segment[len(marker_value):].strip(" .:-")
+    if not detail:
+        return None
+
+    detail = re.split(r"(?:(?:\n{2,})|(?:\*\*[^*]+\*\*))", detail, maxsplit=1)[0].strip()
+    if not detail:
+        return None
+
+    first_sentence = re.split(r"(?<=[.!?])\s+", detail, maxsplit=1)[0].strip()
+    title_source = first_sentence or detail
+    title = re.sub(r"^[\-\u2022*\s]+", "", title_source).strip(" .")
+    if len(title) > 200:
+        title = title[:197].rstrip() + "..."
+    if not title:
+        return None
+
+    action: dict = {
+        "type": "create_task",
+        "title": title,
+        "description": detail[:2000],
+    }
+
+    if any(marker in lowered for marker in _VERIFICATION_MARKERS):
+        action["requires_verification"] = True
+        criteria_match = re.search(
+            r"(?:verifizierung|verification|nachweis|beweis)\s*(?::|mit)?\s*(.+?)(?:(?:[.!?]\s)|$)",
+            detail,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if criteria_match:
+            criteria = re.sub(r"\s+", " ", criteria_match.group(1)).strip(" .,:;")
+            if criteria:
+                action["verification_criteria"] = criteria[:500]
+    return action
 
 
 def _message_prompt_templates(row: Message) -> list[str]:
@@ -371,6 +440,10 @@ def _persist_chat_turn(
         selected_template = select_task_template(template_rows, user_text)
         if selected_template is not None:
             actions.append(build_template_task_action(selected_template))
+    if not any(isinstance(action, dict) and action.get("type") == "create_task" for action in actions):
+        inferred_task = _infer_task_action_from_reply(reply_text)
+        if inferred_task is not None:
+            actions.append(inferred_task)
     if reply_text == structured.message:
         for action in actions:
             if not isinstance(action, dict):

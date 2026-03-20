@@ -426,6 +426,57 @@ def test_chat_falls_back_to_persona_task_template_when_ai_returns_no_task(monkey
             assert task.verification_criteria == "Plombe und Uhrzeit sichtbar"
         finally:
             db.close()
+
+
+def test_chat_infers_task_from_assistant_assignment_when_action_is_missing(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message=(
+                    "Ich fuehre dich weiter. Aktuelle Pflicht: Halte heute bis spaetestens 20:00 die "
+                    "Abendkontrolle ein. Verifizierung mit Uhrzeit und Plombe gut sichtbar."
+                ),
+                actions=[],
+                mood="strict",
+                intensity=4,
+            )
+
+    def _fake_get_ai_gateway(session_obj):
+        _ = session_obj
+        return _DummyAI()
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", _fake_get_ai_gateway)
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Hallo Herrin."},
+        )
+        assert send_resp.status_code == 200
+
+        db = SessionLocal()
+        try:
+            task = db.query(Task).filter(Task.session_id == session_id).order_by(Task.id.desc()).first()
+            assert task is not None
+            assert "Abendkontrolle" in task.title
+            assert task.requires_verification is True
+            assert task.verification_criteria is not None
+
+            task_msg = (
+                db.query(Message)
+                .filter(Message.session_id == session_id, Message.message_type == "task_assigned")
+                .order_by(Message.id.desc())
+                .first()
+            )
+            assert task_msg is not None
+            assert "Abendkontrolle" in task_msg.content
+        finally:
+            db.close()
         payload = send_resp.json()
         assert payload["prompt_version"] is not None
         assert "base_system_prompt.jinja2" in payload["prompt_templates"]

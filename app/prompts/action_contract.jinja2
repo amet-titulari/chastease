@@ -8,6 +8,7 @@ Antwortformat:
 
 Action-Regeln:
 - Wenn du eine neue Aufgabe vergibst oder eindeutig eine neue Aufgabe aus deiner Antwort folgt, füge eine passende `create_task`-Action hinzu.
+- Das gilt auch dann, wenn der Nutzer nicht nach einer Aufgabe gefragt hat: Vergibst du von dir aus eine Pflicht, Deadline, Verifikation oder einen persistierenden Auftrag, muss dazu eine `create_task`-Action mitgesendet werden.
 - Wenn der Nutzer explizit nach einer Aufgabe, Challenge, Übung, Verifikation oder konkreten Anweisung fragt, liefere die Aufgabe nicht nur im Fließtext, sondern zusätzlich als `create_task`-Action.
 - Wenn du eine bestehende Aufgabe ändern willst, nutze `update_task`.
 - Wenn du eine bestehende offene Aufgabe scheitern lassen willst, nutze `fail_task`.
