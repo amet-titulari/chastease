@@ -387,6 +387,34 @@ def test_chat_can_update_roleplay_state(monkeypatch):
             db.close()
 
 
+def test_chat_injects_roleplay_memory_into_ai_context(monkeypatch):
+    captured = {}
+
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            captured["context_items"] = kwargs.get("context_items") or []
+            return AIResponse(
+                message="Verstanden.",
+                actions=[],
+                mood="strict",
+                intensity=3,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda session_obj: _DummyAI())
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Kurzer Lagebericht."},
+        )
+        assert send_resp.status_code == 200
+        assert any(item.get("message_type") == "roleplay_memory" for item in captured.get("context_items", []))
+
+
 def test_chat_falls_back_to_persona_task_template_when_ai_returns_no_task(monkeypatch):
     class _DummyAI:
         def generate_chat_response(self, **kwargs):

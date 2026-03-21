@@ -66,6 +66,35 @@ def test_proactive_sweep_uses_scene_context():
             assert "Ohne Ausfluechte antworten" in reminder.content
 
 
+def test_proactive_sweep_can_use_ai_prompt_path(monkeypatch):
+    captured = {}
+
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            captured["user_text"] = kwargs.get("user_text")
+            captured["prompt_modules"] = kwargs.get("prompt_modules")
+            captured["context_items"] = kwargs.get("context_items") or []
+            return AIResponse(
+                message="Reminder Persona: Bleib praesent und liefere einen knappen Status.",
+                actions=[],
+                mood="strict",
+                intensity=3,
+            )
+
+    monkeypatch.setattr("app.services.proactive_messaging.get_ai_gateway", lambda session_obj=None: _DummyAI())
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        result = sweep_proactive_messages_for_active_sessions()
+        assert result["sent_messages"] >= 1
+        assert "proaktive Reminder-Nachricht" in str(captured.get("user_text") or "")
+        assert "Roleplay-Status" not in str(captured.get("prompt_modules") or "")
+        assert any(item.get("message_type") == "reminder_context" for item in captured.get("context_items", []))
+
+
 def test_proactive_sweep_respects_cooldown():
     with TestClient(app) as client:
         session_id = _create_and_sign(client)

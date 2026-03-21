@@ -79,20 +79,30 @@ Das Dashboard (`/`) ist deine Startseite nach dem Login.
 
 ## 4. Neue Session starten
 
-1. Klicke auf „Neue Session starten" im Dashboard oder navigiere zu `/experience`.
+1. Klicke auf „Neue Session starten" im Dashboard oder navigiere zu `/experience` (`Chat` in der Hauptnavigation).
+   Für einen schnelleren Solo-Einstieg kannst du dort auch **Quick Start** wählen und direkt zur Session-Erstellung springen.
 2. Wähle oder bestätige die Persona-Auswahl.
-3. Wähle die Sperrdauer:
+3. Wähle oder bearbeite das Scenario direkt im Onboarding.
+4. Wähle die Sperrdauer:
    Trägst du nur eine Mindest-Freigabe ein, arbeitet die Session effektiv mit dieser festen Dauer.
    Wenn zusätzlich eine Max-Freigabe gesetzt ist, wird die tatsächliche Laufzeit beim Vertragsstart zufällig innerhalb dieser Spanne festgelegt.
-4. In „Regeln" gelten **Standard-Penalty (Wert)** und **Max-Penalty (Wert)** immer in der gewählten **Einheit** (Minuten/Stunden/Tage).
-5. Schließe den digitalen Vertrag ab – er dokumentiert die Vereinbarungen für diese Session.
-6. Nach dem Signieren startet die Session und du gelangst zur Play-Ansicht.
+5. In „Regeln" gelten **Standard-Penalty (Wert)** und **Max-Penalty (Wert)** immer in der gewählten **Einheit** (Minuten/Stunden/Tage).
+6. Hinterlege im Vertragsrahmen die inhaltlichen Eckpunkte der Vereinbarung:
+   Ziel, Methode/Geraet, Trageweise, Berührungsregeln, Orgasmusregeln, Belohnungen sowie Widerruf.
+7. Schließe den digitalen Vertrag ab – er dokumentiert die Vereinbarungen für diese Session.
+8. Nach dem Signieren startet die Session und du gelangst zur Chat-Ansicht.
+
+Hinweis zu Vertragsaenderungen:
+Vertrags-Addenda koennen spaeter den Vertragsrahmen (`Mindest-Freigabe`, `Max-Freigabe`), Session-Policies (z. B. Hygiene-Limits oder Penalty-Parameter) und aktive Protokollregeln aendern.
+Die aktuell verbleibende Restzeit ist bewusst kein Vertragsbestandteil; sie bleibt task- und ereignisgesteuert.
+Wenn `Mindest-Freigabe` oder `Max-Freigabe` waehrend einer aktiven Session geaendert werden, wird nur geprueft, ob die bereits gezogene Gesamtdauer noch innerhalb des neuen Rahmens liegt.
 
 ---
 
 ## 5. Play-Ansicht – Übersicht
 
-Die Play-Ansicht (`/play`) ist die Hauptoberfläche während einer aktiven Session.
+Die Play-Ansicht (`/play`) ist die Hauptoberfläche waehrend einer aktiven Session.
+Sie ist jetzt bewusst als Chat-Flaeche reduziert; Sessiondaten, Einstimmung, Safety/Hygiene und Spielresultate liegen im separaten Dashboard (`/dashboard/{session_id}`).
 
 ```
 ┌─────────────────────────────────┐
@@ -107,11 +117,12 @@ Die Play-Ansicht (`/play`) ist die Hauptoberfläche während einer aktiven Sessi
 └─────────────────────────────────┘
 ```
 
-- **Header links**: Persona-Name und Countdown (Zeit bis Session-Ende oder bis nächstem Ereignis).
+- **Header links**: Persona-Name, Session und Status.
 - **Tasks-Badge**: Zeigt die Anzahl offener Aufgaben. Rotes Badge = dringende Aufgaben vorhanden.
-- **Zahnrad ⚙**: Öffnet den Einstellungen-Drawer.
+- **Dashboard**: Fuehrt zur zentralen Session-Uebersicht mit Rahmen, Einstimmung und Spieler-Infos.
 - **Chat-Timeline**: Alle Nachrichten chronologisch; Aktionskarten erscheinen am Ende.
 - **Persona-Avatar**: Neben jeder KI-Nachricht wird das Avatar-Bild der aktuellen Persona angezeigt (sofern vorhanden).
+- **Betriebshinweise**: Wenn der LLM-Provider gestört ist, erscheint ein sichtiger Hinweis im Play-Screen; die Session läuft dann vorübergehend in reduziertem Modus.
 
 ---
 
@@ -258,6 +269,7 @@ Du kannst dich auf mehreren Geräten (z.B. Handy + Tablet) gleichzeitig einlogge
 **Empfehlung:** Nutze denselben Browser-Tab nicht auf zwei Geräten gleichzeitig, da der WebSocket-Stream pro Tab verwaltet wird.
 
 Wenn du eine abgeschlossene Session als Vorlage lädst, werden Konfiguration und LLM-Profil übernommen, aber Beziehung, Szene und Protokoll starten neu für die neue Session.
+Proaktive Erinnerungen orientieren sich dabei an der aktuellen Szene und den aktiven Protokollregeln der neuen Session.
 
 ---
 

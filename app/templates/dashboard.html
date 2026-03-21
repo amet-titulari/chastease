@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/dashboard.css?v=20260321b" />
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-shell"
+     data-session-id="{{ session_id }}"
+     data-lock-end="{{ lock_end or '' }}"
+     data-persona-name="{{ persona_name }}"
+     data-player-name="{{ player_nickname }}">
+  <section class="dash-hero">
+    <div class="dash-hero-main">
+      <p class="dash-eyebrow">Spieler-Dashboard</p>
+      <h2>{{ persona_name }} · Session #{{ session_id }}</h2>
+      <p class="dash-subline">Zentraler Block fuer Rahmen, Einstimmung, Regeln, Safety und Spielresultate. Der Chat bleibt dadurch als Gespraechsflaeche ruhig.</p>
+      <div class="dash-hero-actions">
+        <a href="/play/{{ session_id }}" class="dash-link-primary">Zum Chat</a>
+        <a href="/games" class="dash-link-secondary">Spiele</a>
+        <a href="/profile" class="dash-link-secondary">Profil</a>
+      </div>
+    </div>
+    <div class="dash-hero-side">
+      <span id="dash-status-pill" class="status-pill">{{ session_status }}</span>
+      <div class="dash-count-block">
+        <span class="dash-count-label">Verbleibend</span>
+        <strong id="dash-countdown" class="dash-countdown">—</strong>
+      </div>
+    </div>
+  </section>
+
+  <div class="dash-grid">
+    <section class="dash-card dash-card--table">
+      <div class="dash-card-head">
+        <h3>Session</h3>
+      </div>
+      <div class="dash-avatar-row">
+        <img id="dash-keyholder-avatar" alt="Keyholder Avatar" class="dash-avatar is-hidden" />
+        <img id="dash-player-avatar" alt="Player Avatar" class="dash-avatar is-hidden" />
+      </div>
+      <dl class="dash-info-grid">
+        <dt>Wearer</dt><dd id="dash-wearer">{{ player_nickname }}</dd>
+        <dt>Keyholderin</dt><dd id="dash-keyholder">{{ persona_name }}</dd>
+        <dt>Session-ID</dt><dd id="dash-session-id">#{{ session_id }}</dd>
+        <dt>Status</dt><dd id="dash-status-text">{{ session_status }}</dd>
+        <dt>Start</dt><dd id="dash-lock-start">—</dd>
+        <dt>Freigabe</dt><dd id="dash-lock-end">—</dd>
+        <dt>Timer</dt><dd id="dash-timer-frozen">—</dd>
+        <dt>Mindestdauer</dt><dd id="dash-min-duration">—</dd>
+        <dt>Maximaldauer</dt><dd id="dash-max-duration">—</dd>
+        <dt>Aktive Plombe</dt><dd id="dash-active-seal">—</dd>
+        <dt>Hygiene zuletzt</dt><dd id="dash-last-opening">—</dd>
+        <dt>Gesamtdauer</dt><dd id="dash-total-played">—</dd>
+      </dl>
+    </section>
+
+    <section class="dash-card dash-card--table">
+      <div class="dash-card-head">
+        <h3>Einstimmung</h3>
+        <span id="dash-scene-pressure" class="dash-chip">—</span>
+      </div>
+      <div id="dash-scene-title" class="dash-scene-title">Wird geladen…</div>
+      <p id="dash-scene-objective" class="dash-copy">—</p>
+      <div class="dash-meta-grid">
+        <div>
+          <span class="dash-label">Naechster Beat</span>
+          <span id="dash-scene-next-beat" class="dash-meta-value">—</span>
+        </div>
+        <div>
+          <span class="dash-label">Letzte Konsequenz</span>
+          <span id="dash-scene-consequence" class="dash-meta-value">—</span>
+        </div>
+      </div>
+      <div class="dash-card-head dash-subhead">
+        <h4>Beziehung</h4>
+        <span id="dash-control-level" class="dash-chip">—</span>
+      </div>
+      <div id="dash-relationship-meters" class="dash-meter-list"></div>
+    </section>
+
+    <section class="dash-card">
+      <div class="dash-card-head">
+        <h3>Protokoll</h3>
+      </div>
+      <div class="dash-list-block">
+        <span class="dash-label">Aktive Regeln</span>
+        <div id="dash-active-rules" class="dash-pill-list"></div>
+      </div>
+      <div class="dash-list-block">
+        <span class="dash-label">Offene Orders</span>
+        <div id="dash-open-orders" class="dash-pill-list"></div>
+      </div>
+    </section>
+
+    <section class="dash-card">
+      <div class="dash-card-head">
+        <h3>Profil und Policy</h3>
+      </div>
+      <dl class="dash-info-grid">
+        <dt>Erfahrung</dt><dd id="dash-exp">—</dd>
+        <dt>Stil</dt><dd id="dash-style">—</dd>
+        <dt>Ziel</dt><dd id="dash-goal">—</dd>
+        <dt>Limits</dt><dd id="dash-boundary">—</dd>
+        <dt>Task-Statistik</dt><dd id="dash-task-stats">—</dd>
+        <dt>Task-Strafen</dt><dd id="dash-task-penalty">—</dd>
+        <dt>Hygiene-Strafen</dt><dd id="dash-hygiene-penalty">—</dd>
+        <dt>LLM</dt><dd id="dash-llm-provider">—</dd>
+        <dt>Modell</dt><dd id="dash-llm-chat">—</dd>
+        <dt>API-Key</dt><dd id="dash-llm-key">—</dd>
+      </dl>
+    </section>
+
+    <section class="dash-card">
+      <div class="dash-card-head">
+        <h3>Hygiene und Safety</h3>
+      </div>
+      <p id="dash-hygiene-rules" class="dash-copy">Regeln werden geladen…</p>
+      <p id="dash-hygiene-quota" class="dash-copy">Kontingent wird geladen…</p>
+      <p id="dash-hygiene-next-allowed" class="dash-copy"></p>
+      <p id="dash-hygiene-status" class="dash-copy"></p>
+      <div id="dash-hygiene-open-area" class="dash-actions">
+        <button id="dash-hygiene-open" type="button">Oeffnung beantragen</button>
+      </div>
+      <div id="dash-hygiene-relock-area" class="is-hidden">
+        <p class="dash-copy dash-copy-warn">Oeffnung aktiv. Nach Hygiene sofort wiederverschliessen.</p>
+        <label id="dash-hygiene-seal-row" class="dash-field is-hidden">Neue Plombennummer
+          <input id="dash-hygiene-new-seal" type="text" placeholder="z.B. A-456" />
+        </label>
+        <div class="dash-actions">
+          <button id="dash-hygiene-relock" type="button">Wiederverschliessen</button>
+        </div>
+      </div>
+      <div class="dash-divider"></div>
+      <div class="dash-safety-grid">
+        <button id="dash-safety-green" type="button" class="dash-safety-btn">Gruen</button>
+        <button id="dash-safety-yellow" type="button" class="dash-safety-btn dash-safety-btn--yellow">Gelb</button>
+        <button id="dash-safety-red" type="button" class="dash-safety-btn dash-safety-btn--red">Rot</button>
+        <button id="dash-safety-safeword" type="button" class="dash-safety-btn dash-safety-btn--danger">Safeword</button>
+      </div>
+      {% if session_status in ('safeword_stopped', 'yellow', 'red') %}
+      <div class="dash-actions">
+        <button id="dash-resume-session" type="button">Session reaktivieren</button>
+      </div>
+      {% endif %}
+      <div class="dash-actions">
+        <a href="/contract/{{ session_id }}" class="dash-link-secondary">Vertrag ansehen</a>
+      </div>
+    </section>
+
+    <section class="dash-card dash-card--wide">
+      <div class="dash-card-head">
+        <h3>Spiele und Resultate</h3>
+      </div>
+      <div id="dash-runs-list"><p class="dash-copy">Wird geladen …</p></div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/dashboard.js?v={{ dashboard_js_version }}"></script>
+{% endblock %}

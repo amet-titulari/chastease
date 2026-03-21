@@ -39,7 +39,41 @@ def test_scenarios_partial_renders_for_admin():
         resp = client.get("/scenarios/partials/list", follow_redirects=False)
         assert resp.status_code == 200
         assert 'id="sm-list"' in resp.text
-        assert 'hx-get="/scenarios/partials/list"' in resp.text
+        assert 'hx-get="/scenarios/partials/list"' not in resp.text
+
+
+def test_scenarios_page_contains_edit_flow_hooks():
+    with TestClient(app) as client:
+        _register_admin(client)
+        resp = client.get("/scenarios", follow_redirects=False)
+        assert resp.status_code == 200
+        assert 'data-sm-action' in resp.text
+        assert "/api/scenarios/" in resp.text
+        assert "/api/inventory/scenarios/" in resp.text
+
+
+def test_scenarios_partial_uses_delegated_actions_instead_of_inline_onclick():
+    with TestClient(app) as client:
+        _register_admin(client)
+        created = client.post(
+            "/api/scenarios",
+            json={
+                "title": "Delegated Action Scenario",
+                "key": "delegated_action_scenario",
+                "summary": "delegated",
+                "lorebook": [],
+                "phases": [],
+                "tags": [],
+            },
+        )
+        assert created.status_code == 200
+        scenario_id = created.json()["id"]
+
+        resp = client.get("/scenarios/partials/list", follow_redirects=False)
+        assert resp.status_code == 200
+        assert 'onclick=' not in resp.text
+        assert f'data-sm-action="edit"' in resp.text
+        assert f'data-scenario-id="{scenario_id}"' in resp.text
 
 
 def test_scenarios_partial_redirects_for_non_admin():

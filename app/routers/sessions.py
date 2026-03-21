@@ -22,9 +22,9 @@ from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
 from app.models.task import Task
 from app.models.verification import Verification
-from app.services.contract_service import build_contract_text
+from app.services.contract_service import build_contract_context, build_contract_text, normalize_contract_preferences
 from app.services.pdf_export import build_simple_text_pdf
-from app.services.roleplay_state import build_roleplay_state, initialize_roleplay_state
+from app.services.roleplay_state import build_roleplay_state, initialize_roleplay_state, serialize_roleplay_state
 from app.services.session_service import SessionService
 from app.services.audit_logger import audit_log
 from app.services.session_access import bind_session_profile_to_user, get_accessible_session, get_current_session_user, get_owned_session
@@ -46,8 +46,18 @@ class CreateSessionRequest(BaseModel):
     wearer_style: str | None = Field(default=None, max_length=80)
     wearer_goal: str | None = Field(default=None, max_length=120)
     wearer_boundary: str | None = Field(default=None, max_length=1500)
+    hard_limits: list[str] | None = None
     scenario_preset: str | None = Field(default=None, max_length=120)
     initial_seal_number: str | None = Field(default=None, max_length=120)
+    contract_keyholder_title: str | None = Field(default=None, max_length=80)
+    contract_wearer_title: str | None = Field(default=None, max_length=80)
+    contract_goal: str | None = Field(default=None, max_length=4000)
+    contract_method: str | None = Field(default=None, max_length=200)
+    contract_wearing_schedule: str | None = Field(default=None, max_length=160)
+    contract_touch_rules: str | None = Field(default=None, max_length=4000)
+    contract_orgasm_rules: str | None = Field(default=None, max_length=4000)
+    contract_reward_policy: str | None = Field(default=None, max_length=4000)
+    contract_termination_policy: str | None = Field(default=None, max_length=4000)
     template_session_id: int | None = Field(default=None, ge=1)
     llm_provider: str | None = Field(default=None, max_length=50)
     llm_api_url: str | None = Field(default=None, max_length=500)
@@ -79,6 +89,63 @@ class UpdatePlayerProfileRequest(BaseModel):
     needs: dict | None = None
     avatar_media_id: int | None = Field(default=None, ge=1)
     clear_avatar: bool | None = None
+
+
+def _resolve_persona_for_session(payload: CreateSessionRequest, db: Session, current_persona: Persona | None) -> Persona:
+    requested_name = str(payload.persona_name or "").strip()
+    if not requested_name:
+        raise RequestValidationError(errors=[{"type": "missing", "loc": ("body", "persona_name"), "msg": "Field required", "input": None}])
+    existing = db.query(Persona).filter(Persona.name == requested_name).first()
+    if existing:
+        return existing
+    if current_persona and current_persona.name:
+        current_persona.name = requested_name
+        db.add(current_persona)
+        db.flush()
+        return current_persona
+    persona = Persona(name=requested_name)
+    db.add(persona)
+    db.flush()
+    return persona
+
+
+ADDENDUM_SUPPORTED_FIELDS: dict[str, dict[str, str]] = {
+    "min_duration_seconds": {"label": "Mindestdauer", "category": "contract", "effect_scope": "contract_bounds"},
+    "max_duration_seconds": {"label": "Maximaldauer", "category": "contract", "effect_scope": "contract_bounds"},
+    "hygiene_limit_daily": {"label": "Hygiene Tageslimit", "category": "policy", "effect_scope": "active_session_policy"},
+    "hygiene_limit_weekly": {"label": "Hygiene Wochenlimit", "category": "policy", "effect_scope": "active_session_policy"},
+    "hygiene_limit_monthly": {"label": "Hygiene Monatslimit", "category": "policy", "effect_scope": "active_session_policy"},
+    "hygiene_opening_max_duration_seconds": {"label": "Maximale Hygiene-Oeffnungsdauer", "category": "policy", "effect_scope": "active_session_policy"},
+    "penalty_multiplier": {"label": "Penalty-Multiplikator", "category": "policy", "effect_scope": "active_session_policy"},
+    "default_penalty_seconds": {"label": "Standardstrafe", "category": "policy", "effect_scope": "active_session_policy"},
+    "max_penalty_seconds": {"label": "Maximalstrafe", "category": "policy", "effect_scope": "active_session_policy"},
+    "active_rules_add": {"label": "Aktive Regeln hinzufuegen", "category": "protocol", "effect_scope": "roleplay_protocol"},
+    "active_rules_remove": {"label": "Aktive Regeln entfernen", "category": "protocol", "effect_scope": "roleplay_protocol"},
+    "open_orders_add": {"label": "Offene Anweisungen hinzufuegen", "category": "protocol", "effect_scope": "roleplay_protocol"},
+    "open_orders_remove": {"label": "Offene Anweisungen entfernen", "category": "protocol", "effect_scope": "roleplay_protocol"},
+}
+
+ADDENDUM_SESSION_INT_FIELDS = {
+    "min_duration_seconds",
+    "max_duration_seconds",
+    "hygiene_limit_daily",
+    "hygiene_limit_weekly",
+    "hygiene_limit_monthly",
+    "hygiene_opening_max_duration_seconds",
+}
+
+ADDENDUM_REACTION_FIELDS = {
+    "penalty_multiplier",
+    "default_penalty_seconds",
+    "max_penalty_seconds",
+}
+
+ADDENDUM_PROTOCOL_LIST_FIELDS = {
+    "active_rules_add",
+    "active_rules_remove",
+    "open_orders_add",
+    "open_orders_remove",
+}
 
 
 def _ensure_avatar_exists(db: Session, avatar_media_id: int | None) -> None:
@@ -118,6 +185,242 @@ def _remaining_seconds(session_obj: SessionModel, now: datetime) -> int:
     return max(0, int((_as_utc(session_obj.lock_end) - anchor).total_seconds()))
 
 
+def _load_json_dict(raw_value: str | None) -> dict:
+    if not raw_value:
+        return {}
+    try:
+        parsed = json.loads(raw_value)
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _normalize_text_items(value: object, *, limit: int = 8) -> list[str]:
+    if not isinstance(value, list):
+        raise HTTPException(status_code=400, detail="Addendum list fields must be arrays of text")
+    items: list[str] = []
+    seen: set[str] = set()
+    for raw in value:
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        text = text[:160]
+        lowered = text.casefold()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        items.append(text)
+        if len(items) >= limit:
+            break
+    return items
+
+
+def _normalize_addendum_changes(
+    proposed_changes: dict,
+    *,
+    session_obj: SessionModel,
+) -> dict:
+    if not isinstance(proposed_changes, dict) or not proposed_changes:
+        raise HTTPException(status_code=400, detail="Addendum must include proposed_changes")
+
+    normalized: dict[str, object] = {}
+    unsupported = sorted(set(str(key) for key in proposed_changes.keys()) - set(ADDENDUM_SUPPORTED_FIELDS.keys()))
+    if unsupported:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported addendum fields: {', '.join(unsupported)}",
+        )
+
+    for key, value in proposed_changes.items():
+        if key in ADDENDUM_SESSION_INT_FIELDS:
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail=f"{key} must be an integer")
+            minimum = 60 if "duration_seconds" in key else 0
+            if parsed < minimum:
+                raise HTTPException(status_code=400, detail=f"{key} must be >= {minimum}")
+            normalized[key] = parsed
+            continue
+
+        if key == "penalty_multiplier":
+            try:
+                parsed_multiplier = float(value)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="penalty_multiplier must be numeric")
+            normalized[key] = max(0.1, min(5.0, round(parsed_multiplier, 2)))
+            continue
+
+        if key in {"default_penalty_seconds", "max_penalty_seconds"}:
+            try:
+                parsed_penalty = int(value)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail=f"{key} must be an integer")
+            if parsed_penalty < 0:
+                raise HTTPException(status_code=400, detail=f"{key} must be >= 0")
+            normalized[key] = parsed_penalty
+            continue
+
+        if key in ADDENDUM_PROTOCOL_LIST_FIELDS:
+            normalized_list = _normalize_text_items(value)
+            if not normalized_list:
+                raise HTTPException(status_code=400, detail=f"{key} must contain at least one entry")
+            normalized[key] = normalized_list
+            continue
+
+    effective_min = int(normalized.get("min_duration_seconds", session_obj.min_duration_seconds))
+    effective_max = normalized.get("max_duration_seconds", session_obj.max_duration_seconds)
+    if effective_max is not None and int(effective_max) < effective_min:
+        raise HTTPException(status_code=400, detail="max_duration_seconds must be >= min_duration_seconds")
+
+    max_penalty = normalized.get("max_penalty_seconds")
+    default_penalty = normalized.get("default_penalty_seconds")
+    if max_penalty is not None and default_penalty is not None and int(max_penalty) < int(default_penalty):
+        raise HTTPException(status_code=400, detail="max_penalty_seconds must be >= default_penalty_seconds")
+
+    return normalized
+
+
+def _compute_addendum_consent_tier(
+    normalized_changes: dict,
+    *,
+    session_obj: SessionModel,
+    profile: PlayerProfile | None,
+) -> str:
+    reaction = _load_json_dict(profile.reaction_patterns_json if profile else "{}")
+
+    min_before = int(session_obj.min_duration_seconds or 0)
+    max_before = int(session_obj.max_duration_seconds or 0) if session_obj.max_duration_seconds is not None else None
+    if "min_duration_seconds" in normalized_changes and int(normalized_changes["min_duration_seconds"]) - min_before >= 86400:
+        return "high_impact"
+    if "max_duration_seconds" in normalized_changes and max_before is not None and max_before - int(normalized_changes["max_duration_seconds"]) >= 86400:
+        return "high_impact"
+
+    for key in ("hygiene_limit_daily", "hygiene_limit_weekly", "hygiene_limit_monthly"):
+        if key in normalized_changes:
+            before = getattr(session_obj, key)
+            after = int(normalized_changes[key])
+            if before is not None and after < int(before):
+                return "high_impact"
+
+    if "hygiene_opening_max_duration_seconds" in normalized_changes:
+        before_opening = session_obj.hygiene_opening_max_duration_seconds
+        after_opening = int(normalized_changes["hygiene_opening_max_duration_seconds"])
+        if before_opening is not None and after_opening < int(before_opening):
+            return "high_impact"
+
+    if "penalty_multiplier" in normalized_changes:
+        before_multiplier = float(reaction.get("penalty_multiplier", 1.0) or 1.0)
+        if float(normalized_changes["penalty_multiplier"]) - before_multiplier >= 0.5:
+            return "high_impact"
+
+    for penalty_key in ("default_penalty_seconds", "max_penalty_seconds"):
+        if penalty_key in normalized_changes:
+            before_penalty = int(reaction.get(penalty_key, 0) or 0)
+            if int(normalized_changes[penalty_key]) - before_penalty >= 3600:
+                return "high_impact"
+
+    return "standard"
+
+
+def _build_addendum_metadata(
+    normalized_changes: dict,
+    *,
+    session_obj: SessionModel,
+    profile: PlayerProfile | None,
+) -> dict:
+    scopes: list[str] = []
+    labels: list[str] = []
+    for key in normalized_changes.keys():
+        meta = ADDENDUM_SUPPORTED_FIELDS.get(key, {})
+        scope = meta.get("effect_scope")
+        label = meta.get("label")
+        if scope and scope not in scopes:
+            scopes.append(scope)
+        if label:
+            labels.append(label)
+    scope_descriptions = {
+        "contract_bounds": "Vertragsrahmen",
+        "active_session_policy": "Aktive Session-Policy",
+        "roleplay_protocol": "Roleplay-Protokoll",
+    }
+    return {
+        "validated_changes": normalized_changes,
+        "consent_tier": _compute_addendum_consent_tier(normalized_changes, session_obj=session_obj, profile=profile),
+        "effect_scopes": scopes,
+        "effect_summary": ", ".join(scope_descriptions[item] for item in scopes) if scopes else "Keine Wirkung",
+        "supported_fields": ADDENDUM_SUPPORTED_FIELDS,
+        "field_labels": labels,
+    }
+
+
+def _addendum_payload(
+    item: ContractAddendum,
+    *,
+    session_obj: SessionModel,
+    profile: PlayerProfile | None,
+) -> dict:
+    proposed_changes = _load_json_dict(item.proposed_changes_json)
+    metadata = _build_addendum_metadata(proposed_changes, session_obj=session_obj, profile=profile)
+    return {
+        "id": item.id,
+        "change_description": item.change_description,
+        "proposed_changes": proposed_changes,
+        "proposed_by": item.proposed_by,
+        "player_consent": item.player_consent,
+        "player_consent_at": str(item.player_consent_at) if item.player_consent_at else None,
+        "created_at": str(item.created_at),
+        **metadata,
+    }
+
+
+def _apply_protocol_addendum(session_obj: SessionModel, proposed_changes: dict) -> list[str]:
+    roleplay_state = build_roleplay_state(
+        relationship_json=session_obj.relationship_state_json,
+        protocol_json=session_obj.protocol_state_json,
+        scene_json=session_obj.scene_state_json,
+        scenario_title=None,
+        active_phase=None,
+    )
+    protocol = dict(roleplay_state["protocol"])
+    active_rules = list(protocol.get("active_rules") or [])
+    open_orders = list(protocol.get("open_orders") or [])
+    applied_notes: list[str] = []
+
+    if "active_rules_add" in proposed_changes:
+        additions = [item for item in proposed_changes["active_rules_add"] if item not in active_rules]
+        if additions:
+            active_rules.extend(additions)
+            applied_notes.append(f"Aktive Regeln +{len(additions)}")
+    if "active_rules_remove" in proposed_changes:
+        removals = {item for item in proposed_changes["active_rules_remove"]}
+        next_rules = [item for item in active_rules if item not in removals]
+        if len(next_rules) != len(active_rules):
+            applied_notes.append(f"Aktive Regeln -{len(active_rules) - len(next_rules)}")
+            active_rules = next_rules
+
+    if "open_orders_add" in proposed_changes:
+        additions = [item for item in proposed_changes["open_orders_add"] if item not in open_orders]
+        if additions:
+            open_orders.extend(additions)
+            applied_notes.append(f"Offene Anweisungen +{len(additions)}")
+    if "open_orders_remove" in proposed_changes:
+        removals = {item for item in proposed_changes["open_orders_remove"]}
+        next_orders = [item for item in open_orders if item not in removals]
+        if len(next_orders) != len(open_orders):
+            applied_notes.append(f"Offene Anweisungen -{len(open_orders) - len(next_orders)}")
+            open_orders = next_orders
+
+    protocol["active_rules"] = active_rules
+    protocol["open_orders"] = open_orders
+    roleplay_state["protocol"] = protocol
+    serialized = serialize_roleplay_state(roleplay_state)
+    session_obj.relationship_state_json = serialized["relationship_state_json"]
+    session_obj.protocol_state_json = serialized["protocol_state_json"]
+    session_obj.scene_state_json = serialized["scene_state_json"]
+    return applied_notes
+
+
 def _session_blueprint(db: Session, session_obj: SessionModel) -> dict:
     persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
     profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
@@ -142,6 +445,7 @@ def _session_blueprint(db: Session, session_obj: SessionModel) -> dict:
         "wearer_goal": prefs.get("wearer_goal"),
         "wearer_boundary": prefs.get("wearer_boundary"),
         "scenario_preset": prefs.get("scenario_preset"),
+        "contract_preferences": normalize_contract_preferences(prefs.get("contract")),
         "hard_limits": hard_limits,
         "penalty_multiplier": reaction.get("penalty_multiplier", 1.0),
         "gentle_mode": bool(needs.get("gentle_mode")),
@@ -161,6 +465,38 @@ def _session_blueprint(db: Session, session_obj: SessionModel) -> dict:
             active_phase=None,
         ),
     }
+
+
+def _rebuild_contract_preview(
+    db: Session,
+    *,
+    session_obj: SessionModel,
+    contract: Contract,
+    persona: Persona | None,
+    profile: PlayerProfile | None,
+    seal_number: str | None = None,
+) -> None:
+    prefs = _load_json_dict(profile.preferences_json if profile else "{}")
+    hard_limits = json.loads(profile.hard_limits_json) if profile and profile.hard_limits_json else []
+    contract.content_text = build_contract_text(
+        persona_name=persona.name if persona else "Keyholderin",
+        player_nickname=profile.nickname if profile else "Wearer",
+        min_duration_seconds=session_obj.min_duration_seconds,
+        max_duration_seconds=session_obj.max_duration_seconds,
+        contract_context=build_contract_context(
+            keyholder_name=persona.name if persona else "Keyholderin",
+            wearer_name=profile.nickname if profile else "Wearer",
+            min_duration_seconds=session_obj.min_duration_seconds,
+            max_duration_seconds=session_obj.max_duration_seconds,
+            contract_preferences=prefs.get("contract"),
+            hard_limits=hard_limits,
+            scenario_title=prefs.get("scenario_preset"),
+            seal_number=seal_number,
+            hygiene_opening_max_duration_seconds=session_obj.hygiene_opening_max_duration_seconds,
+        ),
+        session_obj=session_obj,
+    )
+    db.add(contract)
 
 
 @router.get("/blueprints/completed")
@@ -187,6 +523,112 @@ def list_completed_blueprints(request: Request, db: Session = Depends(get_db)) -
             "completed_at": str(row.lock_end_actual or row.updated_at),
         })
     return {"items": items}
+
+
+@router.put("/{session_id}/draft")
+def update_draft_session(
+    session_id: int,
+    payload: CreateSessionRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
+    if session_obj.status != "draft":
+        raise HTTPException(status_code=409, detail="Only draft sessions can be updated")
+
+    contract = db.query(Contract).filter(Contract.session_id == session_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Player profile not found")
+
+    current_persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
+    persona = _resolve_persona_for_session(payload, db, current_persona=current_persona)
+    session_obj.persona_id = persona.id
+
+    prefs = _load_json_dict(profile.preferences_json)
+    if payload.scenario_preset is not None:
+        prefs["scenario_preset"] = payload.scenario_preset
+    if payload.wearer_style is not None:
+        prefs["wearer_style"] = payload.wearer_style
+    if payload.wearer_goal is not None:
+        prefs["wearer_goal"] = payload.wearer_goal
+    if payload.wearer_boundary is not None:
+        prefs["wearer_boundary"] = payload.wearer_boundary
+    contract_prefs = normalize_contract_preferences(prefs.get("contract"))
+    contract_mapping = {
+        "keyholder_title": payload.contract_keyholder_title,
+        "wearer_title": payload.contract_wearer_title,
+        "goal": payload.contract_goal,
+        "method": payload.contract_method,
+        "wearing_schedule": payload.contract_wearing_schedule,
+        "touch_rules": payload.contract_touch_rules,
+        "orgasm_rules": payload.contract_orgasm_rules,
+        "reward_policy": payload.contract_reward_policy,
+        "termination_policy": payload.contract_termination_policy,
+    }
+    for key, value in contract_mapping.items():
+        if value is None:
+            continue
+        contract_prefs[key] = str(value).strip()
+    prefs["contract"] = normalize_contract_preferences(contract_prefs)
+
+    profile.nickname = str(payload.player_nickname or "").strip()[:120] or profile.nickname
+    if payload.experience_level:
+        profile.experience_level = payload.experience_level
+    if payload.hard_limits is not None:
+        profile.hard_limits_json = json.dumps(payload.hard_limits)
+    profile.preferences_json = json.dumps(prefs)
+
+    if payload.min_duration_seconds is not None:
+        session_obj.min_duration_seconds = int(payload.min_duration_seconds)
+    if payload.max_duration_seconds is not None or payload.max_duration_seconds is None:
+        session_obj.max_duration_seconds = payload.max_duration_seconds
+    session_obj.hygiene_limit_daily = payload.hygiene_limit_daily
+    session_obj.hygiene_limit_weekly = payload.hygiene_limit_weekly
+    session_obj.hygiene_limit_monthly = payload.hygiene_limit_monthly
+    if payload.hygiene_opening_max_duration_seconds is not None:
+        session_obj.hygiene_opening_max_duration_seconds = int(payload.hygiene_opening_max_duration_seconds)
+    session_obj.llm_provider = payload.llm_provider
+    session_obj.llm_api_url = payload.llm_api_url
+    session_obj.llm_api_key = payload.llm_api_key
+    session_obj.llm_chat_model = payload.llm_chat_model
+    session_obj.llm_vision_model = payload.llm_vision_model
+    session_obj.llm_profile_active = bool(payload.llm_active) if payload.llm_active is not None else session_obj.llm_profile_active
+
+    seal_number = str(payload.initial_seal_number or "").strip() or None
+    _rebuild_contract_preview(
+        db,
+        session_obj=session_obj,
+        contract=contract,
+        persona=persona,
+        profile=profile,
+        seal_number=seal_number,
+    )
+
+    db.add(profile)
+    db.add(session_obj)
+    db.commit()
+    db.refresh(session_obj)
+    db.refresh(contract)
+
+    return {
+        "session_id": session_obj.id,
+        "status": session_obj.status,
+        "ws_auth_token": session_obj.ws_auth_token,
+        "contract_required": True,
+        "contract_preview": contract.content_text,
+        "updated": True,
+        "llm_session": {
+            "provider": session_obj.llm_provider,
+            "api_url": session_obj.llm_api_url,
+            "chat_model": session_obj.llm_chat_model,
+            "vision_model": session_obj.llm_vision_model,
+            "active": bool(session_obj.llm_profile_active),
+        },
+    }
 
 
 @router.get("/blueprints/{session_id}")
@@ -530,7 +972,8 @@ def export_session_snapshot(
 
 @router.get("/{session_id}/contract")
 def get_contract(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
-    get_owned_session(request, db, session_id)
+    session_obj = get_owned_session(request, db, session_id)
+    profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
 
     contract = db.query(Contract).filter(Contract.session_id == session_id).first()
     if not contract:
@@ -553,15 +996,7 @@ def get_contract(session_id: int, request: Request, db: Session = Depends(get_db
             "created_at": str(contract.created_at),
         },
         "addenda": [
-            {
-                "id": item.id,
-                "change_description": item.change_description,
-                "proposed_changes": json.loads(item.proposed_changes_json),
-                "proposed_by": item.proposed_by,
-                "player_consent": item.player_consent,
-                "player_consent_at": str(item.player_consent_at) if item.player_consent_at else None,
-                "created_at": str(item.created_at),
-            }
+            _addendum_payload(item, session_obj=session_obj, profile=profile)
             for item in addenda
         ],
     }
@@ -623,12 +1058,7 @@ def create_session(payload: CreateSessionRequest, request: Request, db: Session 
     if _missing:
         raise RequestValidationError(errors=_missing)
 
-    # Reuse an existing persona with the same name rather than creating a new stub
-    persona = db.query(Persona).filter(Persona.name == persona_name).first()
-    if not persona:
-        persona = Persona(name=persona_name)
-        db.add(persona)
-        db.flush()
+    persona = _resolve_persona_for_session(payload, db, current_persona=None)
 
     template_prefs = {}
     template_hard_limits = []
@@ -649,15 +1079,33 @@ def create_session(payload: CreateSessionRequest, request: Request, db: Session 
         prefs["wearer_goal"] = payload.wearer_goal
     if payload.wearer_boundary is not None:
         prefs["wearer_boundary"] = payload.wearer_boundary
+    contract_prefs = normalize_contract_preferences(prefs.get("contract"))
+    contract_mapping = {
+        "keyholder_title": payload.contract_keyholder_title,
+        "wearer_title": payload.contract_wearer_title,
+        "goal": payload.contract_goal,
+        "method": payload.contract_method,
+        "wearing_schedule": payload.contract_wearing_schedule,
+        "touch_rules": payload.contract_touch_rules,
+        "orgasm_rules": payload.contract_orgasm_rules,
+        "reward_policy": payload.contract_reward_policy,
+        "termination_policy": payload.contract_termination_policy,
+    }
+    for key, value in contract_mapping.items():
+        if value is None:
+            continue
+        contract_prefs[key] = str(value).strip()
+    prefs["contract"] = normalize_contract_preferences(contract_prefs)
 
     experience_level = payload.experience_level or (template_profile.experience_level if template_profile else "beginner")
+    effective_hard_limits = payload.hard_limits if payload.hard_limits is not None else template_hard_limits
 
     player = PlayerProfile(
         auth_user_id=current_user.id if current_user else None,
         nickname=player_nickname,
         experience_level=experience_level,
         preferences_json=json.dumps(prefs),
-        hard_limits_json=json.dumps(template_hard_limits),
+        hard_limits_json=json.dumps(effective_hard_limits),
         reaction_patterns_json=json.dumps(template_reaction),
         needs_json=json.dumps(template_needs),
         avatar_media_id=template_profile.avatar_media_id if template_profile else None,
@@ -722,16 +1170,18 @@ def create_session(payload: CreateSessionRequest, request: Request, db: Session 
 
     contract = Contract(
         session_id=session_obj.id,
-        content_text=build_contract_text(
-            persona_name=persona.name,
-            player_nickname=player.nickname,
-            min_duration_seconds=session_obj.min_duration_seconds,
-            max_duration_seconds=session_obj.max_duration_seconds,
-            session_obj=session_obj,
-        ),
+        content_text="",
         parameters_snapshot="{}",
     )
     db.add(contract)
+    _rebuild_contract_preview(
+        db,
+        session_obj=session_obj,
+        contract=contract,
+        persona=persona,
+        profile=player,
+        seal_number=payload.initial_seal_number,
+    )
 
     if payload.initial_seal_number:
         seal = SealHistory(
@@ -787,6 +1237,34 @@ def sign_contract(session_id: int, request: Request, db: Session = Depends(get_d
         }
 
     updated = SessionService.sign_contract_and_start(db=db, session_obj=session_obj, contract_obj=contract)
+    persona = db.query(Persona).filter(Persona.id == updated.persona_id).first()
+    profile = db.query(PlayerProfile).filter(PlayerProfile.id == updated.player_profile_id).first()
+    profile_prefs = _load_json_dict(profile.preferences_json if profile else "{}")
+    try:
+        snapshot = json.loads(contract.parameters_snapshot or "{}")
+    except Exception:
+        snapshot = {}
+    selected_duration_seconds = snapshot.get("selected_duration_seconds")
+    contract.content_text = build_contract_text(
+        persona_name=persona.name if persona else "Keyholderin",
+        player_nickname=profile.nickname if profile else "Wearer",
+        min_duration_seconds=updated.min_duration_seconds,
+        max_duration_seconds=updated.max_duration_seconds,
+        contract_context=build_contract_context(
+            keyholder_name=persona.name if persona else "Keyholderin",
+            wearer_name=profile.nickname if profile else "Wearer",
+            min_duration_seconds=updated.min_duration_seconds,
+            max_duration_seconds=updated.max_duration_seconds,
+            contract_preferences=profile_prefs.get("contract"),
+            hard_limits=json.loads(profile.hard_limits_json) if profile and profile.hard_limits_json else [],
+            scenario_title=profile_prefs.get("scenario_preset"),
+            hygiene_opening_max_duration_seconds=updated.hygiene_opening_max_duration_seconds,
+            reference_at=contract.signed_at,
+            selected_duration_seconds=selected_duration_seconds if isinstance(selected_duration_seconds, int) else None,
+        ),
+        session_obj=updated,
+    )
+    db.add(contract)
     if current_user is not None:
         bind_session_profile_to_user(db, updated, current_user)
         if current_user.default_player_profile_id is None:
@@ -932,6 +1410,7 @@ def propose_contract_addendum(
     db: Session = Depends(get_db),
 ) -> dict:
     session_obj = get_owned_session(request, db, session_id)
+    profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
 
     contract = db.query(Contract).filter(Contract.session_id == session_id).first()
     if not contract:
@@ -939,9 +1418,11 @@ def propose_contract_addendum(
     if not contract.signed_at:
         raise HTTPException(status_code=400, detail="Contract must be signed before addenda")
 
+    normalized_changes = _normalize_addendum_changes(payload.proposed_changes, session_obj=session_obj)
+
     addendum = ContractAddendum(
         contract_id=contract.id,
-        proposed_changes_json=json.dumps(payload.proposed_changes),
+        proposed_changes_json=json.dumps(normalized_changes, ensure_ascii=False),
         change_description=payload.change_description,
         proposed_by="ai",
         player_consent="pending",
@@ -954,6 +1435,7 @@ def propose_contract_addendum(
         "addendum_id": addendum.id,
         "session_id": session_id,
         "status": addendum.player_consent,
+        **_build_addendum_metadata(normalized_changes, session_obj=session_obj, profile=profile),
     }
 
 
@@ -966,6 +1448,7 @@ def consent_contract_addendum(
     db: Session = Depends(get_db),
 ) -> dict:
     session_obj = get_owned_session(request, db, session_id)
+    profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
 
     contract = db.query(Contract).filter(Contract.session_id == session_id).first()
     if not contract:
@@ -990,23 +1473,82 @@ def consent_contract_addendum(
     addendum.player_consent_at = datetime.now(timezone.utc)
 
     if payload.decision == "approved":
-        proposed_changes = json.loads(addendum.proposed_changes_json)
-        # Only allow non-safety session parameter changes in this initial implementation.
-        allowed_keys = {"min_duration_seconds", "max_duration_seconds"}
+        proposed_changes = _normalize_addendum_changes(_load_json_dict(addendum.proposed_changes_json), session_obj=session_obj)
+        previous_min = session_obj.min_duration_seconds
+        previous_max = session_obj.max_duration_seconds
+        reaction = _load_json_dict(profile.reaction_patterns_json if profile else "{}")
+        applied_summary: list[str] = []
+
         for key, value in proposed_changes.items():
-            if key not in allowed_keys:
-                continue
-            setattr(session_obj, key, value)
+            if key in ADDENDUM_SESSION_INT_FIELDS:
+                setattr(session_obj, key, int(value))
+                applied_summary.append(f"{ADDENDUM_SUPPORTED_FIELDS[key]['label']}: {value}")
+            elif key in ADDENDUM_REACTION_FIELDS:
+                reaction[key] = value
+                applied_summary.append(f"{ADDENDUM_SUPPORTED_FIELDS[key]['label']}: {value}")
 
         if session_obj.status == "active" and session_obj.lock_start is not None and session_obj.lock_end is not None:
             current_duration_seconds = int((session_obj.lock_end - session_obj.lock_start).total_seconds())
-            next_duration_seconds = SessionService.clamp_active_duration_seconds(
-                current_duration_seconds=current_duration_seconds,
-                min_duration_seconds=session_obj.min_duration_seconds,
-                max_duration_seconds=session_obj.max_duration_seconds,
+            duration_inputs_changed = (
+                session_obj.min_duration_seconds != previous_min
+                or session_obj.max_duration_seconds != previous_max
             )
+            next_duration_seconds = current_duration_seconds
+            if duration_inputs_changed:
+                next_duration_seconds = SessionService.clamp_active_duration_seconds(
+                    current_duration_seconds=current_duration_seconds,
+                    min_duration_seconds=session_obj.min_duration_seconds,
+                    max_duration_seconds=session_obj.max_duration_seconds,
+                )
+                if next_duration_seconds != current_duration_seconds:
+                    applied_summary.append(
+                        f"Aktive Sessiondauer geklemmt: {current_duration_seconds}s -> {next_duration_seconds}s"
+                    )
             session_obj.lock_end = session_obj.lock_start + timedelta(seconds=next_duration_seconds)
 
+        protocol_notes = _apply_protocol_addendum(session_obj, proposed_changes)
+        applied_summary.extend(protocol_notes)
+
+        if profile is not None and reaction != _load_json_dict(profile.reaction_patterns_json):
+            profile.reaction_patterns_json = json.dumps(reaction, ensure_ascii=False)
+            db.add(profile)
+
+        if session_obj.min_duration_seconds != previous_min or session_obj.max_duration_seconds != previous_max:
+            persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
+            profile_prefs = _load_json_dict(profile.preferences_json if profile else "{}")
+            contract.content_text = build_contract_text(
+                persona_name=persona.name if persona else "Keyholderin",
+                player_nickname=profile.nickname if profile else "Wearer",
+                min_duration_seconds=session_obj.min_duration_seconds,
+                max_duration_seconds=session_obj.max_duration_seconds,
+                contract_context=build_contract_context(
+                    keyholder_name=persona.name if persona else "Keyholderin",
+                    wearer_name=profile.nickname if profile else "Wearer",
+                    min_duration_seconds=session_obj.min_duration_seconds,
+                    max_duration_seconds=session_obj.max_duration_seconds,
+                    contract_preferences=profile_prefs.get("contract"),
+                    hard_limits=json.loads(profile.hard_limits_json) if profile and profile.hard_limits_json else [],
+                    scenario_title=profile_prefs.get("scenario_preset"),
+                    hygiene_opening_max_duration_seconds=session_obj.hygiene_opening_max_duration_seconds,
+                ),
+                session_obj=session_obj,
+            )
+            db.add(contract)
+
+        if applied_summary:
+            db.add(
+                Message(
+                    session_id=session_id,
+                    role="system",
+                    message_type="contract_addendum_applied",
+                    content=(
+                        f"Vertrags-Addendum #{addendum.id} genehmigt. "
+                        f"{'; '.join(applied_summary[:8])}. "
+                        "Die verbleibende Restzeit bleibt task- und ereignisgesteuert; "
+                        "nur Min/Max koennen die aktuelle Sessiondauer bei Bedarf begrenzen."
+                    ),
+                )
+            )
         db.add(session_obj)
 
     db.add(addendum)
@@ -1018,4 +1560,5 @@ def consent_contract_addendum(
         "session_id": session_id,
         "decision": addendum.player_consent,
         "consented_at": str(addendum.player_consent_at) if addendum.player_consent_at else None,
+        **_build_addendum_metadata(_load_json_dict(addendum.proposed_changes_json), session_obj=session_obj, profile=profile),
     }

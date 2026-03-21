@@ -21,10 +21,9 @@ let plVoiceAvailable = false;
 let plVoiceMode = "realtime-manual";
 
 // -- DOM refs --
-const countdownEl = document.getElementById("play-countdown");
 const statusPillEl = document.getElementById("play-status-pill");
-const statusTextEl = document.getElementById("play-status-text");
 const chatTimeline = document.getElementById("play-chat-timeline");
+const opsBannerEl = document.getElementById("play-ops-banner");
 const chatInput = document.getElementById("play-chat-input");
 const taskBoard = document.getElementById("play-task-board");
 const debugOut = document.getElementById("play-output");
@@ -411,19 +410,6 @@ function plFormatRemaining(isoStr) {
   return `${m}m ${s}s`;
 }
 
-if (LOCK_END && countdownEl) {
-  const lockEndDisplay = document.getElementById("play-lock-end-display");
-  if (lockEndDisplay) {
-    try {
-      lockEndDisplay.textContent = new Date(LOCK_END).toLocaleString("de-DE");
-    } catch (_) {}
-  }
-  setInterval(() => {
-    countdownEl.textContent = plFormatRemaining(LOCK_END);
-  }, 1000);
-  countdownEl.textContent = plFormatRemaining(LOCK_END);
-}
-
 // -- Debug output --
 function plWrite(title, data) {
   if (!debugOut) return;
@@ -525,10 +511,31 @@ function plRenderRoleplayState(roleplayState) {
   setHtml("play-open-orders", pillList(protocol.open_orders, "Keine offenen Orders"));
 }
 
+function plRenderOperationalState(items) {
+  const warnings = Array.isArray(items)
+    ? items.filter((item) => String(item?.message_type || "") === "system_warning" && String(item?.content || "").trim())
+    : [];
+  const latestWarning = warnings.length ? warnings[warnings.length - 1] : null;
+  const warningText = latestWarning ? String(latestWarning.content || "").trim() : "";
+  if (opsBannerEl) {
+    if (warningText) {
+      opsBannerEl.textContent = warningText;
+      opsBannerEl.classList.remove("is-hidden");
+    } else {
+      opsBannerEl.textContent = "";
+      opsBannerEl.classList.add("is-hidden");
+    }
+  }
+  if (statusPillEl) {
+    statusPillEl.classList.toggle("is-degraded", Boolean(warningText));
+  }
+}
+
 // -- Render chat --
 function plRenderChat(items) {
   if (!chatTimeline) return;
   _lastMessageItems = Array.isArray(items) ? items : [];
+  plRenderOperationalState(_lastMessageItems);
   if (!_lastMessageItems.length) {
     chatTimeline.innerHTML = "<p>Noch keine Nachrichten.</p>";
     plInstallInlineTaskCards();
@@ -855,7 +862,6 @@ async function plLoadSessionState() {
   if (!SESSION_ID) return;
   try {
     const data = await plGet(`/api/sessions/${SESSION_ID}`);
-    if (data.roleplay_state) plRenderRoleplayState(data.roleplay_state);
   } catch (err) {
     plWrite("Fehler Roleplay-State", { error: String(err) });
   }
@@ -896,7 +902,6 @@ async function plSafety(color) {
   try {
     const data = await plPost(`/api/sessions/${SESSION_ID}/safety/traffic-light`, { color });
     if (statusPillEl) statusPillEl.textContent = data.status;
-    if (statusTextEl) statusTextEl.textContent = data.status;
     plWrite(`Safety ${color}`, data);
   } catch (err) {
     plWrite("Fehler Safety", { error: String(err) });
@@ -908,7 +913,6 @@ async function plSafeword() {
   try {
     const data = await plPost(`/api/sessions/${SESSION_ID}/safety/safeword`, {});
     if (statusPillEl) statusPillEl.textContent = data.status;
-    if (statusTextEl) statusTextEl.textContent = data.status;
     plWrite("Safeword", data);
   } catch (err) {
     plWrite("Fehler Safeword", { error: String(err) });
@@ -983,20 +987,6 @@ chatInput?.addEventListener("keydown", (e) => {
   }
 });
 
-document.getElementById("play-regenerate")?.addEventListener("click", async () => {
-  if (!SESSION_ID) return;
-  try {
-    const data = await plPost(`/api/sessions/${SESSION_ID}/messages/regenerate`, {});
-    plWrite("Regenerate", data);
-    await plLoadSessionState();
-    await plLoadChat();
-    await plListTasks();
-  } catch (err) {
-    plWrite("Fehler Regenerate", { error: String(err) });
-  }
-});
-
-document.getElementById("play-load-chat")?.addEventListener("click", plLoadChat);
 document.getElementById("play-connect-ws")?.addEventListener("click", plConnectWs);
 document.getElementById("play-voice-toggle")?.addEventListener("click", plToggleVoiceMode);
 
@@ -1007,7 +997,6 @@ document.getElementById("play-resume-session")?.addEventListener("click", async 
   try {
     const data = await plPost(`/api/sessions/${SESSION_ID}/safety/resume`, {});
     if (statusPillEl) statusPillEl.textContent = data.status;
-    if (statusTextEl) statusTextEl.textContent = data.status;
     btn.remove(); // hide button once active again
     plWrite("Session reaktiviert", data);
   } catch (err) {
@@ -1018,59 +1007,50 @@ document.getElementById("play-resume-session")?.addEventListener("click", async 
 
 // -- Tasks dropdown toggle --
 const tasksDropdown = document.getElementById("play-tasks-dropdown");
-const roleplayToggle = document.getElementById("play-roleplay-toggle");
-const roleplayDropdown = document.getElementById("play-roleplay-dropdown");
+const tasksMenu = document.getElementById("play-tasks-menu");
 
 function closeTasksDropdown() {
   tasksDropdown?.classList.remove("is-open");
+  tasksMenu?.classList.remove("is-open-mobile");
   document.getElementById("play-tasks-toggle")?.setAttribute("aria-expanded", "false");
-}
-
-function closeRoleplayDropdown() {
-  roleplayDropdown?.classList.remove("is-open");
-  roleplayToggle?.setAttribute("aria-expanded", "false");
 }
 
 document.getElementById("play-tasks-toggle")?.addEventListener("click", (e) => {
   e.stopPropagation();
-  closeRoleplayDropdown();
   const open = tasksDropdown.classList.toggle("is-open");
+  if (window.innerWidth <= 820) {
+    tasksMenu?.classList.toggle("is-open-mobile", open);
+  }
   document.getElementById("play-tasks-toggle").setAttribute("aria-expanded", String(open));
-});
-
-roleplayToggle?.addEventListener("click", (e) => {
-  e.stopPropagation();
-  closeTasksDropdown();
-  closeSafetyDropdown();
-  const open = roleplayDropdown.classList.toggle("is-open");
-  roleplayToggle.setAttribute("aria-expanded", String(open));
 });
 
 document.addEventListener("click", (e) => {
   if (!e.target.closest("#play-tasks-menu")) closeTasksDropdown();
-  if (!e.target.closest("#play-roleplay-menu")) closeRoleplayDropdown();
 });
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeTasksDropdown();
-    closeRoleplayDropdown();
   }
 });
 
 // -- Safety dropdown toggle --
 const safetyToggle = document.getElementById("play-safety-toggle");
 const safetyDropdown = document.getElementById("play-safety-dropdown");
+const safetyMenu = document.getElementById("play-safety-menu");
 
 function closeSafetyDropdown() {
   safetyDropdown?.classList.remove("is-open");
+  safetyMenu?.classList.remove("is-open-mobile");
   safetyToggle?.setAttribute("aria-expanded", "false");
 }
 
 safetyToggle?.addEventListener("click", (e) => {
   e.stopPropagation();
-  closeRoleplayDropdown();
   const open = safetyDropdown.classList.toggle("is-open");
+  if (window.innerWidth <= 820) {
+    safetyMenu?.classList.toggle("is-open-mobile", open);
+  }
   safetyToggle.setAttribute("aria-expanded", String(open));
 });
 
@@ -1330,118 +1310,3 @@ document.addEventListener("DOMContentLoaded", async () => {
   await plLoadHygieneQuota();
   plConnectWs();
 });
-
-// ============================================================
-// Settings Drawer
-// ============================================================
-const settingsDrawer = document.getElementById("play-settings-drawer");
-const settingsOverlay = document.getElementById("play-settings-overlay");
-
-function plOpenSettings() {
-  settingsDrawer?.classList.add("is-open");
-  settingsOverlay?.classList.add("is-open");
-  settingsDrawer?.setAttribute("aria-hidden", "false");
-  plLoadSettingsSummary();
-  plLoadHygieneQuota();
-}
-
-function plCloseSettings() {
-  settingsDrawer?.classList.remove("is-open");
-  settingsOverlay?.classList.remove("is-open");
-  settingsDrawer?.setAttribute("aria-hidden", "true");
-}
-
-document.getElementById("play-settings-open")?.addEventListener("click", plOpenSettings);
-document.getElementById("play-settings-close")?.addEventListener("click", plCloseSettings);
-settingsOverlay?.addEventListener("click", plCloseSettings);
-
-async function plLoadSettingsSummary() {
-  try {
-    const data = await plGet(`/api/settings/summary?session_id=${SESSION_ID}`);
-    const setAvatar = (id, url) => {
-      const img = document.getElementById(id);
-      if (!img) return;
-      if (url) {
-        img.src = url;
-        img.style.display = "";
-      } else {
-        img.removeAttribute("src");
-        img.style.display = "none";
-      }
-    };
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || "—"; };
-    const setIfPresent = (id, val) => {
-      if (val === null || val === undefined) return;
-      const normalized = String(val).trim();
-      if (!normalized) return;
-      const el = document.getElementById(id);
-      if (el) el.textContent = normalized;
-    };
-    const fmtDate = (val) => {
-      if (!val) return "—";
-      try {
-        return new Date(val).toLocaleString("de-DE");
-      } catch (_) {
-        return String(val);
-      }
-    };
-    const fmtSecs = (secs) => {
-      if (secs === null || secs === undefined || Number.isNaN(Number(secs))) return "—";
-      const total = Math.max(0, Number(secs));
-      const d = Math.floor(total / 86400);
-      const hRemainder = Math.floor((total % 86400) / 3600);
-      const m = Math.floor((total % 3600) / 60);
-      const s = Math.floor(total % 60);
-      const parts = [`${d}d`, `${hRemainder}h`, `${m}m`, `${s}s`];
-      return parts.join(" ");
-    };
-
-    if (data.session) {
-      const s = data.session;
-      setAvatar("psd-keyholder-avatar", s.persona_avatar_url || null);
-      setAvatar("psd-player-avatar", s.player_avatar_url || null);
-      setIfPresent("psd-wearer", s.player_nickname);
-      setIfPresent("psd-keyholder", s.persona_name);
-      set("psd-session-id", s.session_id ? `#${s.session_id}` : "—");
-      set("psd-lock-start", fmtDate(s.lock_start));
-      set("play-lock-end-display", fmtDate(s.lock_end));
-      set("psd-remaining", fmtSecs(s.remaining_seconds));
-      set("play-status-text", s.status);
-      set("psd-timer-frozen", s.timer_frozen ? "eingefroren" : "laufend");
-      set("psd-min-duration", fmtSecs(s.min_duration_seconds));
-      set("psd-max-duration", s.max_duration_seconds ? fmtSecs(s.max_duration_seconds) : "—");
-      set("psd-active-seal", s.active_seal_number || "—");
-      set("psd-last-opening", s.last_opening_status ? `${s.last_opening_status}${s.last_opening_due_back_at ? ` (Rueckgabe: ${fmtDate(s.last_opening_due_back_at)})` : ""}` : "—");
-      set("psd-task-stats", `Gesamt: ${s.task_total ?? 0} | pending: ${s.task_pending ?? 0} | completed: ${s.task_completed ?? 0} | overdue: ${s.task_overdue ?? 0} | failed: ${s.task_failed ?? 0}`);
-      set("psd-task-penalty", fmtSecs(s.task_penalty_total_seconds));
-      set("psd-hygiene-penalty", `${fmtSecs(s.hygiene_penalty_total_seconds)} (Overrun: ${fmtSecs(s.hygiene_overrun_total_seconds)})`);
-      set("psd-total-played", fmtSecs(s.total_played_seconds));
-
-      const rulesEl = document.getElementById("psd-hygiene-rules");
-      if (rulesEl) {
-        const basePenalty = fmtSecs(s.hygiene_overdue_penalty_min_seconds);
-        const maxMinutes = Math.max(1, Math.floor(Number(s.hygiene_opening_max_duration_seconds || 900) / 60));
-        rulesEl.textContent =
-          `Regeln: Maximaldauer ${maxMinutes} Minuten. ` +
-          `Bei Ueberziehung gilt Penalty = max(Overrun, ${basePenalty}). ` +
-          `Wenn mit Plombe geoeffnet wurde, ist beim Wiederverschliessen eine neue Plombennummer Pflicht.`;
-      }
-      plHygieneConfiguredDurationSeconds = Math.max(60, Math.round(Number(s.hygiene_opening_max_duration_seconds || 900)));
-    }
-
-    set("psd-exp", data.experience_level);
-    set("psd-style", data.style);
-    set("psd-goal", data.goal);
-    set("psd-boundary", data.boundary);
-    if (data.llm) {
-      const llm = data.llm;
-      set("psd-llm-provider-display", llm.provider || "—");
-      set("psd-llm-chat-display", llm.chat_model || "—");
-      set("psd-llm-key-display", llm.api_key_stored ? "hinterlegt ✓" : "nicht gesetzt");
-      const keyEl = document.getElementById("psd-llm-key-display");
-      if (keyEl) keyEl.style.color = llm.api_key_stored ? "var(--color-success, #81c784)" : "var(--muted)";
-    }
-  } catch (err) {
-    plWrite("Settings load error", { error: String(err) });
-  }
-}

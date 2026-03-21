@@ -7,6 +7,9 @@ from app.models.message import Message
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
 from app.models.session import Session as SessionModel
+from app.services.ai_gateway import StubAIGateway, get_ai_gateway
+from app.services.context_window import build_context_window
+from app.services.prompt_builder import build_prompt_modules
 from app.services.roleplay_state import build_roleplay_state
 
 
@@ -92,6 +95,102 @@ def _build_reminder(
     )
 
 
+def _build_ai_reminder(
+    persona: Persona | None,
+    player_profile: PlayerProfile | None,
+    session_obj: SessionModel,
+    now: datetime,
+    recent_rows: list[Message],
+) -> tuple[str, bool, str | None]:
+    persona_name = persona.name if persona else "Keyholderin"
+    prefs: dict = {}
+    hard_limits: list[str] = []
+    if player_profile and player_profile.preferences_json:
+        try:
+            parsed = json.loads(player_profile.preferences_json or "{}")
+            if isinstance(parsed, dict):
+                prefs = parsed
+        except Exception:
+            prefs = {}
+    if player_profile and player_profile.hard_limits_json:
+        try:
+            parsed = json.loads(player_profile.hard_limits_json or "[]")
+            if isinstance(parsed, list):
+                hard_limits = [str(item).strip().lower() for item in parsed if str(item).strip()]
+        except Exception:
+            hard_limits = []
+
+    scenario_title = str(prefs.get("scenario_preset") or "").strip() or None
+    roleplay_state = build_roleplay_state(
+        relationship_json=session_obj.relationship_state_json,
+        protocol_json=session_obj.protocol_state_json,
+        scene_json=session_obj.scene_state_json,
+        scenario_title=scenario_title,
+        active_phase=None,
+    )
+    context_items, context_summary = build_context_window(recent_rows, max_messages=8)
+    remaining_seconds = None
+    if session_obj.lock_end is not None:
+        remaining_seconds = int((_as_utc(session_obj.lock_end) - now).total_seconds())
+    reminder_instruction = (
+        "Erzeuge genau eine kurze proaktive Reminder-Nachricht im Charakter der Persona. "
+        "Keine neuen Aufgaben vergeben. Keine JSON-Metakommentare. "
+        "Die Nachricht soll sich wie ein natuerlicher Check-in innerhalb der laufenden Szene anfuehlen, "
+        "konkret auf Szene, Ziel, Regel oder Drucklage Bezug nehmen und maximal 3 Saetze haben."
+    )
+    if remaining_seconds is not None:
+        reminder_instruction += f" Verbleibende Zeit in Sekunden: {remaining_seconds}."
+
+    prompt_modules = build_prompt_modules(
+        persona_name=persona_name,
+        session_status=session_obj.status,
+        safety_mode=None,
+        scenario_title=scenario_title,
+        wearer_nickname=player_profile.nickname if player_profile else None,
+        experience_level=player_profile.experience_level if player_profile else None,
+        wearer_style=prefs.get("wearer_style"),
+        wearer_goal=prefs.get("wearer_goal"),
+        wearer_boundary=prefs.get("wearer_boundary"),
+        persona_system_prompt=persona.system_prompt if persona else None,
+        speech_style_tone=persona.speech_style_tone if persona else None,
+        speech_style_dominance=persona.speech_style_dominance if persona else None,
+        strictness_level=persona.strictness_level if persona else 3,
+        hard_limits=hard_limits or None,
+        active_phase=None,
+        lorebook_entries=None,
+        relationship_state=roleplay_state["relationship"],
+        protocol_state=roleplay_state["protocol"],
+        scene_state=roleplay_state["scene"],
+    )
+
+    ai = get_ai_gateway(session_obj=session_obj)
+    if isinstance(ai, StubAIGateway):
+        return _build_reminder(persona, player_profile, session_obj, now), False, None
+    structured = ai.generate_chat_response(
+        persona_name=persona_name,
+        user_text=reminder_instruction,
+        prompt_modules=prompt_modules.render(),
+        context_items=[
+            {
+                "role": "system",
+                "content": (
+                    "Reminder-Kontext: "
+                    f"Szene='{roleplay_state['scene'].get('title') or 'Einstimmung'}'; "
+                    f"Ziel='{roleplay_state['scene'].get('objective') or '-'}'; "
+                    f"NextBeat='{roleplay_state['scene'].get('next_beat') or '-'}'; "
+                    f"Regeln={', '.join(roleplay_state['protocol'].get('active_rules') or []) or 'keine'}"
+                ),
+                "message_type": "reminder_context",
+            }
+        ] + (context_items or []),
+        context_summary=context_summary or "Fortlaufende Session",
+    )
+    text = str(structured.message or "").strip()
+    if text:
+        return text, bool(structured.degraded), structured.degraded_reason
+    return _build_reminder(persona, player_profile, session_obj, now), True, "Leere Reminder-Antwort"
+
+
 def sweep_proactive_messages_for_active_sessions() -> dict:
     now = datetime.now(timezone.utc)
     cooldown = timedelta(seconds=max(settings.proactive_messages_cooldown_seconds, 0))
@@ -132,13 +231,39 @@ def sweep_proactive_messages_for_active_sessions() -> dict:
 
             persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
             player_profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+            recent_rows = (
+                db.query(Message)
+                .filter(Message.session_id == session_obj.id)
+                .order_by(Message.id.desc())
+                .limit(12)
+                .all()
+            )
+            reminder_text, degraded, degraded_reason = _build_ai_reminder(
+                persona,
+                player_profile,
+                session_obj,
+                now,
+                list(reversed(recent_rows)),
+            )
             reminder = Message(
                 session_id=session_obj.id,
                 role="assistant",
-                content=_build_reminder(persona, player_profile, session_obj, now),
+                content=reminder_text,
                 message_type="proactive_reminder",
             )
             db.add(reminder)
+            if degraded:
+                db.add(
+                    Message(
+                        session_id=session_obj.id,
+                        role="system",
+                        content=(
+                            "Reminder wurde im degradierten Modus erzeugt. "
+                            f"Grund: {degraded_reason or 'temporärer Providerfehler'}."
+                        ),
+                        message_type="system_warning",
+                    )
+                )
             sent_count += 1
 
         if sent_count > 0:

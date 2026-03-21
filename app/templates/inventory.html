@@ -12,6 +12,7 @@
     border-radius: 12px;
     padding: 0.9rem 1rem;
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     gap: 1rem;
   }
@@ -41,7 +42,45 @@
     font-weight: 600;
   }
   .inventory-card-actions { display: flex; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; }
-  .inventory-card-actions button { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+  .inventory-card-actions button,
+  .inventory-card-actions a {
+    padding: 0.3rem 0.7rem;
+    font-size: 0.8rem;
+  }
+  .inventory-card-actions a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+  .inventory-inline-editor {
+    flex: 1 1 100%;
+    width: 100%;
+    margin-top: 0.2rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .inventory-inline-editor .stack {
+    gap: 0.7rem;
+  }
+  .inventory-inline-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+  }
+  .inventory-inline-editor .inventory-inline-grid label:last-child {
+    grid-column: span 2;
+  }
+  .inventory-inline-actions {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .inventory-inline-note {
+    font-size: 0.8rem;
+    color: var(--color-text-muted, #8899aa);
+  }
 
   .import-zone {
     border: 2px dashed rgba(255,255,255,0.15);
@@ -97,6 +136,15 @@
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
+  }
+
+  @media (max-width: 760px) {
+    .inventory-inline-grid {
+      grid-template-columns: 1fr;
+    }
+    .inventory-inline-editor .inventory-inline-grid label:last-child {
+      grid-column: auto;
+    }
   }
 </style>
 {% endblock %}
@@ -228,28 +276,50 @@ function imReloadList() {
 
 async function imStartEdit(itemId) {
   try {
-    const data = await imFetch("/api/inventory/items?include_inactive=true");
-    const item = (data.items || []).find((row) => row.id === itemId);
-    if (!item) throw new Error("Item nicht gefunden");
-
-    imShowForm();
-
-    document.getElementById("im-edit-id").value = item.id;
-    document.getElementById("im-name").value = item.name || "";
-    document.getElementById("im-key").value = item.key || "";
-    document.getElementById("im-category").value = item.category || "";
-    document.getElementById("im-tags").value = (item.tags || []).join(", ");
-    document.getElementById("im-description").value = item.description || "";
-    document.getElementById("im-is-active").checked = !!item.is_active;
-
-    document.getElementById("im-form-title").textContent = `Item bearbeiten: ${item.name}`;
-    document.getElementById("im-save-btn").textContent = "Aenderungen speichern";
-    document.getElementById("im-cancel-btn").style.display = "inline-flex";
-    document.getElementById("im-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+    const item = await imFetch(`/api/inventory/items/${itemId}`);
+    imHideForm();
+    imResetInlineEditors();
+    const card = document.querySelector(`.inventory-card[data-id="${itemId}"]`);
+    if (!card) throw new Error("Item-Karte nicht gefunden");
+    const host = document.createElement("div");
+    host.className = "inventory-inline-editor";
+    host.innerHTML = `
+      <form class="stack" data-im-inline-form="${item.id}">
+        <div class="inventory-inline-grid">
+          <label>Name *
+            <input data-im-field="name" type="text" maxlength="160" required value="${imEscHtml(item.name || "")}" />
+          </label>
+          <label>Key
+            <input data-im-field="key" type="text" maxlength="120" required value="${imEscHtml(item.key || "")}" />
+          </label>
+          <label>Kategorie
+            <input data-im-field="category" type="text" maxlength="80" value="${imEscHtml(item.category || "")}" />
+          </label>
+          <label>Tags
+            <input data-im-field="tags" type="text" value="${imEscHtml((item.tags || []).join(", "))}" />
+          </label>
+          <label>Beschreibung
+            <textarea data-im-field="description" rows="3" maxlength="4000">${imEscHtml(item.description || "")}</textarea>
+          </label>
+        </div>
+        <label style="display:flex;gap:0.45rem;align-items:center;">
+          <input data-im-field="is_active" type="checkbox" ${item.is_active ? "checked" : ""} />
+          Item ist aktiv
+        </label>
+        <div class="inventory-inline-actions">
+          <button type="submit" data-im-inline-save="${item.id}">Speichern</button>
+          <button type="button" class="ghost" data-im-inline-cancel="${item.id}">Abbrechen</button>
+          <span class="inventory-inline-note">Direkt in der Kachel bearbeiten.</span>
+        </div>
+      </form>
+    `;
+    card.appendChild(host);
+    host.scrollIntoView({ behavior: "smooth", block: "nearest" });
   } catch (err) {
     imStatus("Fehler beim Laden: " + String(err), true);
   }
 }
+window.imStartEdit = imStartEdit;
 
 function imResetForm() {
   document.getElementById("im-edit-id").value = "";
@@ -259,6 +329,21 @@ function imResetForm() {
   document.getElementById("im-save-btn").textContent = "Item speichern";
   document.getElementById("im-cancel-btn").style.display = "none";
   imHideForm();
+}
+
+function imResetInlineEditors() {
+  document.querySelectorAll(".inventory-inline-editor").forEach((node) => node.remove());
+}
+
+function imCollectInlinePayload(form) {
+  return {
+    key: form.querySelector('[data-im-field="key"]').value.trim(),
+    name: form.querySelector('[data-im-field="name"]').value.trim(),
+    category: form.querySelector('[data-im-field="category"]').value.trim() || null,
+    description: form.querySelector('[data-im-field="description"]').value.trim() || null,
+    tags: form.querySelector('[data-im-field="tags"]').value.split(",").map((v) => v.trim()).filter(Boolean),
+    is_active: form.querySelector('[data-im-field="is_active"]').checked,
+  };
 }
 
 async function imDelete(id, name) {
@@ -279,6 +364,7 @@ function imExportOne(id, name) {
   a.download = `item-${slug}.json`;
   a.click();
 }
+window.imExportOne = imExportOne;
 
 document.getElementById("im-export-all-btn").addEventListener("click", () => {
   const a = document.createElement("a");
@@ -343,7 +429,6 @@ imImportZone.addEventListener("drop", async (e) => {
 
 document.getElementById("im-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const editId = document.getElementById("im-edit-id").value;
   const payload = {
     key: document.getElementById("im-key").value.trim(),
     name: document.getElementById("im-name").value.trim(),
@@ -356,13 +441,8 @@ document.getElementById("im-form").addEventListener("submit", async (e) => {
   const saveBtn = document.getElementById("im-save-btn");
   saveBtn.disabled = true;
   try {
-    if (editId) {
-      await imFetch(`/api/inventory/items/${editId}`, { method: "PUT", body: JSON.stringify(payload) });
-      imStatus(`Item "${payload.name}" aktualisiert.`);
-    } else {
-      await imFetch("/api/inventory/items", { method: "POST", body: JSON.stringify(payload) });
-      imStatus(`Item "${payload.name}" erstellt.`);
-    }
+    await imFetch("/api/inventory/items", { method: "POST", body: JSON.stringify(payload) });
+    imStatus(`Item "${payload.name}" erstellt.`);
     imResetForm();
     imReloadList();
   } catch (err) {
@@ -381,24 +461,53 @@ document.getElementById("im-new-btn").addEventListener("click", () => {
 
 document.addEventListener("click", (event) => {
   const trigger = event.target.closest("[data-im-action]");
-  if (!trigger) return;
+  if (trigger) {
+    const action = String(trigger.getAttribute("data-im-action") || "").trim();
+    const itemId = Number.parseInt(trigger.getAttribute("data-item-id") || "", 10);
+    const itemName = trigger.getAttribute("data-item-name") || "";
 
-  const action = String(trigger.getAttribute("data-im-action") || "").trim();
-  const itemId = Number.parseInt(trigger.getAttribute("data-item-id") || "", 10);
-  const itemName = trigger.getAttribute("data-item-name") || "";
+    if (!Number.isFinite(itemId) || itemId <= 0) return;
 
+    if (action === "edit") {
+      imStartEdit(itemId);
+      return;
+    }
+    if (action === "export") {
+      if (trigger.tagName !== "A") {
+        imExportOne(itemId, itemName);
+      }
+      return;
+    }
+    if (action === "delete") {
+      imDelete(itemId, itemName);
+    }
+    return;
+  }
+
+  const cancelTrigger = event.target.closest("[data-im-inline-cancel]");
+  if (cancelTrigger) {
+    cancelTrigger.closest(".inventory-inline-editor")?.remove();
+  }
+});
+
+document.addEventListener("submit", async (event) => {
+  const form = event.target.closest("[data-im-inline-form]");
+  if (!form) return;
+  event.preventDefault();
+
+  const itemId = Number.parseInt(form.getAttribute("data-im-inline-form") || "", 10);
   if (!Number.isFinite(itemId) || itemId <= 0) return;
 
-  if (action === "edit") {
-    imStartEdit(itemId);
-    return;
-  }
-  if (action === "export") {
-    imExportOne(itemId, itemName);
-    return;
-  }
-  if (action === "delete") {
-    imDelete(itemId, itemName);
+  const payload = imCollectInlinePayload(form);
+  const saveBtn = form.querySelector("[data-im-inline-save]");
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    await imFetch(`/api/inventory/items/${itemId}`, { method: "PUT", body: JSON.stringify(payload) });
+    imStatus(`Item "${payload.name}" aktualisiert.`);
+    imReloadList();
+  } catch (err) {
+    imStatus("Fehler: " + err.message, true);
+    if (saveBtn) saveBtn.disabled = false;
   }
 });
 

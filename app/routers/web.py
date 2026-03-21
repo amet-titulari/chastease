@@ -28,6 +28,7 @@ from app.models.session import Session as SessionModel
 from app.models.task import Task
 from app.security import AUTH_COOKIE_NAME, is_cookie_secure
 from app.services.auth_password import hash_password, is_legacy_password_hash, verify_legacy_password, verify_password_and_update
+from app.services.contract_service import default_contract_preferences, normalize_contract_preferences
 from app.services.games import as_public_module_payload, get_module, list_modules
 
 router = APIRouter(tags=["web"])
@@ -65,6 +66,15 @@ class ExperienceDraftRequest(BaseModel):
     hygiene_opening_max_duration_seconds: int | None = Field(default=None, ge=1)
     seal_enabled: bool | None = None
     initial_seal_number: str | None = Field(default=None, max_length=120)
+    contract_keyholder_title: str | None = Field(default=None, max_length=80)
+    contract_wearer_title: str | None = Field(default=None, max_length=80)
+    contract_goal: str | None = Field(default=None, max_length=4000)
+    contract_method: str | None = Field(default=None, max_length=200)
+    contract_wearing_schedule: str | None = Field(default=None, max_length=160)
+    contract_touch_rules: str | None = Field(default=None, max_length=4000)
+    contract_orgasm_rules: str | None = Field(default=None, max_length=4000)
+    contract_reward_policy: str | None = Field(default=None, max_length=4000)
+    contract_termination_policy: str | None = Field(default=None, max_length=4000)
     llm_provider: str | None = Field(default=None, max_length=50)
     llm_api_url: str | None = Field(default=None, max_length=500)
     llm_api_key: str | None = Field(default=None, max_length=4000)
@@ -153,6 +163,12 @@ def _load_json_list(raw: str | None) -> list:
         return []
 
 
+def _contract_preferences_from_prefs(prefs: dict | None) -> dict:
+    if not isinstance(prefs, dict):
+        return default_contract_preferences()
+    return normalize_contract_preferences(prefs.get("contract"))
+
+
 def _resolve_default_player_profile(user: AuthUser, db: Session, create_if_missing: bool = False) -> PlayerProfile | None:
     profile = None
     if user.default_player_profile_id:
@@ -189,6 +205,7 @@ def _resolve_default_player_profile(user: AuthUser, db: Session, create_if_missi
 
 def _setup_context_from_user_and_profile(user: AuthUser, profile: PlayerProfile | None) -> dict:
     if not profile:
+        contract = default_contract_preferences()
         return {
             "wearer_nickname": user.username,
             "experience_level": "beginner",
@@ -198,12 +215,14 @@ def _setup_context_from_user_and_profile(user: AuthUser, profile: PlayerProfile 
             "hard_limits": "",
             "penalty_multiplier": 1.0,
             "gentle_mode": False,
+            "contract": contract,
         }
 
     prefs = _load_json_dict(profile.preferences_json)
     reaction = _load_json_dict(profile.reaction_patterns_json)
     needs = _load_json_dict(profile.needs_json)
     hard_limits = _load_json_list(profile.hard_limits_json)
+    contract = _contract_preferences_from_prefs(prefs)
     return {
         "wearer_nickname": profile.nickname or user.username,
         "experience_level": profile.experience_level or "beginner",
@@ -217,6 +236,7 @@ def _setup_context_from_user_and_profile(user: AuthUser, profile: PlayerProfile 
             else 1.0
         ),
         "gentle_mode": bool(needs.get("gentle_mode", False)),
+        "contract": contract,
     }
 
 
@@ -1368,11 +1388,31 @@ def save_experience_draft(
         "hard-dominant": 5,
     }
 
+    def _apply_contract_payload(target: dict) -> None:
+        contract = _contract_preferences_from_prefs(target)
+        mapping = {
+            "keyholder_title": payload.contract_keyholder_title,
+            "wearer_title": payload.contract_wearer_title,
+            "goal": payload.contract_goal,
+            "method": payload.contract_method,
+            "wearing_schedule": payload.contract_wearing_schedule,
+            "touch_rules": payload.contract_touch_rules,
+            "orgasm_rules": payload.contract_orgasm_rules,
+            "reward_policy": payload.contract_reward_policy,
+            "termination_policy": payload.contract_termination_policy,
+        }
+        for key, value in mapping.items():
+            if value is None:
+                continue
+            contract[key] = str(value).strip()[:4000]
+        target["contract"] = normalize_contract_preferences(contract)
+
     default_profile = _resolve_default_player_profile(user, db, create_if_missing=False)
     if default_profile:
         prefs = _load_json_dict(default_profile.preferences_json)
         reaction = _load_json_dict(default_profile.reaction_patterns_json)
         needs = _load_json_dict(default_profile.needs_json)
+        _apply_contract_payload(prefs)
         if payload.wearer_nickname is not None:
             default_profile.nickname = payload.wearer_nickname.strip()[:80] or default_profile.nickname
         if payload.experience_level is not None:
@@ -1461,6 +1501,7 @@ def save_experience_draft(
                 needs = parsed
         except Exception:
             needs = {}
+        _apply_contract_payload(prefs)
 
         if payload.wearer_nickname is not None:
             active_player.nickname = payload.wearer_nickname.strip()[:80] or active_player.nickname
@@ -1585,6 +1626,50 @@ def play_page(session_id: int, request: Request, db: Session = Depends(get_db)):
             "lock_end": session_obj.lock_end.isoformat() if session_obj.lock_end else None,
             "ws_debug_enabled": settings.play_ws_debug_enabled,
             "play_js_version": _asset_version("js/play.js"),
+        },
+    )
+
+
+@router.get("/dashboard", response_class=HTMLResponse)
+def dashboard_redirect(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    target_session = None
+    if user.active_session_id:
+        target_session = db.query(SessionModel).filter(SessionModel.id == user.active_session_id).first()
+    if target_session is None:
+        target_session = db.query(SessionModel).order_by(SessionModel.id.desc()).first()
+    if target_session is None:
+        return RedirectResponse(url="/experience", status_code=303)
+    return RedirectResponse(url=f"/dashboard/{target_session.id}", status_code=303)
+
+
+@router.get("/dashboard/{session_id}", response_class=HTMLResponse)
+def dashboard_page(session_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if session_obj is None:
+        return RedirectResponse(url="/experience", status_code=303)
+    user.active_session_id = session_id
+    db.commit()
+    persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
+    player = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={
+            "title": f"Dashboard – {settings.app_name}",
+            "current_user": user,
+            "session_id": session_id,
+            "session_status": session_obj.status,
+            "ws_token": session_obj.ws_auth_token or "",
+            "persona_name": persona.name if persona else "Keyholderin",
+            "player_nickname": player.nickname if player else user.username,
+            "lock_end": session_obj.lock_end.isoformat() if session_obj.lock_end else None,
+            "dashboard_js_version": _asset_version("js/dashboard.js"),
         },
     )
 
@@ -1912,5 +1997,5 @@ def experience_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request=request,
         name="experience.html",
-        context={"title": f"{settings.app_name} Experience", "current_user": user, "setup": setup_ctx},
+        context={"title": f"{settings.app_name} Chat", "current_user": user, "setup": setup_ctx},
     )

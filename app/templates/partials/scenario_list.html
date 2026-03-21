@@ -1,10 +1,4 @@
-<div
-  class="scenario-list"
-  id="sm-list"
-  hx-get="/scenarios/partials/list"
-  hx-trigger="load"
-  hx-swap="outerHTML"
->
+<div class="scenario-list" id="sm-list">
   {% if not items %}
   <div class="empty-hint">Noch keine Scenarios gespeichert.</div>
   {% else %}
@@ -21,9 +15,9 @@
       </div>
     </div>
     <div class="scenario-card-actions">
-      <button type="button" onclick="smStartEdit({{ s.id }})">Bearbeiten</button>
-      <button type="button" onclick="smExport({{ s.id }})">&#8659;</button>
-      <button type="button" onclick="smDelete({{ s.id }})" class="ghost">Löschen</button>
+      <button type="button" data-sm-action="edit" data-scenario-id="{{ s.id }}">Bearbeiten</button>
+      <button type="button" data-sm-action="export" data-scenario-id="{{ s.id }}">&#8659;</button>
+      <button type="button" data-sm-action="delete" data-scenario-id="{{ s.id }}" class="ghost">Löschen</button>
     </div>
   </div>
   {% endfor %}

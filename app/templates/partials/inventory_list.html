@@ -1,10 +1,4 @@
-<div
-  class="inventory-list"
-  id="im-list"
-  hx-get="/inventory/partials/list"
-  hx-trigger="load"
-  hx-swap="outerHTML"
->
+<div class="inventory-list" id="im-list">
   {% if not items %}
   <div class="empty-hint">Noch keine Items gespeichert.</div>
   {% else %}
@@ -28,8 +22,8 @@
       </div>
     </div>
     <div class="inventory-card-actions">
-      <button type="button" data-im-action="edit" data-item-id="{{ item.id }}" class="ghost">Bearbeiten</button>
-      <button type="button" data-im-action="export" data-item-id="{{ item.id }}" data-item-name="{{ item.name|e }}">&#8659; Export</button>
+      <button type="button" data-im-action="edit" data-item-id="{{ item.id }}" onclick="window.imStartEdit && window.imStartEdit({{ item.id }})" class="ghost">Bearbeiten</button>
+      <a href="/api/inventory/items/{{ item.id }}/export" data-im-action="export" data-item-id="{{ item.id }}" data-item-name="{{ item.name|e }}" download>&#8659; Export</a>
       <button type="button" data-im-action="delete" data-item-id="{{ item.id }}" data-item-name="{{ item.name|e }}" class="warn">Loeschen</button>
     </div>
   </div>

@@ -254,6 +254,15 @@ def import_item(payload: ItemImportRequest, request: Request, db: Session = Depe
     return _item_to_dict(row)
 
 
+@router.get("/items/{item_id}")
+def get_item(item_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = _require_current_user(request, db)
+    row = db.query(Item).filter(Item.id == item_id, Item.owner_user_id == user.id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return _item_to_dict(row)
+
+
 @router.put("/items/{item_id}")
 def update_item(item_id: int, payload: ItemUpdateRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     user = _require_current_user(request, db)

@@ -1,6 +1,6 @@
 import secrets
 from hmac import compare_digest
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -27,6 +27,15 @@ async def extract_csrf_token(request: Request) -> str | None:
     header_token = str(request.headers.get("X-CSRF-Token") or "").strip()
     if header_token:
         return header_token
+    content_type = str(request.headers.get("content-type") or "").lower()
+    if "application/x-www-form-urlencoded" in content_type:
+        try:
+            raw_body = await request.body()
+        except Exception:
+            return None
+        form_token = str((parse_qs(raw_body.decode("utf-8", errors="ignore")).get("csrf_token") or [""])[0]).strip()
+        if form_token:
+            return form_token
     return None
 
 

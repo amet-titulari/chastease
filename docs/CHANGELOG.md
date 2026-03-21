@@ -24,6 +24,18 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Neue Sessions aus abgeschlossenen Vorlagen starten mit frischem Roleplay-State statt alte Szenen-, Beziehungs- und Protokollzustände blind zu übernehmen.
 - Chat markiert degradierten AI-Betrieb jetzt sichtbar bei Providerfehlern statt still auf generische Echo-Antworten zurückzufallen.
 - Proaktive Reminder nutzen jetzt Persona-, Szenen- und Protokollkontext statt starre Standardtexte.
+- Addenda fuer aktive Sessions klemmen laufende Dauer jetzt gezielt in den neuen Min/Max-Rahmen, statt implizit auf die reine Mindestdauer zurückzufallen.
+- Vertrags-Addenda sind jetzt auf klar definierte Vertrags- und Policy-Felder erweitert: `min/max`, Hygiene-Limits, maximale Hygiene-Oeffnungsdauer, Penalty-Parameter sowie aktive Regeln und offene Anweisungen.
+- Vertrags-Addenda validieren und klassifizieren Aenderungen jetzt mit `standard`/`high_impact`-Consent-Stufe und liefern strukturierte Wirkungsmetadaten fuer UI und Export.
+- Vertrags-Addenda manipulieren die verbleibende Restzeit nicht direkt mehr; diese bleibt bewusst task- und ereignisgesteuert ausserhalb des Vertrags.
+- Vertrags-Onboarding und Contract-Preview fuehren jetzt strukturierte Vertragsfelder fuer Ziel, Methode, Trageweise, Beruehrungs-/Orgasmusregeln, Belohnungen und Widerruf statt nur freier AI-Ausformulierung.
+- Persona- und Scenario-Verwaltung ist im Onboarding nicht mehr nur Auswahl, sondern auch direktes Anlegen, Bearbeiten und Speichern fuer normale Nutzer.
+- Hauptnavigation und Session-UX neu getrennt: `Experience` ist in der Navigation jetzt `Chat`, waehrend ein neues Spieler-Dashboard Sessionrahmen, Einstimmung, Hygiene/Safety und Spielresultate zentral buendelt.
+- Chat-Header in `/play` stark entschlackt: `Verbleibend`, `Einstimmung`, `Regenerate`, `Verlauf` und der Settings-Drawer sind aus der Gespraechsflaeche entfernt und ins Dashboard ausgelagert.
+- Spielverlauf und Resultate sind nicht mehr in der Games-Uebersicht verteilt, sondern pro Session gesammelt im Dashboard sichtbar.
+- Play-Mode zeigt degradierte AI-/Reminder-Zustände jetzt zusätzlich sichtbar als Banner im UI.
+- Experience-Onboarding bietet jetzt einen Quick-Start-Pfad fuer Solo-Sessions mit reduzierter Vorkonfiguration.
+- Chat-Kontext fuehrt jetzt einen kompakten Session-Memory-Block plus expliziten Roleplay-Status fuer stabilere narrative Kontinuität.
 
 ## [0.2.7] - 2026-03-16
 

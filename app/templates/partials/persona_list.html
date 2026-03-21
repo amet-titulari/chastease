@@ -1,10 +1,4 @@
-<div
-  class="persona-list"
-  id="pm-list"
-  hx-get="/personas/partials/list"
-  hx-trigger="load"
-  hx-swap="outerHTML"
->
+<div class="persona-list" id="pm-list">
   {% if not items %}
   <div class="empty-hint">Noch keine Personas gespeichert. Erstelle deine erste unten.</div>
   {% else %}
@@ -23,9 +17,9 @@
       </p>
     </div>
     <div class="persona-card-actions">
-      <button type="button" onclick="pmStartEdit({{ p.id }})" class="ghost">Bearbeiten</button>
-      <button type="button" onclick="pmExportOne({{ p.id }}, {{ p.name|tojson }})">&#8659; Export</button>
-      <button type="button" onclick="pmDelete({{ p.id }}, {{ p.name|tojson }})" class="warn">L&ouml;schen</button>
+      <button type="button" data-pm-action="edit" data-persona-id="{{ p.id }}" onclick="window.pmStartEdit && window.pmStartEdit({{ p.id }})" class="ghost">Bearbeiten</button>
+      <a href="/api/personas/{{ p.id }}/export" data-pm-action="export" data-persona-id="{{ p.id }}" data-persona-name="{{ p.name|e }}" download>&#8659; Export</a>
+      <button type="button" data-pm-action="delete" data-persona-id="{{ p.id }}" data-persona-name="{{ p.name|e }}" class="warn">L&ouml;schen</button>
     </div>
   </div>
   {% endfor %}

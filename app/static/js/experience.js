@@ -6,6 +6,7 @@ let xpScenarioPresets = [];
 let xpDbPersonas = [];       // DB personas with full data (id, name, ...)
 let xpHardcodedPresets = []; // Presets not yet in DB
 let xpEditPersonaId = null;  // null = new, int = edit
+let xpEditScenarioId = null; // null = new or preset-derived, int = edit DB scenario
 let xpCompletedTemplates = [];
 let xpDraftSaveInFlight = false;
 let xpDraftSaveQueued = false;
@@ -36,6 +37,21 @@ function xpParseOptionalInt(v) {
   if (!raw) return null;
   const n = Number(raw);
   return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+function xpSlugifyScenarioKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "scenario";
+}
+
+function xpParseCommaList(value) {
+  return String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 async function xpGet(url) {
@@ -107,7 +123,7 @@ async function xpUploadAvatar(fileInputId, target) {
 
 // ---- localStorage persistence ----
 const XP_STORAGE_KEY = "xp_onboarding_draft";
-const XP_STORAGE_VERSION = "2"; // bump when HTML defaults change to discard stale drafts
+const XP_STORAGE_VERSION = "3"; // bump when HTML defaults change to discard stale drafts
 
 const XP_PERSIST_FIELDS = [
   { id: "xp-pe-name",            type: "value" },
@@ -116,6 +132,10 @@ const XP_PERSIST_FIELDS = [
   { id: "xp-pe-description",     type: "value" },
   { id: "xp-pe-system-prompt",   type: "value" },
   { id: "xp-scenario-preset",    type: "value" },
+  { id: "xp-se-title",           type: "value" },
+  { id: "xp-se-key",             type: "value" },
+  { id: "xp-se-summary",         type: "value" },
+  { id: "xp-se-tags",            type: "value" },
   { id: "xp-player-nickname",    type: "value" },
   { id: "xp-experience-level",   type: "value" },
   { id: "xp-hard-limits",        type: "value" },
@@ -133,6 +153,15 @@ const XP_PERSIST_FIELDS = [
   { id: "xp-penalty-max-value",      type: "value" },
   { id: "xp-seal-enabled",       type: "checked" },
   { id: "xp-seal-number",        type: "value" },
+  { id: "xp-contract-keyholder-title", type: "value" },
+  { id: "xp-contract-wearer-title", type: "value" },
+  { id: "xp-contract-goal",      type: "value" },
+  { id: "xp-contract-method",    type: "value" },
+  { id: "xp-contract-wearing-schedule", type: "value" },
+  { id: "xp-contract-touch-rules", type: "value" },
+  { id: "xp-contract-orgasm-rules", type: "value" },
+  { id: "xp-contract-reward-policy", type: "value" },
+  { id: "xp-contract-termination-policy", type: "value" },
   { id: "xp-llm-provider",       type: "value" },
   { id: "xp-llm-api-url",        type: "value" },
   { id: "xp-llm-api-key",        type: "value" },
@@ -170,6 +199,41 @@ function xpClearDraft() {
 }
 // ----------------------------------
 
+function xpApplyQuickStart() {
+  const personaSelect = document.getElementById("xp-persona-preset");
+  if (personaSelect && !personaSelect.value && personaSelect.options.length > 0) {
+    personaSelect.value = personaSelect.options[0].value;
+  }
+  if (personaSelect && personaSelect.value) {
+    xpFillPersonaEditor(personaSelect.value);
+  }
+
+  const scenarioSelect = document.getElementById("xp-scenario-preset");
+  if (scenarioSelect && !scenarioSelect.value && scenarioSelect.options.length > 0) {
+    scenarioSelect.value = scenarioSelect.options[0].value;
+  }
+  if (scenarioSelect && scenarioSelect.value) {
+    xpUpdateScenarioDetail(scenarioSelect.value);
+    xpFillScenarioEditor(scenarioSelect.value);
+  }
+
+  const expEl = document.getElementById("xp-experience-level");
+  if (expEl && !expEl.value) expEl.value = "beginner";
+  const gentleEl = document.getElementById("xp-gentle-mode");
+  if (gentleEl && !gentleEl.value) gentleEl.value = "false";
+  const llmProviderEl = document.getElementById("xp-llm-provider");
+  if (llmProviderEl && !llmProviderEl.value) llmProviderEl.value = "custom";
+
+  gateEl?.classList.add("is-hidden");
+  xpShowOnboardingBody(true);
+  if (statusEl) {
+    statusEl.textContent = "Quick Start aktiv: reduzierte Vorkonfiguration, direkt zur Session-Erstellung.";
+  }
+  xpSaveDraft();
+  xpSaveDraftToServer();
+  xpSwitchStep(5);
+}
+
 function xpBuildServerDraftPayload() {
   const noLimit = document.getElementById("xp-max-no-limit")?.checked;
   const minSecs = xpDateToSeconds(document.getElementById("xp-min-date")?.value) || xpDaysToSeconds(document.getElementById("xp-min-days")?.value || "7");
@@ -201,6 +265,15 @@ function xpBuildServerDraftPayload() {
     hygiene_opening_max_duration_seconds: Math.max(1, Math.round(Number(document.getElementById("xp-hygiene-max-minutes")?.value || "15") * 60)),
     seal_enabled: sealEnabled,
     initial_seal_number: sealEnabled ? (document.getElementById("xp-seal-number")?.value || "") : null,
+    contract_keyholder_title: document.getElementById("xp-contract-keyholder-title")?.value || "",
+    contract_wearer_title: document.getElementById("xp-contract-wearer-title")?.value || "",
+    contract_goal: document.getElementById("xp-contract-goal")?.value || "",
+    contract_method: document.getElementById("xp-contract-method")?.value || "",
+    contract_wearing_schedule: document.getElementById("xp-contract-wearing-schedule")?.value || "",
+    contract_touch_rules: document.getElementById("xp-contract-touch-rules")?.value || "",
+    contract_orgasm_rules: document.getElementById("xp-contract-orgasm-rules")?.value || "",
+    contract_reward_policy: document.getElementById("xp-contract-reward-policy")?.value || "",
+    contract_termination_policy: document.getElementById("xp-contract-termination-policy")?.value || "",
     llm_provider: document.getElementById("xp-llm-provider")?.value || "stub",
     llm_api_url: document.getElementById("xp-llm-api-url")?.value || "",
     llm_api_key: document.getElementById("xp-llm-api-key")?.value || "",
@@ -485,7 +558,7 @@ async function xpSavePersonaEditor() {
   }
 }
 
-async function xpLoadScenarioPresets() {
+async function xpLoadScenarioPresets(preferredKey = null) {
   const select = document.getElementById("xp-scenario-preset");
   if (!select) return;
   select.innerHTML = "";
@@ -533,10 +606,13 @@ async function xpLoadScenarioPresets() {
     }
 
     const preferred = ["ametara_titulari_devotion_protocol", "amet_titulari_devotion_protocol"];
-    const initialScenario = xpScenarioPresets.find((s) => preferred.includes(s.key)) || xpScenarioPresets[0];
+    const initialScenario = xpScenarioPresets.find((s) => s.key === preferredKey)
+      || xpScenarioPresets.find((s) => preferred.includes(s.key))
+      || xpScenarioPresets[0];
     if (initialScenario) {
       select.value = initialScenario.key;
       xpUpdateScenarioDetail(initialScenario.key);
+      xpFillScenarioEditor(initialScenario.key);
     }
   } catch (err) {
     select.innerHTML = '<option value="">Scenario-Fehler</option>';
@@ -600,6 +676,18 @@ async function xpApplyTemplateSession(sessionId) {
     const sc = document.getElementById("xp-scenario-preset");
     sc.value = data.scenario_preset;
     xpUpdateScenarioDetail(data.scenario_preset);
+    xpFillScenarioEditor(data.scenario_preset);
+  }
+  if (data.contract_preferences) {
+    document.getElementById("xp-contract-keyholder-title").value = data.contract_preferences.keyholder_title || "";
+    document.getElementById("xp-contract-wearer-title").value = data.contract_preferences.wearer_title || "";
+    document.getElementById("xp-contract-goal").value = data.contract_preferences.goal || "";
+    document.getElementById("xp-contract-method").value = data.contract_preferences.method || "";
+    document.getElementById("xp-contract-wearing-schedule").value = data.contract_preferences.wearing_schedule || "";
+    document.getElementById("xp-contract-touch-rules").value = data.contract_preferences.touch_rules || "";
+    document.getElementById("xp-contract-orgasm-rules").value = data.contract_preferences.orgasm_rules || "";
+    document.getElementById("xp-contract-reward-policy").value = data.contract_preferences.reward_policy || "";
+    document.getElementById("xp-contract-termination-policy").value = data.contract_preferences.termination_policy || "";
   }
 
   if (data.min_duration_seconds) {
@@ -692,6 +780,101 @@ function xpUpdateScenarioDetail(key) {
   xpLoadScenarioInventoryPreview(scenario, itemsEl);
 }
 
+function xpFillScenarioEditor(key) {
+  const titleEl = document.getElementById("xp-scenario-editor-title");
+  const deleteBtn = document.getElementById("xp-se-delete-btn");
+  const scenario = xpScenarioPresets.find((p) => p.key === key);
+  if (!titleEl) return;
+
+  if (!scenario) {
+    xpEditScenarioId = null;
+    titleEl.textContent = "Neues Scenario";
+    document.getElementById("xp-se-title").value = "";
+    document.getElementById("xp-se-key").value = "";
+    document.getElementById("xp-se-summary").value = "";
+    document.getElementById("xp-se-tags").value = "";
+    if (deleteBtn) deleteBtn.disabled = true;
+    return;
+  }
+
+  const isDbScenario = scenario._source === "db" && Number.isInteger(scenario.id);
+  xpEditScenarioId = isDbScenario ? scenario.id : null;
+  titleEl.textContent = isDbScenario ? `Scenario: ${scenario.title}` : `Preset kopieren: ${scenario.title}`;
+  document.getElementById("xp-se-title").value = scenario.title || "";
+  document.getElementById("xp-se-key").value = scenario.key || "";
+  document.getElementById("xp-se-summary").value = scenario.summary || "";
+  document.getElementById("xp-se-tags").value = (scenario.tags || []).join(", ");
+  if (deleteBtn) deleteBtn.disabled = !isDbScenario;
+}
+
+function xpClearScenarioEditor() {
+  xpEditScenarioId = null;
+  document.getElementById("xp-scenario-editor-title").textContent = "Neues Scenario";
+  document.getElementById("xp-se-title").value = "";
+  document.getElementById("xp-se-key").value = "";
+  document.getElementById("xp-se-summary").value = "";
+  document.getElementById("xp-se-tags").value = "";
+  document.getElementById("xp-scenario-preset").value = "";
+  const deleteBtn = document.getElementById("xp-se-delete-btn");
+  if (deleteBtn) deleteBtn.disabled = true;
+  document.getElementById("xp-se-title").focus();
+}
+
+async function xpSaveScenarioEditor() {
+  const title = document.getElementById("xp-se-title").value.trim();
+  if (!title) {
+    xpWrite("Hinweis", { error: "Bitte einen Scenario-Titel eingeben." });
+    return;
+  }
+
+  const selectedKey = document.getElementById("xp-scenario-preset").value;
+  const currentScenario = xpScenarioPresets.find((p) => p.key === selectedKey) || null;
+  const payload = {
+    title,
+    key: document.getElementById("xp-se-key").value.trim() || xpSlugifyScenarioKey(title),
+    summary: document.getElementById("xp-se-summary").value.trim() || null,
+    tags: xpParseCommaList(document.getElementById("xp-se-tags").value),
+    phases: currentScenario?.phases || [],
+    lorebook: currentScenario?.lorebook || [],
+  };
+
+  const saveBtn = document.getElementById("xp-se-save-btn");
+  saveBtn.disabled = true;
+  try {
+    let saved;
+    if (xpEditScenarioId !== null) {
+      saved = await xpPut(`/api/scenarios/${xpEditScenarioId}`, payload);
+    } else {
+      saved = await xpPost("/api/scenarios", payload);
+    }
+    xpWrite("Scenario gespeichert", { title: saved.title, key: saved.key, id: saved.id });
+    await xpLoadScenarioPresets(saved.key);
+  } catch (err) {
+    xpWrite("Fehler Scenario speichern", { error: String(err) });
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
+async function xpDeleteScenarioEditor() {
+  if (xpEditScenarioId === null) return;
+  const title = document.getElementById("xp-se-title").value.trim() || "dieses Scenario";
+  if (!window.confirm(`Scenario wirklich loeschen: ${title}?`)) return;
+
+  const deleteBtn = document.getElementById("xp-se-delete-btn");
+  deleteBtn.disabled = true;
+  try {
+    const res = await fetch(`/api/scenarios/${xpEditScenarioId}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(data));
+    xpWrite("Scenario geloescht", { id: xpEditScenarioId, title });
+    xpClearScenarioEditor();
+    await xpLoadScenarioPresets();
+  } catch (err) {
+    xpWrite("Fehler Scenario loeschen", { error: String(err) });
+  }
+}
+
 async function xpLoadScenarioInventoryPreview(scenario, targetEl) {
   if (!targetEl) return;
   if (!scenario || !scenario.id) {
@@ -719,15 +902,21 @@ document.getElementById("xp-persona-preset").addEventListener("change", (e) => {
 
 document.getElementById("xp-scenario-preset").addEventListener("change", (e) => {
   xpUpdateScenarioDetail(e.target.value);
+  xpFillScenarioEditor(e.target.value);
 });
 
 document.getElementById("xp-new-persona-btn").addEventListener("click", xpClearPersonaEditor);
 document.getElementById("xp-pe-save-btn").addEventListener("click", xpSavePersonaEditor);
+document.getElementById("xp-new-scenario-btn").addEventListener("click", xpClearScenarioEditor);
+document.getElementById("xp-se-save-btn").addEventListener("click", xpSaveScenarioEditor);
+document.getElementById("xp-se-delete-btn").addEventListener("click", xpDeleteScenarioEditor);
 document.getElementById("xp-gate-new")?.addEventListener("click", () => {
   gateEl?.classList.add("is-hidden");
   xpShowOnboardingBody(true);
   xpSwitchStep(1);
 });
+document.getElementById("xp-gate-quick")?.addEventListener("click", xpApplyQuickStart);
+document.getElementById("xp-quick-start")?.addEventListener("click", xpApplyQuickStart);
 document.getElementById("xp-gate-load")?.addEventListener("click", () => {
   gateLoadPanelEl?.classList.remove("is-hidden");
 });
@@ -785,6 +974,14 @@ function xpMarkdownToHtml(md) {
     .replace(/^(.+)$/gm, (m) => m.startsWith("<") ? m : m);
 }
 
+function xpRefreshCreateButton() {
+  const createBtn = document.getElementById("xp-create-session");
+  if (!createBtn) return;
+  const label = createBtn.querySelector(".btn-label");
+  if (!label) return;
+  label.textContent = xpSessionId ? "Vertragsvorschau aktualisieren" : "Session erstellen";
+}
+
 document.getElementById("xp-create-session").addEventListener("click", async () => {
   const createBtn = document.getElementById("xp-create-session");
   createBtn.disabled = true;
@@ -806,8 +1003,21 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
       hygiene_limit_monthly: xpParseOptionalInt(document.getElementById("xp-hygiene-month").value),
       hygiene_opening_max_duration_seconds: Math.max(1, Math.round(Number(document.getElementById("xp-hygiene-max-minutes")?.value || "15") * 60)),
       experience_level: document.getElementById("xp-experience-level").value || "beginner",
+      hard_limits: String(document.getElementById("xp-hard-limits").value)
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean),
       scenario_preset: scenarioPreset,
       initial_seal_number: sealNumber,
+      contract_keyholder_title: document.getElementById("xp-contract-keyholder-title")?.value?.trim() || null,
+      contract_wearer_title: document.getElementById("xp-contract-wearer-title")?.value?.trim() || null,
+      contract_goal: document.getElementById("xp-contract-goal")?.value?.trim() || null,
+      contract_method: document.getElementById("xp-contract-method")?.value?.trim() || null,
+      contract_wearing_schedule: document.getElementById("xp-contract-wearing-schedule")?.value?.trim() || null,
+      contract_touch_rules: document.getElementById("xp-contract-touch-rules")?.value?.trim() || null,
+      contract_orgasm_rules: document.getElementById("xp-contract-orgasm-rules")?.value?.trim() || null,
+      contract_reward_policy: document.getElementById("xp-contract-reward-policy")?.value?.trim() || null,
+      contract_termination_policy: document.getElementById("xp-contract-termination-policy")?.value?.trim() || null,
       template_session_id: xpParseOptionalInt(document.getElementById("xp-template-session")?.value || ""),
       llm_provider: document.getElementById("xp-llm-provider")?.value || null,
       llm_api_url: document.getElementById("xp-llm-api-url")?.value?.trim() || null,
@@ -816,9 +1026,12 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
       llm_vision_model: document.getElementById("xp-llm-vision-model")?.value?.trim() || null,
       llm_active: true,
     };
-    const created = await xpPost("/api/sessions", payload);
+    const created = xpSessionId
+      ? await xpPut(`/api/sessions/${xpSessionId}/draft`, payload)
+      : await xpPost("/api/sessions", payload);
     xpSessionId = created.session_id;
     xpWsToken = created.ws_auth_token;
+    xpRefreshCreateButton();
     sessionIdEl.textContent = String(xpSessionId);
     sessionStatusEl.textContent = created.status;
     contractEl.innerHTML = `<div class="md-body">${xpMarkdownToHtml(created.contract_preview || "(keine Vorschau)")}</div>`;
@@ -827,7 +1040,21 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
       experience_level: document.getElementById("xp-experience-level").value,
       preferences: {
         scenario_preset: document.getElementById("xp-scenario-preset")?.value || null,
+        wearer_style: document.getElementById("xp-pe-tone")?.value?.trim() || null,
+        wearer_goal: document.getElementById("xp-contract-goal")?.value?.trim() || null,
+        wearer_boundary: document.getElementById("xp-hard-limits")?.value?.trim() || null,
         hygiene_opening_max_duration_seconds: Math.max(1, Math.round(Number(document.getElementById("xp-hygiene-max-minutes")?.value || "15") * 60)),
+        contract: {
+          keyholder_title: document.getElementById("xp-contract-keyholder-title")?.value?.trim() || null,
+          wearer_title: document.getElementById("xp-contract-wearer-title")?.value?.trim() || null,
+          goal: document.getElementById("xp-contract-goal")?.value?.trim() || null,
+          method: document.getElementById("xp-contract-method")?.value?.trim() || null,
+          wearing_schedule: document.getElementById("xp-contract-wearing-schedule")?.value?.trim() || null,
+          touch_rules: document.getElementById("xp-contract-touch-rules")?.value?.trim() || null,
+          orgasm_rules: document.getElementById("xp-contract-orgasm-rules")?.value?.trim() || null,
+          reward_policy: document.getElementById("xp-contract-reward-policy")?.value?.trim() || null,
+          termination_policy: document.getElementById("xp-contract-termination-policy")?.value?.trim() || null,
+        },
       },
       hard_limits: String(document.getElementById("xp-hard-limits").value)
         .split(",")
@@ -856,7 +1083,7 @@ document.getElementById("xp-create-session").addEventListener("click", async () 
     xpSwitchStep(6);
     const contractStep = document.querySelector('.step-pane[data-step="6"]');
     contractStep?.scrollIntoView({ behavior: "smooth", block: "start" });
-    xpWrite("Session erstellt", created);
+    xpWrite(created.updated ? "Draft-Session aktualisiert" : "Session erstellt", created);
   } catch (err) {
     xpWrite("Fehler Session", { error: String(err) });
   } finally {
@@ -915,6 +1142,8 @@ document.getElementById("xp-sign-contract").addEventListener("click", async () =
     signBtn.textContent = "Vertrag signieren und Play-Mode starten";
   }
 });
+
+xpRefreshCreateButton();
 
 document.getElementById("xp-pe-avatar-upload")?.addEventListener("click", async () => {
   try {

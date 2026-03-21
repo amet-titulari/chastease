@@ -562,7 +562,12 @@ async function smStartEdit(id) {
     document.getElementById("sm-tags").value = (s.tags || []).join(", ");
     smSetPhases(s.phases || []);
     smSetLore(s.lorebook || []);
-    await smLoadScenarioInventory(id);
+    try {
+      await smLoadScenarioInventory(id);
+    } catch (inventoryErr) {
+      smStatus("Scenario geöffnet, aber die Item-Zuordnung konnte nicht geladen werden.", true);
+      console.error("smLoadScenarioInventory failed during edit", inventoryErr);
+    }
     document.getElementById("sm-cancel-btn").style.display = "";
     document.getElementById("sm-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
@@ -647,6 +652,27 @@ document.getElementById("sm-new-btn").addEventListener("click", () => {
 });
 document.getElementById("sm-add-phase-btn").addEventListener("click", () => smAddPhase());
 document.getElementById("sm-add-lore-btn").addEventListener("click", () => smAddLore());
+
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest("[data-sm-action]");
+  if (!trigger) return;
+
+  const action = String(trigger.getAttribute("data-sm-action") || "").trim();
+  const scenarioId = Number.parseInt(trigger.getAttribute("data-scenario-id") || "", 10);
+  if (!Number.isFinite(scenarioId) || scenarioId <= 0) return;
+
+  if (action === "edit") {
+    smStartEdit(scenarioId);
+    return;
+  }
+  if (action === "export") {
+    smExport(scenarioId);
+    return;
+  }
+  if (action === "delete") {
+    smDelete(scenarioId);
+  }
+});
 
 // ── Import ──
 document.getElementById("sm-import-input").addEventListener("change", async (e) => {

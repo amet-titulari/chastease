@@ -276,6 +276,16 @@ def _persist_chat_turn(
         .all()
     )
     context_items, context_summary = build_context_window(context_rows, max_messages=12)
+    roleplay_summary = (
+        "Roleplay-Status: "
+        f"Szene='{roleplay_state['scene'].get('title') or 'Einstimmung'}'; "
+        f"Ziel='{roleplay_state['scene'].get('objective') or '-'}'; "
+        f"NextBeat='{roleplay_state['scene'].get('next_beat') or '-'}'; "
+        f"Control='{roleplay_state['relationship'].get('control_level') or 'structured'}'; "
+        f"Regeln={', '.join(roleplay_state['protocol'].get('active_rules') or []) or 'keine'}; "
+        f"Orders={', '.join(roleplay_state['protocol'].get('open_orders') or []) or 'keine'}"
+    )
+    context_items = [{"role": "system", "content": roleplay_summary, "message_type": "roleplay_memory"}] + (context_items or [])
 
     now_utc = datetime.now(timezone.utc)
     now_local = now_utc.astimezone()

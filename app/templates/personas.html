@@ -31,7 +31,14 @@
     text-overflow: ellipsis;
   }
   .persona-card-actions { display: flex; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; }
-  .persona-card-actions button { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+  .persona-card-actions button,
+  .persona-card-actions a { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+  .persona-card-actions a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
 
   .import-zone {
     border: 2px dashed rgba(255,255,255,0.15);
@@ -644,12 +651,18 @@ async function pmStartEdit(id) {
     pmCurrentPersonaId = p.id;
     document.getElementById("pm-task-lib-panel").style.display = "";
     pmTplResetForm();
-    await pmTplLoad();
+    try {
+      await pmTplLoad();
+    } catch (tplError) {
+      pmStatus("Persona geöffnet, aber Aufgaben-Bibliothek konnte nicht geladen werden.", true);
+      console.error("pmTplLoad failed during edit", tplError);
+    }
     document.getElementById("pm-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
     pmStatus("Fehler: " + e.message, true);
   }
 }
+window.pmStartEdit = pmStartEdit;
 
 // ── Delete ──
 async function pmDelete(id, name) {
@@ -751,6 +764,7 @@ function pmExportOne(id, name) {
   a.download = `persona-${slug}.json`;
   a.click();
 }
+window.pmExportOne = pmExportOne;
 
 // ── Export all ──
 document.getElementById("pm-export-all-btn").addEventListener("click", () => {
@@ -809,6 +823,30 @@ pmImportZone.addEventListener("drop", async (e) => {
   let total = 0;
   for (const file of files) total += await pmImportFile(file);
   if (total > 0) { pmStatus(`${total} Persona(s) importiert.`); pmReloadList(); }
+});
+
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest("[data-pm-action]");
+  if (!trigger) return;
+
+  const action = String(trigger.getAttribute("data-pm-action") || "").trim();
+  const personaId = Number.parseInt(trigger.getAttribute("data-persona-id") || "", 10);
+  const personaName = trigger.getAttribute("data-persona-name") || "";
+  if (!Number.isFinite(personaId) || personaId <= 0) return;
+
+  if (action === "edit") {
+    pmStartEdit(personaId);
+    return;
+  }
+  if (action === "export") {
+    if (trigger.tagName !== "A") {
+      pmExportOne(personaId, personaName);
+    }
+    return;
+  }
+  if (action === "delete") {
+    pmDelete(personaId, personaName);
+  }
 });
 
 document.getElementById("pm-avatar-upload")?.addEventListener("click", pmUploadAvatar);

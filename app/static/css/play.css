@@ -82,51 +82,39 @@ body:has(.play-shell) main.container {
   flex-shrink: 0;
 }
 
+.status-pill.is-degraded {
+  background: rgba(208, 96, 96, 0.14);
+  color: #ffb4b4;
+  border-color: rgba(208, 96, 96, 0.34);
+}
+
+.status-pill.is-degraded::before {
+  background: #ff8d8d;
+}
+
 .play-header-right {
   display: flex;
   align-items: center;
   gap: 0.55rem;
 }
 
-.play-header-chat-actions {
+.play-head-link {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-}
-
-.play-head-action {
-  padding: 0.34rem 0.68rem;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--muted);
-  font-size: 0.78rem;
-  cursor: pointer;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0.36rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid rgba(124, 180, 224, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+  color: #d9e8f6;
+  text-decoration: none;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
-.play-head-action:hover {
+.play-head-link:hover {
   background: rgba(124, 180, 224, 0.14);
-  color: var(--ink);
-  border-color: rgba(124, 180, 224, 0.45);
-}
-
-.play-timer-label {
-  font-size: 0.74rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-}
-
-.play-countdown {
-  font-family: "Space Mono", monospace;
-  font-size: 0.95rem;
-  color: #7cb4e0;
-  background: rgba(124, 180, 224, 0.08);
-  padding: 0.15rem 0.55rem;
-  border-radius: 6px;
-  border: 1px solid rgba(124, 180, 224, 0.2);
-  white-space: nowrap;
+  border-color: rgba(124, 180, 224, 0.42);
 }
 
 .play-ws-btn {
@@ -165,6 +153,21 @@ body:has(.play-shell) main.container {
   overflow: hidden;
   flex: 1;
   min-height: 0;
+}
+
+.play-ops-banner {
+  margin: 0.75rem 0.75rem 0;
+  padding: 0.65rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(208, 96, 96, 0.32);
+  background: linear-gradient(180deg, rgba(65, 24, 24, 0.76), rgba(44, 16, 16, 0.72));
+  color: #ffd0d0;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.play-ops-banner.is-hidden {
+  display: none;
 }
 
 .play-roleplay-menu {
@@ -1130,6 +1133,9 @@ body:has(.play-shell) main.container {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 0.65rem 0.85rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -1141,6 +1147,7 @@ body:has(.play-shell) main.container {
 }
 
 .ac-header {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
@@ -1148,8 +1155,10 @@ body:has(.play-shell) main.container {
 
 .ac-header-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 0.45rem;
+  min-width: 0;
 }
 
 .ac-deadline {
@@ -1200,15 +1209,20 @@ body:has(.play-shell) main.container {
 }
 
 .ac-title {
+  min-width: 0;
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--ink);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ac-hint {
   font-size: 0.76rem;
   color: var(--muted);
   margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ac-actions {
@@ -1636,12 +1650,14 @@ body:has(.play-shell) main.container {
   top: calc(100% + 6px);
   right: 0;
   width: 360px;
+  max-width: min(360px, calc(100vw - 1rem));
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 10px;
   z-index: 200;
   box-shadow: 0 6px 20px rgba(0,0,0,0.35);
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .play-tasks-dropdown.is-open {
@@ -1667,6 +1683,7 @@ body:has(.play-shell) main.container {
   gap: 0.45rem;
   max-height: 320px;
   overflow-y: auto;
+  overflow-x: hidden;
   font-size: 0.82rem;
 }
 
@@ -1738,8 +1755,11 @@ body:has(.play-shell) main.container {
 
   .play-header-right {
     width: 100%;
-    justify-content: flex-start;
-    gap: 0.35rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 0.45rem;
+    position: relative;
   }
 
   .play-persona {
@@ -1756,63 +1776,21 @@ body:has(.play-shell) main.container {
     display: none;
   }
 
-  /* Timer label: hide text, keep countdown */
-  .play-timer-label {
-    display: none;
-  }
-
-  .play-countdown {
-    font-size: 0.8rem;
-    padding: 0.12rem 0.45rem;
-  }
-
-  .play-header-chat-actions {
-    margin-left: 0;
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .play-head-action {
-    font-size: 0.74rem;
-    padding: 0.28rem 0.58rem;
-  }
-
-  .play-roleplay-menu {
-    flex-basis: 100%;
-  }
-
-  .play-roleplay-toggle {
-    padding: 0.28rem 0.62rem;
-    border-radius: 9px;
-  }
-
-  .roleplay-mini-chip {
-    max-width: 46vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .play-roleplay-dropdown {
-    left: 0.5rem;
-    right: 0.5rem;
-    max-height: min(68dvh, 620px);
-    padding: 0.6rem;
-  }
-
-  /* Tasks/Safety smaller */
+  .play-head-link,
   .play-tasks-toggle,
   .play-safety-toggle {
-    font-size: 0.74rem;
-    padding: 0.2rem 0.5rem;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    justify-content: center;
+    font-size: 0.78rem;
+    padding: 0.24rem 0.55rem;
     gap: 0.25rem;
   }
 
-  /* Settings + WS button smaller */
-  .play-settings-btn {
-    width: 28px;
-    height: 28px;
-    font-size: 0.95rem;
+  .play-head-link {
+    padding-inline: 0.5rem;
+    text-align: center;
   }
 
   .play-ws-btn {
@@ -1821,25 +1799,36 @@ body:has(.play-shell) main.container {
     font-size: 0.65rem;
   }
 
-  /* Secondary buttons: compact ghost style */
-  .play-chat-secondary {
-    padding: 0.25rem 0.5rem 0.3rem;
-    gap: 0.3rem;
+  .play-tasks-menu,
+  .play-safety-menu {
+    position: static;
   }
 
-  .play-chat-secondary button {
-    font-size: 0.72rem;
-    padding: 0.22rem 0.6rem;
+  .play-tasks-menu.is-open-mobile,
+  .play-safety-menu.is-open-mobile {
+    grid-column: 1 / -1;
   }
 
-  /* Dropdown positioning on mobile */
-  .play-tasks-dropdown {
-    width: min(280px, calc(100vw - 2rem));
-    right: -0.5rem;
+  .play-tasks-dropdown,
+  .play-safety-dropdown {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    border-radius: 14px;
+    margin-top: 0.45rem;
   }
 
   .play-safety-dropdown {
-    right: -0.5rem;
+    padding: 0.3rem 0;
+  }
+
+  .task-drop-board {
+    max-height: min(46dvh, 360px);
+  }
+
+  .play-safety-dropdown button {
+    padding: 0.65rem 0.9rem;
   }
 
   /* Action cards take less vertical space on mobile */
@@ -1862,6 +1851,24 @@ body:has(.play-shell) main.container {
   .ac-btn,
   .ac-submit-btn {
     min-height: 34px;
+  }
+
+  .play-chat-footer {
+    gap: 0.38rem;
+    padding: 0.5rem 0.55rem;
+  }
+
+  .chat-attach-btn,
+  .chat-voice-btn,
+  .play-send-btn {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
+  }
+
+  .play-chat-footer input {
+    padding: 0.6rem 0.72rem;
+    font-size: 0.95rem;
   }
 
   .play-debug-output {

@@ -11,6 +11,8 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **KI-Keyholderin** – Anpassbare Persona mit konsistentem Charakter; Grenzen und Stil werden automatisch in den Prompt übernommen
 - **Session-Mechanik** – Zufällige Sperrdauern, Timer-Management, automatisches Session-Ende bei Timer-Ablauf
 - **Verlässlicher Session-Start** – Bei gesetzter Mindest- und Maximaldauer wird die tatsächliche Laufzeit beim Vertragsstart konsistent innerhalb dieser Spanne gewählt
+- **Geführte Vertragslogik** – Das Onboarding erfasst jetzt Vertragsziel, Methode, Trageweise, Berührungs-/Orgasmusregeln, Belohnungen und Widerruf strukturiert und gibt der AI damit einen klaren Vertragsrahmen
+- **Strukturierte Vertrags-Addenda** – Addenda koennen Vertragsrahmen (`min`/`max`), Session-Policy (Hygiene, Oeffnungsdauer, Penalty-Parameter) und Protokollregeln aendern; direkte Restzeitmanipulation bleibt ausserhalb des Vertrags
 - **Bildverifikation** – Optionale Verifikation mit nummerierten Plomben direkt im Chat
 - **Aufgaben-System** – Challenges mit Belohnungen und Bestrafungen; Aktionskarten inline im Chat
 - **KI-Taskvergabe** – Chat löst via Structured Output `create_task`, `fail_task` und `add_time`-Aktionen aus
@@ -24,6 +26,9 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Benachrichtigungen** – Timer, Erinnerungen, Nachrichten der Keyholderin
 - **Web Push** – Browser-Subscriptions und Test-Dispatch über Web Push API
 - **Sichtbarer Degraded Mode** – Bei LLM-Ausfällen fällt der Chat nicht mehr still auf einen Echo-Stub zurück, sondern markiert degradierten Betrieb sichtbar
+- **Quick Start** – Solo-Session kann mit reduzierter Vorkonfiguration direkt aus dem Experience-Onboarding gestartet werden
+- **Getrennte Spieleroberflaechen** – `Chat` bleibt als ruhige Gespraechsflaeche schlank; Sessiondaten, Einstimmung, Safety, Hygiene und Spielresultate liegen gesammelt im separaten Dashboard
+- **Kontextstabilerer Chat** – Prompt-Kontext enthält kompakten Session-Memory-Block und expliziten Roleplay-Status für kohärentere Antworten
 - **Multi-Device-Login** – Bestehende Sessions bleiben erhalten; kein gegenseitiges Ausloggen
 - **Moderne Passwort-Hashes** – Passwortspeicherung via `pwdlib` mit Argon2-Backend; Legacy-SHA-256-Hashes werden beim nächsten Login migriert
 - **CSRF-Schutz für Browser-Flows** – Same-Origin-Prüfung plus CSRF-Header für mutierende Browser-Requests

@@ -191,3 +191,61 @@ def test_inventory_item_export_and_import_flow():
         imported_payload = imported.json()
         assert imported_payload["name"] == card["name"]
         assert imported_payload["key"] != card["key"]
+
+
+def test_scenario_inventory_endpoint_stays_available_for_edit_flow():
+    unique = uuid4().hex[:8]
+
+    with TestClient(app) as client:
+        register_resp = _register(client)
+        assert register_resp.status_code == 303
+
+        create_item = client.post(
+            "/api/inventory/items",
+            json={
+                "key": f"edit_item_{unique}",
+                "name": "Edit Flow Item",
+                "category": "toy",
+                "description": "Scenario edit helper",
+                "tags": ["edit"],
+                "is_active": True,
+            },
+        )
+        assert create_item.status_code == 200
+        item_id = create_item.json()["id"]
+
+        create_scenario = client.post(
+            "/api/scenarios",
+            json={
+                "title": f"Edit Scenario {unique}",
+                "key": f"edit_scenario_{unique}",
+                "summary": "Scenario edit flow",
+                "lorebook": [],
+                "phases": [],
+                "tags": ["edit"],
+            },
+        )
+        assert create_scenario.status_code == 200
+        scenario_id = create_scenario.json()["id"]
+
+        assign = client.put(
+            f"/api/inventory/scenarios/{scenario_id}/items",
+            json={
+                "entries": [
+                    {
+                        "item_id": item_id,
+                        "is_required": True,
+                        "default_quantity": 2,
+                        "notes": "Edit flow test",
+                    }
+                ]
+            },
+        )
+        assert assign.status_code == 200
+
+        fetch = client.get(f"/api/inventory/scenarios/{scenario_id}/items")
+        assert fetch.status_code == 200
+        payload = fetch.json()
+        assert len(payload["items"]) == 1
+        assert payload["items"][0]["item"]["id"] == item_id
+        assert payload["items"][0]["default_quantity"] == 2

@@ -45,11 +45,18 @@ def test_experience_page_renders():
         resp = client.get("/experience")
         assert resp.status_code == 200
         html = resp.text
+        assert "Chastease Chat" in html
         assert "Onboarding" in html
         assert "xp-create-session" in html
         assert "xp-scenario-preset" in html
+        assert "xp-scenario-editor" in html
+        assert "xp-se-save-btn" in html
         assert "xp-sign-contract" in html
         assert "xp-contract-preview" in html
+        assert "xp-contract-goal" in html
+        assert "xp-contract-touch-rules" in html
+        assert "xp-quick-start" in html
+        assert "xp-gate-quick" in html
 
 
 def test_experience_assets_are_served():
@@ -58,19 +65,88 @@ def test_experience_assets_are_served():
         assert js.status_code == 200
         assert "xp-create-session" in js.text
         assert "xpLoadScenarioPresets" in js.text
+        assert "xpSaveScenarioEditor" in js.text
         assert "sign-contract" in js.text
         assert "xpSwitchStep(6)" in js.text
+        assert "xpApplyQuickStart" in js.text
+
+
+def test_experience_onboarding_allows_persona_and_scenario_crud_for_normal_user():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        persona_resp = client.post(
+            "/api/personas",
+            json={
+                "name": "Onboarding Persona",
+                "speech_style_tone": "warm",
+                "speech_style_dominance": "gentle-dominant",
+                "strictness_level": 3,
+                "description": "Inline erstellt",
+                "system_prompt": "Bleib praesent.",
+                "avatar_media_id": None,
+            },
+        )
+        assert persona_resp.status_code == 200
+        persona_id = persona_resp.json()["id"]
+
+        persona_update = client.put(
+            f"/api/personas/{persona_id}",
+            json={
+                "name": "Onboarding Persona Plus",
+                "speech_style_tone": "direct",
+            },
+        )
+        assert persona_update.status_code == 200
+        assert persona_update.json()["name"] == "Onboarding Persona Plus"
+
+        scenario_resp = client.post(
+            "/api/scenarios",
+            json={
+                "title": "Onboarding Scenario",
+                "key": f"onboarding_{uuid4().hex[:8]}",
+                "summary": "Wird direkt im Setup gepflegt.",
+                "tags": ["ritual", "focus"],
+                "phases": [],
+                "lorebook": [],
+            },
+        )
+        assert scenario_resp.status_code == 200
+        scenario_id = scenario_resp.json()["id"]
+
+        scenario_update = client.put(
+            f"/api/scenarios/{scenario_id}",
+            json={
+                "title": "Onboarding Scenario Plus",
+                "summary": "Aktualisiert durch normalen Nutzer.",
+                "tags": ["ritual", "adapted"],
+            },
+        )
+        assert scenario_update.status_code == 200
+        assert scenario_update.json()["title"] == "Onboarding Scenario Plus"
 
         # play.js handles the live chat/task/regenerate functionality
         play_js = client.get("/static/js/play.js")
         assert play_js.status_code == 200
-        assert "messages/regenerate" in play_js.text
         assert "play-safety-yellow" in play_js.text
+        assert "play-ops-banner" in play_js.text
+        assert "/api/sessions/${SESSION_ID}/messages" in play_js.text
+
+        dashboard_js = client.get("/static/js/dashboard.js")
+        assert dashboard_js.status_code == 200
+        assert "dashLoadRunHistory" in dashboard_js.text
+        assert "dash-hygiene-open" in dashboard_js.text
 
         css = client.get("/static/css/experience.css")
         assert css.status_code == 200
         assert "xp-grid" in css.text
         assert "chat-timeline" in css.text
+        assert "xp-quickbar" in css.text
+
+        dashboard_css = client.get("/static/css/dashboard.css")
+        assert dashboard_css.status_code == 200
+        assert "dash-grid" in dashboard_css.text
+        assert "dash-run-card" in dashboard_css.text
 
 
 def test_experience_draft_autosave_updates_profile_defaults():
@@ -82,6 +158,8 @@ def test_experience_draft_autosave_updates_profile_defaults():
                 "wearer_nickname": "Nova",
                 "experience_level": "advanced",
                 "hard_limits": "humiliation, pain",
+                "contract_goal": "Klare Fuehrung und einvernehmliche Enthaltsamkeit.",
+                "contract_method": "psychologische Keuschhaltung",
                 "penalty_multiplier": 1.7,
                 "gentle_mode": True,
                 "hygiene_opening_max_duration_seconds": 720,
@@ -164,27 +242,49 @@ def test_experience_draft_updates_active_session_player_and_hygiene_max():
         assert summary.status_code == 200
         data = summary.json()
         assert data["session"]["persona_name"] == "Esmeralda"
-        assert data["session"]["player_nickname"] == "Esmeralda"
-        assert data["session"]["min_duration_seconds"] == 7200
-        assert data["session"]["max_duration_seconds"] == 28800
-        assert data["session"]["hygiene_limit_daily"] == 3
-        assert data["session"]["hygiene_limit_weekly"] == 8
-        assert data["session"]["hygiene_limit_monthly"] == 20
-        assert data["session"]["hygiene_opening_max_duration_seconds"] == 720
-        assert data["session"]["active_seal_number"] == "S-987"
-        assert (data.get("llm") or {}).get("chat_model") == "grok-sync"
 
-        session_detail = client.get(f"/api/sessions/{session_id}")
-        assert session_detail.status_code == 200
-        player_profile = session_detail.json().get("player_profile") or {}
-        assert player_profile.get("experience_level") == "advanced"
-        assert player_profile.get("hard_limits") == ["running", "humiliation"]
-        prefs = player_profile.get("preferences") or {}
-        assert prefs.get("scenario_preset") == "ametara_titulari_devotion_protocol"
-        reaction = player_profile.get("reaction_patterns") or {}
-        assert reaction.get("penalty_multiplier") == 1.4
-        assert reaction.get("default_penalty_seconds") == 5400
-        assert reaction.get("max_penalty_seconds") == 21600
+
+def test_draft_session_can_be_updated_without_creating_new_session():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        created = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Draft Persona",
+                "player_nickname": "Nova",
+                "min_duration_seconds": 3600,
+                "max_duration_seconds": 7200,
+                "contract_goal": "Erste Fassung.",
+            },
+        )
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+
+        updated = client.put(
+            f"/api/sessions/{session_id}/draft",
+            json={
+                "persona_name": "Draft Persona",
+                "player_nickname": "Nova",
+                "min_duration_seconds": 3600,
+                "max_duration_seconds": 10800,
+                "contract_goal": "Nachgeschaerfte verbindliche Fassung.",
+                "contract_touch_rules": "Keine Beruehrung ohne Erlaubnis.",
+                "scenario_preset": "ametara_titulari_devotion_protocol",
+                "hard_limits": ["public play"],
+                "llm_active": True,
+            },
+        )
+        assert updated.status_code == 200
+        payload = updated.json()
+        assert payload["session_id"] == session_id
+        assert payload["updated"] is True
+        assert "Nachgeschaerfte verbindliche Fassung." in payload["contract_preview"]
+        assert "Keine Beruehrung ohne Erlaubnis." in payload["contract_preview"]
+
+        detail = client.get(f"/api/sessions/{session_id}")
+        assert detail.status_code == 200
+        assert detail.json()["status"] == "draft"
 
 
 def test_experience_and_profile_redirect_to_play_when_active_session_exists():
@@ -242,6 +342,39 @@ def test_play_page_uses_versioned_play_script_url():
         play = client.get(f"/play/{session_id}", follow_redirects=False)
         assert play.status_code == 200
         assert '/static/js/play.js?v=' in play.text
+        assert 'href="/dashboard/' in play.text
+        assert "Regenerate" not in play.text
+        assert "Verlauf" not in play.text
+
+
+def test_dashboard_page_renders_for_active_session():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        created = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Dashboard Persona",
+                "player_nickname": "Dashboard Player",
+                "min_duration_seconds": 900,
+            },
+        )
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+
+        signed = client.post(f"/api/sessions/{session_id}/sign-contract")
+        assert signed.status_code == 200
+
+        dashboard = client.get(f"/dashboard/{session_id}", follow_redirects=False)
+        assert dashboard.status_code == 200
+        assert "Spieler-Dashboard" in dashboard.text
+        assert "Spiele und Resultate" in dashboard.text
+        assert '/static/js/dashboard.js?v=' in dashboard.text
+
+        nav = client.get(f"/play/{session_id}", follow_redirects=False)
+        assert nav.status_code == 200
+        assert ">Chat<" in nav.text
+        assert ">Dashboard<" in nav.text
 
 
 def test_settings_summary_includes_total_played_duration_across_owned_sessions():

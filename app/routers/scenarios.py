@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.scenario import Scenario
 from app.security import require_admin_session_user
+from app.services.session_access import require_session_user
 from app.services.audit_logger import audit_log
 
 router = APIRouter(prefix="/api/scenarios", tags=["scenarios"])
@@ -188,14 +189,14 @@ def list_scenario_presets() -> dict:
 
 @router.get("")
 def list_scenarios(request: Request, db: Session = Depends(get_db)) -> dict:
-    require_admin_session_user(request, db)
+    require_session_user(request, db)
     rows = db.query(Scenario).order_by(Scenario.id.asc()).all()
     return {"items": [_scenario_to_dict(s) for s in rows]}
 
 
 @router.post("")
 def create_scenario(payload: ScenarioCreateRequest, request: Request, db: Session = Depends(get_db)) -> dict:
-    user = require_admin_session_user(request, db)
+    user = require_session_user(request, db)
     key = payload.key.strip()
     if db.query(Scenario).filter(Scenario.key == key).first():
         raise HTTPException(status_code=409, detail=f"Scenario key '{key}' already exists")
@@ -216,7 +217,7 @@ def create_scenario(payload: ScenarioCreateRequest, request: Request, db: Sessio
 
 @router.get("/{scenario_id}")
 def get_scenario(scenario_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
-    require_admin_session_user(request, db)
+    require_session_user(request, db)
     s = db.query(Scenario).filter(Scenario.id == scenario_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Scenario not found")
@@ -230,7 +231,7 @@ def update_scenario(
     request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    user = require_admin_session_user(request, db)
+    user = require_session_user(request, db)
     s = db.query(Scenario).filter(Scenario.id == scenario_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Scenario not found")
@@ -259,7 +260,7 @@ def update_scenario(
 
 @router.delete("/{scenario_id}")
 def delete_scenario(scenario_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
-    user = require_admin_session_user(request, db)
+    user = require_session_user(request, db)
     s = db.query(Scenario).filter(Scenario.id == scenario_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Scenario not found")

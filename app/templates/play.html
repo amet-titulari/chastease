@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="/static/css/play.css?v=20260319-roleplay" />
+<link rel="stylesheet" href="/static/css/play.css?v=20260321-mobilemenus" />
 {% endblock %}
 
 {% block content %}
@@ -21,60 +21,7 @@
       <span id="play-status-pill" class="status-pill">{{ session_status }}</span>
     </div>
     <div class="play-header-right">
-      <span class="play-timer-label">Verbleibend</span>
-      <code id="play-countdown" class="play-countdown">—</code>
-
-      <div class="play-roleplay-menu" id="play-roleplay-menu">
-        <button id="play-roleplay-toggle" class="play-roleplay-toggle" type="button" title="Session-Status" aria-haspopup="true" aria-expanded="false">
-          <span id="play-roleplay-scene-mini" class="roleplay-mini-scene">Szene</span>
-          <span id="play-roleplay-mini-chip" class="roleplay-mini-chip">lade...</span>
-        </button>
-        <div class="play-roleplay-dropdown" id="play-roleplay-dropdown" role="dialog" aria-label="Session-Status">
-          <div class="roleplay-card">
-            <div class="roleplay-card-head">
-              <span class="roleplay-label">Szene</span>
-              <span id="play-scene-pressure" class="roleplay-pressure">lade...</span>
-            </div>
-            <div id="play-scene-title" class="roleplay-scene-title">Roleplay-State wird geladen...</div>
-            <p id="play-scene-objective" class="roleplay-scene-objective">—</p>
-            <div class="roleplay-meta-grid">
-              <div>
-                <span class="roleplay-meta-label">Naechster Beat</span>
-                <span id="play-scene-next-beat" class="roleplay-meta-value">—</span>
-              </div>
-              <div>
-                <span class="roleplay-meta-label">Letzte Konsequenz</span>
-                <span id="play-scene-consequence" class="roleplay-meta-value">—</span>
-              </div>
-            </div>
-          </div>
-          <div class="roleplay-card roleplay-card--compact">
-            <div class="roleplay-card-head">
-              <span class="roleplay-label">Beziehung</span>
-              <span id="play-control-level" class="roleplay-chip">—</span>
-            </div>
-            <div id="play-relationship-meters" class="roleplay-meter-list"></div>
-          </div>
-          <div class="roleplay-card roleplay-card--compact">
-            <div class="roleplay-card-head">
-              <span class="roleplay-label">Protokoll</span>
-            </div>
-            <div class="roleplay-list-block">
-              <span class="roleplay-meta-label">Aktive Regeln</span>
-              <div id="play-active-rules" class="roleplay-pill-list"></div>
-            </div>
-            <div class="roleplay-list-block">
-              <span class="roleplay-meta-label">Offene Orders</span>
-              <div id="play-open-orders" class="roleplay-pill-list"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="play-header-chat-actions">
-        <button id="play-regenerate" type="button" class="play-head-action">Regenerate</button>
-        <button id="play-load-chat" type="button" class="play-head-action">Verlauf</button>
-      </div>
+      <a href="/dashboard/{{ session_id }}" class="play-head-link">Dashboard</a>
 
       <!-- Tasks Dropdown -->
       <div class="play-tasks-menu" id="play-tasks-menu">
@@ -104,8 +51,6 @@
           <button id="play-safety-safeword" class="sdrop-safeword" type="button" role="menuitem">Safeword</button>
         </div>
       </div>
-
-      <button id="play-settings-open" class="play-settings-btn" type="button" title="Einstellungen">&#9881;</button>
     </div>
   </header>
 
@@ -113,6 +58,7 @@
 
     <!-- CHAT -->
     <section class="play-chat-section">
+      <div id="play-ops-banner" class="play-ops-banner is-hidden" role="status" aria-live="polite"></div>
       <div id="play-chat-timeline" class="play-chat-timeline"></div>
       <div class="play-chat-footer">
         <input id="play-file-input" type="file" accept="image/*,audio/*" style="display:none" />
@@ -125,92 +71,6 @@
       <div class="play-voice-status-row">
         <span id="play-voice-status" class="hint">Voice: pruefe Verfuegbarkeit...</span>
       </div>
-    </section>
-
-  </div>
-</div>
-
-<!-- Settings Drawer -->
-<div class="play-settings-overlay" id="play-settings-overlay"></div>
-<div class="play-settings-drawer" id="play-settings-drawer" aria-hidden="true">
-  <div class="psd-header">
-    <span>Einstellungen</span>
-    <button id="play-settings-close" type="button" class="psd-close" aria-label="Schlie&szlig;en">&times;</button>
-  </div>
-  <div class="psd-body">
-
-    <section class="psd-section">
-      <h4>Session</h4>
-      <div style="display:flex;gap:0.7rem;align-items:center;margin-bottom:0.6rem;">
-        <img id="psd-keyholder-avatar" alt="Keyholder Avatar" style="display:none;width:38px;height:38px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.25);" />
-        <img id="psd-player-avatar" alt="Player Avatar" style="display:none;width:38px;height:38px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.25);" />
-      </div>
-      <dl class="psd-info-grid">
-        <dt>Wearer</dt><dd id="psd-wearer">{{ player_nickname }}</dd>
-        <dt>Keyholderin</dt><dd id="psd-keyholder">{{ persona_name }}</dd>
-        <dt>Session-ID</dt><dd id="psd-session-id">{{ session_id }}</dd>
-        <dt>Start</dt><dd id="psd-lock-start">&mdash;</dd>
-        <dt>Freigabe</dt><dd id="play-lock-end-display">{{ lock_end or '&mdash;' }}</dd>
-        <dt>Verbleibend</dt><dd id="psd-remaining">&mdash;</dd>
-        <dt>Status</dt><dd id="play-status-text">{{ session_status }}</dd>
-        <dt>Timer</dt><dd id="psd-timer-frozen">&mdash;</dd>
-        <dt>Mindestdauer</dt><dd id="psd-min-duration">&mdash;</dd>
-        <dt>Maximaldauer</dt><dd id="psd-max-duration">&mdash;</dd>
-        <dt>Aktive Plombe</dt><dd id="psd-active-seal">&mdash;</dd>
-        <dt>Hygiene zuletzt</dt><dd id="psd-last-opening">&mdash;</dd>
-        <dt>Task-Statistik</dt><dd id="psd-task-stats">&mdash;</dd>
-        <dt>Task-Strafen</dt><dd id="psd-task-penalty">&mdash;</dd>
-        <dt>Hygiene-Strafen</dt><dd id="psd-hygiene-penalty">&mdash;</dd>
-        <dt>Gesamtdauer</dt><dd id="psd-total-played">&mdash;</dd>
-      </dl>
-      {% if session_status in ('safeword_stopped', 'yellow', 'red') %}
-      <button id="play-resume-session" type="button" class="play-resume-btn">&#8635; Session reaktivieren</button>
-      {% endif %}
-    </section>
-
-    <section class="psd-section">
-      <h4>Dein Profil</h4>
-      <dl class="psd-info-grid" id="psd-setup-grid">
-        <dt>Erfahrung</dt><dd id="psd-exp">—</dd>
-        <dt>Stil</dt><dd id="psd-style">—</dd>
-        <dt>Ziel</dt><dd id="psd-goal">—</dd>
-        <dt>Limits</dt><dd id="psd-boundary">—</dd>
-        <dt>LLM</dt><dd id="psd-llm-provider-display">—</dd>
-        <dt>Modell</dt><dd id="psd-llm-chat-display">—</dd>
-        <dt>API-Key</dt><dd id="psd-llm-key-display">—</dd>
-      </dl>
-      <a href="/profile" class="psd-link">Profil bearbeiten &rarr;</a>
-    </section>
-
-    <section class="psd-section">
-      <h4>Hygiene-&Ouml;ffnung</h4>
-      <p id="psd-hygiene-rules" class="psd-feedback">Regeln werden geladen...</p>
-      <p id="psd-hygiene-quota" class="psd-feedback">Kontingent wird geladen...</p>
-      <p id="psd-hygiene-next-allowed" class="psd-feedback"></p>
-      <p id="psd-hygiene-status" class="psd-feedback"></p>
-      <div id="psd-hygiene-open-area">
-        <div class="psd-actions">
-          <button id="psd-hygiene-open" type="button">&Ouml;ffnung beantragen</button>
-        </div>
-      </div>
-      <div id="psd-hygiene-relock-area" class="is-hidden">
-        <p class="psd-feedback" style="color:var(--color-warn,#ffb300)">&#9200; &Ouml;ffnung aktiv &mdash; nach Hygiene sofort wiederverschlie&szlig;en.</p>
-        <div id="psd-hygiene-seal-row" style="display:none">
-          <div class="psd-field">
-            <label>Neue Plombennummer<span class="required-star">*</span>
-              <input id="psd-hygiene-new-seal" type="text" placeholder="z.B. A-456" />
-            </label>
-          </div>
-        </div>
-        <div class="psd-actions">
-          <button id="psd-hygiene-relock" type="button">&#128274; Wiederverschlie&szlig;en</button>
-        </div>
-      </div>
-    </section>
-
-    <section class="psd-section">
-      <h4>Vertrag</h4>
-      <a href="/contract/{{ session_id }}" class="psd-link">&#128220; Vertrag dieser Session ansehen &rarr;</a>
     </section>
 
   </div>

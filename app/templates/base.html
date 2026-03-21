@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="csrf-token" content="{{ request.state.csrf_token if request else '' }}" />
   <title>{{ title }}</title>
-  <link rel="stylesheet" href="/static/css/theme.css" />
-  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="/static/css/theme.css?v=20260321" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20260321b" />
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -17,7 +17,8 @@
       <a class="brand-link" href="/"><h1 class="brand">Chastease</h1></a>
       <nav class="topnav" aria-label="Hauptnavigation">
         {% if current_user %}
-          <a href="/experience" class="nav-link{% if current_path == '/experience' %} nav-link--active{% endif %}">Experience</a>
+          <a href="/experience" class="nav-link{% if current_path == '/experience' or current_path.startswith('/play/') %} nav-link--active{% endif %}">Chat</a>
+          <a href="/dashboard" class="nav-link{% if current_path == '/dashboard' or current_path.startswith('/dashboard/') %} nav-link--active{% endif %}">Dashboard</a>
           <a href="/games" class="nav-link{% if current_path == '/games' or current_path.startswith('/games/') %} nav-link--active{% endif %}">Games</a>
         {% else %}
           <a href="/" class="nav-link{% if current_path == '/' %} nav-link--active{% endif %}">Start</a>
@@ -34,6 +35,27 @@
           </form>
         {% endif %}
       </div>
+      <button type="button" class="topbar-menu-btn" id="topbar-menu-btn" aria-expanded="false" aria-controls="mobile-topbar-menu">Menu</button>
+    </div>
+    <div class="mobile-topbar-menu" id="mobile-topbar-menu" hidden>
+      <nav class="mobile-topbar-links" aria-label="Mobile Hauptnavigation">
+        {% if current_user %}
+          <a href="/experience" class="nav-link{% if current_path == '/experience' or current_path.startswith('/play/') %} nav-link--active{% endif %}">Chat</a>
+          <a href="/dashboard" class="nav-link{% if current_path == '/dashboard' or current_path.startswith('/dashboard/') %} nav-link--active{% endif %}">Dashboard</a>
+          <a href="/games" class="nav-link{% if current_path == '/games' or current_path.startswith('/games/') %} nav-link--active{% endif %}">Games</a>
+        {% else %}
+          <a href="/" class="nav-link{% if current_path == '/' %} nav-link--active{% endif %}">Start</a>
+        {% endif %}
+        {% if current_user and current_user.is_admin %}
+          <a href="/admin" id="admin-menu-mobile" class="nav-link{% if admin_active %} nav-link--active{% endif %}">Admin</a>
+        {% endif %}
+        <a href="/profile" class="nav-link nav-link--subtle{% if current_path == '/profile' or current_path.startswith('/profile/') %} nav-link--active{% endif %}">Profil</a>
+        {% if current_user %}
+          <form method="post" action="/auth/logout" class="topnav-logout-form mobile-topbar-logout">
+            <button type="submit" class="topnav-logout-btn">Logout</button>
+          </form>
+        {% endif %}
+      </nav>
     </div>
   </header>
   <main class="container main-grid">
@@ -42,6 +64,23 @@
   <script>
   (() => {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+    const mobileMenuBtn = document.getElementById("topbar-menu-btn");
+    const mobileMenu = document.getElementById("mobile-topbar-menu");
+    const syncMobileMenu = () => {
+      if (!mobileMenuBtn || !mobileMenu) return;
+      if (window.innerWidth > 680) {
+        mobileMenu.hidden = true;
+        mobileMenuBtn.setAttribute("aria-expanded", "false");
+      }
+    };
+    mobileMenuBtn?.addEventListener("click", () => {
+      if (!mobileMenu) return;
+      const nextHidden = !mobileMenu.hidden;
+      mobileMenu.hidden = nextHidden;
+      mobileMenuBtn.setAttribute("aria-expanded", String(!nextHidden));
+    });
+    window.addEventListener("resize", syncMobileMenu);
+    syncMobileMenu();
     if (!csrfToken) return;
 
     const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);

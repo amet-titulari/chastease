@@ -39,7 +39,30 @@ def test_personas_partial_renders_for_admin():
         resp = client.get("/personas/partials/list", follow_redirects=False)
         assert resp.status_code == 200
         assert 'id="pm-list"' in resp.text
-        assert 'hx-get="/personas/partials/list"' in resp.text
+        assert 'hx-get="/personas/partials/list"' not in resp.text
+
+
+def test_personas_partial_uses_resilient_action_hooks():
+    with TestClient(app) as client:
+        _register_admin(client)
+        created = client.post(
+            "/api/personas",
+            json={
+                "name": "Persona Action Test",
+                "strictness_level": 3,
+                "speech_style_tone": "warm",
+                "speech_style_dominance": "gentle-dominant",
+            },
+        )
+        assert created.status_code == 200
+        persona_id = created.json()["id"]
+
+        resp = client.get("/personas/partials/list", follow_redirects=False)
+        assert resp.status_code == 200
+        assert 'data-pm-action="edit"' in resp.text
+        assert f'data-persona-id="{persona_id}"' in resp.text
+        assert f'href="/api/personas/{persona_id}/export"' in resp.text
+        assert 'window.pmStartEdit && window.pmStartEdit' in resp.text
 
 
 def test_personas_partial_redirects_for_non_admin():

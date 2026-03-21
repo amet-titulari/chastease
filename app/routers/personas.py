@@ -9,6 +9,7 @@ from app.models.media_asset import MediaAsset
 from app.models.persona import Persona
 from app.models.persona_task_template import PersonaTaskTemplate
 from app.security import require_admin_session_user
+from app.services.session_access import require_session_user
 from app.services.audit_logger import audit_log
 from app.services.persona_card_mapper import map_external_persona_card
 
@@ -230,14 +231,14 @@ def _template_export_payload(template: PersonaTaskTemplate) -> dict:
 
 @router.get("")
 def list_personas(request: Request, db: Session = Depends(get_db)) -> dict:
-    require_admin_session_user(request, db)
+    require_session_user(request, db)
     rows = db.query(Persona).order_by(Persona.id.asc()).all()
     return {"items": [_persona_to_dict(p) for p in rows]}
 
 
 @router.post("")
 def create_persona(payload: PersonaCreateRequest, request: Request, db: Session = Depends(get_db)) -> dict:
-    user = require_admin_session_user(request, db)
+    user = require_session_user(request, db)
     _ensure_avatar_exists(db, payload.avatar_media_id)
     persona = Persona(
         name=payload.name.strip(),
@@ -257,7 +258,7 @@ def create_persona(payload: PersonaCreateRequest, request: Request, db: Session 
 
 @router.get("/{persona_id}")
 def get_persona(persona_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
-    require_admin_session_user(request, db)
+    require_session_user(request, db)
     persona = db.query(Persona).filter(Persona.id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
@@ -499,7 +500,7 @@ def import_persona_task_templates(
 
 @router.put("/{persona_id}")
 def update_persona(persona_id: int, payload: PersonaUpdateRequest, request: Request, db: Session = Depends(get_db)) -> dict:
-    user = require_admin_session_user(request, db)
+    user = require_session_user(request, db)
     persona = db.query(Persona).filter(Persona.id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
@@ -527,7 +528,7 @@ def update_persona(persona_id: int, payload: PersonaUpdateRequest, request: Requ
 
 @router.delete("/{persona_id}")
 def delete_persona(persona_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
-    user = require_admin_session_user(request, db)
+    user = require_session_user(request, db)
     persona = db.query(Persona).filter(Persona.id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")

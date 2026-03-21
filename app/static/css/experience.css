@@ -93,8 +93,26 @@
 
 .xp-gate-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.55rem;
+}
+
+.xp-quickbar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.9rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 16px;
+  border: 1px solid rgba(88, 124, 156, 0.25);
+  background: linear-gradient(180deg, rgba(13, 22, 33, 0.72), rgba(10, 18, 28, 0.58));
+}
+
+.xp-quickbar-copy {
+  margin: 0;
+  color: #97aac0;
+  font-size: 0.88rem;
+  line-height: 1.35;
 }
 
 .xp-gate-load {
@@ -732,7 +750,6 @@ button {
   border: 1px solid #33506d;
 }
 
-#xp-contract-preview,
 #xp-output {
   max-height: 220px;
   overflow: auto;
@@ -744,19 +761,35 @@ button {
 }
 
 /* Markdown-rendered contract body */
+.xp-contract-stage {
+  margin: 1rem 0 1.15rem;
+  padding: 1rem;
+  border: 1px solid rgba(126, 164, 199, 0.14);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(12, 22, 32, 0.94), rgba(7, 16, 23, 0.98)),
+    radial-gradient(circle at top, rgba(137, 182, 219, 0.07), transparent 52%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
 .xp-contract-body {
-  max-height: 68vh;
-  min-height: 180px;
-  overflow-y: auto;
-  background: #071017;
-  color: #cde1f5;
-  border-radius: 16px;
-  padding: 1rem 1.05rem;
-  border: 1px solid #223548;
-  font-size: 0.83rem;
-  line-height: 1.6;
+  min-height: 56vh;
+  overflow: visible;
+  background:
+    linear-gradient(180deg, rgba(10, 18, 26, 0.98), rgba(7, 14, 21, 0.98));
+  color: #dbe8f5;
+  border-radius: 20px;
+  padding: 1.85rem 2rem;
+  border: 1px solid #284159;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 22px 48px rgba(0,0,0,0.22);
+  font-size: 0.98rem;
+  line-height: 1.82;
   word-break: break-word;
   white-space: normal;
+  max-width: 980px;
+  margin: 0 auto;
 }
 
 @media (max-width: 760px) {
@@ -781,40 +814,92 @@ button {
   .step-actions {
     flex-direction: column;
   }
+
+  .xp-gate-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .xp-quickbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .xp-contract-stage {
+    padding: 0.55rem;
+    border-radius: 18px;
+  }
+
+  .xp-contract-body {
+    min-height: 42vh;
+    padding: 1.15rem 1rem;
+    font-size: 0.92rem;
+    line-height: 1.72;
+  }
 }
 
 .xp-contract-body h2,
 .xp-contract-body h3,
 .xp-contract-body h4 {
-  margin: 0.8em 0 0.3em;
-  color: #8fb3d5;
-  font-size: 0.88rem;
+  margin: 1.05em 0 0.42em;
+  color: #9ec4e8;
+  font-size: 1.08rem;
   letter-spacing: 0.04em;
 }
 
-.xp-contract-body strong { color: #b8d4ee; }
+.xp-contract-body strong { color: #edf5fd; }
 .xp-contract-body em    { color: #8fb3d5; font-style: italic; }
-.xp-contract-body hr    { border: none; border-top: 1px solid #223548; margin: 0.6em 0; }
-.xp-contract-body p     { margin: 0.4em 0; }
+.xp-contract-body hr    { border: none; border-top: 1px solid #223548; margin: 0.9em 0; }
+.xp-contract-body p     { margin: 0.56em 0; }
 
 .xp-contract-body ul {
-  margin: 0.3em 0;
-  padding-left: 1.2em;
+  margin: 0.45em 0;
+  padding-left: 1.35em;
 }
 
-.xp-contract-body li { margin: 0.15em 0; }
+.xp-contract-body li { margin: 0.26em 0; }
 
 .xp-contract-body table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.79rem;
-  margin: 0.5em 0;
+  font-size: 0.9rem;
+  margin: 0.7em 0;
 }
 
 .xp-contract-body td {
-  padding: 0.25em 0.5em;
+  padding: 0.4em 0.62em;
   border: 1px solid #223548;
   vertical-align: top;
+}
+
+.xp-debug-panel {
+  margin-top: 1rem;
+  border: 1px solid rgba(88, 113, 138, 0.42);
+  border-radius: 16px;
+  background: rgba(7, 16, 23, 0.72);
+  overflow: hidden;
+}
+
+.xp-debug-panel summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.85rem 1rem;
+  color: #9cb3ca;
+  font-weight: 700;
+}
+
+.xp-debug-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.xp-debug-panel[open] summary {
+  border-bottom: 1px solid rgba(88, 113, 138, 0.28);
+}
+
+.xp-debug-output {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 /* Loading spinner on buttons */

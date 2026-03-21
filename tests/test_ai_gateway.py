@@ -12,9 +12,18 @@ def test_stub_gateway_generates_contract_text():
         player_nickname="Tester",
         min_duration_seconds=300,
         max_duration_seconds=600,
+        contract_context={
+            "keyholder_title": "Mistress",
+            "wearer_title": "pet",
+            "touch_rules": "Keine Beruehrung ohne Freigabe.",
+            "hard_limits": ["public play"],
+        },
     )
     assert "KEUSCHHEITS-VERTRAG" in text
     assert "Test Persona" in text
+    assert "Mistress" in text
+    assert "Keine Beruehrung ohne Freigabe." in text
+    assert "Der Keuschgehaltene anerkennt" in text
 
 
 def test_ollama_gateway_uses_response_payload(monkeypatch):
