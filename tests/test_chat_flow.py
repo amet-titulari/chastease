@@ -71,6 +71,38 @@ def test_chat_message_roundtrip():
         assert items[-1]["role"] == "assistant"
 
 
+def test_chat_surfaces_degraded_ai_mode(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            return AIResponse(
+                message="Chat Persona: Der Leitkanal ist gerade instabil.",
+                actions=[],
+                mood="caring",
+                intensity=2,
+                degraded=True,
+                degraded_reason="provider offline",
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda **_: _DummyAI())
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Status update"},
+        )
+        assert send_resp.status_code == 200
+        assert "Leitkanal" in send_resp.json()["reply"]
+
+        list_resp = client.get(f"/api/sessions/{session_id}/messages")
+        assert list_resp.status_code == 200
+        items = list_resp.json()["items"]
+        assert any(item["message_type"] == "system_warning" for item in items)
+
+
 def test_chat_reply_switches_to_care_mode_on_yellow():
     with TestClient(app) as client:
         _register_user(client, prefix="chat-admin-yellow", make_admin=True)

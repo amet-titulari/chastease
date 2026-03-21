@@ -39,6 +39,8 @@ class AIResponse:
     actions: list[dict[str, Any]]
     mood: str
     intensity: int
+    degraded: bool = False
+    degraded_reason: str | None = None
 
 
 def _normalize_intensity(value: Any) -> int:
@@ -98,6 +100,22 @@ def _fallback_chat_response(persona_name: str, user_text: str) -> AIResponse:
         actions=actions,
         mood="strict",
         intensity=3,
+    )
+
+
+def _degraded_chat_response(persona_name: str, reason: str | None = None) -> AIResponse:
+    detail = str(reason or "LLM nicht erreichbar").strip()
+    return AIResponse(
+        message=(
+            f"{persona_name}: Der Leitkanal ist gerade instabil. "
+            "Ich bleibe bei dir, aber antworte im Moment nur vereinfacht. "
+            "Gib mir bitte einen kurzen Status oder versuche es gleich noch einmal."
+        ),
+        actions=[],
+        mood="caring",
+        intensity=2,
+        degraded=True,
+        degraded_reason=detail[:240],
     )
 
 
@@ -276,9 +294,9 @@ class OllamaGateway(AIGateway):
             )
         except Exception:
             logger.exception("Ollama chat generation failed")
-            return StubAIGateway().generate_chat_response(
+            return _degraded_chat_response(
                 persona_name=persona_name,
-                user_text=user_text,
+                reason="Ollama-Chat nicht erreichbar",
             )
 
 
@@ -473,9 +491,9 @@ class CustomOpenAIGateway(AIGateway):
             )
         except Exception:
             logger.exception("Custom OpenAI chat generation failed")
-            return StubAIGateway().generate_chat_response(
+            return _degraded_chat_response(
                 persona_name=persona_name,
-                user_text=user_text,
+                reason=f"{self.provider}-Chat nicht erreichbar",
             )
 
 

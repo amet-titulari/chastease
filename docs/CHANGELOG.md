@@ -20,6 +20,10 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - `Don't move`-Livevorschau vereinfacht: störende Overlay-Boxen entfernt, farbiger Rahmen beibehalten, Skelett nur noch rot/grün.
 - Kontrollbild-Annotationen fuer Bewegungsverstösse lesbarer gemacht, inkl. groesserer Label-Schrift im Frontend-Fallback und serverseitig eingebrannten Bildern.
 - Spielekonfiguration entschlackt: ungenutzte Zeilen `Default Werte` und `Empfehlung` aus der modulspezifischen Schwellenwert-UI entfernt.
+- Session-Start zieht bei gesetzter Mindest- und Maximaldauer jetzt konsistent eine tatsächliche Laufzeit innerhalb der gewählten Spanne statt immer nur die Mindestdauer zu verwenden.
+- Neue Sessions aus abgeschlossenen Vorlagen starten mit frischem Roleplay-State statt alte Szenen-, Beziehungs- und Protokollzustände blind zu übernehmen.
+- Chat markiert degradierten AI-Betrieb jetzt sichtbar bei Providerfehlern statt still auf generische Echo-Antworten zurückzufallen.
+- Proaktive Reminder nutzen jetzt Persona-, Szenen- und Protokollkontext statt starre Standardtexte.
 
 ## [0.2.7] - 2026-03-16
 

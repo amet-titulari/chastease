@@ -39,6 +39,33 @@ def test_proactive_sweep_creates_assistant_reminder():
             assert rows[0].role == "assistant"
 
 
+def test_proactive_sweep_uses_scene_context():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        with SessionLocal() as db:
+            from app.models.session import Session as SessionModel
+
+            row = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            row.scene_state_json = '{"title": "Inspection", "objective": "Praesente Haltung halten", "next_beat": "Kurzen Status liefern"}'
+            row.protocol_state_json = '{"active_rules": ["Ohne Ausfluechte antworten"]}'
+            db.add(row)
+            db.commit()
+
+        sweep_proactive_messages_for_active_sessions()
+
+        with SessionLocal() as db:
+            reminder = (
+                db.query(Message)
+                .filter(Message.session_id == session_id, Message.message_type == "proactive_reminder")
+                .order_by(Message.id.desc())
+                .first()
+            )
+            assert reminder is not None
+            assert "Inspection" in reminder.content
+            assert "Ohne Ausfluechte antworten" in reminder.content
+
+
 def test_proactive_sweep_respects_cooldown():
     with TestClient(app) as client:
         session_id = _create_and_sign(client)

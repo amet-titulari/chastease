@@ -48,6 +48,9 @@ def test_completed_session_can_be_used_as_blueprint():
 
         with SessionLocal() as db:
             row = db.query(Session).filter(Session.id == template_id).first()
+            row.relationship_state_json = '{"trust": 91, "control_level": "punitive"}'
+            row.protocol_state_json = '{"open_orders": ["Melde dich alle 10 Minuten"]}'
+            row.scene_state_json = '{"title": "Altlast", "objective": "Vorherige Szene"}'
             row.status = "completed"
             row.lock_end_actual = datetime.now(timezone.utc)
             db.add(row)
@@ -76,3 +79,8 @@ def test_completed_session_can_be_used_as_blueprint():
         assert new_detail.status_code == 200
         assert new_detail.json()["min_duration_seconds"] == 300
         assert new_detail.json()["llm_session"]["provider"] == "custom"
+        roleplay_state = new_detail.json()["roleplay_state"]
+        assert roleplay_state["relationship"]["trust"] != 91
+        assert roleplay_state["relationship"]["control_level"] != "punitive"
+        assert "Melde dich alle 10 Minuten" not in roleplay_state["protocol"]["open_orders"]
+        assert roleplay_state["scene"]["title"] != "Altlast"

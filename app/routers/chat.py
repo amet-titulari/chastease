@@ -440,7 +440,10 @@ def _persist_chat_turn(
         selected_template = select_task_template(template_rows, user_text)
         if selected_template is not None:
             actions.append(build_template_task_action(selected_template))
-    if not any(isinstance(action, dict) and action.get("type") == "create_task" for action in actions):
+    if (
+        not structured.degraded
+        and not any(isinstance(action, dict) and action.get("type") == "create_task" for action in actions)
+    ):
         inferred_task = _infer_task_action_from_reply(reply_text)
         if inferred_task is not None:
             actions.append(inferred_task)
@@ -606,6 +609,19 @@ def _persist_chat_turn(
         prompt_version=prompt_modules.version,
         prompt_templates_json=json.dumps(prompt_modules.templates_used),
     )
+
+    if structured.degraded:
+        db.add(
+            Message(
+                session_id=session_id,
+                role="system",
+                content=(
+                    "LLM-Antwort laeuft derzeit im degradierten Modus. "
+                    f"Grund: {structured.degraded_reason or 'temporärer Providerfehler'}."
+                ),
+                message_type="system_warning",
+            )
+        )
 
     if created_task_ids:
         summary = "; ".join(created_task_details)

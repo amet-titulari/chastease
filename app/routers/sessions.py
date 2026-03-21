@@ -689,16 +689,6 @@ def create_session(payload: CreateSessionRequest, request: Request, db: Session 
     llm_vision_model = payload.llm_vision_model if payload.llm_vision_model is not None else (template_session.llm_vision_model if template_session else (default_llm.vision_model if default_llm else None))
     llm_active = payload.llm_active if payload.llm_active is not None else (bool(template_session.llm_profile_active) if template_session else bool(default_llm.profile_active if default_llm else False))
     initial_roleplay_state = initialize_roleplay_state(scenario_title=prefs.get("scenario_preset"))
-    if template_session and any([
-        template_session.relationship_state_json,
-        template_session.protocol_state_json,
-        template_session.scene_state_json,
-    ]):
-        initial_roleplay_state = {
-            "relationship_state_json": template_session.relationship_state_json,
-            "protocol_state_json": template_session.protocol_state_json,
-            "scene_state_json": template_session.scene_state_json,
-        }
 
     session_obj = SessionModel(
         persona_id=persona.id,
@@ -1008,8 +998,14 @@ def consent_contract_addendum(
                 continue
             setattr(session_obj, key, value)
 
-        if session_obj.status == "active" and session_obj.lock_start is not None:
-            session_obj.lock_end = session_obj.lock_start + timedelta(seconds=session_obj.min_duration_seconds)
+        if session_obj.status == "active" and session_obj.lock_start is not None and session_obj.lock_end is not None:
+            current_duration_seconds = int((session_obj.lock_end - session_obj.lock_start).total_seconds())
+            next_duration_seconds = SessionService.clamp_active_duration_seconds(
+                current_duration_seconds=current_duration_seconds,
+                min_duration_seconds=session_obj.min_duration_seconds,
+                max_duration_seconds=session_obj.max_duration_seconds,
+            )
+            session_obj.lock_end = session_obj.lock_start + timedelta(seconds=next_duration_seconds)
 
         db.add(session_obj)
 

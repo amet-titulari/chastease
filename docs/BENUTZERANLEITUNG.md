@@ -81,7 +81,9 @@ Das Dashboard (`/`) ist deine Startseite nach dem Login.
 
 1. Klicke auf „Neue Session starten" im Dashboard oder navigiere zu `/experience`.
 2. Wähle oder bestätige die Persona-Auswahl.
-3. Wähle die Sperrdauer (zufällig oder fix).
+3. Wähle die Sperrdauer:
+   Trägst du nur eine Mindest-Freigabe ein, arbeitet die Session effektiv mit dieser festen Dauer.
+   Wenn zusätzlich eine Max-Freigabe gesetzt ist, wird die tatsächliche Laufzeit beim Vertragsstart zufällig innerhalb dieser Spanne festgelegt.
 4. In „Regeln" gelten **Standard-Penalty (Wert)** und **Max-Penalty (Wert)** immer in der gewählten **Einheit** (Minuten/Stunden/Tage).
 5. Schließe den digitalen Vertrag ab – er dokumentiert die Vereinbarungen für diese Session.
 6. Nach dem Signieren startet die Session und du gelangst zur Play-Ansicht.
@@ -254,6 +256,8 @@ Unter `/contracts` findest du alle unterzeichneten Verträge.
 Du kannst dich auf mehreren Geräten (z.B. Handy + Tablet) gleichzeitig einloggen. Beide Geräte nutzen dasselbe Session-Token und bleiben verbunden – ein neues Login meldet dich **nicht** auf anderen Geräten aus.
 
 **Empfehlung:** Nutze denselben Browser-Tab nicht auf zwei Geräten gleichzeitig, da der WebSocket-Stream pro Tab verwaltet wird.
+
+Wenn du eine abgeschlossene Session als Vorlage lädst, werden Konfiguration und LLM-Profil übernommen, aber Beziehung, Szene und Protokoll starten neu für die neue Session.
 
 ---
 

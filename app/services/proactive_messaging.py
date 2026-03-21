@@ -1,10 +1,13 @@
+import json
 from datetime import datetime, timedelta, timezone
 
 from app.config import settings
 from app.database import SessionLocal
 from app.models.message import Message
 from app.models.persona import Persona
+from app.models.player_profile import PlayerProfile
 from app.models.session import Session as SessionModel
+from app.services.roleplay_state import build_roleplay_state
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -13,19 +16,80 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-def _build_reminder(persona_name: str, session_obj: SessionModel, now: datetime) -> str:
+def _persona_opening(persona_name: str, tone: str | None, dominance: str | None) -> str:
+    tone_value = str(tone or "").strip().lower()
+    dominance_value = str(dominance or "").strip().lower()
+    if "warm" in tone_value or "soft" in dominance_value or "supportive" in dominance_value:
+        return f"{persona_name}: Ruhig bleiben."
+    if "hard" in dominance_value or "firm" in dominance_value or "strict" in tone_value:
+        return f"{persona_name}: Haltung halten."
+    return f"{persona_name}: Bleib sauber im Protokoll."
+
+
+def _build_reminder(
+    persona: Persona | None,
+    player_profile: PlayerProfile | None,
+    session_obj: SessionModel,
+    now: datetime,
+) -> str:
+    persona_name = persona.name if persona else "Keyholderin"
+    prefs: dict = {}
+    if player_profile and player_profile.preferences_json:
+        try:
+            parsed = json.loads(player_profile.preferences_json or "{}")
+            if isinstance(parsed, dict):
+                prefs = parsed
+        except Exception:
+            prefs = {}
+
+    scenario_title = str(prefs.get("scenario_preset") or "").strip() or None
+    roleplay_state = build_roleplay_state(
+        relationship_json=session_obj.relationship_state_json,
+        protocol_json=session_obj.protocol_state_json,
+        scene_json=session_obj.scene_state_json,
+        scenario_title=scenario_title,
+        active_phase=None,
+    )
+    scene = roleplay_state["scene"]
+    relationship = roleplay_state["relationship"]
+    protocol = roleplay_state["protocol"]
+    opening = _persona_opening(
+        persona_name=persona_name,
+        tone=persona.speech_style_tone if persona else None,
+        dominance=persona.speech_style_dominance if persona else None,
+    )
+    objective = str(scene.get("objective") or "Saubere Compliance halten").strip()
+    next_beat = str(scene.get("next_beat") or "Einen kurzen Status geben").strip()
+    active_rule = ""
+    rules = protocol.get("active_rules") if isinstance(protocol, dict) else []
+    if isinstance(rules, list) and rules:
+        active_rule = str(rules[0] or "").strip()
+
     if session_obj.lock_end is None:
-        return f"{persona_name}: Bleib fokussiert. Ich erwarte jetzt einen kurzen Statusbericht."
+        return (
+            f"{opening} Szene: {scene.get('title') or 'Einstimmung'}. "
+            f"Ziel bleibt: {objective}. "
+            f"{'Aktive Regel: ' + active_rule + '. ' if active_rule else ''}"
+            f"Naechster Beat: {next_beat}."
+        )
 
     remaining_seconds = int((_as_utc(session_obj.lock_end) - now).total_seconds())
     if remaining_seconds > 0:
         remaining_minutes = max(1, remaining_seconds // 60)
         return (
-            f"{persona_name}: Disziplin halten. Noch ca. {remaining_minutes} Minuten in dieser Phase. "
-            "Melde dich mit deinem aktuellen Zustand."
+            f"{opening} Noch ca. {remaining_minutes} Minuten in der Szene "
+            f"'{scene.get('title') or 'Einstimmung'}'. "
+            f"Ziel: {objective}. "
+            f"Kontrollniveau: {relationship.get('control_level') or 'strukturiert'}. "
+            f"{'Aktive Regel: ' + active_rule + '. ' if active_rule else ''}"
+            f"Melde dich kurz mit deinem Status."
         )
 
-    return f"{persona_name}: Die geplante Zeit ist erreicht. Warte auf meine naechste Anweisung."
+    return (
+        f"{opening} Die geplante Zeitmarke ist erreicht. "
+        f"Bleib in der Haltung der Szene '{scene.get('title') or 'Einstimmung'}' "
+        "und warte auf die naechste Anweisung."
+    )
 
 
 def sweep_proactive_messages_for_active_sessions() -> dict:
@@ -67,11 +131,11 @@ def sweep_proactive_messages_for_active_sessions() -> dict:
                 continue
 
             persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
-            persona_name = persona.name if persona else "Keyholderin"
+            player_profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
             reminder = Message(
                 session_id=session_obj.id,
                 role="assistant",
-                content=_build_reminder(persona_name, session_obj, now),
+                content=_build_reminder(persona, player_profile, session_obj, now),
                 message_type="proactive_reminder",
             )
             db.add(reminder)

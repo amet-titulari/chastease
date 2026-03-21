@@ -10,17 +10,20 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 
 - **KI-Keyholderin** – Anpassbare Persona mit konsistentem Charakter; Grenzen und Stil werden automatisch in den Prompt übernommen
 - **Session-Mechanik** – Zufällige Sperrdauern, Timer-Management, automatisches Session-Ende bei Timer-Ablauf
+- **Verlässlicher Session-Start** – Bei gesetzter Mindest- und Maximaldauer wird die tatsächliche Laufzeit beim Vertragsstart konsistent innerhalb dieser Spanne gewählt
 - **Bildverifikation** – Optionale Verifikation mit nummerierten Plomben direkt im Chat
 - **Aufgaben-System** – Challenges mit Belohnungen und Bestrafungen; Aktionskarten inline im Chat
 - **KI-Taskvergabe** – Chat löst via Structured Output `create_task`, `fail_task` und `add_time`-Aktionen aus
 - **Actions-Schema Hardening** – KI-Actions werden validiert/normalisiert; Fallbacks bei fehlerhaftem JSON
 - **Task-Eventlogging** – `task_reward`/`task_penalty`/`task_failed` werden als Session-Events dokumentiert
 - **Persona-Presets** – Vordefinierte Keyholder-Personas mit individuellen Charakterzügen
+- **Szenischer Roleplay-State** – Beziehung, Szene und Protokollregeln werden pro Session getrennt geführt; Vorlagen starten mit frischem State
 - **Sicherheitssystem** – Ampelsystem, Safeword, Emergency Release
 - **Safety-Override im Chat** – Gelb aktiviert Fürsorge-Modus, Rot pausiert mit deeskalierenden Antworten
 - **Hygiene-Öffnungen** – Zeitlich begrenzte Entsperrungen mit Protokollierung
 - **Benachrichtigungen** – Timer, Erinnerungen, Nachrichten der Keyholderin
 - **Web Push** – Browser-Subscriptions und Test-Dispatch über Web Push API
+- **Sichtbarer Degraded Mode** – Bei LLM-Ausfällen fällt der Chat nicht mehr still auf einen Echo-Stub zurück, sondern markiert degradierten Betrieb sichtbar
 - **Multi-Device-Login** – Bestehende Sessions bleiben erhalten; kein gegenseitiges Ausloggen
 - **Moderne Passwort-Hashes** – Passwortspeicherung via `pwdlib` mit Argon2-Backend; Legacy-SHA-256-Hashes werden beim nächsten Login migriert
 - **CSRF-Schutz für Browser-Flows** – Same-Origin-Prüfung plus CSRF-Header für mutierende Browser-Requests
