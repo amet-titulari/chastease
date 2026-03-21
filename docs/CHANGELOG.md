@@ -17,6 +17,9 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 - Auth- und CSRF-Cookies koennen jetzt ueber `CHASTEASE_COOKIE_SECURE` fuer HTTPS-nahe Setups auf `Secure` gesetzt werden.
 - Dokumentation (README, Architektur, Security) auf den aktuellen Sicherheits- und Feature-Stand synchronisiert.
+- `Don't move`-Livevorschau vereinfacht: störende Overlay-Boxen entfernt, farbiger Rahmen beibehalten, Skelett nur noch rot/grün.
+- Kontrollbild-Annotationen fuer Bewegungsverstösse lesbarer gemacht, inkl. groesserer Label-Schrift im Frontend-Fallback und serverseitig eingebrannten Bildern.
+- Spielekonfiguration entschlackt: ungenutzte Zeilen `Default Werte` und `Empfehlung` aus der modulspezifischen Schwellenwert-UI entfernt.
 
 ## [0.2.7] - 2026-03-16
 

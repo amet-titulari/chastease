@@ -86,37 +86,6 @@
   .gms-mask-row { display: flex; align-items: center; gap: 1.2rem; margin-top: 0.6rem; flex-wrap: wrap; }
   .gms-mask-thumb { max-width: 160px; max-height: 220px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #111; object-fit: contain; }
   .gms-mask-upload { display: flex; flex-direction: column; gap: 0.5rem; }
-  .gms-default-label {
-    margin: 0;
-    padding: 0.4rem 0.5rem;
-    border-radius: 8px;
-    font-size: 0.84rem;
-    font-weight: 700;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    color: #d8e6f6;
-  }
-  .gms-difficulty-hint-label {
-    margin: 0;
-    padding: 0.4rem 0.5rem;
-    border-radius: 8px;
-    font-size: 0.82rem;
-    font-weight: 700;
-    background: rgba(115, 183, 255, 0.08);
-    border: 1px solid rgba(115, 183, 255, 0.28);
-    color: #d7eaff;
-  }
-  .gms-difficulty-hint-cell {
-    margin: 0;
-    padding: 0.42rem 0.5rem;
-    border-radius: 8px;
-    border: 1px dashed rgba(152, 209, 255, 0.34);
-    background: rgba(72, 120, 168, 0.10);
-    color: #b7cee6;
-    font-size: 0.78rem;
-    line-height: 1.25;
-    text-align: center;
-  }
   .gms-preset-cell {
     display: flex;
     align-items: center;
@@ -301,15 +270,6 @@ function movementPresetFor(moduleKeyValue, level) {
   return mod[level] || mod.balanced;
 }
 
-function recommendationFor(moduleKey) {
-  const tips = {
-    posture_training: "Empfehlung: Hier zaehlt nur der Pose-Score. Deviation und Stillness sind in diesem Modul deaktiviert.",
-    dont_move: "Empfehlung: Mit Balanced starten. Strict erst nutzen, wenn Kamera, Licht und Ausschnitt wirklich stabil sind.",
-    tiptoeing: "Empfehlung: Tolerant bis Kameraausschnitt und Licht stabil sind, danach auf Balanced wechseln.",
-  };
-  return tips[moduleKey] || "Empfehlung: Mit Balanced starten und nur bei Bedarf in kleinen Schritten anpassen.";
-}
-
 function moduleFieldId(moduleKey, field) {
   return `gms-${slugKey(moduleKey)}-${field}`;
 }
@@ -485,58 +445,10 @@ function moduleCardHtml(module) {
   const slug = slugKey(key);
   const title = String(module.title || key);
   const summary = String(module.summary || "");
-  const reco = recommendationFor(key);
   const isPostureTraining = key === "posture_training";
   const poseScoreEasyDefault = defaultPoseSimilarityThreshold(key, "easy");
   const poseScoreMediumDefault = defaultPoseSimilarityThreshold(key, "medium");
   const poseScoreHardDefault = defaultPoseSimilarityThreshold(key, "hard");
-  const hintsByModule = {
-    posture_training: {
-      easy: "Einsteigerfreundlich und fehlertolerant",
-      medium: "Alltagstauglich und fokussiert",
-      hard: "Technisch sauber und streng",
-    },
-    dont_move: {
-      easy: "Stabiler Einstieg, wenig False Positives",
-      medium: "Empfohlener Alltagssweetspot",
-      hard: "Strenger, aber noch mobil tauglich",
-    },
-    tiptoeing: {
-      easy: "Fuer Setup- und Lichtphase",
-      medium: "Empfohlener Standard nach Kalibrierung",
-      hard: "Nur bei sehr stabiler Kamera sinnvoll",
-    },
-  };
-  const moduleHints = hintsByModule[key] || {
-    easy: "Sanfter Einstieg",
-    medium: "Ausgewogene Standardstufe",
-    hard: "Strikte Herausforderung",
-  };
-  const defaultRow = isPostureTraining
-    ? `
-          <p class="gms-default-label">Default Werte</p>
-          <div class="gms-preset-cell"><span class="gms-note">Nicht relevant</span></div>
-          <div class="gms-preset-cell"><span class="gms-note">Nicht relevant</span></div>
-          <div class="gms-preset-cell"><span class="gms-note">Nicht relevant</span></div>
-      `
-    : `
-          <p class="gms-default-label">Default Werte</p>
-          <div class="gms-preset-cell">
-            <button type="button" class="ghost gms-preset-btn" data-preset="tolerant" data-module-key="${key}">Tolerant</button>
-          </div>
-          <div class="gms-preset-cell">
-            <button type="button" class="ghost gms-preset-btn" data-preset="balanced" data-module-key="${key}">Balanced</button>
-          </div>
-          <div class="gms-preset-cell">
-            <button type="button" class="ghost gms-preset-btn" data-preset="strict" data-module-key="${key}">Strict</button>
-          </div>
-      `;
-  const hintRow = `
-          <p class="gms-difficulty-hint-label">Empfehlung</p>
-          <p class="gms-difficulty-hint-cell">${moduleHints.easy}</p>
-          <p class="gms-difficulty-hint-cell">${moduleHints.medium}</p>
-          <p class="gms-difficulty-hint-cell">${moduleHints.hard}</p>
-      `;
   const movementRows = isPostureTraining
     ? ""
     : `
@@ -567,15 +479,12 @@ function moduleCardHtml(module) {
     <article class="gms-module-card" data-module-key="${key}">
       <h3>${title}</h3>
       <p class="gms-module-summary">${summary}</p>
-      <p class="gms-note">${reco}</p>
       <div class="gms-matrix-wrap">
         <div class="gms-matrix">
           <div class="gms-matrix-head">Metrik</div>
           <div class="gms-matrix-head">Easy</div>
           <div class="gms-matrix-head">Medium</div>
           <div class="gms-matrix-head">Hard</div>
-          ${defaultRow}
-          ${hintRow}
 
           <p class="gms-metric-label gms-metric-score">${key === "tiptoeing" ? "Gruen-Ueberhang % (hoeher = strenger)" : "Pose-Score Minimum (%)"}<span class="gms-help" title="${key === "tiptoeing" ? "Minimaler Abstand Gruen zu Rot/Blau. Hoeherer Wert bedeutet strengere Farberkennung." : "Mindestwert fuer die Pose-Aehnlichkeit. Hoeherer Wert bedeutet strengere Erkennung."}">?</span></p>
           <input id="gms-${slug}-pose-score-easy" type="number" min="0" max="100" step="0.1" value="${poseScoreEasyDefault}" />

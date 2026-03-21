@@ -14,7 +14,7 @@ import re
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
-from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -739,6 +739,11 @@ def _annotate_movement_capture(
     radius = max(16, int(min(width, height) * (0.035 + (0.01 * normalized))))
     cross = max(26, int(radius * 1.4))
     line = max(4, int(min(width, height) * 0.008))
+    font_size = max(22, int(min(width, height) * 0.04))
+    try:
+        font = ImageFont.truetype("DejaVuSans-Bold.ttf", size=font_size)
+    except Exception:
+        font = ImageFont.load_default()
 
     draw.ellipse((px - radius, py - radius, px + radius, py + radius), fill=(255, 24, 24, 70))
     draw.ellipse((px - radius, py - radius, px + radius, py + radius), outline=(255, 36, 36, 255), width=line)
@@ -746,12 +751,17 @@ def _annotate_movement_capture(
     draw.line((px, py - cross, px, py + cross), fill=(255, 36, 36, 255), width=max(3, line - 1))
 
     label = (str(marker_label or "").strip() or "Bewegung")[:32]
-    text_w = int(len(label) * max(10, int(min(width, height) * 0.02)))
-    box_x = max(8, min(width - text_w - 26, px + radius + 10))
-    box_y = max(8, py - radius - 40)
-    box_h = 30
-    draw.rectangle((box_x, box_y, box_x + text_w + 18, box_y + box_h), fill=(0, 0, 0, 170))
-    draw.text((box_x + 9, box_y + 6), label, fill=(255, 90, 90, 255))
+    bbox = draw.textbbox((0, 0), label, font=font)
+    text_w = max(1, int(bbox[2] - bbox[0]))
+    text_h = max(1, int(bbox[3] - bbox[1]))
+    pad_x = max(12, int(font_size * 0.42))
+    pad_y = max(8, int(font_size * 0.28))
+    box_w = text_w + (pad_x * 2)
+    box_h = text_h + (pad_y * 2)
+    box_x = max(8, min(width - box_w - 8, px + radius + 10))
+    box_y = max(8, py - radius - box_h - 12)
+    draw.rectangle((box_x, box_y, box_x + box_w, box_y + box_h), fill=(0, 0, 0, 170))
+    draw.text((box_x + pad_x, box_y + pad_y - bbox[1]), label, fill=(255, 90, 90, 255), font=font)
 
     out = io.BytesIO()
     image.save(out, format="JPEG", quality=95, optimize=True)
