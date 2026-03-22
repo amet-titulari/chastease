@@ -91,24 +91,17 @@ def test_admin_secret_protects_control_actions_when_configured():
             _register_user(client, prefix="safety-admin-secret", make_admin=True)
             session_id = _create_and_sign_session(client)
 
-            blocked_traffic = client.post(
+            traffic_without_secret = client.post(
                 f"/api/sessions/{session_id}/safety/traffic-light",
                 json={"color": "yellow"},
             )
-            assert blocked_traffic.status_code == 403
+            assert traffic_without_secret.status_code == 200
 
             blocked_emergency = client.post(
                 f"/api/sessions/{session_id}/safety/emergency-release",
                 json={"reason": "Physical discomfort detected"},
             )
             assert blocked_emergency.status_code == 403
-
-            allowed_traffic = client.post(
-                f"/api/sessions/{session_id}/safety/traffic-light",
-                json={"color": "yellow"},
-                headers={"X-Admin-Secret": "safety-secret"},
-            )
-            assert allowed_traffic.status_code == 200
 
             allowed_emergency = client.post(
                 f"/api/sessions/{session_id}/safety/emergency-release",
@@ -132,7 +125,7 @@ def test_sensitive_safety_actions_require_admin_session():
             f"/api/sessions/{session_id}/safety/traffic-light",
             json={"color": "yellow"},
         )
-        assert traffic.status_code == 403
+        assert traffic.status_code == 200
 
         emergency = client.post(
             f"/api/sessions/{session_id}/safety/emergency-release",

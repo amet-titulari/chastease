@@ -24,13 +24,10 @@ class EmergencyReleaseRequest(BaseModel):
 def traffic_light(
     session_id: int,
     payload: TrafficLightRequest,
-    _admin_user = Depends(require_admin_session_user),
-    _: None = Depends(verify_admin_secret),
+    request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session_obj = get_owned_session(request, db, session_id)
 
     if payload.color == "red" and session_obj.status == "active":
         session_obj.status = "paused"
