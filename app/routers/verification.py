@@ -43,10 +43,16 @@ def _safe_suffix(filename: str | None) -> str:
     return suffix
 
 
-def _chat_verification_filename(session_id: int, verification_id: int, filename: str | None) -> str:
+def _chat_verification_filename(
+    session_id: int,
+    verification_id: int,
+    filename: str | None,
+    linked_task_id: int | None = None,
+) -> str:
     stamp = _timestamp_slug()
     suffix = _safe_suffix(filename)
-    return f"session{session_id}-game0-run{verification_id}-{stamp}{suffix}"
+    task_part = linked_task_id if isinstance(linked_task_id, int) and linked_task_id > 0 else verification_id
+    return f"session{session_id}-chat-task{task_part}-{stamp}{suffix}"
 
 
 def _verification_image_url(image_path: str | None) -> str | None:
@@ -157,7 +163,12 @@ async def upload_verification(
 
     target_dir = Path(settings.media_dir) / "verifications" / "chat" / str(session_id)
     target_dir.mkdir(parents=True, exist_ok=True)
-    target_path = target_dir / _chat_verification_filename(session_id, verification_id, file.filename)
+    target_path = target_dir / _chat_verification_filename(
+        session_id,
+        verification_id,
+        file.filename,
+        linked_task_id=record.linked_task_id,
+    )
 
     data = await file.read()
     status, analysis = analyze_verification(

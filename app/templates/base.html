@@ -5,16 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="csrf-token" content="{{ request.state.csrf_token if request else '' }}" />
   <title>{{ title }}</title>
+  <link rel="icon" type="image/jpeg" href="/static/logo.jpg?v=20260322a" />
   <link rel="stylesheet" href="/static/css/theme.css?v=20260321" />
-  <link rel="stylesheet" href="/static/css/style.css?v=20260321b" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20260322d" />
   {% block extra_head %}{% endblock %}
 </head>
 <body>
   {% set current_path = request.url.path if request else '' %}
   {% set admin_active = current_path.startswith('/admin') or current_path in ['/personas', '/scenarios', '/inventory', '/contracts', '/history'] or current_path.startswith('/games/module-settings') or current_path.startswith('/games/postures') %}
+  {% set show_top_navigation = not (not current_user and current_path == '/') %}
   <header class="topbar">
     <div class="container">
-      <a class="brand-link" href="/"><h1 class="brand">Chastease</h1></a>
+      <a class="brand-link" href="/" aria-label="Chastease">
+        <img
+          class="brand-logo"
+          src="/static/logo.jpg?v=20260322a"
+          alt="Chastease"
+          width="30"
+          height="30"
+          style="width:30px;height:30px;max-width:30px;max-height:30px;object-fit:cover;border-radius:8px;"
+        />
+      </a>
+      {% if show_top_navigation %}
       <nav class="topnav" aria-label="Hauptnavigation">
         {% if current_user %}
           <a href="/experience" class="nav-link{% if current_path == '/experience' or current_path.startswith('/play/') %} nav-link--active{% endif %}">Chat</a>
@@ -28,15 +40,17 @@
         {% endif %}
       </nav>
       <div class="topnav-account">
-        <a href="/profile" class="nav-link nav-link--subtle{% if current_path == '/profile' or current_path.startswith('/profile/') %} nav-link--active{% endif %}">Profil</a>
         {% if current_user %}
+          <a href="/profile" class="nav-link nav-link--subtle{% if current_path == '/profile' or current_path.startswith('/profile/') %} nav-link--active{% endif %}">Profil</a>
           <form method="post" action="/auth/logout" class="topnav-logout-form">
             <button type="submit" class="topnav-logout-btn">Logout</button>
           </form>
         {% endif %}
       </div>
       <button type="button" class="topbar-menu-btn" id="topbar-menu-btn" aria-expanded="false" aria-controls="mobile-topbar-menu">Menu</button>
+      {% endif %}
     </div>
+    {% if show_top_navigation %}
     <div class="mobile-topbar-menu" id="mobile-topbar-menu" hidden>
       <nav class="mobile-topbar-links" aria-label="Mobile Hauptnavigation">
         {% if current_user %}
@@ -49,14 +63,15 @@
         {% if current_user and current_user.is_admin %}
           <a href="/admin" id="admin-menu-mobile" class="nav-link{% if admin_active %} nav-link--active{% endif %}">Admin</a>
         {% endif %}
-        <a href="/profile" class="nav-link nav-link--subtle{% if current_path == '/profile' or current_path.startswith('/profile/') %} nav-link--active{% endif %}">Profil</a>
         {% if current_user %}
+          <a href="/profile" class="nav-link nav-link--subtle{% if current_path == '/profile' or current_path.startswith('/profile/') %} nav-link--active{% endif %}">Profil</a>
           <form method="post" action="/auth/logout" class="topnav-logout-form mobile-topbar-logout">
             <button type="submit" class="topnav-logout-btn">Logout</button>
           </form>
         {% endif %}
       </nav>
     </div>
+    {% endif %}
   </header>
   <main class="container main-grid">
     {% block content %}{% endblock %}
@@ -66,18 +81,43 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
     const mobileMenuBtn = document.getElementById("topbar-menu-btn");
     const mobileMenu = document.getElementById("mobile-topbar-menu");
+    const closeMobileMenu = () => {
+      if (!mobileMenuBtn || !mobileMenu) return;
+      mobileMenu.hidden = true;
+      mobileMenuBtn.setAttribute("aria-expanded", "false");
+    };
+    const openMobileMenu = () => {
+      if (!mobileMenuBtn || !mobileMenu) return;
+      mobileMenu.hidden = false;
+      mobileMenuBtn.setAttribute("aria-expanded", "true");
+    };
+    const toggleMobileMenu = () => {
+      if (!mobileMenuBtn || !mobileMenu) return;
+      if (mobileMenu.hidden) {
+        openMobileMenu();
+      } else {
+        closeMobileMenu();
+      }
+    };
     const syncMobileMenu = () => {
       if (!mobileMenuBtn || !mobileMenu) return;
       if (window.innerWidth > 680) {
-        mobileMenu.hidden = true;
-        mobileMenuBtn.setAttribute("aria-expanded", "false");
+        closeMobileMenu();
       }
     };
-    mobileMenuBtn?.addEventListener("click", () => {
-      if (!mobileMenu) return;
-      const nextHidden = !mobileMenu.hidden;
-      mobileMenu.hidden = nextHidden;
-      mobileMenuBtn.setAttribute("aria-expanded", String(!nextHidden));
+    mobileMenuBtn?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleMobileMenu();
+    });
+    mobileMenu?.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    document.addEventListener("click", () => {
+      if (mobileMenu?.hidden) return;
+      closeMobileMenu();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeMobileMenu();
     });
     window.addEventListener("resize", syncMobileMenu);
     syncMobileMenu();

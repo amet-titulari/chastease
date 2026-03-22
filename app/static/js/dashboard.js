@@ -96,6 +96,15 @@ function dashRenderRoleplayState(roleplayState) {
   const relationship = roleplayState?.relationship || {};
   const protocol = roleplayState?.protocol || {};
   const scene = roleplayState?.scene || {};
+  const growthBaseline = {
+    trust: 55,
+    obedience: 50,
+    resistance: 20,
+    favor: 40,
+    strictness: 68,
+    frustration: 18,
+    attachment: 46,
+  };
 
   dashSetText("dash-scene-pressure", scene.pressure || "—");
   dashSetText("dash-scene-title", scene.title || "Einstimmung");
@@ -106,23 +115,60 @@ function dashRenderRoleplayState(roleplayState) {
 
   const meterEl = document.getElementById("dash-relationship-meters");
   if (meterEl) {
-    const metric = (label, value) => {
+    const nextPhase = (score, key) => {
+      const safe = Math.max(0, Math.min(100, Number(score) || 0));
+      if (key === "resistance") {
+        const targets = [15, 10, 5, 0];
+        const target = targets.find((item) => safe > item);
+        if (target == null) return { label: "Naechste Phase: erreicht", target: null };
+        return { label: `Naechste Phase: ${target} (${safe - target} Punkte weniger)`, target };
+      }
+      const targets = [60, 70, 80, 90, 100];
+      const target = targets.find((item) => safe < item);
+      if (!target) return { label: "Naechste Phase: erreicht", target: null };
+      return { label: `Naechste Phase: ${target} (${target - safe} Punkte)`, target };
+    };
+    const metric = (label, value, key) => {
       const safe = Math.max(0, Math.min(100, Number(value) || 0));
+      const baseline = Number(growthBaseline[key]);
+      const baseSafe = Math.max(0, Math.min(100, Number.isFinite(baseline) ? baseline : 0));
+      const delta = Number.isFinite(baseline) ? safe - baseline : 0;
+      const deltaText = delta > 0 ? `+${delta}` : `${delta}`;
+      const deltaClass = delta > 0 ? "is-up" : (delta < 0 ? "is-down" : "is-flat");
+      const resistanceClass = key === "resistance" ? " is-resistance" : "";
+      const phase = nextPhase(safe, key);
+      const baseWidth = Math.min(safe, baseSafe);
+      const growthWidth = Math.max(0, safe - baseSafe);
+      const targetMarker = Number.isFinite(Number(phase.target)) ? Math.max(0, Math.min(100, Number(phase.target))) : null;
       return `
         <div class="dash-meter">
           <div class="dash-meter-top">
             <span>${dashEsc(label)}</span>
             <strong>${safe}</strong>
           </div>
-          <div class="dash-meter-track"><span style="width:${safe}%"></span></div>
+          <div class="dash-meter-track">
+            <span class="dash-meter-fill dash-meter-fill--base" style="width:${baseWidth}%"></span>
+            ${growthWidth > 0 ? `<span class="dash-meter-fill dash-meter-fill--growth" style="left:${baseWidth}%;width:${growthWidth}%"></span>` : ""}
+            ${targetMarker != null ? `<span class="dash-meter-target" style="left:${targetMarker}%"></span>` : ""}
+          </div>
+          <div class="dash-meter-meta">
+            <span class="dash-meter-delta ${deltaClass}${resistanceClass}">Seit Start: ${deltaText}</span>
+            <span class="dash-meter-phase">${dashEsc(phase.label)}</span>
+          </div>
         </div>
       `;
     };
+    const metricDefs = [
+      ["Trust", "trust"],
+      ["Obedience", "obedience"],
+      ["Resistance", "resistance"],
+      ["Favor", "favor"],
+      ["Strictness", "strictness"],
+      ["Frustration", "frustration"],
+      ["Attachment", "attachment"],
+    ];
     meterEl.innerHTML = [
-      metric("Trust", relationship.trust),
-      metric("Obedience", relationship.obedience),
-      metric("Strictness", relationship.strictness),
-      metric("Resistance", relationship.resistance),
+      ...metricDefs.map(([label, key]) => metric(label, relationship[key], key)),
     ].join("");
   }
 
@@ -445,4 +491,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await dashLoadSessionState();
   await dashLoadHygieneQuota();
   await dashLoadRunHistory();
+  setInterval(() => {
+    dashLoadSessionState().catch(() => {});
+  }, 8000);
 });

@@ -3,7 +3,7 @@
   class="profile-session-section"
   id="profile-session-section"
   hx-get="/profile/partials/session-summary"
-  hx-trigger="load, every 30s"
+  hx-trigger="every 30s"
   hx-swap="outerHTML"
 >
   <div class="profile-session-head">
@@ -16,7 +16,7 @@
         type="button"
         class="ghost"
         hx-get="/profile/partials/session-summary"
-        hx-target="#profile-session-section"
+        hx-target="closest .profile-session-section"
         hx-swap="outerHTML"
       >
         Aktualisieren

@@ -313,7 +313,14 @@ body:has(.play-shell) main.container {
   color: rgba(245, 235, 224, 0.8);
 }
 
+.roleplay-meter-top strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .roleplay-meter-track {
+  position: relative;
   height: 7px;
   margin-top: 0.24rem;
   background: rgba(255, 255, 255, 0.06);
@@ -321,11 +328,62 @@ body:has(.play-shell) main.container {
   overflow: hidden;
 }
 
-.roleplay-meter-track span {
+.roleplay-meter-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
   display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #bc8e59, #d8b98c);
+  border-radius: 999px;
+  z-index: 1;
+}
+
+.roleplay-meter-fill--base {
+  background: linear-gradient(90deg, #3a6f9f, #6ea3c5);
+}
+
+.roleplay-meter-fill--growth {
+  background: linear-gradient(90deg, #2d915f, #83e3b6);
+}
+
+.roleplay-meter-target {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 999px;
+  background: rgba(220, 228, 236, 0.78);
+  box-shadow: 0 0 0 1px rgba(220, 228, 236, 0.24);
+  z-index: 2;
+}
+
+.roleplay-meter-meta {
+  margin-top: 0.2rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.68rem;
+}
+
+.roleplay-meter-delta.is-up {
+  color: #83e3b6;
+}
+
+.roleplay-meter-delta.is-down {
+  color: #e59898;
+}
+
+.roleplay-meter-delta.is-resistance {
+  color: #e59898;
+}
+
+.roleplay-meter-delta.is-flat {
+  color: #9fb4c8;
+}
+
+.roleplay-meter-phase {
+  color: #9fb4c8;
 }
 
 .roleplay-list-block + .roleplay-list-block {

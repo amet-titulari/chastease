@@ -3,6 +3,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 import re
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
@@ -116,6 +117,15 @@ _ASSISTANT_TASK_MARKERS = (
     "heutige pflicht",
 )
 _VERIFICATION_MARKERS = ("verifizierung", "verification", "foto", "bild", "beweis", "nachweis")
+_RELATIONSHIP_SCORE_KEYS = (
+    "trust",
+    "obedience",
+    "resistance",
+    "favor",
+    "strictness",
+    "frustration",
+    "attachment",
+)
 
 
 def _infer_task_action_from_reply(reply_text: str) -> dict | None:
@@ -173,6 +183,42 @@ def _infer_task_action_from_reply(reply_text: str) -> dict | None:
             if criteria:
                 action["verification_criteria"] = criteria[:500]
     return action
+
+
+def _clamp_score(value: int) -> int:
+    return max(0, min(100, int(value)))
+
+
+def _infer_roleplay_update_from_reply(reply_text: str, current_relationship: dict[str, Any] | None = None) -> dict | None:
+    text = str(reply_text or "").strip()
+    if not text:
+        return None
+    current = current_relationship or {}
+    patch: dict[str, Any] = {}
+
+    # Absolute score claims, e.g. "trust=67" or "obedience: 60"
+    for key in _RELATIONSHIP_SCORE_KEYS:
+        match = re.search(rf"\b{key}\b\s*[:=]\s*(-?\d{{1,3}})\b", text, flags=re.IGNORECASE)
+        if match:
+            patch[key] = _clamp_score(int(match.group(1)))
+
+    # Relative score claims, e.g. "trust +5" when no absolute score is present
+    for key in _RELATIONSHIP_SCORE_KEYS:
+        if key in patch:
+            continue
+        match = re.search(rf"\b{key}\b\s*(?:\(|\[)?\s*([+-]\d{{1,2}})\s*(?:\)|\])?", text, flags=re.IGNORECASE)
+        if not match:
+            continue
+        base = current.get(key)
+        try:
+            base_int = int(base)
+        except (TypeError, ValueError):
+            continue
+        patch[key] = _clamp_score(base_int + int(match.group(1)))
+
+    if not patch:
+        return None
+    return {"type": "update_roleplay_state", "relationship": patch}
 
 
 def _message_prompt_templates(row: Message) -> list[str]:
@@ -454,9 +500,27 @@ def _persist_chat_turn(
         not structured.degraded
         and not any(isinstance(action, dict) and action.get("type") == "create_task" for action in actions)
     ):
-        inferred_task = _infer_task_action_from_reply(reply_text)
+        try:
+            inferred_task = _infer_task_action_from_reply(reply_text)
+        except Exception:
+            logger.exception("Failed to infer task action from reply text")
+            inferred_task = None
         if inferred_task is not None:
             actions.append(inferred_task)
+    if (
+        not structured.degraded
+        and not any(isinstance(action, dict) and action.get("type") == "update_roleplay_state" for action in actions)
+    ):
+        try:
+            inferred_roleplay = _infer_roleplay_update_from_reply(
+                reply_text,
+                current_relationship=roleplay_state.get("relationship"),
+            )
+        except Exception:
+            logger.exception("Failed to infer roleplay update from reply text")
+            inferred_roleplay = None
+        if inferred_roleplay is not None:
+            actions.append(inferred_roleplay)
     if reply_text == structured.message:
         for action in actions:
             if not isinstance(action, dict):
@@ -669,6 +733,38 @@ def _persist_chat_turn(
     return assistant_msg
 
 
+def _persist_error_fallback_turn(
+    db: Session,
+    session_id: int,
+    user_text: str,
+    session_obj: SessionModel,
+    reason: str | None = None,
+) -> Message:
+    persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
+    persona_name = persona.name if persona and persona.name else "Keyholderin"
+    reply_text = (
+        f"{persona_name}: Der Leitkanal hatte gerade einen internen Fehler. "
+        "Deine Nachricht ist angekommen. Bitte sende sie in ein paar Sekunden erneut."
+    )
+    user_msg = Message(session_id=session_id, role="user", content=user_text, message_type="chat")
+    assistant_msg = Message(session_id=session_id, role="assistant", content=reply_text, message_type="chat")
+    warning_msg = Message(
+        session_id=session_id,
+        role="system",
+        content=(
+            "Interner Chat-Fehler abgefangen. "
+            f"Grund: {(reason or 'unknown')[:240]}"
+        ),
+        message_type="system_warning",
+    )
+    db.add(user_msg)
+    db.add(assistant_msg)
+    db.add(warning_msg)
+    db.commit()
+    db.refresh(assistant_msg)
+    return assistant_msg
+
+
 def _latest_assistant_message_id(db: Session, session_id: int) -> int:
     row = (
         db.query(Message)
@@ -709,7 +805,9 @@ async def _push_new_assistant_messages(
     return last_sent_assistant_id
 
 
-def _as_utc(value: datetime) -> datetime:
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
@@ -720,8 +818,8 @@ def _timer_snapshot(session_obj: SessionModel, now: datetime) -> tuple[int, bool
         return 0, bool(session_obj.timer_frozen)
     anchor = now
     if session_obj.timer_frozen and session_obj.freeze_start is not None:
-        anchor = _as_utc(session_obj.freeze_start)
-    remaining = max(0, int((_as_utc(session_obj.lock_end) - anchor).total_seconds()))
+        anchor = _as_utc(session_obj.freeze_start) or now
+    remaining = max(0, int(((_as_utc(session_obj.lock_end) or now) - anchor).total_seconds()))
     return remaining, bool(session_obj.timer_frozen)
 
 
@@ -754,7 +852,17 @@ def list_messages(session_id: int, request: Request, db: Session = Depends(get_d
 @router.post("/{session_id}/messages")
 def send_message(session_id: int, payload: SendMessageRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     session_obj = get_owned_session(request, db, session_id)
-    assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=payload.content, session_obj=session_obj)
+    try:
+        assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=payload.content, session_obj=session_obj)
+    except Exception as exc:
+        logger.exception("send_message failed for session_id=%s", session_id)
+        assistant_msg = _persist_error_fallback_turn(
+            db=db,
+            session_id=session_id,
+            user_text=payload.content,
+            session_obj=session_obj,
+            reason=str(exc),
+        )
     return {
         "session_id": session_id,
         "reply": assistant_msg.content,
@@ -859,14 +967,24 @@ async def send_message_with_media(
             if result.error:
                 audio_note += f" [Transkript nicht verfügbar: {result.error}]"
             user_text = f"{user_text}\n\n{audio_note}".strip() if user_text else audio_note
-    assistant_msg = _persist_chat_turn(
-        db=db,
-        session_id=session_id,
-        user_text=user_text,
-        image_bytes=image_bytes,
-        image_filename=image_filename,
-        session_obj=session_obj,
-    )
+    try:
+        assistant_msg = _persist_chat_turn(
+            db=db,
+            session_id=session_id,
+            user_text=user_text,
+            image_bytes=image_bytes,
+            image_filename=image_filename,
+            session_obj=session_obj,
+        )
+    except Exception as exc:
+        logger.exception("send_message_with_media failed for session_id=%s", session_id)
+        assistant_msg = _persist_error_fallback_turn(
+            db=db,
+            session_id=session_id,
+            user_text=user_text,
+            session_obj=session_obj,
+            reason=str(exc),
+        )
     response_message_type = "chat"
     if media_kind == "image":
         response_message_type = "chat_image"
@@ -918,7 +1036,17 @@ def regenerate_last_message(
             raise HTTPException(status_code=400, detail="No user message available for regeneration")
         user_text = row.content
 
-    assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=user_text, session_obj=session_obj)
+    try:
+        assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=user_text, session_obj=session_obj)
+    except Exception as exc:
+        logger.exception("regenerate_last_message failed for session_id=%s", session_id)
+        assistant_msg = _persist_error_fallback_turn(
+            db=db,
+            session_id=session_id,
+            user_text=user_text,
+            session_obj=session_obj,
+            reason=str(exc),
+        )
     assistant_msg.message_type = "chat_regenerated"
     db.commit()
     db.refresh(assistant_msg)

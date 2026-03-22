@@ -236,7 +236,14 @@ body:has(.dashboard-shell) main.container {
   color: #d5e3f0;
 }
 
+.dash-meter-top strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .dash-meter-track {
+  position: relative;
   height: 8px;
   margin-top: 0.24rem;
   border-radius: 999px;
@@ -244,11 +251,62 @@ body:has(.dashboard-shell) main.container {
   background: rgba(255,255,255,0.06);
 }
 
-.dash-meter-track span {
+.dash-meter-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
   display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #bc8e59, #d8b98c);
+  border-radius: 999px;
+  z-index: 1;
+}
+
+.dash-meter-fill--base {
+  background: linear-gradient(90deg, #3a6f9f, #6ea3c5);
+}
+
+.dash-meter-fill--growth {
+  background: linear-gradient(90deg, #2d915f, #83e3b6);
+}
+
+.dash-meter-target {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 999px;
+  background: rgba(220, 228, 236, 0.78);
+  box-shadow: 0 0 0 1px rgba(220, 228, 236, 0.24);
+  z-index: 2;
+}
+
+.dash-meter-meta {
+  margin-top: 0.22rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.68rem;
+}
+
+.dash-meter-delta.is-up {
+  color: #83e3b6;
+}
+
+.dash-meter-delta.is-down {
+  color: #e59898;
+}
+
+.dash-meter-delta.is-resistance {
+  color: #e59898;
+}
+
+.dash-meter-delta.is-flat {
+  color: #9fb4c8;
+}
+
+.dash-meter-phase {
+  color: #9fb4c8;
 }
 
 .dash-list-block + .dash-list-block {

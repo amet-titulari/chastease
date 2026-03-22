@@ -460,6 +460,15 @@ function plRenderRoleplayState(roleplayState) {
   const relationship = roleplayState?.relationship || {};
   const protocol = roleplayState?.protocol || {};
   const scene = roleplayState?.scene || {};
+  const growthBaseline = {
+    trust: 55,
+    obedience: 50,
+    resistance: 20,
+    favor: 40,
+    strictness: 68,
+    frustration: 18,
+    attachment: 46,
+  };
 
   const setText = (id, value, fallback = "—") => {
     const el = document.getElementById(id);
@@ -470,16 +479,47 @@ function plRenderRoleplayState(roleplayState) {
     if (!el) return;
     el.innerHTML = html || fallback;
   };
-  const metric = (label, value) => {
+  const nextPhase = (score, key) => {
+    const safe = Math.max(0, Math.min(100, Number(score) || 0));
+    if (key === "resistance") {
+      const targets = [15, 10, 5, 0];
+      const target = targets.find((item) => safe > item);
+      if (target == null) return { label: "Naechste Phase: erreicht", target: null };
+      return { label: `Naechste Phase: ${target} (${safe - target} Punkte weniger)`, target };
+    }
+    const targets = [60, 70, 80, 90, 100];
+    const target = targets.find((item) => safe < item);
+    if (!target) return { label: "Naechste Phase: erreicht", target: null };
+    return { label: `Naechste Phase: ${target} (${target - safe} Punkte)`, target };
+  };
+  const metric = (label, value, key) => {
     const num = Number(value);
     const safe = Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : 0;
+    const baseline = Number(growthBaseline[key]);
+    const baseSafe = Math.max(0, Math.min(100, Number.isFinite(baseline) ? baseline : 0));
+    const delta = Number.isFinite(baseline) ? safe - baseline : 0;
+    const deltaText = delta > 0 ? `+${delta}` : `${delta}`;
+    const deltaClass = delta > 0 ? "is-up" : (delta < 0 ? "is-down" : "is-flat");
+    const resistanceClass = key === "resistance" ? " is-resistance" : "";
+    const phase = nextPhase(safe, key);
+    const baseWidth = Math.min(safe, baseSafe);
+    const growthWidth = Math.max(0, safe - baseSafe);
+    const targetMarker = Number.isFinite(Number(phase.target)) ? Math.max(0, Math.min(100, Number(phase.target))) : null;
     return `
       <div class="roleplay-meter">
         <div class="roleplay-meter-top">
           <span>${plEscapeHtml(label)}</span>
           <strong>${safe}</strong>
         </div>
-        <div class="roleplay-meter-track"><span style="width:${safe}%"></span></div>
+        <div class="roleplay-meter-track">
+          <span class="roleplay-meter-fill roleplay-meter-fill--base" style="width:${baseWidth}%"></span>
+          ${growthWidth > 0 ? `<span class="roleplay-meter-fill roleplay-meter-fill--growth" style="left:${baseWidth}%;width:${growthWidth}%"></span>` : ""}
+          ${targetMarker != null ? `<span class="roleplay-meter-target" style="left:${targetMarker}%"></span>` : ""}
+        </div>
+        <div class="roleplay-meter-meta">
+          <span class="roleplay-meter-delta ${deltaClass}${resistanceClass}">Seit Start: ${deltaText}</span>
+          <span class="roleplay-meter-phase">${plEscapeHtml(phase.label)}</span>
+        </div>
       </div>
     `;
   };
@@ -501,11 +541,14 @@ function plRenderRoleplayState(roleplayState) {
   setHtml(
     "play-relationship-meters",
     [
-      metric("Trust", relationship.trust),
-      metric("Obedience", relationship.obedience),
-      metric("Strictness", relationship.strictness),
-      metric("Resistance", relationship.resistance),
-    ].join("")
+      ["Trust", "trust"],
+      ["Obedience", "obedience"],
+      ["Resistance", "resistance"],
+      ["Favor", "favor"],
+      ["Strictness", "strictness"],
+      ["Frustration", "frustration"],
+      ["Attachment", "attachment"],
+    ].map(([label, key]) => metric(label, relationship[key], key)).join("")
   );
   setHtml("play-active-rules", pillList(protocol.active_rules, "Keine aktiven Regeln"));
   setHtml("play-open-orders", pillList(protocol.open_orders, "Keine offenen Orders"));
@@ -862,6 +905,8 @@ async function plLoadSessionState() {
   if (!SESSION_ID) return;
   try {
     const data = await plGet(`/api/sessions/${SESSION_ID}`);
+    if (statusPillEl) statusPillEl.textContent = data.status || "—";
+    plRenderRoleplayState(data.roleplay_state || {});
   } catch (err) {
     plWrite("Fehler Roleplay-State", { error: String(err) });
   }
@@ -1308,5 +1353,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   await plListTasks();
   await plLoadVerifications();
   await plLoadHygieneQuota();
+  setInterval(() => {
+    plLoadSessionState().catch(() => {});
+  }, 8000);
   plConnectWs();
 });

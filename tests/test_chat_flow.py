@@ -5,6 +5,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.main import app
 from app.models.message import Message
+from app.models.task import Task
 from app.models.persona import Persona
 from app.models.persona_task_template import PersonaTaskTemplate
 from app.models.task import Task
@@ -385,6 +386,78 @@ def test_chat_can_update_roleplay_state(monkeypatch):
             assert "Inspection" in update_msg.content
         finally:
             db.close()
+
+
+def test_chat_infers_roleplay_update_from_reply_text(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message=(
+                    "Belohnung fliesst: trust=67 (+5), obedience=60 (+5). "
+                    "Wir bleiben fokussiert."
+                ),
+                actions=[],
+                mood="strict",
+                intensity=4,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda session_obj: _DummyAI())
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Kannst du meine Werte aktualisieren?"},
+        )
+        assert send_resp.status_code == 200
+
+        detail_resp = client.get(f"/api/sessions/{session_id}")
+        assert detail_resp.status_code == 200
+        state = detail_resp.json()["roleplay_state"]
+        assert state["relationship"]["trust"] == 67
+        assert state["relationship"]["obedience"] == 60
+
+
+def test_chat_handles_pending_tasks_without_deadline(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+            _ = kwargs
+            return AIResponse(
+                message="Verstanden.",
+                actions=[],
+                mood="strict",
+                intensity=3,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda session_obj: _DummyAI())
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        db = SessionLocal()
+        try:
+            task = Task(
+                session_id=session_id,
+                title="Task ohne Deadline",
+                description="Regression test",
+                status="pending",
+                deadline_at=None,
+            )
+            db.add(task)
+            db.commit()
+        finally:
+            db.close()
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Kurzer Status"},
+        )
+        assert send_resp.status_code == 200
 
 
 def test_chat_injects_roleplay_memory_into_ai_context(monkeypatch):

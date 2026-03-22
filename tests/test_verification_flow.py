@@ -71,7 +71,7 @@ def test_verification_upload_is_accessible_without_admin_secret():
         settings.admin_secret = previous
 
 
-def test_chat_verification_image_path_uses_session_game_run_timestamp_name():
+def test_chat_verification_image_path_uses_session_chat_task_timestamp_name():
     with TestClient(app) as client:
         session_id = _create_and_sign_session(client)
 
@@ -100,7 +100,7 @@ def test_chat_verification_image_path_uses_session_game_run_timestamp_name():
         expected_prefix = f"{Path(settings.media_dir)}/verifications/chat/{session_id}/"
         assert image_path.startswith(expected_prefix)
         filename = Path(image_path).name
-        assert filename.startswith(f"session{session_id}-game0-run{verification_id}-")
+        assert filename.startswith(f"session{session_id}-chat-task{verification_id}-")
         assert re.search(r"\d{8}-\d{4}", filename) is not None
         assert Path(image_path).is_file()
 

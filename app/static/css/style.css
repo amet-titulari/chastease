@@ -15,20 +15,24 @@
   margin: 0 auto;
   padding: 0.58rem 1rem;
   min-width: 0;
-}
-
-.brand {
-  margin: 0;
-  font-size: 1.1rem;
-  color: #e7f2fc;
-  white-space: nowrap;
-  flex-shrink: 0;
-  letter-spacing: -0.03em;
+  position: relative;
 }
 
 .brand-link {
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
   flex-shrink: 0;
+}
+
+.brand-logo {
+  display: block;
+  width: 30px !important;
+  height: 30px !important;
+  max-width: 30px !important;
+  max-height: 30px !important;
+  border-radius: 8px;
+  object-fit: cover;
 }
 
 .topbar .topnav {
@@ -256,8 +260,11 @@ code {
     align-items: center;
   }
 
-  .brand {
-    font-size: 0.92rem;
+  .brand-logo {
+    width: 28px !important;
+    height: 28px !important;
+    max-width: 28px !important;
+    max-height: 28px !important;
   }
 
   .topbar .topnav,
@@ -287,21 +294,28 @@ code {
   }
 
   .mobile-topbar-menu {
-    display: block !important;
-    padding: 0 0.55rem 0.5rem;
+    display: none !important;
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: 0.55rem;
+    width: min(250px, calc(100vw - 1.1rem));
+    padding: 0;
+    z-index: 55;
   }
 
-  .mobile-topbar-menu[hidden] {
-    display: none;
+  .mobile-topbar-menu:not([hidden]) {
+    display: block !important;
   }
 
   .mobile-topbar-links {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.42rem;
-    padding: 0.55rem;
-    border-top: 1px solid rgba(127, 163, 194, 0.12);
-    background: rgba(8, 14, 21, 0.9);
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+    padding: 0.4rem;
+    border-radius: 12px;
+    border: 1px solid rgba(127, 163, 194, 0.22);
+    background: rgba(8, 14, 21, 0.97);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
   }
 
   .mobile-topbar-links .nav-link,
@@ -309,12 +323,12 @@ code {
     width: 100%;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    min-height: 40px;
+    justify-content: flex-start;
+    min-height: 36px;
     padding: 0.42rem 0.55rem;
     font-size: 0.84rem;
     border-radius: 9px;
-    text-align: center;
+    text-align: left;
   }
 
   .mobile-topbar-links .nav-link--active::after {
@@ -358,12 +372,13 @@ code {
     max-width: 100%;
   }
 
-  .brand {
-    white-space: nowrap;
+  .mobile-topbar-links {
+    gap: 0.24rem;
   }
 
-  .mobile-topbar-links {
-    grid-template-columns: 1fr;
+  .mobile-topbar-menu {
+    right: 0.45rem;
+    width: min(236px, calc(100vw - 0.9rem));
   }
 
   .mobile-topbar-links .nav-link,
