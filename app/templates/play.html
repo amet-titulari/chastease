@@ -23,6 +23,67 @@
     <div class="play-header-right">
       <a href="/dashboard/{{ session_id }}" class="play-head-link">Dashboard</a>
 
+      <div class="play-roleplay-menu" id="play-roleplay-menu">
+        <button id="play-roleplay-toggle" class="play-roleplay-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+          <span id="play-roleplay-scene-mini" class="roleplay-mini-scene">Szene</span>
+          <span id="play-roleplay-mini-chip" class="roleplay-mini-chip">Status</span>
+        </button>
+        <div class="play-roleplay-dropdown" id="play-roleplay-dropdown" role="dialog" aria-label="Roleplay Status">
+          <section class="roleplay-card">
+            <div class="roleplay-card-head">
+              <span class="roleplay-label">Szene</span>
+              <span id="play-scene-pressure" class="roleplay-pressure">—</span>
+            </div>
+            <div id="play-scene-title" class="roleplay-scene-title">Einstimmung</div>
+            <p id="play-scene-objective" class="roleplay-scene-objective">—</p>
+            <div class="roleplay-meta-grid">
+              <div>
+                <span class="roleplay-meta-label">Naechster Beat</span>
+                <span id="play-scene-next-beat" class="roleplay-meta-value">—</span>
+              </div>
+              <div>
+                <span class="roleplay-meta-label">Letzte Konsequenz</span>
+                <span id="play-scene-consequence" class="roleplay-meta-value">keine</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="roleplay-card">
+            <div class="roleplay-card-head">
+              <span class="roleplay-label">Beziehung</span>
+              <span id="play-control-level" class="roleplay-chip">structured</span>
+            </div>
+            <div id="play-relationship-meters" class="roleplay-meter-list"></div>
+          </section>
+
+          <section class="roleplay-card">
+            <div class="roleplay-list-block">
+              <span class="roleplay-label">Aktive Regeln</span>
+              <div id="play-active-rules" class="roleplay-pill-list"></div>
+            </div>
+            <div class="roleplay-list-block">
+              <span class="roleplay-label">Offene Anweisungen</span>
+              <div id="play-open-orders" class="roleplay-pill-list"></div>
+            </div>
+            <div class="roleplay-list-block">
+              <span class="roleplay-label">Langzeitdynamik</span>
+              <div class="roleplay-meta-grid">
+                <div>
+                  <span class="roleplay-meta-label">Vergleichssessions</span>
+                  <span id="play-memory-count" class="roleplay-meta-value">0</span>
+                </div>
+                <div>
+                  <span class="roleplay-meta-label">Dominanter Stil</span>
+                  <span id="play-memory-control" class="roleplay-meta-value">noch offen</span>
+                </div>
+              </div>
+              <p id="play-memory-summary" class="roleplay-scene-objective">Noch keine Langzeitdynamik verfuegbar.</p>
+              <div id="play-memory-highlights" class="roleplay-pill-list"></div>
+            </div>
+          </section>
+        </div>
+      </div>
+
       <!-- Tasks Dropdown -->
       <div class="play-tasks-menu" id="play-tasks-menu">
         <button id="play-tasks-toggle" class="play-tasks-toggle" type="button" title="Tasks" aria-haspopup="true" aria-expanded="false">

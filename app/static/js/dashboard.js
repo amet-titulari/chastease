@@ -173,7 +173,26 @@ function dashRenderRoleplayState(roleplayState) {
   }
 
   dashPillList("dash-active-rules", protocol.active_rules, "Keine aktiven Regeln");
-  dashPillList("dash-open-orders", protocol.open_orders, "Keine offenen Orders");
+  dashPillList("dash-open-orders", protocol.open_orders, "Keine offenen Anweisungen");
+}
+
+function dashRenderRelationshipMemory(memory) {
+  const safeMemory = memory || {};
+  const sessionsConsidered = Number(safeMemory.sessions_considered || 0);
+  const highlights = Array.isArray(safeMemory.highlights) ? safeMemory.highlights.filter(Boolean) : [];
+
+  dashSetText("dash-memory-count", sessionsConsidered);
+  dashSetText("dash-memory-control", safeMemory.dominant_control_level || "noch offen");
+  dashSetText(
+    "dash-memory-summary",
+    sessionsConsidered > 0
+      ? safeMemory.summary || "Langzeitdynamik verfuegbar."
+      : "Noch keine abgeschlossenen Vergleichssessions."
+  );
+  dashSetText(
+    "dash-memory-highlights",
+    highlights.length ? highlights.join(" • ") : (sessionsConsidered > 0 ? "Noch keine markante Tendenz." : "—")
+  );
 }
 
 function dashRenderHygieneQuota(quotaData) {
@@ -249,6 +268,7 @@ async function dashLoadSummary() {
 async function dashLoadSessionState() {
   const data = await dashGet(`/api/sessions/${DASH_SESSION_ID}`);
   if (data.roleplay_state) dashRenderRoleplayState(data.roleplay_state);
+  dashRenderRelationshipMemory(data.relationship_memory || {});
 }
 
 async function dashLoadHygieneQuota() {

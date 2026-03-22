@@ -456,7 +456,7 @@ function plFormatSpeakerName(item) {
   return "System";
 }
 
-function plRenderRoleplayState(roleplayState) {
+function plRenderRoleplayState(roleplayState, relationshipMemory = {}) {
   const relationship = roleplayState?.relationship || {};
   const protocol = roleplayState?.protocol || {};
   const scene = roleplayState?.scene || {};
@@ -551,7 +551,23 @@ function plRenderRoleplayState(roleplayState) {
     ].map(([label, key]) => metric(label, relationship[key], key)).join("")
   );
   setHtml("play-active-rules", pillList(protocol.active_rules, "Keine aktiven Regeln"));
-  setHtml("play-open-orders", pillList(protocol.open_orders, "Keine offenen Orders"));
+  setHtml("play-open-orders", pillList(protocol.open_orders, "Keine offenen Anweisungen"));
+  const sessionsConsidered = Number(relationshipMemory?.sessions_considered || 0);
+  setText("play-memory-count", sessionsConsidered);
+  setText("play-memory-control", relationshipMemory?.dominant_control_level || "noch offen");
+  setText(
+    "play-memory-summary",
+    sessionsConsidered > 0
+      ? relationshipMemory?.summary || "Langzeitdynamik verfuegbar."
+      : "Noch keine abgeschlossenen Vergleichssessions."
+  );
+  setHtml(
+    "play-memory-highlights",
+    pillList(
+      relationshipMemory?.highlights,
+      sessionsConsidered > 0 ? "Noch keine markante Tendenz" : "Keine Langzeitdaten"
+    )
+  );
 }
 
 function plRenderOperationalState(items) {
@@ -906,7 +922,7 @@ async function plLoadSessionState() {
   try {
     const data = await plGet(`/api/sessions/${SESSION_ID}`);
     if (statusPillEl) statusPillEl.textContent = data.status || "—";
-    plRenderRoleplayState(data.roleplay_state || {});
+    plRenderRoleplayState(data.roleplay_state || {}, data.relationship_memory || {});
   } catch (err) {
     plWrite("Fehler Roleplay-State", { error: String(err) });
   }
@@ -1047,6 +1063,36 @@ document.getElementById("play-resume-session")?.addEventListener("click", async 
   } catch (err) {
     plWrite("Fehler Reaktivierung", { error: String(err) });
     btn.disabled = false;
+  }
+});
+
+// -- Roleplay dropdown toggle --
+const roleplayToggle = document.getElementById("play-roleplay-toggle");
+const roleplayDropdown = document.getElementById("play-roleplay-dropdown");
+const roleplayMenu = document.getElementById("play-roleplay-menu");
+
+function closeRoleplayDropdown() {
+  roleplayDropdown?.classList.remove("is-open");
+  roleplayMenu?.classList.remove("is-open-mobile");
+  roleplayToggle?.setAttribute("aria-expanded", "false");
+}
+
+roleplayToggle?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const open = roleplayDropdown.classList.toggle("is-open");
+  if (window.innerWidth <= 820) {
+    roleplayMenu?.classList.toggle("is-open-mobile", open);
+  }
+  roleplayToggle.setAttribute("aria-expanded", String(open));
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#play-roleplay-menu")) closeRoleplayDropdown();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeRoleplayDropdown();
   }
 });
 

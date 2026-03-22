@@ -10,6 +10,7 @@ from app.models.session import Session as SessionModel
 from app.services.ai_gateway import StubAIGateway, get_ai_gateway
 from app.services.context_window import build_context_window
 from app.services.prompt_builder import build_prompt_modules
+from app.services.relationship_memory import build_relationship_memory
 from app.services.roleplay_state import build_roleplay_state
 
 
@@ -53,6 +54,7 @@ def _build_reminder(
         scenario_title=scenario_title,
         active_phase=None,
     )
+    relationship_memory = build_relationship_memory(db, session_obj)
     scene = roleplay_state["scene"]
     relationship = roleplay_state["relationship"]
     protocol = roleplay_state["protocol"]
@@ -161,6 +163,7 @@ def _build_ai_reminder(
         relationship_state=roleplay_state["relationship"],
         protocol_state=roleplay_state["protocol"],
         scene_state=roleplay_state["scene"],
+        relationship_memory=relationship_memory,
     )
 
     ai = get_ai_gateway(session_obj=session_obj)

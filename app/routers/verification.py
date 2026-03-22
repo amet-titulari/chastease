@@ -13,6 +13,7 @@ from app.models.task import Task
 from app.models.message import Message
 from app.models.verification import Verification
 from app.services.image_stamp import stamp_verification_proof
+from app.services.roleplay_progression import advance_roleplay_state_from_event
 from app.services.session_access import get_owned_session
 from app.services.task_service import TaskService
 from app.services.verification_analysis import analyze_verification
@@ -233,6 +234,19 @@ async def upload_verification(
             content=content,
             message_type="verification_result",
         ))
+
+    if status == "confirmed":
+        advance_roleplay_state_from_event(
+            db,
+            session_obj,
+            event_type="verification_confirmed",
+        )
+    elif status == "suspicious":
+        advance_roleplay_state_from_event(
+            db,
+            session_obj,
+            event_type="verification_suspicious",
+        )
 
     db.add(record)
     db.commit()

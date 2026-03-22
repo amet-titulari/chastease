@@ -50,6 +50,8 @@ Archiv der bereits erledigten Roadmap-Punkte. Die offene Planung liegt in [ROADM
 - [x] `data/`-Verzeichnis in `.gitignore`
 - [x] Client-Privacy-Baseline: kein LocalStorage, kein IndexedDB, kein Service-Worker-Cache
 - [x] Upload-Pfad für Verifikationsbilder so definieren, dass keine bewusste Galerie-Speicherung durch die App erfolgt
+- [x] HTMX/Server-Partials dort ausgerollt, wo der Pflegegewinn klar ist (Profil-Sessionübersicht, Personas, Scenarios, Inventory)
+- [x] Alpine.js fuer kleine lokale UI-Zustaende evaluiert und bewusst nicht eingefuehrt; Vanilla JS + punktuelles HTMX bleiben ausreichend
 
 Deliverable erreicht: `python -m uvicorn app.main:app` startet ohne Fehler.
 
@@ -196,6 +198,10 @@ Deliverable erreicht: MVP – vollständig funktionsfähig.
 - [x] Persistenter Roleplay-State für Relationship / Protocol / Scene eingeführt
 - [x] `update_roleplay_state`-Action für KI-seitige Session-State-Updates ergänzt
 - [x] Director-Guidance im Prompting ergänzt
+- [x] Roleplay-State wird jetzt auch ereignisgetrieben aus Task-Completion, Task-Fail/Overdue, Verifikationen und Spielberichten fortgeschrieben
+- [x] `Orders` im UI/Prompting in `Offene Anweisungen` umbenannt und klarer von formalen Tasks getrennt
+- [x] Scene-/Protocol-State im Dashboard und in der Play-Ansicht verdichtet und direkt sichtbar gemacht
+- [x] Sessionuebergreifende Beziehungsdynamik als `relationship_memory` fuer Prompting, API und UI ergaenzt
 
 ### v0.3.3 – HTMX & Backoffice-UX
 - [x] HTMX für Profil-Sessionübersicht eingeführt

@@ -17,7 +17,7 @@ Mehrere Schutzschichten greifen zusammen:
    - Wenn gesetzt: geschuetzte Endpunkte erfordern Header `X-Admin-Secret: <value>`.
 6. **Passwortspeicherung**: Neue Passwort-Hashes werden mit `pwdlib` + Argon2-Backend gespeichert; alte SHA-256-Salt-Hashes werden beim Login automatisch auf das moderne Format migriert.
 
-Fuer besonders sensible Steuer-Endpunkte gilt jetzt bewusst ein Zwei-Layer-Modell: Admin-Session ist Pflicht, das Admin-Secret bleibt optional als zusaetzlicher Hardening-Layer.
+Fuer besonders sensible Admin-Steuer-Endpunkte gilt bewusst ein Zwei-Layer-Modell: Admin-Session ist Pflicht, das Admin-Secret bleibt optional als zusaetzlicher Hardening-Layer. Owner-Aktionen wie Ampelstatus, Safeword oder Verifikations-Upload bleiben dagegen session-gescoped und benoetigen kein Admin-Secret.
 
 ## Endpoint-Matrix (Stand März 2026)
 
@@ -75,6 +75,7 @@ Hinweis: Session-bezogene Endpunkte sind auf den Session-Eigentuemer gescoped. L
 - `POST /api/sessions/{id}/hygiene/openings/{opening_id}/relock`
 
 **Safety:**
+- `POST /api/sessions/{id}/safety/traffic-light`
 - `POST /api/sessions/{id}/safety/safeword`
 - `POST /api/sessions/{id}/safety/resume`
 - `GET /api/sessions/{id}/safety/logs`
@@ -165,7 +166,6 @@ Hinweis: Session-bezogene Endpunkte sind auf den Session-Eigentuemer gescoped. L
 ### Optional geschuetzt (bei gesetztem `CHASTEASE_ADMIN_SECRET`)
 
 - `POST /api/sessions/{id}/chat/ws-token/rotate` (zusaetzlich immer Admin-Session erforderlich)
-- `POST /api/sessions/{id}/safety/traffic-light` (zusaetzlich immer Admin-Session erforderlich)
 - `POST /api/sessions/{id}/safety/emergency-release` (zusaetzlich immer Admin-Session erforderlich)
 
 `POST /api/sessions/{id}/verifications/{verification_id}/upload` ist bewusst **keine** Admin-Aktion, sondern eine Wearer-/Session-Aktion und bleibt owner-gescoped.

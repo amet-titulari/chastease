@@ -89,6 +89,7 @@ def build_prompt_modules(
     relationship_state: dict | None = None,
     protocol_state: dict | None = None,
     scene_state: dict | None = None,
+    relationship_memory: dict | None = None,
 ) -> PromptModules:
     clamped = max(1, min(5, strictness_level))
     style_directive = _STRICTNESS_STYLE[clamped]
@@ -119,6 +120,7 @@ def build_prompt_modules(
             relationship_state=relationship_state or {},
             protocol_state=protocol_state or {},
             scene_state=scene_state or {},
+            relationship_memory=relationship_memory or {},
         ),
         wearer_module=_render_prompt_template(
             "wearer_profile.jinja2",

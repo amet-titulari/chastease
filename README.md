@@ -20,6 +20,7 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Task-Eventlogging** – `task_reward`/`task_penalty`/`task_failed` werden als Session-Events dokumentiert
 - **Persona-Presets** – Vordefinierte Keyholder-Personas mit individuellen Charakterzügen
 - **Szenischer Roleplay-State** – Beziehung, Szene und Protokollregeln werden pro Session getrennt geführt; Vorlagen starten mit frischem State
+- **Beziehungsmetriken mit Progress-Overlay** – Dashboard und Play visualisieren Basiswerte, Entwicklung seit Start, naechste Phasen-Ziele und Zielmarker direkt auf der Skala
 - **Sicherheitssystem** – Ampelsystem, Safeword, Emergency Release
 - **Safety-Override im Chat** – Gelb aktiviert Fürsorge-Modus, Rot pausiert mit deeskalierenden Antworten
 - **Hygiene-Öffnungen** – Zeitlich begrenzte Entsperrungen mit Protokollierung
@@ -33,6 +34,8 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Moderne Passwort-Hashes** – Passwortspeicherung via `pwdlib` mit Argon2-Backend; Legacy-SHA-256-Hashes werden beim nächsten Login migriert
 - **CSRF-Schutz für Browser-Flows** – Same-Origin-Prüfung plus CSRF-Header für mutierende Browser-Requests
 - **Responsive UI** – Optimiert für Desktop und Mobile (100dvh, kompakte Aktionskarten)
+- **Einheitliche App-Navigation** – Gleiches Kopfmenue auf allen authentifizierten Seiten; Landing/Login bleiben bewusst reduziert
+- **App-Branding** – Logo im Header und als Favicon eingebunden
 
 ## Dokumentation
 
@@ -164,9 +167,7 @@ WebSocket Live-Feed:
 - `POST /api/sessions/{id}/chat/ws-token/rotate` erzeugt ein neues Token und invalidiert bestehende WS-Verbindungen serverseitig.
 - Optionaler Schutz: Wenn `CHASTEASE_ADMIN_SECRET` gesetzt ist, muss der Header `X-Admin-Secret` fuer Rotations-Endpunkte mitgesendet werden.
 - Der gleiche optionale Schutz gilt auch fuer sicherheitskritische Steuer-Endpunkte:
-	- `POST /api/sessions/{id}/safety/traffic-light`
 	- `POST /api/sessions/{id}/safety/emergency-release`
-	- `POST /api/sessions/{id}/verifications/{verification_id}/upload`
 
 Tests ausführen:
 
@@ -189,7 +190,7 @@ Sicherheit (Kurzfassung):
 - Browser-Mutationen werden über Same-Origin-Prüfung plus CSRF-Header abgesichert.
 - Session-nahe API-Endpunkte sind auf Session-Eigentümer gescoped; Admin-Bereiche erfordern Admin-Session.
 - WS-Token-Rotation invalidiert alte Verbindungen serverseitig.
-- Sensible Steuer-Endpunkte koennen optional mit `CHASTEASE_ADMIN_SECRET` + Header `X-Admin-Secret` zusaetzlich geschuetzt werden.
+- `safety/traffic-light` ist eine Owner-Aktion; `emergency-release` und WS-Token-Rotation bleiben Admin-Aktionen und koennen optional zusaetzlich per `CHASTEASE_ADMIN_SECRET` abgesichert werden.
 - Vollstaendige Matrix: `docs/SECURITY.md`.
 
 Operations-Hinweise:
@@ -242,6 +243,11 @@ KI-Bildanalyse fuer Verifikation:
 	- `CHASTEASE_VERIFICATION_OLLAMA_MODEL=llava`
 	- `CHASTEASE_VERIFICATION_OLLAMA_TIMEOUT_SECONDS=20`
 - Bei Fehlern/Nichterreichbarkeit des Ollama-Endpoints faellt die Analyse automatisch auf heuristische Auswertung zurueck.
+
+Verifikationsdateien:
+
+- Chat-Verifikationen werden unter `data/media/verifications/chat/<session_id>/` gespeichert.
+- Das Dateinamensschema fuer Chat-Verifikationen lautet `session<id>-chat-task<task_or_verification_id>-<timestamp>.<ext>`.
 
 ## Lizenz
 

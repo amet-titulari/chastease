@@ -33,6 +33,7 @@ from app.services.games import as_public_module_payload, get_module, list_module
 from app.services.image_stamp import stamp_game_verification_proof
 from app.services.audit_logger import audit_log
 from app.services.pose_similarity import extract_reference_landmarks_json, pose_similarity_available, score_against_reference
+from app.services.roleplay_progression import advance_roleplay_state_from_event
 from app.services.verification_analysis import analyze_verification, generate_game_run_summary
 
 router = APIRouter(prefix="/api/games", tags=["games"])
@@ -1285,6 +1286,17 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
             ),
         )
     )
+    session_obj = db.query(SessionModel).filter(SessionModel.id == run.session_id).first()
+    if session_obj is not None:
+        advance_roleplay_state_from_event(
+            db,
+            session_obj,
+            event_type="game_report",
+            passed_steps=passed,
+            failed_steps=failed,
+            miss_count=run.miss_count,
+            scheduled_steps=scheduled_total,
+        )
     db.add(run)
     return True
 

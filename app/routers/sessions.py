@@ -24,6 +24,7 @@ from app.models.task import Task
 from app.models.verification import Verification
 from app.services.contract_service import build_contract_context, build_contract_text, normalize_contract_preferences
 from app.services.pdf_export import build_simple_text_pdf
+from app.services.relationship_memory import build_relationship_memory
 from app.services.roleplay_state import build_roleplay_state, initialize_roleplay_state, serialize_roleplay_state
 from app.services.session_service import SessionService
 from app.services.audit_logger import audit_log
@@ -658,6 +659,7 @@ def get_session(session_id: int, request: Request, db: Session = Depends(get_db)
         scenario_title=prefs.get("scenario_preset"),
         active_phase=None,
     )
+    relationship_memory = build_relationship_memory(db, session_obj)
 
     return {
         "session_id": session_obj.id,
@@ -681,6 +683,7 @@ def get_session(session_id: int, request: Request, db: Session = Depends(get_db)
         "ws_auth_token": session_obj.ws_auth_token,
         "contract_signed": bool(contract and contract.signed_at),
         "roleplay_state": roleplay_state,
+        "relationship_memory": relationship_memory,
         "player_profile": {
             "id": profile.id,
             "experience_level": profile.experience_level,

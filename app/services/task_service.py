@@ -8,6 +8,7 @@ from app.models.message import Message
 from app.models.player_profile import PlayerProfile
 from app.models.session import Session as SessionModel
 from app.models.task import Task
+from app.services.roleplay_progression import advance_roleplay_state_from_event
 
 
 class TaskService:
@@ -127,6 +128,12 @@ class TaskService:
             else:
                 db.add(row)
                 changed += 1
+            advance_roleplay_state_from_event(
+                db,
+                session_obj,
+                event_type="task_overdue",
+                task_title=row.title,
+            )
             overdue_ids.append(row.id)
         if changed > 0:
             db.commit()

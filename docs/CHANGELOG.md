@@ -17,6 +17,14 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 - Auth- und CSRF-Cookies koennen jetzt ueber `CHASTEASE_COOKIE_SECURE` fuer HTTPS-nahe Setups auf `Secure` gesetzt werden.
 - Dokumentation (README, Architektur, Security) auf den aktuellen Sicherheits- und Feature-Stand synchronisiert.
+- Authentifizierte Seiten verwenden jetzt konsistent dieselbe Hauptnavigation; Landing/Login bleiben bewusst ohne volles App-Menue.
+- App-Branding vereinheitlicht: Logo im Header ersetzt den reinen Texttitel und wird auch als Favicon verwendet.
+- Dashboard- und Play-Metriken visualisieren jetzt Basiswert, Entwicklung seit Start, naechste Zielphase und Zielmarker direkt auf der Skala.
+- Resistance wird in der Fortschrittsanzeige als negative Entwicklung dargestellt; fallende Werte werden rot markiert und als `Punkte weniger` beschrieben.
+- Chat-Antworten koennen Roleplay-State-Aenderungen jetzt notfalls aus freiem Antworttext ableiten, wenn die KI keine strukturierte `update_roleplay_state`-Action mitsendet.
+- Chat-Fehler beim Nachrichtensenden werden serverseitig abgefangen und als sichtbare System-/Fallback-Antwort protokolliert statt als roher 500er im Frontend zu enden.
+- Chat-Verifikationen verwenden jetzt das Dateinamensschema `session<id>-chat-task<task_or_verification_id>-<timestamp>.<ext>`.
+- Safety-Ampel (`traffic-light`) ist jetzt eine Owner-Aktion ohne zusaetzliches Admin-Secret; nur `emergency-release` und WS-Token-Rotation bleiben Admin-geschuetzt.
 - `Don't move`-Livevorschau vereinfacht: störende Overlay-Boxen entfernt, farbiger Rahmen beibehalten, Skelett nur noch rot/grün.
 - Kontrollbild-Annotationen fuer Bewegungsverstösse lesbarer gemacht, inkl. groesserer Label-Schrift im Frontend-Fallback und serverseitig eingebrannten Bildern.
 - Spielekonfiguration entschlackt: ungenutzte Zeilen `Default Werte` und `Empfehlung` aus der modulspezifischen Schwellenwert-UI entfernt.

@@ -112,7 +112,7 @@ Offene (pending) Tasks werden bei jedem Chat-Request als Kontext-Block in den Sy
   - Verifikation läuft komplett inline (Foto-Upload → Analyse → Ergebnis-Pill).
 - **Tasks-Dropdown** im Header zeigt interaktive Action Cards (nicht read-only).
 - **Persona-Avatar** neben KI-Nachrichten (wenn Avatar in Persona hinterlegt).
-- Settings-Drawer: Session-Info, Hygiene-Öffnung, Safety-Controls, Persona-Wechsel.
+- Session-Steuerung ist zwischen Dashboard und Play verteilt: Dashboard fuer Rahmen, Hygiene, Safety und Resultate; Play fuer Chat, Tasks und schnelle Safety-Aktionen.
 
 ### Persistenz
 
@@ -133,8 +133,8 @@ Offene (pending) Tasks werden bei jedem Chat-Request als Kontext-Block in den Sy
 - Cookie-basierte Auth (`chastease_auth`, httpOnly, optional `Secure`, 30 Tage Gültigkeit).
 - Browserbasierter CSRF-Schutz ueber Same-Origin-Pruefung plus CSRF-Header fuers Fetch-Layer.
 - Session-Ownership-Scoping fuer benutzergebundene Session-APIs.
-- Optionales `CHASTEASE_ADMIN_SECRET` als Zusatzschutz fuer besonders sensible Steuer-Endpoints.
-- Geschützte Steuer-Endpunkte validieren `X-Admin-Secret`, falls gesetzt.
+- Optionales `CHASTEASE_ADMIN_SECRET` als Zusatzschutz fuer besonders sensible Admin-Steuer-Endpoints.
+- Admin-Steuer-Endpunkte wie `emergency-release` oder WS-Token-Rotation validieren `X-Admin-Secret`, falls gesetzt; Owner-Aktionen wie `traffic-light` oder Verifikations-Upload bleiben session-gescoped.
 - WebSocket-Verbindung erfordert gültiges Session-Token.
 - Einheitliches API-Fehlerformat mit `request_id` und strukturiertem Fehlerobjekt.
 - Optionaler Audit-Logger (JSON-Lines, opt-in).

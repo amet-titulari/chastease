@@ -27,7 +27,7 @@ Diese Anleitung erklärt Schritt für Schritt, wie du Chastease einrichtest und 
     - [Safeword](#safeword)
     - [Notfallentlassung](#notfallentlassung)
   - [10. Hygiene-Öffnung](#10-hygiene-öffnung)
-  - [11. Einstellungen-Drawer](#11-einstellungen-drawer)
+  - [11. Dashboard und Schnellaktionen](#11-dashboard-und-schnellaktionen)
   - [12. Session History \& Export](#12-session-history--export)
   - [13. Verträge](#13-verträge)
   - [14. Multi-Device-Nutzung](#14-multi-device-nutzung)
@@ -42,7 +42,7 @@ Diese Anleitung erklärt Schritt für Schritt, wie du Chastease einrichtest und 
 
 - **Registrieren**: Klicke auf „Registrieren", gib einen Benutzernamen (mind. 3 Zeichen) und ein Passwort (mind. 8 Zeichen) ein. Danach wirst du automatisch eingeloggt und zur Ersteinrichtung weitergeleitet.
 - **Einloggen**: Gib Benutzername und Passwort ein. Dein Session-Token bleibt 30 Tage gültig, solange du den Browser nicht schließt oder abmeldest. Du kannst dich auf mehreren Geräten gleichzeitig einloggen, ohne gegenseitig abgemeldet zu werden.
-- **Abmelden**: Im Dashboard oben rechts → „Abmelden".
+- **Abmelden**: Ueber die Kopfnavigation oben rechts → „Logout".
 
 ---
 
@@ -69,11 +69,14 @@ Klicke „Weiter" – die Einstellungen werden gespeichert und stehen der KI sof
 
 ## 3. Dashboard
 
-Das Dashboard (`/`) ist deine Startseite nach dem Login.
+Das Dashboard (`/dashboard` bzw. `/dashboard/{session_id}`) ist die zentrale Spieleroberflaeche nach dem Login.
 
-- **Aktive Session**: Falls eine Session läuft, siehst du Status und Verbleibzeit. Klicke auf „Zur Session" um zur Play-Ansicht zu wechseln.
-- **Neue Session starten**: Direkter Einstiegsbutton.
-- **Schnellübersicht**: Letzte Sessions, offene Tasks, Systemstatus.
+- **Aktive Session**: Status, verbleibende Zeit, Session-Rahmen und direkte Navigation zur Play-Ansicht.
+- **Beziehungswerte**: Trust, Obedience, Resistance, Favor, Strictness, Frustration und Attachment werden als Balken visualisiert.
+- **Fortschritt seit Start**: Der blaue Bereich zeigt den Startwert, der gruene Bereich die Entwicklung seit Session-Beginn.
+- **Naechste Phase**: Heller Marker und Text zeigen das naechste Ziel auf der Skala.
+- **Safety/Hygiene**: Ampelaktionen, Safeword, Hygiene-Kontingente und Oeffnungen sind direkt im Dashboard gebuendelt.
+- **Navigation**: Auf allen authentifizierten Seiten ist dasselbe Hauptmenue sichtbar; Landing und Login bleiben absichtlich reduziert.
 
 ---
 
@@ -122,7 +125,8 @@ Sie ist jetzt bewusst als Chat-Flaeche reduziert; Sessiondaten, Einstimmung, Saf
 - **Dashboard**: Fuehrt zur zentralen Session-Uebersicht mit Rahmen, Einstimmung und Spieler-Infos.
 - **Chat-Timeline**: Alle Nachrichten chronologisch; Aktionskarten erscheinen am Ende.
 - **Persona-Avatar**: Neben jeder KI-Nachricht wird das Avatar-Bild der aktuellen Persona angezeigt (sofern vorhanden).
-- **Betriebshinweise**: Wenn der LLM-Provider gestört ist, erscheint ein sichtiger Hinweis im Play-Screen; die Session läuft dann vorübergehend in reduziertem Modus.
+- **Betriebshinweise**: Wenn der LLM-Provider gestoert ist, erscheint ein sichtiger Hinweis im Play-Screen; die Session laeuft dann voruebergehend in reduziertem Modus.
+- **Navigation**: Die obere App-Navigation bleibt auf Play, Dashboard, Vertrag, Profil und weiteren authentifizierten Seiten konsistent.
 
 ---
 
@@ -193,16 +197,16 @@ Die Bildverifikation wird genutzt, wenn die Keyholderin eine nummerierte Plombe 
 4. Lade das Bild hoch – die KI analysiert es automatisch.
 5. Das Ergebnis (Bestätigt / Abgelehnt) erscheint in der Karte und als Chat-Systemmeldung.
 
-**Hinweis:** Bilder werden nur auf dem Server gespeichert, nicht im Browser-Cache oder der Galerie.
+**Hinweis:** Bilder werden nur auf dem Server gespeichert, nicht im Browser-Cache oder der Galerie. Chat-Verifikationen erhalten Dateinamen nach dem Schema `session<id>-chat-task<task_id>-<timestamp>.<ext>`.
 
 ---
 
 ## 9. Sicherheitssystem (Ampel, Safeword, Notfall)
 
-Das Sicherheitssystem ist jederzeit verfügbar und überschreibt immer den normalen Session-Ablauf.
+Das Sicherheitssystem ist jederzeit verfuegbar und ueberschreibt immer den normalen Session-Ablauf.
 
 ### Ampelsystem
-Drücke im Einstellungen-Drawer (⚙) oder über die schnellen Ampel-Buttons:
+Druecke im Dashboard oder in der Play-Ansicht ueber die schnellen Ampel-Buttons:
 
 | Farbe | Bedeutung | KI-Reaktion |
 |---|---|---|
@@ -211,10 +215,10 @@ Drücke im Einstellungen-Drawer (⚙) oder über die schnellen Ampel-Buttons:
 | 🔴 **Rot** | Stopp – sofortiger Rückzug | Session pausiert; KI deeskaliert aktiv |
 
 ### Safeword
-Im Drawer → „Safeword ausrufen". Die Session wird sofort in den roten Modus versetzt und protokolliert.
+Ueber den Safeword-Button. Die Session wird sofort in den roten Modus versetzt und protokolliert.
 
 ### Notfallentlassung
-Im Drawer → „Notfall-Entsperren". Beendet die Session sofort und erstellt einen vollständigen Safety-Log-Eintrag. Dieser Schritt ist **irreversibel**.
+Ueber die Notfallaktion im geschuetzten Bereich. Beendet die Session sofort und erstellt einen vollstaendigen Safety-Log-Eintrag. Dieser Schritt ist **irreversibel**.
 
 ---
 
@@ -222,23 +226,20 @@ Im Drawer → „Notfall-Entsperren". Beendet die Session sofort und erstellt ei
 
 Eine Hygiene-Öffnung erlaubt eine zeitlich begrenzte Entsperrung für Reinigungszwecke.
 
-1. ⚙ Drawer → „Hygiene-Öffnung beantragen".
+1. Im Dashboard → „Oeffnung beantragen".
 2. Die Dauer wird aus deinem Kontingent abgezogen (konfigurierbar im Vertrag).
 3. Während der Öffnung läuft ein Countdown.
 4. Klicke „Wieder verschließen" wenn du fertig bist – oder warte bis der Timer abläuft.
 
 ---
 
-## 11. Einstellungen-Drawer
+## 11. Dashboard und Schnellaktionen
 
-Erreichbar über das ⚙-Symbol im Header oder per Swipe (mobile).
+Die fruehere Drawer-Logik ist reduziert. Relevante Session-Steuerung liegt jetzt an festen Stellen:
 
-Inhalte:
-- **Session-Info**: Aktueller Status, Sperr-Ende, Persona
-- **Hygiene-Öffnung**: Kontingent und Beantragung
-- **Ampel-Status**: Schneller Zugriff auf Gelb/Rot
-- **Safeword & Notfall**: Direkte Auslösung
-- **Persona wechseln**: Keyholderin während laufender Session anpassen
+- **Dashboard**: Session-Info, Hygiene, Safety, Beziehungswerte und Spielresultate.
+- **Play-Header**: Direkte Schnellaktionen fuer Tasks und Safety.
+- **Kopfmenue**: Einheitliche App-Navigation zwischen Chat, Dashboard, Games, Profil und Admin-Bereichen.
 
 ---
 
@@ -296,4 +297,4 @@ Wichtig:
 - Alle Daten bleiben auf deinem lokalen Server – keine Cloud, kein Tracking.
 - Verifikationsbilder werden ausschließlich im `data/media/`-Verzeichnis auf dem Server gespeichert.
 - Der Server sollte **nicht direkt ins Internet** exponiert werden. Nutze VPN (z.B. WireGuard, Tailscale) für externen Zugriff.
-- Das Admin-Secret (`CHASTEASE_ADMIN_SECRET`) in der `.env`-Datei schützt sensible Steuer-Endpunkte.
+- Das Admin-Secret (`CHASTEASE_ADMIN_SECRET`) in der `.env`-Datei schuetzt sensible Admin-Steuer-Endpunkte wie `emergency-release` oder WS-Token-Rotation; normale Owner-Aktionen wie Ampelstatus oder Verifikations-Upload bleiben ohne zusaetzlichen Secret-Header nutzbar.

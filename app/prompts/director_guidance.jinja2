@@ -24,6 +24,11 @@ trust={{ relationship_state.trust or 0 }}, obedience={{ relationship_state.obedi
 Protokoll:
 Aktive Regeln: {{ (protocol_state.active_rules or []) | join("; ") or "keine" }}.
 Gesperrte Handlungen: {{ (protocol_state.blocked_actions or []) | join("; ") or "keine" }}.
-Offene Orders: {{ (protocol_state.open_orders or []) | join("; ") or "keine" }}.
+Offene Anweisungen: {{ (protocol_state.open_orders or []) | join("; ") or "keine" }}.
 Reward-Fokus: {{ protocol_state.reward_focus or "saubere Ausfuehrung" }}.
 Konsequenz-Fokus: {{ protocol_state.consequence_focus or "engere Kontrolle" }}.
+
+Langzeitdynamik:
+Abgeschlossene Vergleichssessions: {{ relationship_memory.sessions_considered or 0 }}.
+Langzeitbild: {{ relationship_memory.summary or "Noch kein Verlauf." }}.
+Dominanter Kontrollstil: {{ relationship_memory.dominant_control_level or "noch offen" }}.

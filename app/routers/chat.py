@@ -25,6 +25,7 @@ from app.services.ai_gateway import get_ai_gateway
 from app.services.audit_logger import audit_log
 from app.services.context_window import build_context_window
 from app.services.prompt_builder import build_prompt_modules
+from app.services.relationship_memory import build_relationship_memory
 from app.services.roleplay_state import build_roleplay_state, merge_roleplay_state, serialize_roleplay_state, summarize_roleplay_state_changes
 from app.services.session_access import get_owned_session
 from app.services.task_template_pool import build_template_task_action, select_task_template, user_requested_task
@@ -314,6 +315,7 @@ def _persist_chat_turn(
         scenario_title=scenario_title,
         active_phase=active_phase,
     )
+    relationship_memory = build_relationship_memory(db, session_obj)
 
     context_rows = (
         db.query(Message)
@@ -332,6 +334,14 @@ def _persist_chat_turn(
         f"Orders={', '.join(roleplay_state['protocol'].get('open_orders') or []) or 'keine'}"
     )
     context_items = [{"role": "system", "content": roleplay_summary, "message_type": "roleplay_memory"}] + (context_items or [])
+    if relationship_memory.get("sessions_considered"):
+        memory_summary = (
+            "Langzeitdynamik: "
+            f"sessions={relationship_memory.get('sessions_considered')}; "
+            f"summary={relationship_memory.get('summary') or 'keine'}; "
+            f"control={relationship_memory.get('dominant_control_level') or 'offen'}"
+        )
+        context_items = [{"role": "system", "content": memory_summary, "message_type": "relationship_memory"}] + (context_items or [])
 
     now_utc = datetime.now(timezone.utc)
     now_local = now_utc.astimezone()
@@ -453,6 +463,7 @@ def _persist_chat_turn(
         relationship_state=roleplay_state["relationship"],
         protocol_state=roleplay_state["protocol"],
         scene_state=roleplay_state["scene"],
+        relationship_memory=relationship_memory,
     )
     logger.info(
         "Rendered prompt version=%s templates=%s session_id=%s",

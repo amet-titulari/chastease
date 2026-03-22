@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.message import Message
 from app.models.session import Session as SessionModel
 from app.models.task import Task
+from app.services.roleplay_progression import advance_roleplay_state_from_event
 from app.services.session_access import get_owned_session
 from app.services.task_service import TaskService
 
@@ -134,12 +135,24 @@ def update_task_status(
                 content=f"Task-Reward dokumentiert: task_id={task.id}, title='{task.title}', status=completed",
             )
         )
+        advance_roleplay_state_from_event(
+            db,
+            session_obj,
+            event_type="task_completed",
+            task_title=task.title,
+        )
     if payload.status == "failed":
         TaskService.apply_task_consequence(
             db=db,
             session_obj=session_obj,
             task=task,
             now=datetime.now(timezone.utc),
+        )
+        advance_roleplay_state_from_event(
+            db,
+            session_obj,
+            event_type="task_failed",
+            task_title=task.title,
         )
 
     db.add(task)

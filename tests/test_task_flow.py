@@ -169,3 +169,28 @@ def test_task_reward_and_penalty_events_are_logged():
         types = [item["event_type"] for item in events.json()["items"]]
         assert "task_reward" in types
         assert "task_penalty" in types
+
+
+def test_task_completion_advances_roleplay_state():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        created = client.post(
+            f"/api/sessions/{session_id}/tasks",
+            json={"title": "Morgenmeldung", "description": "Kurz und sauber melden"},
+        )
+        assert created.status_code == 200
+        task_id = created.json()["task_id"]
+
+        completed = client.post(
+            f"/api/sessions/{session_id}/tasks/{task_id}/status",
+            json={"status": "completed"},
+        )
+        assert completed.status_code == 200
+
+        session_resp = client.get(f"/api/sessions/{session_id}")
+        assert session_resp.status_code == 200
+        roleplay = session_resp.json()["roleplay_state"]
+        assert roleplay["relationship"]["trust"] == 57
+        assert roleplay["relationship"]["obedience"] == 52
+        assert "Pflichterfuellung" in roleplay["scene"]["last_consequence"]

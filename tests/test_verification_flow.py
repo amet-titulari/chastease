@@ -142,3 +142,30 @@ def test_verification_upload_stamps_required_and_detected_proof_text():
         assert "Verdacht" in captured["detected_text"]
         assert "Ist: A-9" in captured["detected_text"]
         assert "KI sagt: Plombe verdeckt." in captured["detected_text"]
+
+
+def test_confirmed_verification_advances_roleplay_state():
+    with TestClient(app) as client:
+        session_id = _create_and_sign_session(client)
+
+        request_resp = client.post(
+            f"/api/sessions/{session_id}/verifications/request",
+            json={"requested_seal_number": "A-2"},
+        )
+        assert request_resp.status_code == 200
+        verification_id = request_resp.json()["verification_id"]
+
+        upload_resp = client.post(
+            f"/api/sessions/{session_id}/verifications/{verification_id}/upload",
+            files={"file": ("proof.jpg", b"fake-image-bytes", "image/jpeg")},
+            data={"observed_seal_number": "A-2"},
+        )
+        assert upload_resp.status_code == 200
+        assert upload_resp.json()["status"] == "confirmed"
+
+        session_resp = client.get(f"/api/sessions/{session_id}")
+        assert session_resp.status_code == 200
+        roleplay = session_resp.json()["roleplay_state"]
+        assert roleplay["relationship"]["trust"] == 58
+        assert roleplay["relationship"]["obedience"] == 52
+        assert "Nachweis" in roleplay["scene"]["last_consequence"]

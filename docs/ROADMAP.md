@@ -14,22 +14,7 @@ Abgeschlossene Punkte wurden nach [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md) a
 
 ---
 
-## Offene Phasenpunkte
-
-### Phase 0: Fundament
-
-- [ ] HTMX/Server-Partials auf weitere Admin-/Backoffice-Seiten ausweiten, wenn der Pflegegewinn klar ist
-- [ ] Alpine.js nur ergänzend für kleine lokale UI-Zustände evaluieren, kein Framework-Umbau
-
----
-
 ## Backlog (Post-MVP)
-
-### v0.3.2 Roleplay Engine
-- [ ] Roleplay-State aus Games, Task-Fails und Verifikationen automatisch fortschreiben
-- [ ] Orders klar von formalen Tasks trennen und im UI konsistent benennen
-- [ ] Scene-/Protocol-State im Settings-/Session-Bereich weiter verdichten
-- [ ] Langzeit-Beziehungsdynamik zwischen Sessions modellieren
 
 ### v0.4 – Gamification
 - [ ] Achievements / Abzeichen
@@ -55,7 +40,7 @@ Abgeschlossene Punkte wurden nach [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md) a
 | Feature | Priorität | Aufwand | Zielbereich |
 | --- | --- | --- | --- |
 | Rollen-/Identity-Konzept | MUSS | Mittel | Plattformhärtung |
-| Roleplay-State / Scene Engine | MUSS | Mittel bis hoch | v0.3.2 |
+| Roleplay-State / Scene Engine | MUSS | Mittel | v0.3.2 (Rest) |
 | Rate-Limits / Abuse-Protection | MUSS | Mittel | Sicherheit |
 | Games-/Posture-API bereinigen | SOLL | Mittel | v0.3.1 |
 | HTMX für weitere Admin-Flächen | SOLL | Niedrig bis mittel | UX / Wartbarkeit |

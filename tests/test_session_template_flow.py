@@ -70,6 +70,9 @@ def test_completed_session_can_be_used_as_blueprint():
             "/api/sessions",
             json={
                 "template_session_id": template_id,
+                "persona_name": payload["persona_name"],
+                "player_nickname": payload["player_nickname"],
+                "min_duration_seconds": 300,
             },
         )
         assert cloned.status_code == 200
