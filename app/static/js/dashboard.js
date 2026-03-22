@@ -96,6 +96,8 @@ function dashRenderRoleplayState(roleplayState) {
   const relationship = roleplayState?.relationship || {};
   const protocol = roleplayState?.protocol || {};
   const scene = roleplayState?.scene || {};
+  const sceneTitleRaw = String(scene.title || "").trim();
+  const sceneHeading = sceneTitleRaw || "Einstimmung";
   const growthBaseline = {
     trust: 55,
     obedience: 50,
@@ -107,7 +109,7 @@ function dashRenderRoleplayState(roleplayState) {
   };
 
   dashSetText("dash-scene-pressure", scene.pressure || "—");
-  dashSetText("dash-scene-title", scene.title || "Einstimmung");
+  dashSetText("dash-scene-title", sceneHeading);
   dashSetText("dash-scene-objective", scene.objective || "—");
   dashSetText("dash-scene-next-beat", scene.next_beat || "—");
   dashSetText("dash-scene-consequence", scene.last_consequence || "keine");

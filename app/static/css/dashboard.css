@@ -1,5 +1,6 @@
 body:has(.dashboard-shell) main.container {
-  max-width: 100%;
+  width: 100%;
+  max-width: none;
   margin: 0;
   padding: 0.85rem;
   display: block;
@@ -123,14 +124,18 @@ body:has(.dashboard-shell) main.container {
 
 .dash-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 0.9rem;
+  align-items: stretch;
 }
 
 .dash-card {
   min-width: 0;
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
   gap: 0.75rem;
+  height: 100%;
   padding: 1rem;
   border-radius: 16px;
   border: 1px solid rgba(124, 180, 224, 0.14);
@@ -140,6 +145,30 @@ body:has(.dashboard-shell) main.container {
 
 .dash-card--wide {
   grid-column: 1 / -1;
+}
+
+.dash-card--session {
+  grid-column: span 4;
+}
+
+.dash-card--scene {
+  grid-column: span 4;
+}
+
+.dash-card--relationship {
+  grid-column: span 4;
+}
+
+.dash-card--protocol {
+  grid-column: span 4;
+}
+
+.dash-card--profile {
+  grid-column: span 7;
+}
+
+.dash-card--safety {
+  grid-column: span 5;
 }
 
 .dash-card-head {
@@ -202,6 +231,7 @@ body:has(.dashboard-shell) main.container {
   margin: 0;
   color: var(--ink);
   word-break: break-word;
+  line-height: 1.45;
 }
 
 .dash-scene-title {
@@ -339,6 +369,7 @@ body:has(.dashboard-shell) main.container {
 .dash-divider {
   height: 1px;
   background: rgba(124, 180, 224, 0.12);
+  margin: 0.15rem 0;
 }
 
 .dash-safety-grid {
@@ -502,6 +533,15 @@ body:has(.dashboard-shell) main.container {
 @media (max-width: 1100px) {
   .dash-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dash-card--session,
+  .dash-card--scene,
+  .dash-card--relationship,
+  .dash-card--protocol,
+  .dash-card--profile,
+  .dash-card--safety {
+    grid-column: auto;
   }
 }
 

@@ -460,6 +460,8 @@ function plRenderRoleplayState(roleplayState, relationshipMemory = {}) {
   const relationship = roleplayState?.relationship || {};
   const protocol = roleplayState?.protocol || {};
   const scene = roleplayState?.scene || {};
+  const sceneTitleRaw = String(scene.title || "").trim();
+  const sceneHeading = sceneTitleRaw || "Einstimmung";
   const growthBaseline = {
     trust: 55,
     obedience: 50,
@@ -530,12 +532,12 @@ function plRenderRoleplayState(roleplayState, relationshipMemory = {}) {
   };
 
   setText("play-scene-pressure", scene.pressure || "—");
-  setText("play-scene-title", scene.title || "Einstimmung");
+  setText("play-scene-title", sceneHeading);
   setText("play-scene-objective", scene.objective || "—");
   setText("play-scene-next-beat", scene.next_beat || "—");
   setText("play-scene-consequence", scene.last_consequence || "keine");
   setText("play-control-level", relationship.control_level || "structured");
-  setText("play-roleplay-scene-mini", scene.title || "Szene");
+  setText("play-roleplay-scene-mini", sceneHeading);
   setText("play-roleplay-mini-chip", relationship.control_level || scene.pressure || "Status");
 
   setHtml(

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="/static/css/dashboard.css?v=20260322e" />
+<link rel="stylesheet" href="/static/css/dashboard.css?v=20260322f" />
 {% endblock %}
 
 {% block content %}
@@ -31,7 +31,7 @@
   </section>
 
   <div class="dash-grid">
-    <section class="dash-card dash-card--table">
+    <section class="dash-card dash-card--table dash-card--session">
       <div class="dash-card-head">
         <h3>Session</h3>
       </div>
@@ -55,9 +55,9 @@
       </dl>
     </section>
 
-    <section class="dash-card dash-card--table">
+    <section class="dash-card dash-card--table dash-card--scene">
       <div class="dash-card-head">
-        <h3>Einstimmung</h3>
+        <h3>Aktuelle Szene</h3>
         <span id="dash-scene-pressure" class="dash-chip">—</span>
       </div>
       <div id="dash-scene-title" class="dash-scene-title">Wird geladen…</div>
@@ -72,6 +72,9 @@
           <span id="dash-scene-consequence" class="dash-meta-value">—</span>
         </div>
       </div>
+    </section>
+
+    <section class="dash-card dash-card--table dash-card--relationship">
       <div class="dash-card-head dash-subhead">
         <h4>Beziehung</h4>
         <span id="dash-control-level" class="dash-chip">—</span>
@@ -79,9 +82,9 @@
       <div id="dash-relationship-meters" class="dash-meter-list"></div>
     </section>
 
-    <section class="dash-card">
+    <section class="dash-card dash-card--protocol">
       <div class="dash-card-head">
-        <h3>Protokoll</h3>
+        <h3>Protokoll und Langzeitdynamik</h3>
       </div>
       <div class="dash-list-block">
         <span class="dash-label">Aktive Regeln</span>
@@ -91,12 +94,7 @@
         <span class="dash-label">Offene Anweisungen</span>
         <div id="dash-open-orders" class="dash-pill-list"></div>
       </div>
-    </section>
-
-    <section class="dash-card">
-      <div class="dash-card-head">
-        <h3>Langzeitdynamik</h3>
-      </div>
+      <div class="dash-divider"></div>
       <dl class="dash-info-grid">
         <dt>Vergleichssessions</dt><dd id="dash-memory-count">—</dd>
         <dt>Dominanter Stil</dt><dd id="dash-memory-control">—</dd>
@@ -105,7 +103,7 @@
       </dl>
     </section>
 
-    <section class="dash-card">
+    <section class="dash-card dash-card--table dash-card--profile">
       <div class="dash-card-head">
         <h3>Profil und Policy</h3>
       </div>
@@ -114,16 +112,22 @@
         <dt>Stil</dt><dd id="dash-style">—</dd>
         <dt>Ziel</dt><dd id="dash-goal">—</dd>
         <dt>Limits</dt><dd id="dash-boundary">—</dd>
+      </dl>
+      <div class="dash-divider"></div>
+      <dl class="dash-info-grid">
         <dt>Task-Statistik</dt><dd id="dash-task-stats">—</dd>
         <dt>Task-Strafen</dt><dd id="dash-task-penalty">—</dd>
         <dt>Hygiene-Strafen</dt><dd id="dash-hygiene-penalty">—</dd>
+      </dl>
+      <div class="dash-divider"></div>
+      <dl class="dash-info-grid">
         <dt>LLM</dt><dd id="dash-llm-provider">—</dd>
         <dt>Modell</dt><dd id="dash-llm-chat">—</dd>
         <dt>API-Key</dt><dd id="dash-llm-key">—</dd>
       </dl>
     </section>
 
-    <section class="dash-card">
+    <section class="dash-card dash-card--safety">
       <div class="dash-card-head">
         <h3>Hygiene und Safety</h3>
       </div>
