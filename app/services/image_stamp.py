@@ -2,11 +2,33 @@ from __future__ import annotations
 
 import io
 from datetime import datetime, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from app.config import settings
+
+
+_FONT_PATH_CANDIDATES = {
+    False: (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/System/Library/Fonts/Supplemental/Tahoma.ttf",
+        "/System/Library/Fonts/Supplemental/Verdana.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+    ),
+    True: (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Tahoma Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Verdana Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Black.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+    ),
+}
 
 
 def _timestamp_text(now: datetime | None = None) -> str:
@@ -30,9 +52,16 @@ def _local_timestamp_text(now: datetime | None = None) -> str:
 
 def _load_font(size: int, *, bold: bool = False):
     font_name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+    desired_size = max(12, int(size))
     try:
-        return ImageFont.truetype(font_name, size=max(12, int(size)))
+        return ImageFont.truetype(font_name, size=desired_size)
     except Exception:
+        for candidate in _FONT_PATH_CANDIDATES[bold]:
+            try:
+                if Path(candidate).exists():
+                    return ImageFont.truetype(candidate, size=desired_size)
+            except Exception:
+                continue
         return ImageFont.load_default()
 
 
@@ -110,11 +139,11 @@ def _draw_text_box(
     if not label and not value:
         return
 
-    title_font = _load_font(max(22, int(min(image_width, image_height) * 0.034)), bold=True)
-    body_font = _load_font(max(20, int(min(image_width, image_height) * 0.029)))
-    pad_x = max(16, int(image_width * 0.02))
-    pad_y = max(13, int(image_height * 0.016))
-    line_gap = max(6, int(image_height * 0.007))
+    title_font = _load_font(max(34, int(min(image_width, image_height) * 0.048)), bold=True)
+    body_font = _load_font(max(28, int(min(image_width, image_height) * 0.039)))
+    pad_x = max(20, int(image_width * 0.024))
+    pad_y = max(16, int(image_height * 0.02))
+    line_gap = max(8, int(image_height * 0.009))
     max_box_width = max(300, int(image_width * (0.48 if anchor.startswith("top") else 0.86)))
     content_max_lines = 3 if anchor.startswith("top") else 4
     content_lines = _fit_text_lines(
@@ -161,7 +190,8 @@ def _draw_text_box(
     for index, line in enumerate(lines):
         font = fonts[min(index, len(fonts) - 1)]
         fill = (255, 221, 158, 255) if index == 0 and label else (255, 255, 255, 252)
-        draw.text((x1 + pad_x, y), line, fill=(0, 0, 0, 190), font=font, stroke_width=3, stroke_fill=(0, 0, 0, 190))
+        stroke_width = max(3, int(getattr(font, "size", 18) * 0.1))
+        draw.text((x1 + pad_x, y), line, fill=(0, 0, 0, 190), font=font, stroke_width=stroke_width, stroke_fill=(0, 0, 0, 190))
         draw.text((x1 + pad_x, y), line, fill=fill, font=font)
         y += line_heights[index] + line_gap
 
