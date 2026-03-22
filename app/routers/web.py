@@ -1135,6 +1135,7 @@ def contract_view(session_id: int, request: Request, db: Session = Depends(get_d
         name="contract_view.html",
         context={
             "title": f"Vertrag – Session #{session_id}",
+            "current_user": user,
             "session_id": session_id,
             "content_text": content_text,
             "signed_at": signed_at,

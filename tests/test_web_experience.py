@@ -59,6 +59,31 @@ def test_experience_page_renders():
         assert "xp-gate-quick" in html
 
 
+def test_contract_view_uses_authenticated_main_menu():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+        created = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Menu Persona",
+                "player_nickname": "Wearer",
+                "min_duration_seconds": 300,
+                "max_duration_seconds": 900,
+            },
+        )
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+        signed = client.post(f"/api/sessions/{session_id}/sign-contract")
+        assert signed.status_code == 200
+
+        resp = client.get(f"/contract/{session_id}")
+        assert resp.status_code == 200
+        html = resp.text
+        assert ">Chat<" in html
+        assert ">Dashboard<" in html
+        assert ">Games<" in html
+
+
 def test_experience_assets_are_served():
     with TestClient(app) as client:
         js = client.get("/static/js/experience.js")
