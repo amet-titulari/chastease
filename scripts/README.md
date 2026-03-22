@@ -1,4 +1,4 @@
-# Tools
+# Scripts
 
 ## fetch_remote_volume.py
 
@@ -12,7 +12,7 @@ Features:
 ### Usage
 
 ```bash
-python tools/fetch_remote_volume.py
+python scripts/fetch_remote_volume.py
 ```
 
 Default behavior:
@@ -24,7 +24,7 @@ Default behavior:
 ### Optional arguments
 
 ```bash
-python tools/fetch_remote_volume.py \
+python scripts/fetch_remote_volume.py \
   --host 10.0.5.30 \
   --user root \
   --remote-path /var/lib/docker/volumes/chastease_chastease_data \
@@ -40,7 +40,7 @@ python tools/fetch_remote_volume.py \
 ### Only fetch the database
 
 ```bash
-python tools/fetch_remote_volume.py \
+python scripts/fetch_remote_volume.py \
   --mode db-only \
   --local-dir ./data \
   --db-filename chastease.db
@@ -49,7 +49,7 @@ python tools/fetch_remote_volume.py \
 ### Fetch all data
 
 ```bash
-python tools/fetch_remote_volume.py --mode all --local-dir ./data
+python scripts/fetch_remote_volume.py --mode all --local-dir ./data
 ```
 
 ### Backup behavior
@@ -61,13 +61,13 @@ Before overwrite:
 Disable backup if needed:
 
 ```bash
-python tools/fetch_remote_volume.py --no-backup
+python scripts/fetch_remote_volume.py --no-backup
 ```
 
 ### Dry run
 
 ```bash
-python tools/fetch_remote_volume.py --dry-run
+python scripts/fetch_remote_volume.py --dry-run
 ```
 
 ## push_remote_volume.py
@@ -82,7 +82,7 @@ Features:
 ### Usage
 
 ```bash
-python tools/push_remote_volume.py
+python scripts/push_remote_volume.py
 ```
 
 Default behavior:
@@ -93,7 +93,7 @@ Default behavior:
 ### Upload only the database
 
 ```bash
-python tools/push_remote_volume.py \
+python scripts/push_remote_volume.py \
   --mode db-only \
   --local-dir ./data \
   --db-filename chastease.db
@@ -102,19 +102,19 @@ python tools/push_remote_volume.py \
 ### Upload all local data
 
 ```bash
-python tools/push_remote_volume.py --mode all --local-dir ./data
+python scripts/push_remote_volume.py --mode all --local-dir ./data
 ```
 
 ### Create remote backup before overwrite
 
 ```bash
-python tools/push_remote_volume.py --remote-backup
+python scripts/push_remote_volume.py --remote-backup
 ```
 
 ### Dry run
 
 ```bash
-python tools/push_remote_volume.py --dry-run
+python scripts/push_remote_volume.py --dry-run
 ```
 
 ## abort_active_runs.py
@@ -125,15 +125,15 @@ wenn ein Spiel im Status `active` hängengeblieben ist.
 ### Usage
 
 ```bash
-python tools/abort_active_runs.py
+python scripts/abort_active_runs.py
 ```
 
 ### Optionale Argumente
 
 ```bash
 # Andere DB-Datei verwenden (überschreibt CHASTEASE_DATABASE_URL)
-python tools/abort_active_runs.py --db-path data/chastease.db
+python scripts/abort_active_runs.py --db-path data/chastease.db
 
 # Nur anzeigen, was beendet würde – keine Änderungen schreiben
-python tools/abort_active_runs.py --dry-run
+python scripts/abort_active_runs.py --dry-run
 ```

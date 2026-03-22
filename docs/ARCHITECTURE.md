@@ -159,7 +159,7 @@ chastease/
 │   └── versions/         # 14 Migrationen (0001–0014)
 ├── docs/
 ├── tests/                # 31 Testmodule + conftest
-├── tools/                # Remote-Volume-Skripte
+├── scripts/              # Hilfs- und Remote-Volume-Skripte
 ├── data/                 # lokal, gitignored
 ├── README.md
 └── requirements.txt

@@ -5,9 +5,9 @@ Beendet alle aktiven GameRuns in der lokalen Datenbank (chastease.db).
 Nützlich beim Testen, wenn ein Spiel im Status "active" hängengeblieben ist.
 
 Usage:
-    python tools/abort_active_runs.py
-    python tools/abort_active_runs.py --db-path data/chastease.db
-    python tools/abort_active_runs.py --dry-run
+    python scripts/abort_active_runs.py
+    python scripts/abort_active_runs.py --db-path data/chastease.db
+    python scripts/abort_active_runs.py --dry-run
 """
 import argparse
 import json
