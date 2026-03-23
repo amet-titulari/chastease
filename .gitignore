@@ -8,6 +8,7 @@ htmlcov/
 *.pyc
 .env
 data/
+data-tests/
 .DS_Store
 
 backups/

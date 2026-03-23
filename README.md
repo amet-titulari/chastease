@@ -173,6 +173,8 @@ Tests ausführen:
 
 ```bash
 python -m pytest -q
+
+Die Tests verwenden ein separates Arbeitsverzeichnis `data-tests/` fuer SQLite, Medien und Audit-Logs. Unter `data/` bleiben nur Laufzeitdaten der echten App.
 ```
 
 Fehlerformat (API):

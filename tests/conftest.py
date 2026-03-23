@@ -14,15 +14,19 @@ from pathlib import Path
 import pytest
 
 # Must be configured before importing app modules that build SQLAlchemy engine.
-TEST_DB_PATH = Path("data/chastease-test.db")
+TEST_DATA_DIR = Path("data-tests")
+TEST_DB_PATH = TEST_DATA_DIR / "chastease-test.db"
 PROD_DB_PATH = Path("data/chastease.db")
-TEST_MEDIA_DIR = Path("data/media-test")
+TEST_MEDIA_DIR = TEST_DATA_DIR / "media"
+TEST_AUDIT_LOG_PATH = TEST_DATA_DIR / "audit.log"
 
 os.environ.setdefault("CHASTEASE_DATABASE_URL", f"sqlite:///./{TEST_DB_PATH.as_posix()}")
 os.environ.setdefault("CHASTEASE_MEDIA_DIR", f"./{TEST_MEDIA_DIR.as_posix()}")
+os.environ.setdefault("CHASTEASE_AUDIT_LOG_PATH", f"./{TEST_AUDIT_LOG_PATH.as_posix()}")
+
+TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 if PROD_DB_PATH.exists() and not TEST_DB_PATH.exists():
-    TEST_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(PROD_DB_PATH, TEST_DB_PATH)
 
 from app.database import SessionLocal

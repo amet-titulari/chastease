@@ -139,12 +139,14 @@ def _draw_text_box(
     if not label and not value:
         return
 
-    title_font = _load_font(max(34, int(min(image_width, image_height) * 0.048)), bold=True)
-    body_font = _load_font(max(28, int(min(image_width, image_height) * 0.039)))
-    pad_x = max(20, int(image_width * 0.024))
-    pad_y = max(16, int(image_height * 0.02))
-    line_gap = max(8, int(image_height * 0.009))
+    scale_base = max(image_width, image_height)
+    title_font = _load_font(max(38, int(scale_base * 0.028)), bold=True)
+    body_font = _load_font(max(30, int(scale_base * 0.022)))
+    pad_x = max(20, int(scale_base * 0.015))
+    pad_y = max(16, int(scale_base * 0.012))
+    line_gap = max(8, int(scale_base * 0.006))
     max_box_width = max(300, int(image_width * (0.48 if anchor.startswith("top") else 0.86)))
+    min_box_width = max(220, int(image_width * (0.16 if anchor.startswith("top") else 0.44)))
     content_max_lines = 3 if anchor.startswith("top") else 4
     content_lines = _fit_text_lines(
         draw,
@@ -166,7 +168,7 @@ def _draw_text_box(
         text_width = max(text_width, int(bbox[2] - bbox[0]))
         line_heights.append(max(1, int(bbox[3] - bbox[1])))
 
-    box_width = min(max_box_width, text_width + (pad_x * 2))
+    box_width = min(max_box_width, max(min_box_width, text_width + (pad_x * 2)))
     box_height = sum(line_heights) + (line_gap * max(0, len(lines) - 1)) + (pad_y * 2)
 
     margin_x = max(10, int(image_width * 0.012))
@@ -184,14 +186,29 @@ def _draw_text_box(
 
     x2 = min(image_width - margin_x, x1 + box_width)
     y2 = min(image_height - margin_y, y1 + box_height)
-    draw.rounded_rectangle((x1, y1, x2, y2), radius=max(10, int(min(image_width, image_height) * 0.015)), fill=(8, 8, 8, 212))
+    radius = max(12, int(scale_base * 0.016))
+    border_width = max(2, int(scale_base * 0.002))
+    draw.rounded_rectangle(
+        (x1, y1, x2, y2),
+        radius=radius,
+        fill=(5, 5, 5, 232),
+        outline=(255, 255, 255, 72),
+        width=border_width,
+    )
 
     y = y1 + pad_y
     for index, line in enumerate(lines):
         font = fonts[min(index, len(fonts) - 1)]
         fill = (255, 221, 158, 255) if index == 0 and label else (255, 255, 255, 252)
-        stroke_width = max(3, int(getattr(font, "size", 18) * 0.1))
-        draw.text((x1 + pad_x, y), line, fill=(0, 0, 0, 190), font=font, stroke_width=stroke_width, stroke_fill=(0, 0, 0, 190))
+        stroke_width = max(3, int(getattr(font, "size", 18) * 0.14))
+        draw.text(
+            (x1 + pad_x, y),
+            line,
+            fill=(0, 0, 0, 220),
+            font=font,
+            stroke_width=stroke_width,
+            stroke_fill=(0, 0, 0, 220),
+        )
         draw.text((x1 + pad_x, y), line, fill=fill, font=font)
         y += line_heights[index] + line_gap
 
