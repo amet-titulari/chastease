@@ -4,8 +4,11 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models.message import Message
+from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
+from app.models.scenario import Scenario
 from app.models.session import Session as SessionModel
+from app.services.behavior_profile import behavior_profile_from_entities, behavior_profile_from_scenario_key, progression_profile_from_behavior
 from app.services.roleplay_state import (
     build_roleplay_state,
     merge_roleplay_state,
@@ -68,83 +71,39 @@ def _patch_for_task_event(
     current_state: dict[str, dict[str, Any]],
     *,
     event_type: str,
+    progression_profile: dict[str, Any],
     task_title: str | None = None,
 ) -> dict[str, Any] | None:
     relationship = current_state.get("relationship", {})
     protocol = current_state.get("protocol", {})
-
-    if event_type == "task_completed":
-        relationship_patch = _relationship_patch(
-            relationship,
-            {"trust": 2, "obedience": 2, "favor": 1, "resistance": -1},
-        )
-        patch: dict[str, Any] = {
-            "relationship": relationship_patch,
-            "scene": {
-                "pressure": "niedrig",
-                "last_consequence": "Saubere Pflichterfuellung wurde positiv vermerkt.",
-                "next_beat": "Naechste Anweisung setzen und die ruhige Compliance halten.",
-            },
-        }
-        next_orders = _trim_open_orders(protocol, task_title)
-        if next_orders is not None:
-            patch["protocol"] = {"open_orders": next_orders}
-        return patch
-
-    if event_type in {"task_failed", "task_overdue"}:
-        relationship_patch = _relationship_patch(
-            relationship,
-            {"trust": -2, "obedience": -3, "resistance": 2, "strictness": 2, "frustration": 2},
-        )
-        label = "Pflicht verfehlt" if event_type == "task_failed" else "Pflicht ueberfaellig"
-        patch = {
-            "relationship": relationship_patch,
-            "scene": {
-                "pressure": "mittel",
-                "last_consequence": f"{label}; Kontrolle und Nachfassen wurden verschaerft.",
-                "next_beat": "Konsequenz umsetzen und erneute Compliance pruefen.",
-            },
-        }
-        next_orders = _trim_open_orders(protocol, task_title)
-        if next_orders is not None:
-            patch["protocol"] = {"open_orders": next_orders}
-        return patch
-
-    return None
+    event_patch = ((progression_profile.get("events") or {}).get(event_type) or {}) if isinstance(progression_profile, dict) else {}
+    if not isinstance(event_patch, dict):
+        return None
+    relationship_patch = _relationship_patch(relationship, event_patch.get("relationship_deltas") or {})
+    patch: dict[str, Any] = {}
+    if relationship_patch:
+        patch["relationship"] = relationship_patch
+    if isinstance(event_patch.get("scene"), dict):
+        patch["scene"] = dict(event_patch["scene"])
+    if isinstance(event_patch.get("protocol"), dict):
+        patch["protocol"] = dict(event_patch["protocol"])
+    next_orders = _trim_open_orders(protocol, task_title)
+    if next_orders is not None:
+        patch["protocol"] = {**(patch.get("protocol") or {}), "open_orders": next_orders}
+    return patch or None
 
 
 def _patch_for_verification_event(
     current_state: dict[str, dict[str, Any]],
     *,
     status: str,
+    progression_profile: dict[str, Any],
 ) -> dict[str, Any] | None:
-    relationship = current_state.get("relationship", {})
     normalized = str(status or "").strip().lower()
-    if normalized == "confirmed":
-        return {
-            "relationship": _relationship_patch(
-                relationship,
-                {"trust": 3, "obedience": 2, "favor": 1, "resistance": -1},
-            ),
-            "scene": {
-                "pressure": "niedrig",
-                "last_consequence": "Nachweis sauber erbracht und positiv registriert.",
-                "next_beat": "Die naechste Pflicht darf auf dieser Verlaesslichkeit aufbauen.",
-            },
-        }
-    if normalized == "suspicious":
-        return {
-            "relationship": _relationship_patch(
-                relationship,
-                {"trust": -2, "obedience": -2, "resistance": 1, "strictness": 2, "frustration": 2},
-            ),
-            "scene": {
-                "pressure": "mittel",
-                "last_consequence": "Nachweis war nicht ueberzeugend; Kontrolle wurde enger.",
-                "next_beat": "Klaren Nachweis nachfordern und die Ausfuehrung enger fuehren.",
-            },
-        }
-    return None
+    event_type = "verification_confirmed" if normalized == "confirmed" else ("verification_suspicious" if normalized == "suspicious" else "")
+    if not event_type:
+        return None
+    return _patch_for_task_event(current_state, event_type=event_type, progression_profile=progression_profile, task_title=None)
 
 
 def _patch_for_game_report(
@@ -154,8 +113,8 @@ def _patch_for_game_report(
     failed_steps: int,
     miss_count: int,
     scheduled_steps: int,
+    progression_profile: dict[str, Any],
 ) -> dict[str, Any] | None:
-    relationship = current_state.get("relationship", {})
     total = max(1, int(scheduled_steps or 0))
     passed = max(0, int(passed_steps or 0))
     failed = max(0, int(failed_steps or 0))
@@ -163,56 +122,28 @@ def _patch_for_game_report(
     ratio = passed / total
 
     if ratio >= 0.8 and failed == 0 and misses <= 1:
-        return {
-            "relationship": _relationship_patch(
-                relationship,
-                {"trust": 3, "obedience": 3, "favor": 2, "resistance": -1, "attachment": 1},
-            ),
-            "scene": {
-                "pressure": "niedrig",
-                "last_consequence": "Spiel sauber gemeistert; Fuehrung und Vertrauen wurden bestaetigt.",
-                "next_beat": "Die naechste Szene kann auf dieser Disziplin aufbauen.",
-            },
-        }
+        return _patch_for_task_event(current_state, event_type="game_report_success", progression_profile=progression_profile, task_title=None)
 
     if ratio <= 0.4 or failed > passed or misses >= 3:
-        return {
-            "relationship": _relationship_patch(
-                relationship,
-                {"trust": -2, "obedience": -2, "resistance": 1, "strictness": 2, "frustration": 3},
-            ),
-            "scene": {
-                "pressure": "hoch",
-                "last_consequence": "Spiel schwach abgeschlossen; Nachschulung und engere Kontrolle stehen an.",
-                "next_beat": "Fehlerbild klar benennen und die naechste Uebung straffer fuehren.",
-            },
-        }
+        return _patch_for_task_event(current_state, event_type="game_report_failure", progression_profile=progression_profile, task_title=None)
 
-    return {
-        "relationship": _relationship_patch(
-            relationship,
-            {"trust": 1, "obedience": 1, "strictness": 1, "frustration": 1},
-        ),
-        "scene": {
-            "pressure": "mittel",
-            "last_consequence": "Spiel mit gemischtem Ergebnis; Fuehrung bleibt praesent und nachschaerfend.",
-            "next_beat": "Schwaechen nachziehen und anschliessend wieder stabile Compliance verlangen.",
-        },
-    }
+    return _patch_for_task_event(current_state, event_type="game_report_mixed", progression_profile=progression_profile, task_title=None)
 
 
 def roleplay_patch_for_event(
     current_state: dict[str, dict[str, Any]],
     *,
     event_type: str,
+    behavior_profile: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any] | None:
     normalized = str(event_type or "").strip().lower()
+    progression_profile = progression_profile_from_behavior(behavior_profile or {})
     if normalized in {"task_completed", "task_failed", "task_overdue"}:
-        return _patch_for_task_event(current_state, event_type=normalized, task_title=kwargs.get("task_title"))
+        return _patch_for_task_event(current_state, event_type=normalized, progression_profile=progression_profile, task_title=kwargs.get("task_title"))
     if normalized in {"verification_confirmed", "verification_suspicious"}:
         status = "confirmed" if normalized.endswith("confirmed") else "suspicious"
-        return _patch_for_verification_event(current_state, status=status)
+        return _patch_for_verification_event(current_state, status=status, progression_profile=progression_profile)
     if normalized == "game_report":
         return _patch_for_game_report(
             current_state,
@@ -220,8 +151,19 @@ def roleplay_patch_for_event(
             failed_steps=int(kwargs.get("failed_steps") or 0),
             miss_count=int(kwargs.get("miss_count") or 0),
             scheduled_steps=int(kwargs.get("scheduled_steps") or 0),
+            progression_profile=progression_profile,
         )
     return None
+
+
+def _behavior_profile_for_session(db: Session, session_obj: SessionModel) -> dict[str, Any]:
+    persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first() if session_obj.persona_id else None
+    scenario_title = _scenario_title_for_session(db, session_obj)
+    scenario = db.query(Scenario).filter(Scenario.key == scenario_title).first() if scenario_title else None
+    profile = behavior_profile_from_entities(persona=persona, scenario=scenario)
+    if profile:
+        return profile
+    return behavior_profile_from_scenario_key(db, scenario_title)
 
 
 def advance_roleplay_state_from_event(
@@ -233,14 +175,16 @@ def advance_roleplay_state_from_event(
     **kwargs: Any,
 ) -> bool:
     scenario_title = _scenario_title_for_session(db, session_obj)
+    behavior_profile = _behavior_profile_for_session(db, session_obj)
     current_state = build_roleplay_state(
         relationship_json=session_obj.relationship_state_json,
         protocol_json=session_obj.protocol_state_json,
         scene_json=session_obj.scene_state_json,
         scenario_title=scenario_title,
         active_phase=None,
+        behavior_profile=behavior_profile,
     )
-    patch = roleplay_patch_for_event(current_state, event_type=event_type, **kwargs)
+    patch = roleplay_patch_for_event(current_state, event_type=event_type, behavior_profile=behavior_profile, **kwargs)
     if not patch:
         return False
 
@@ -249,6 +193,7 @@ def advance_roleplay_state_from_event(
         patch=patch,
         scenario_title=scenario_title,
         active_phase=None,
+        behavior_profile=behavior_profile,
     )
     if next_state == current_state:
         return False

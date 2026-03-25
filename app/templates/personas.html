@@ -365,6 +365,11 @@
             placeholder="Der Prompt mit dem die KI als diese Persona instruiert wird."></textarea>
         </label>
 
+        <label>Behavior Profile JSON <span style="font-weight:400;font-size:0.75rem;color:#7d8da1;">(optional, advanced)</span>
+          <textarea id="pm-behavior-profile" rows="10" spellcheck="false"
+            placeholder='{"director":{"scene_visibility":"minimal"},"reminder":{"max_sentences":2}}'></textarea>
+        </label>
+
         <input type="hidden" id="pm-strictness" value="3" />
 
         <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
@@ -676,6 +681,7 @@ function pmLoadPreset(preset) {
   document.getElementById("pm-context-exposition-style").value = preset.context_exposition_style || "";
   document.getElementById("pm-description").value = preset.description || "";
   document.getElementById("pm-system-prompt").value = preset.system_prompt || "";
+  document.getElementById("pm-behavior-profile").value = preset.behavior_profile ? JSON.stringify(preset.behavior_profile, null, 2) : "";
   document.getElementById("pm-form-title").textContent = `Aus Preset: ${preset.name}`;
   document.getElementById("pm-cancel-btn").style.display = "inline-flex";
   document.getElementById("pm-preset-section").removeAttribute("open");
@@ -699,6 +705,7 @@ async function pmStartEdit(id) {
     document.getElementById("pm-context-exposition-style").value = p.context_exposition_style || "";
     document.getElementById("pm-description").value = p.description || "";
     document.getElementById("pm-system-prompt").value = p.system_prompt || "";
+    document.getElementById("pm-behavior-profile").value = p.behavior_profile ? JSON.stringify(p.behavior_profile, null, 2) : "";
     pmAvatarMediaId = p.avatar_media_id || null;
     document.getElementById("pm-avatar-media-id").value = pmAvatarMediaId ? String(pmAvatarMediaId) : "";
     pmUpdateAvatarUi(p.avatar_url || null);
@@ -751,6 +758,17 @@ document.getElementById("pm-form").addEventListener("submit", async (e) => {
     strictness_level: parseInt(document.getElementById("pm-strictness").value, 10),
     avatar_media_id: pmAvatarMediaId,
   };
+  const behaviorRaw = document.getElementById("pm-behavior-profile").value.trim();
+  if (behaviorRaw) {
+    try {
+      payload.behavior_profile = JSON.parse(behaviorRaw);
+    } catch (err) {
+      pmStatus("Behavior Profile JSON ist ungültig: " + err.message, true);
+      return;
+    }
+  } else {
+    payload.behavior_profile = {};
+  }
 
   const btn = document.getElementById("pm-save-btn");
   btn.disabled = true;
@@ -789,6 +807,7 @@ function pmResetForm() {
   document.getElementById("pm-praise-style").value = "";
   document.getElementById("pm-repetition-guard").value = "";
   document.getElementById("pm-context-exposition-style").value = "";
+  document.getElementById("pm-behavior-profile").value = "";
   document.getElementById("pm-strictness").value = "3";
   document.getElementById("pm-avatar-file").value = "";
   document.getElementById("pm-avatar-media-id").value = "";

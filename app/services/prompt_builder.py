@@ -81,6 +81,30 @@ _CONTEXT_EXPOSITION_STYLE = {
     "full": "Du darfst Kontext, Szene und Regeln aktiv sichtbar machen, aber bleibe trotzdem klar und strukturiert.",
 }
 
+_DIRECTOR_TASK_EAGERNESS = {
+    "low": "Vergib nur selten neue persistente Aufgaben von dir aus.",
+    "balanced": "Vergib neue persistente Aufgaben nur dann, wenn sie klar aus Szene oder Regelwerk folgen.",
+    "high": "Wenn eine Pflicht naheliegt, formuliere sie aktiv und persistent.",
+}
+
+_DIRECTOR_STATE_UPDATE = {
+    "low": "Nutze `update_roleplay_state` nur bei klaren, deutlichen Veraenderungen.",
+    "balanced": "Nutze `update_roleplay_state` bei merklichen Veraenderungen in Szene, Beziehung oder Protokoll.",
+    "high": "Pflege Szene, Beziehung und Protokoll aktiv nach, sobald sich der Turn spuerbar auswirkt.",
+}
+
+_DIRECTOR_CONSEQUENCE_STYLE = {
+    "soft": "Konsequenzen eher sanft, korrigierend und deeskalierend formulieren.",
+    "balanced": "Konsequenzen klar, aber proportional und strukturiert formulieren.",
+    "strict": "Konsequenzen direkt, eng fuehrend und deutlich kontrollierend formulieren.",
+}
+
+_DIRECTOR_SCENE_VISIBILITY = {
+    "minimal": "Szene und Metastruktur nur knapp sichtbar machen.",
+    "contextual": "Szene und Metastruktur nur dann sichtbar machen, wenn es im Turn hilft.",
+    "full": "Szene, Regelwerk und Spannungsbogen duerfen explizit praesent bleiben.",
+}
+
 
 def _render_prompt_template(template_name: str, **context) -> str:
     return _PROMPT_ENV.get_template(template_name).render(**context).strip()
@@ -116,6 +140,7 @@ def build_prompt_modules(
     praise_style: str | None = None,
     repetition_guard: str | None = None,
     context_exposition_style: str | None = None,
+    director_profile: dict | None = None,
     strictness_level: int = 3,
     hard_limits: list[str] | None = None,
     active_phase: dict | None = None,
@@ -134,6 +159,23 @@ def build_prompt_modules(
     context_exposition_directive = _CONTEXT_EXPOSITION_STYLE.get(
         (context_exposition_style or "contextual").strip().lower(),
         _CONTEXT_EXPOSITION_STYLE["contextual"],
+    )
+    director_profile = director_profile or {}
+    task_eagerness = _DIRECTOR_TASK_EAGERNESS.get(
+        str(director_profile.get("task_eagerness") or "balanced").strip().lower(),
+        _DIRECTOR_TASK_EAGERNESS["balanced"],
+    )
+    state_update_directive = _DIRECTOR_STATE_UPDATE.get(
+        str(director_profile.get("state_update_aggressiveness") or "balanced").strip().lower(),
+        _DIRECTOR_STATE_UPDATE["balanced"],
+    )
+    consequence_style_directive = _DIRECTOR_CONSEQUENCE_STYLE.get(
+        str(director_profile.get("consequence_style") or "balanced").strip().lower(),
+        _DIRECTOR_CONSEQUENCE_STYLE["balanced"],
+    )
+    scene_visibility_directive = _DIRECTOR_SCENE_VISIBILITY.get(
+        str(director_profile.get("scene_visibility") or "contextual").strip().lower(),
+        _DIRECTOR_SCENE_VISIBILITY["contextual"],
     )
 
     persona_template = _resolve_persona_template(persona_name)
@@ -163,6 +205,10 @@ def build_prompt_modules(
             protocol_state=protocol_state or {},
             scene_state=scene_state or {},
             relationship_memory=relationship_memory or {},
+            task_eagerness=task_eagerness,
+            state_update_directive=state_update_directive,
+            consequence_style_directive=consequence_style_directive,
+            scene_visibility_directive=scene_visibility_directive,
         ),
         wearer_module=_render_prompt_template(
             "wearer_profile.jinja2",

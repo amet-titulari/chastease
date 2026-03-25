@@ -11,6 +11,7 @@ from app.models.scenario import Scenario
 from app.security import require_admin_session_user
 from app.services.session_access import require_session_user
 from app.services.audit_logger import audit_log
+from app.services.behavior_profile import dumps_behavior_profile, parse_behavior_profile
 
 router = APIRouter(prefix="/api/scenarios", tags=["scenarios"])
 
@@ -22,6 +23,40 @@ SCENARIO_PRESETS = [
         "title": "Ametara Titulari Devotion Protocol",
         "summary": "Langfristige Chastity-Rahmung mit wärmevoller, sinnlicher Kontrolle, täglichen Ritualen, intensivem Edging/Tease & Denial, Inspektionen, Aufgaben und sehr seltenen, bedeutungsvollen Belohnungen.",
         "tags": ["ritual", "devotion", "psychological", "control", "long-term-chastity", "edging", "tease-and-denial", "chronic-denial", "orgasm-control", "progressive-frustration"],
+        "behavior_profile": {
+            "roleplay_defaults": {
+                "protocol": {
+                    "active_rules": [
+                        "Status klar, ehrlich und ohne Verzierung melden",
+                        "Rituale ruhig und vollstaendig ausfuehren",
+                    ],
+                    "reward_focus": "Saubere Hingabe, Verlaesslichkeit und ritualisierte Ausfuehrung",
+                    "consequence_focus": "Engere Fuehrung, mehr Struktur und gezielte Nachschaerfung",
+                },
+                "scene": {
+                    "next_beat": "Naechstes Ritual oder naechsten Check-in klar setzen",
+                },
+            },
+            "progression": {
+                "events": {
+                    "task_completed": {
+                        "relationship_deltas": {"trust": 2, "obedience": 2, "favor": 1},
+                    },
+                    "task_failed": {
+                        "relationship_deltas": {"trust": -2, "obedience": -2, "strictness": 1, "frustration": 1},
+                    },
+                },
+            },
+            "director": {
+                "task_eagerness": "high",
+                "state_update_aggressiveness": "balanced",
+                "consequence_style": "balanced",
+                "scene_visibility": "contextual",
+            },
+            "reminder": {
+                "max_sentences": 2,
+            },
+        },
         "phases": [
             {
                 "phase_id": "phase_1",
@@ -98,6 +133,19 @@ SCENARIO_PRESETS = [
         "title": "Devotion Protocol",
         "summary": "Taegliche Rituale, kurze Checks und klare Konsequenzstufen.",
         "tags": ["ritual", "checkin", "consistency"],
+        "behavior_profile": {
+            "roleplay_defaults": {
+                "protocol": {
+                    "active_rules": ["Taegliche Statusmeldung ist Pflicht", "Anweisungen ohne Ausfluechte ausfuehren"],
+                },
+            },
+            "director": {
+                "task_eagerness": "high",
+                "state_update_aggressiveness": "balanced",
+                "consequence_style": "balanced",
+                "scene_visibility": "contextual",
+            },
+        },
         "phases": [
             {
                 "phase_id": "daily",
@@ -113,6 +161,23 @@ SCENARIO_PRESETS = [
         "title": "Cold Structure",
         "summary": "Nuechterne, klare Anleitung mit Fokus auf Regeltreue und Reporting.",
         "tags": ["discipline", "reporting", "tasks"],
+        "behavior_profile": {
+            "roleplay_defaults": {
+                "relationship": {"strictness": 74, "control_level": "strict"},
+                "protocol": {
+                    "active_rules": ["Kurz und wahrheitsgemaess reporten", "Keine eigenmaechtigen Abweichungen"],
+                },
+            },
+            "director": {
+                "task_eagerness": "high",
+                "state_update_aggressiveness": "high",
+                "consequence_style": "strict",
+                "scene_visibility": "minimal",
+            },
+            "reminder": {
+                "max_sentences": 2,
+            },
+        },
         "phases": [
             {
                 "phase_id": "active",
@@ -128,6 +193,25 @@ SCENARIO_PRESETS = [
         "title": "Careful Progression",
         "summary": "Sanfte, schrittweise Intensitaetssteuerung mit Safety-Prioritaet.",
         "tags": ["safety", "progression", "feedback"],
+        "behavior_profile": {
+            "roleplay_defaults": {
+                "relationship": {"trust": 58, "strictness": 58},
+                "protocol": {
+                    "reward_focus": "Sicherheit, Feedback und stabile Gewoehnung",
+                    "consequence_focus": "Anpassen, verlangsamen und klar rueckkoppeln",
+                },
+            },
+            "director": {
+                "task_eagerness": "balanced",
+                "state_update_aggressiveness": "low",
+                "consequence_style": "soft",
+                "scene_visibility": "contextual",
+            },
+            "reminder": {
+                "opening_soft": "Ruhig bleiben.",
+                "max_sentences": 3,
+            },
+        },
         "phases": [
             {
                 "phase_id": "intro",
@@ -150,6 +234,7 @@ class ScenarioCreateRequest(BaseModel):
     lorebook: list = Field(default_factory=list)
     phases: list = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
+    behavior_profile: dict = Field(default_factory=dict)
 
 
 class ScenarioUpdateRequest(BaseModel):
@@ -159,6 +244,7 @@ class ScenarioUpdateRequest(BaseModel):
     lorebook: list | None = Field(default=None)
     phases: list | None = Field(default=None)
     tags: list[str] | None = Field(default=None)
+    behavior_profile: dict | None = None
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -172,6 +258,7 @@ def _scenario_to_dict(s: Scenario) -> dict:
         "lorebook": json.loads(s.lorebook_json or "[]"),
         "phases": json.loads(s.phases_json or "[]"),
         "tags": json.loads(s.tags_json or "[]"),
+        "behavior_profile": parse_behavior_profile(s.behavior_profile_json),
         "created_at": s.created_at.isoformat() if s.created_at else None,
     }
 
@@ -207,6 +294,7 @@ def create_scenario(payload: ScenarioCreateRequest, request: Request, db: Sessio
         lorebook_json=json.dumps(payload.lorebook, ensure_ascii=False),
         phases_json=json.dumps(payload.phases, ensure_ascii=False),
         tags_json=json.dumps(payload.tags, ensure_ascii=False),
+        behavior_profile_json=dumps_behavior_profile(payload.behavior_profile),
     )
     db.add(scenario)
     db.commit()
@@ -251,6 +339,8 @@ def update_scenario(
         s.phases_json = json.dumps(payload.phases, ensure_ascii=False)
     if payload.tags is not None:
         s.tags_json = json.dumps(payload.tags, ensure_ascii=False)
+    if payload.behavior_profile is not None:
+        s.behavior_profile_json = dumps_behavior_profile(payload.behavior_profile)
     db.add(s)
     db.commit()
     db.refresh(s)
@@ -286,6 +376,7 @@ def export_scenario(scenario_id: int, request: Request, db: Session = Depends(ge
         "lorebook": json.loads(s.lorebook_json or "[]"),
         "phases": json.loads(s.phases_json or "[]"),
         "tags": json.loads(s.tags_json or "[]"),
+        "behavior_profile": parse_behavior_profile(s.behavior_profile_json),
     }
     slug = re.sub(r"[^a-z0-9]+", "-", s.title.lower()).strip("-") or f"scenario-{s.id}"
     return JSONResponse(
@@ -316,6 +407,7 @@ async def import_scenario(request: Request, db: Session = Depends(get_db)) -> di
         lorebook_json=json.dumps(body.get("lorebook") or [], ensure_ascii=False),
         phases_json=json.dumps(body.get("phases") or [], ensure_ascii=False),
         tags_json=json.dumps(list(tags), ensure_ascii=False),
+        behavior_profile_json=dumps_behavior_profile(body.get("behavior_profile") if isinstance(body.get("behavior_profile"), dict) else {}),
     )
     db.add(s)
     db.commit()

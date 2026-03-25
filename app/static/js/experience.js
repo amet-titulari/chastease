@@ -462,8 +462,6 @@ async function xpLoadPersonaPresets(selectName) {
 
 // ── Inline Persona Editor ────────────────────────────────────────────────────
 
-const _DOMINANCE_STRICTNESS = { soft: 1, supportive: 2, "gentle-dominant": 3, firm: 4, "hard-dominant": 5 };
-
 // Fill the always-visible editor with data for the given persona name
 function xpFillPersonaEditor(selectedName) {
   const title = document.getElementById("xp-persona-editor-title");
@@ -518,7 +516,6 @@ async function xpSavePersonaEditor() {
     name,
     speech_style_tone: document.getElementById("xp-pe-tone").value.trim() || null,
     speech_style_dominance: dominance || null,
-    strictness_level: _DOMINANCE_STRICTNESS[dominance] || 3,
     description: document.getElementById("xp-pe-description").value.trim() || null,
     system_prompt: document.getElementById("xp-pe-system-prompt").value.trim() || null,
     avatar_media_id: xpPersonaAvatarMediaId,

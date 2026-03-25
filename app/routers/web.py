@@ -1381,14 +1381,6 @@ def save_experience_draft(
     if user is None:
         return JSONResponse({"error": "unauthorized"}, status_code=401)
 
-    dominance_to_strictness = {
-        "soft": 1,
-        "supportive": 2,
-        "gentle-dominant": 3,
-        "firm": 4,
-        "hard-dominant": 5,
-    }
-
     def _apply_contract_payload(target: dict) -> None:
         contract = _contract_preferences_from_prefs(target)
         mapping = {
@@ -1473,8 +1465,6 @@ def save_experience_draft(
         if payload.persona_dominance is not None:
             dominance = payload.persona_dominance.strip()[:60] or None
             active_persona.speech_style_dominance = dominance
-            if dominance in dominance_to_strictness:
-                active_persona.strictness_level = dominance_to_strictness[dominance]
         if payload.persona_description is not None:
             active_persona.description = payload.persona_description.strip()[:4000] or None
         if payload.persona_system_prompt is not None:
@@ -1667,9 +1657,12 @@ def dashboard_page(session_id: int, request: Request, db: Session = Depends(get_
             "session_id": session_id,
             "session_status": session_obj.status,
             "ws_token": session_obj.ws_auth_token or "",
+            "persona_id": persona.id if persona else None,
+            "persona_missing": persona is None,
             "persona_name": persona.name if persona else "Keyholderin",
             "player_nickname": player.nickname if player else user.username,
             "lock_end": session_obj.lock_end.isoformat() if session_obj.lock_end else None,
+            "dashboard_css_version": _asset_version("css/dashboard.css"),
             "dashboard_js_version": _asset_version("js/dashboard.js"),
         },
     )

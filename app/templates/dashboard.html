@@ -1,28 +1,37 @@
 {% extends "base.html" %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="/static/css/dashboard.css?v=20260322f" />
+<link rel="stylesheet" href="/static/css/dashboard.css?v={{ dashboard_css_version }}" />
 {% endblock %}
 
 {% block content %}
 <div class="dashboard-shell"
      data-session-id="{{ session_id }}"
      data-lock-end="{{ lock_end or '' }}"
+     data-persona-id="{{ persona_id or '' }}"
+     data-persona-missing="{{ '1' if persona_missing else '0' }}"
      data-persona-name="{{ persona_name }}"
      data-player-name="{{ player_nickname }}">
   <section class="dash-hero">
-    <div class="dash-hero-main">
-      <p class="dash-eyebrow">Spieler-Dashboard</p>
-      <h2>{{ persona_name }} · Session #{{ session_id }}</h2>
-      <p class="dash-subline">Zentraler Block fuer Rahmen, Einstimmung, Regeln, Safety und Spielresultate. Der Chat bleibt dadurch als Gespraechsflaeche ruhig.</p>
+    <div class="dash-hero-top">
+      <div class="dash-hero-left">
+        <span class="dash-live-dot" aria-hidden="true"></span>
+        <span id="dash-hero-persona" class="dash-hero-persona">{{ persona_name }}</span>
+        <span class="dash-hero-sep">&middot;</span>
+        <span class="dash-hero-session">Session #{{ session_id }}</span>
+        <span id="dash-status-pill" class="status-pill">{{ session_status }}</span>
+      </div>
       <div class="dash-hero-actions">
         <a href="/play/{{ session_id }}" class="dash-link-primary">Zum Chat</a>
         <a href="/games" class="dash-link-secondary">Spiele</a>
         <a href="/profile" class="dash-link-secondary">Profil</a>
       </div>
     </div>
-    <div class="dash-hero-side">
-      <span id="dash-status-pill" class="status-pill">{{ session_status }}</span>
+    <div class="dash-hero-bottom">
+      <div class="dash-hero-copy">
+        <p class="dash-eyebrow">Spieler-Dashboard</p>
+        <p class="dash-subline">Rahmen, Szene, Regeln, Safety und Resultate bleiben hier gebuendelt. Der Chat kann dadurch kompakter und ruhiger bleiben.</p>
+      </div>
       <div class="dash-count-block">
         <span class="dash-count-label">Verbleibend</span>
         <strong id="dash-countdown" class="dash-countdown">—</strong>
@@ -39,6 +48,18 @@
         <img id="dash-keyholder-avatar" alt="Keyholder Avatar" class="dash-avatar is-hidden" />
         <img id="dash-player-avatar" alt="Player Avatar" class="dash-avatar is-hidden" />
       </div>
+      <div class="dash-persona-picker">
+        <label class="dash-field">
+          Keyholderin dieser Session
+          <select id="dash-persona-select">
+            <option value="">Wird geladen…</option>
+          </select>
+        </label>
+        <button id="dash-persona-save" type="button">Uebernehmen</button>
+      </div>
+      <p id="dash-persona-note" class="dash-copy{% if not persona_missing %} is-hidden{% endif %}">
+        Diese Session zeigt gerade nur den Fallback-Namen. Waehle hier wieder eine gespeicherte Keyholderin aus.
+      </p>
       <dl class="dash-info-grid">
         <dt>Wearer</dt><dd id="dash-wearer">{{ player_nickname }}</dd>
         <dt>Keyholderin</dt><dd id="dash-keyholder">{{ persona_name }}</dd>

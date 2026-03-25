@@ -107,6 +107,17 @@ def map_external_persona_card(payload: dict) -> dict:
             "praise_style": praise_style,
             "repetition_guard": repetition_guard,
             "context_exposition_style": context_exposition_style,
+            "behavior_profile": {
+                "director": {
+                    "task_eagerness": "balanced",
+                    "state_update_aggressiveness": "balanced",
+                    "consequence_style": "strict" if strictness_level >= 4 else "balanced",
+                    "scene_visibility": context_exposition_style,
+                },
+                "reminder": {
+                    "max_sentences": 2 if strictness_level >= 4 else 3,
+                },
+            },
             "strictness_level": strictness_level,
             "system_prompt": (
                 f"Du bist {name}. Ton={tone}. Dominance={dominance_style}. "
@@ -123,6 +134,7 @@ def map_external_persona_card(payload: dict) -> dict:
             "focus": scenario_tags[:6],
             "lorebook": lorebook_items,
             "phases": phases,
+            "behavior_profile": {},
         },
         "setup_defaults": {
             "role_style": role_style,

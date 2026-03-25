@@ -28,6 +28,7 @@ from app.services.relationship_memory import build_relationship_memory
 from app.services.roleplay_state import build_roleplay_state, initialize_roleplay_state, serialize_roleplay_state
 from app.services.session_service import SessionService
 from app.services.audit_logger import audit_log
+from app.services.behavior_profile import behavior_profile_from_entities, behavior_profile_from_scenario_key
 from app.services.session_access import bind_session_profile_to_user, get_accessible_session, get_current_session_user, get_owned_session
 from app.security import require_admin_session_user, verify_admin_secret
 
@@ -90,6 +91,10 @@ class UpdatePlayerProfileRequest(BaseModel):
     needs: dict | None = None
     avatar_media_id: int | None = Field(default=None, ge=1)
     clear_avatar: bool | None = None
+
+
+class UpdateSessionPersonaRequest(BaseModel):
+    persona_id: int = Field(ge=1)
 
 
 def _resolve_persona_for_session(payload: CreateSessionRequest, db: Session, current_persona: Persona | None) -> Persona:
@@ -632,6 +637,31 @@ def update_draft_session(
     }
 
 
+@router.put("/{session_id}/persona")
+def update_session_persona(
+    session_id: int,
+    payload: UpdateSessionPersonaRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    session_obj = get_owned_session(request, db, session_id)
+    persona = db.query(Persona).filter(Persona.id == payload.persona_id).first()
+    if persona is None:
+        raise HTTPException(status_code=404, detail="Persona not found")
+
+    session_obj.persona_id = persona.id
+    db.add(session_obj)
+    db.commit()
+
+    audit_log("session_persona_reassigned", session_id=session_obj.id, persona_id=persona.id, persona_name=persona.name)
+    return {
+        "ok": True,
+        "session_id": session_obj.id,
+        "persona_id": persona.id,
+        "persona_name": persona.name,
+    }
+
+
 @router.get("/blueprints/{session_id}")
 def get_completed_blueprint(session_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
     session_obj = get_owned_session(request, db, session_id)
@@ -1139,7 +1169,16 @@ def create_session(payload: CreateSessionRequest, request: Request, db: Session 
     llm_chat_model = payload.llm_chat_model if payload.llm_chat_model is not None else (template_session.llm_chat_model if template_session else (default_llm.chat_model if default_llm else None))
     llm_vision_model = payload.llm_vision_model if payload.llm_vision_model is not None else (template_session.llm_vision_model if template_session else (default_llm.vision_model if default_llm else None))
     llm_active = payload.llm_active if payload.llm_active is not None else (bool(template_session.llm_profile_active) if template_session else bool(default_llm.profile_active if default_llm else False))
-    initial_roleplay_state = initialize_roleplay_state(scenario_title=prefs.get("scenario_preset"))
+    initial_roleplay_behavior = behavior_profile_from_entities(
+        persona=persona,
+        scenario=db.query(Scenario).filter(Scenario.key == prefs.get("scenario_preset")).first() if prefs.get("scenario_preset") else None,
+    )
+    if not initial_roleplay_behavior:
+        initial_roleplay_behavior = behavior_profile_from_scenario_key(db, prefs.get("scenario_preset"))
+    initial_roleplay_state = initialize_roleplay_state(
+        scenario_title=prefs.get("scenario_preset"),
+        behavior_profile=initial_roleplay_behavior,
+    )
 
     session_obj = SessionModel(
         persona_id=persona.id,

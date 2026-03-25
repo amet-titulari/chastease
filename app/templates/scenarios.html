@@ -251,6 +251,11 @@
           <input id="sm-tags" type="text" placeholder="z.B. ritual, devotion, long-term" />
         </label>
 
+        <label>Behavior Profile JSON <span style="font-weight:400;font-size:0.75rem;color:#7d8da1;">(optional, advanced)</span>
+          <textarea id="sm-behavior-profile" rows="10" spellcheck="false"
+            placeholder='{"roleplay_defaults":{"scene":{"next_beat":"Kurzen Status einfordern"}}}'></textarea>
+        </label>
+
         <div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
             <label style="margin:0;">Inventar (Items)</label>
@@ -544,6 +549,7 @@ function smLoadPreset(preset) {
   document.getElementById("sm-key").value = preset.key || "";
   document.getElementById("sm-summary").value = preset.summary || "";
   document.getElementById("sm-tags").value = (preset.tags || []).join(", ");
+  document.getElementById("sm-behavior-profile").value = preset.behavior_profile ? JSON.stringify(preset.behavior_profile, null, 2) : "";
   smSetPhases(preset.phases || []);
   smSetLore(preset.lorebook || []);
 }
@@ -560,6 +566,7 @@ async function smStartEdit(id) {
     document.getElementById("sm-key").value = s.key;
     document.getElementById("sm-summary").value = s.summary || "";
     document.getElementById("sm-tags").value = (s.tags || []).join(", ");
+    document.getElementById("sm-behavior-profile").value = s.behavior_profile ? JSON.stringify(s.behavior_profile, null, 2) : "";
     smSetPhases(s.phases || []);
     smSetLore(s.lorebook || []);
     try {
@@ -617,6 +624,17 @@ document.getElementById("sm-form").addEventListener("submit", async (e) => {
     phases: smCollectPhases(),
     lorebook: smCollectLore(),
   };
+  const behaviorRaw = document.getElementById("sm-behavior-profile").value.trim();
+  if (behaviorRaw) {
+    try {
+      payload.behavior_profile = JSON.parse(behaviorRaw);
+    } catch (err) {
+      smStatus("Behavior Profile JSON ist ungültig: " + err.message, true);
+      return;
+    }
+  } else {
+    payload.behavior_profile = {};
+  }
   const saveBtn = document.getElementById("sm-save-btn");
   saveBtn.disabled = true;
   try {

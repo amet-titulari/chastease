@@ -118,17 +118,20 @@ def test_persona_create_export_import_preserves_response_style_controls():
                 "praise_style": "minimal",
                 "repetition_guard": "strong",
                 "context_exposition_style": "minimal",
+                "behavior_profile": {"director": {"scene_visibility": "minimal"}},
             },
         )
         assert created.status_code == 200
         persona_id = created.json()["id"]
         assert created.json()["verbosity_style"] == "brief"
+        assert created.json()["behavior_profile"]["director"]["scene_visibility"] == "minimal"
 
         exported = client.get(f"/api/personas/{persona_id}/export")
         assert exported.status_code == 200
         payload = exported.json()
         assert payload["speech_style"]["formatting_style"] == "plain"
         assert payload["response_style"]["praise_style"] == "minimal"
+        assert payload["behavior_profile"]["director"]["scene_visibility"] == "minimal"
 
         imported = client.post("/api/personas/import", json={"card": payload})
         assert imported.status_code == 200

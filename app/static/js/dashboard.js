@@ -2,6 +2,8 @@
 
 const dashShell = document.querySelector(".dashboard-shell");
 const DASH_SESSION_ID = Number(dashShell?.dataset.sessionId || 0);
+let dashPersonaId = Number(dashShell?.dataset.personaId || 0);
+let dashPersonaMissing = String(dashShell?.dataset.personaMissing || "") === "1";
 let dashLockEnd = dashShell?.dataset.lockEnd || "";
 let dashHygieneOpeningId = null;
 let dashHygieneUsesSeal = false;
@@ -29,9 +31,26 @@ async function dashPost(url, payload) {
   return data;
 }
 
+async function dashPut(url, payload) {
+  const resp = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
+  return data;
+}
+
 function dashSetText(id, value, fallback = "—") {
   const el = document.getElementById(id);
   if (el) el.textContent = value == null || value === "" ? fallback : String(value);
+}
+
+function dashSetPersonaLabel(name) {
+  dashSetText("dash-keyholder", name);
+  dashSetText("dash-hero-persona", name);
+  if (dashShell) dashShell.dataset.personaName = name || "";
 }
 
 function dashFmtDate(value) {
@@ -227,7 +246,7 @@ async function dashLoadSummary() {
   dashSetAvatar("dash-keyholder-avatar", s.persona_avatar_url || null);
   dashSetAvatar("dash-player-avatar", s.player_avatar_url || null);
   dashSetText("dash-wearer", s.player_nickname);
-  dashSetText("dash-keyholder", s.persona_name);
+  dashSetPersonaLabel(s.persona_name);
   dashSetText("dash-session-id", s.session_id ? `#${s.session_id}` : "—");
   dashSetText("dash-status-pill", s.status || "—");
   dashSetText("dash-status-text", s.status || "—");
@@ -265,6 +284,67 @@ async function dashLoadSummary() {
       `Regeln: Maximaldauer ${maxMinutes} Minuten. Bei Ueberziehung gilt Penalty = max(Overrun, ${dashFmtSecs(s.hygiene_overdue_penalty_min_seconds)}).`;
   }
   dashHygieneConfiguredDurationSeconds = Math.max(60, Math.round(Number(s.hygiene_opening_max_duration_seconds || 900)));
+}
+
+async function dashLoadPersonas() {
+  const select = document.getElementById("dash-persona-select");
+  if (!select) return;
+  try {
+    const data = await dashGet("/api/personas");
+    const items = Array.isArray(data.items) ? data.items : [];
+    const options = ['<option value="">Keyholderin waehlen</option>'];
+    items.forEach((item) => {
+      const id = Number(item?.id || 0);
+      const name = String(item?.name || "").trim();
+      if (!id || !name) return;
+      options.push(`<option value="${id}">${dashEsc(name)}</option>`);
+    });
+    select.innerHTML = options.join("");
+    if (dashPersonaId && items.some((item) => Number(item?.id || 0) === dashPersonaId)) {
+      select.value = String(dashPersonaId);
+    } else {
+      select.value = "";
+    }
+  } catch (err) {
+    select.innerHTML = '<option value="">Personas konnten nicht geladen werden</option>';
+  }
+}
+
+async function dashSavePersona() {
+  const select = document.getElementById("dash-persona-select");
+  const btn = document.getElementById("dash-persona-save");
+  const note = document.getElementById("dash-persona-note");
+  const nextPersonaId = Number(select?.value || 0);
+  if (!nextPersonaId) {
+    if (note) {
+      note.textContent = "Bitte zuerst eine gespeicherte Keyholderin auswaehlen.";
+      note.classList.remove("is-hidden");
+    }
+    return;
+  }
+  if (btn) btn.disabled = true;
+  try {
+    const data = await dashPut(`/api/sessions/${DASH_SESSION_ID}/persona`, { persona_id: nextPersonaId });
+    dashPersonaId = Number(data.persona_id || nextPersonaId);
+    dashPersonaMissing = false;
+    dashSetPersonaLabel(data.persona_name || "");
+    if (dashShell) {
+      dashShell.dataset.personaId = String(dashPersonaId);
+      dashShell.dataset.personaMissing = "0";
+    }
+    if (note) {
+      note.textContent = `Keyholderin gewechselt zu ${data.persona_name}.`;
+      note.classList.remove("is-hidden");
+    }
+    await dashLoadSummary();
+  } catch (err) {
+    if (note) {
+      note.textContent = `Persona konnte nicht gesetzt werden (${String(err)})`;
+      note.classList.remove("is-hidden");
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function dashLoadSessionState() {
@@ -504,11 +584,15 @@ document.getElementById("dash-safety-green")?.addEventListener("click", () => da
 document.getElementById("dash-safety-yellow")?.addEventListener("click", () => dashHandleSafety("yellow"));
 document.getElementById("dash-safety-red")?.addEventListener("click", () => dashHandleSafety("red"));
 document.getElementById("dash-safety-safeword")?.addEventListener("click", () => dashHandleSafety("safeword"));
+document.getElementById("dash-persona-save")?.addEventListener("click", () => {
+  dashSavePersona().catch(() => {});
+});
 
 document.addEventListener("DOMContentLoaded", async () => {
   if (!DASH_SESSION_ID) return;
   dashUpdateCountdown();
   setInterval(dashUpdateCountdown, 1000);
+  await dashLoadPersonas();
   await dashLoadSummary();
   await dashLoadSessionState();
   await dashLoadHygieneQuota();

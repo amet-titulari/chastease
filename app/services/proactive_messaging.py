@@ -6,8 +6,16 @@ from app.database import SessionLocal
 from app.models.message import Message
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
+from app.models.scenario import Scenario
 from app.models.session import Session as SessionModel
 from app.services.ai_gateway import StubAIGateway, get_ai_gateway
+from app.services.behavior_profile import (
+    behavior_profile_from_entities,
+    behavior_profile_from_scenario_key,
+    director_profile_from_behavior,
+    merge_behavior_profiles,
+    reminder_profile_from_behavior,
+)
 from app.services.context_window import build_context_window
 from app.services.prompt_builder import build_prompt_modules
 from app.services.relationship_memory import build_relationship_memory
@@ -30,7 +38,15 @@ def _persona_opening(persona_name: str, tone: str | None, dominance: str | None)
     return f"{persona_name}: Bleib sauber im Protokoll."
 
 
+def _scenario_for_prefs(db, prefs: dict) -> Scenario | None:
+    scenario_key = str((prefs or {}).get("scenario_preset") or "").strip()
+    if not scenario_key:
+        return None
+    return db.query(Scenario).filter(Scenario.key == scenario_key).first()
+
+
 def _build_reminder(
+    db,
     persona: Persona | None,
     player_profile: PlayerProfile | None,
     session_obj: SessionModel,
@@ -47,21 +63,39 @@ def _build_reminder(
             prefs = {}
 
     scenario_title = str(prefs.get("scenario_preset") or "").strip() or None
+    scenario = _scenario_for_prefs(db, prefs)
+    behavior_profile = merge_behavior_profiles(
+        behavior_profile_from_entities(persona=persona, scenario=scenario),
+        behavior_profile_from_scenario_key(db, prefs.get("scenario_preset")),
+    )
     roleplay_state = build_roleplay_state(
         relationship_json=session_obj.relationship_state_json,
         protocol_json=session_obj.protocol_state_json,
         scene_json=session_obj.scene_state_json,
         scenario_title=scenario_title,
         active_phase=None,
+        behavior_profile=behavior_profile,
     )
     relationship_memory = build_relationship_memory(db, session_obj)
+    reminder_profile = reminder_profile_from_behavior(behavior_profile)
     scene = roleplay_state["scene"]
     relationship = roleplay_state["relationship"]
     protocol = roleplay_state["protocol"]
-    opening = _persona_opening(
-        persona_name=persona_name,
-        tone=persona.speech_style_tone if persona else None,
-        dominance=persona.speech_style_dominance if persona else None,
+    opening = (
+        f"{persona_name}: "
+        + str(
+            reminder_profile.get("opening_soft")
+            if ("warm" in str(persona.speech_style_tone if persona else "").strip().lower()
+                or "soft" in str(persona.speech_style_dominance if persona else "").strip().lower()
+                or "supportive" in str(persona.speech_style_dominance if persona else "").strip().lower())
+            else (
+                reminder_profile.get("opening_firm")
+                if ("hard" in str(persona.speech_style_dominance if persona else "").strip().lower()
+                    or "firm" in str(persona.speech_style_dominance if persona else "").strip().lower()
+                    or "strict" in str(persona.speech_style_tone if persona else "").strip().lower())
+                else reminder_profile.get("opening_default")
+            )
+        ).strip()
     )
     objective = str(scene.get("objective") or "Saubere Compliance halten").strip()
     next_beat = str(scene.get("next_beat") or "Einen kurzen Status geben").strip()
@@ -98,6 +132,7 @@ def _build_reminder(
 
 
 def _build_ai_reminder(
+    db,
     persona: Persona | None,
     player_profile: PlayerProfile | None,
     session_obj: SessionModel,
@@ -123,13 +158,20 @@ def _build_ai_reminder(
             hard_limits = []
 
     scenario_title = str(prefs.get("scenario_preset") or "").strip() or None
+    relationship_memory = build_relationship_memory(db, session_obj)
+    behavior_profile = merge_behavior_profiles(
+        behavior_profile_from_entities(persona=persona, scenario=_scenario_for_prefs(db, prefs)),
+        behavior_profile_from_scenario_key(db, prefs.get("scenario_preset")),
+    )
     roleplay_state = build_roleplay_state(
         relationship_json=session_obj.relationship_state_json,
         protocol_json=session_obj.protocol_state_json,
         scene_json=session_obj.scene_state_json,
         scenario_title=scenario_title,
         active_phase=None,
+        behavior_profile=behavior_profile,
     )
+    reminder_profile = reminder_profile_from_behavior(behavior_profile)
     context_items, context_summary = build_context_window(recent_rows, max_messages=8)
     remaining_seconds = None
     if session_obj.lock_end is not None:
@@ -138,7 +180,7 @@ def _build_ai_reminder(
         "Erzeuge genau eine kurze proaktive Reminder-Nachricht im Charakter der Persona. "
         "Keine neuen Aufgaben vergeben. Keine JSON-Metakommentare. "
         "Die Nachricht soll sich wie ein natuerlicher Check-in innerhalb der laufenden Szene anfuehlen, "
-        "konkret auf Szene, Ziel, Regel oder Drucklage Bezug nehmen und maximal 3 Saetze haben."
+        f"konkret auf Szene, Ziel, Regel oder Drucklage Bezug nehmen und maximal {max(1, int(reminder_profile.get('max_sentences') or 3))} Saetze haben."
     )
     if remaining_seconds is not None:
         reminder_instruction += f" Verbleibende Zeit in Sekunden: {remaining_seconds}."
@@ -161,6 +203,7 @@ def _build_ai_reminder(
         praise_style=persona.praise_style if persona else None,
         repetition_guard=persona.repetition_guard if persona else None,
         context_exposition_style=persona.context_exposition_style if persona else None,
+        director_profile=director_profile_from_behavior(behavior_profile),
         strictness_level=persona.strictness_level if persona else 3,
         hard_limits=hard_limits or None,
         active_phase=None,
@@ -173,7 +216,7 @@ def _build_ai_reminder(
 
     ai = get_ai_gateway(session_obj=session_obj)
     if isinstance(ai, StubAIGateway):
-        return _build_reminder(persona, player_profile, session_obj, now), False, None
+        return _build_reminder(db, persona, player_profile, session_obj, now), False, None
     structured = ai.generate_chat_response(
         persona_name=persona_name,
         user_text=reminder_instruction,
@@ -197,7 +240,7 @@ def _build_ai_reminder(
     text = str(structured.message or "").strip()
     if text:
         return text, bool(structured.degraded), structured.degraded_reason
-    return _build_reminder(persona, player_profile, session_obj, now), True, "Leere Reminder-Antwort"
+    return _build_reminder(db, persona, player_profile, session_obj, now), True, "Leere Reminder-Antwort"
 
 
 def sweep_proactive_messages_for_active_sessions() -> dict:
@@ -248,6 +291,7 @@ def sweep_proactive_messages_for_active_sessions() -> dict:
                 .all()
             )
             reminder_text, degraded, degraded_reason = _build_ai_reminder(
+                db,
                 persona,
                 player_profile,
                 session_obj,

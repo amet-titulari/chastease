@@ -23,6 +23,12 @@ from app.models.session_item import SessionItem
 from app.models.task import Task
 from app.services.ai_gateway import get_ai_gateway
 from app.services.audit_logger import audit_log
+from app.services.behavior_profile import (
+    behavior_profile_from_entities,
+    behavior_profile_from_scenario_key,
+    director_profile_from_behavior,
+    merge_behavior_profiles,
+)
 from app.services.context_window import build_context_window
 from app.services.prompt_builder import build_prompt_modules
 from app.services.relationship_memory import build_relationship_memory
@@ -282,6 +288,7 @@ def _persist_chat_turn(
     # Load full scenario for phase + lorebook injection
     active_phase: dict | None = None
     matched_lore: list[dict] = []
+    db_scenario = None
     scenario_key = prefs.get("scenario_preset") if prefs else None
     if scenario_key:
         db_scenario = db.query(Scenario).filter(Scenario.key == scenario_key).first()
@@ -308,12 +315,17 @@ def _persist_chat_turn(
             if len(matched_lore) >= 3:
                 break
 
+    behavior_profile = merge_behavior_profiles(
+        behavior_profile_from_entities(persona=persona, scenario=db_scenario),
+        behavior_profile_from_scenario_key(db, scenario_key),
+    )
     roleplay_state = build_roleplay_state(
         relationship_json=session_obj.relationship_state_json,
         protocol_json=session_obj.protocol_state_json,
         scene_json=session_obj.scene_state_json,
         scenario_title=scenario_title,
         active_phase=active_phase,
+        behavior_profile=behavior_profile,
     )
     relationship_memory = build_relationship_memory(db, session_obj)
 
@@ -461,6 +473,7 @@ def _persist_chat_turn(
         praise_style=persona.praise_style if persona else None,
         repetition_guard=persona.repetition_guard if persona else None,
         context_exposition_style=persona.context_exposition_style if persona else None,
+        director_profile=director_profile_from_behavior(behavior_profile),
         strictness_level=persona.strictness_level if persona else 3,
         hard_limits=hard_limits or None,
         active_phase=active_phase,

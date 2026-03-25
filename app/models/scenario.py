@@ -13,4 +13,5 @@ class Scenario(Base):
     lorebook_json = Column(Text, nullable=False, server_default="[]")
     phases_json = Column(Text, nullable=False, server_default="[]")
     tags_json = Column(Text, nullable=False, server_default="[]")
+    behavior_profile_json = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -2,6 +2,8 @@ import json
 from copy import deepcopy
 from typing import Any
 
+from app.services.behavior_profile import roleplay_defaults_from_profile
+
 
 def _clamp_score(value: Any, default: int = 50) -> int:
     try:
@@ -29,8 +31,8 @@ def _text(value: Any, default: str, limit: int = 240) -> str:
     return text[:limit] if text else default
 
 
-def default_relationship_state() -> dict[str, Any]:
-    return {
+def default_relationship_state(behavior_profile: dict[str, Any] | None = None) -> dict[str, Any]:
+    base = {
         "trust": 55,
         "obedience": 50,
         "resistance": 20,
@@ -40,10 +42,15 @@ def default_relationship_state() -> dict[str, Any]:
         "attachment": 46,
         "control_level": "structured",
     }
+    defaults = roleplay_defaults_from_profile(behavior_profile)
+    relationship = defaults.get("relationship")
+    if isinstance(relationship, dict):
+        base.update(relationship)
+    return base
 
 
-def default_protocol_state() -> dict[str, Any]:
-    return {
+def default_protocol_state(behavior_profile: dict[str, Any] | None = None) -> dict[str, Any]:
+    base = {
         "active_rules": [
             "Status klar und wahrheitsgemass melden",
             "Anweisungen ruhig und ohne Ausfluechte ausfuehren",
@@ -55,14 +62,23 @@ def default_protocol_state() -> dict[str, Any]:
         "reward_focus": "Vertrauen durch saubere Ausfuehrung verdienen",
         "consequence_focus": "Bei Nachlaessigkeit folgen engere Kontrolle und Zusatzpflichten",
     }
+    defaults = roleplay_defaults_from_profile(behavior_profile)
+    protocol = defaults.get("protocol")
+    if isinstance(protocol, dict):
+        base.update(protocol)
+    return base
 
 
-def default_scene_state(scenario_title: str | None = None, active_phase: dict | None = None) -> dict[str, Any]:
+def default_scene_state(
+    scenario_title: str | None = None,
+    active_phase: dict | None = None,
+    behavior_profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     phase = active_phase or {}
     title = str(phase.get("title") or "").strip() or "Einstimmung"
     objective = str(phase.get("objective") or "").strip() or "Praesenz, Gehorsam und ruhige Fuehrung etablieren"
     pressure = str(phase.get("guidance") or "").strip() or "niedrig"
-    return {
+    base = {
         "arc": str(scenario_title or "Keyholder Session").strip()[:120] or "Keyholder Session",
         "title": title[:120],
         "objective": objective[:240],
@@ -70,10 +86,18 @@ def default_scene_state(scenario_title: str | None = None, active_phase: dict | 
         "last_consequence": "",
         "next_beat": "Naechste klare Anweisung setzen und ruhige Compliance pruefen",
     }
+    defaults = roleplay_defaults_from_profile(behavior_profile)
+    scene = defaults.get("scene")
+    if isinstance(scene, dict):
+        base.update(scene)
+    return base
+    if isinstance(scene, dict):
+        base.update(scene)
+    return base
 
 
-def _normalize_relationship_state(value: Any) -> dict[str, Any]:
-    base = default_relationship_state()
+def _normalize_relationship_state(value: Any, behavior_profile: dict[str, Any] | None = None) -> dict[str, Any]:
+    base = default_relationship_state(behavior_profile=behavior_profile)
     if isinstance(value, dict):
         base["trust"] = _clamp_score(value.get("trust"), base["trust"])
         base["obedience"] = _clamp_score(value.get("obedience"), base["obedience"])
@@ -86,8 +110,8 @@ def _normalize_relationship_state(value: Any) -> dict[str, Any]:
     return base
 
 
-def _normalize_protocol_state(value: Any) -> dict[str, Any]:
-    base = default_protocol_state()
+def _normalize_protocol_state(value: Any, behavior_profile: dict[str, Any] | None = None) -> dict[str, Any]:
+    base = default_protocol_state(behavior_profile=behavior_profile)
     if isinstance(value, dict):
         base["active_rules"] = _list_of_text(value.get("active_rules")) or base["active_rules"]
         base["blocked_actions"] = _list_of_text(value.get("blocked_actions")) or base["blocked_actions"]
@@ -97,8 +121,13 @@ def _normalize_protocol_state(value: Any) -> dict[str, Any]:
     return base
 
 
-def _normalize_scene_state(value: Any, scenario_title: str | None = None, active_phase: dict | None = None) -> dict[str, Any]:
-    base = default_scene_state(scenario_title=scenario_title, active_phase=active_phase)
+def _normalize_scene_state(
+    value: Any,
+    scenario_title: str | None = None,
+    active_phase: dict | None = None,
+    behavior_profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    base = default_scene_state(scenario_title=scenario_title, active_phase=active_phase, behavior_profile=behavior_profile)
     if isinstance(value, dict):
         base["arc"] = _text(value.get("arc"), base["arc"], limit=120)
         base["title"] = _text(value.get("title"), base["title"], limit=120)
@@ -125,17 +154,24 @@ def build_roleplay_state(
     scene_json: str | None,
     scenario_title: str | None = None,
     active_phase: dict | None = None,
+    behavior_profile: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     return {
-        "relationship": _normalize_relationship_state(parse_json_dict(relationship_json)),
-        "protocol": _normalize_protocol_state(parse_json_dict(protocol_json)),
-        "scene": _normalize_scene_state(parse_json_dict(scene_json), scenario_title=scenario_title, active_phase=active_phase),
+        "relationship": _normalize_relationship_state(parse_json_dict(relationship_json), behavior_profile=behavior_profile),
+        "protocol": _normalize_protocol_state(parse_json_dict(protocol_json), behavior_profile=behavior_profile),
+        "scene": _normalize_scene_state(
+            parse_json_dict(scene_json),
+            scenario_title=scenario_title,
+            active_phase=active_phase,
+            behavior_profile=behavior_profile,
+        ),
     }
 
 
 def initialize_roleplay_state(
     scenario_title: str | None = None,
     active_phase: dict | None = None,
+    behavior_profile: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     state = build_roleplay_state(
         relationship_json=None,
@@ -143,6 +179,7 @@ def initialize_roleplay_state(
         scene_json=None,
         scenario_title=scenario_title,
         active_phase=active_phase,
+        behavior_profile=behavior_profile,
     )
     return {
         "relationship_state_json": json.dumps(state["relationship"], ensure_ascii=False),
@@ -156,6 +193,7 @@ def merge_roleplay_state(
     patch: dict[str, Any],
     scenario_title: str | None = None,
     active_phase: dict | None = None,
+    behavior_profile: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     merged = deepcopy(current_state)
     relationship_patch = patch.get("relationship")
@@ -170,9 +208,14 @@ def merge_roleplay_state(
         merged["scene"].update(scene_patch)
 
     return {
-        "relationship": _normalize_relationship_state(merged["relationship"]),
-        "protocol": _normalize_protocol_state(merged["protocol"]),
-        "scene": _normalize_scene_state(merged["scene"], scenario_title=scenario_title, active_phase=active_phase),
+        "relationship": _normalize_relationship_state(merged["relationship"], behavior_profile=behavior_profile),
+        "protocol": _normalize_protocol_state(merged["protocol"], behavior_profile=behavior_profile),
+        "scene": _normalize_scene_state(
+            merged["scene"],
+            scenario_title=scenario_title,
+            active_phase=active_phase,
+            behavior_profile=behavior_profile,
+        ),
     }
 
 

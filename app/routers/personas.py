@@ -11,6 +11,7 @@ from app.models.persona_task_template import PersonaTaskTemplate
 from app.security import require_admin_session_user
 from app.services.session_access import require_session_user
 from app.services.audit_logger import audit_log
+from app.services.behavior_profile import dumps_behavior_profile, parse_behavior_profile
 from app.services.persona_card_mapper import map_external_persona_card
 
 router = APIRouter(prefix="/api/personas", tags=["personas"])
@@ -32,6 +33,20 @@ PERSONA_PRESETS = [
         "praise_style": "situational",
         "repetition_guard": "strong",
         "context_exposition_style": "minimal",
+        "behavior_profile": {
+            "director": {
+                "task_eagerness": "balanced",
+                "state_update_aggressiveness": "balanced",
+                "consequence_style": "balanced",
+                "scene_visibility": "minimal",
+            },
+            "reminder": {
+                "opening_soft": "Bleib gesammelt.",
+                "opening_firm": "Bleib fokussiert.",
+                "opening_default": "Halte den Rahmen sauber.",
+                "max_sentences": 2,
+            },
+        },
         "strictness_level": 4,
         "system_prompt": "Du bist Ametara Titulari. Fuehre warm, klar und verbindlich. Antworte meist in 1 bis 4 Saetzen oder kurzen Markdown-Abschnitten. Verwende Markdown nur dezent fuer Lesbarkeit, etwa kurze Hervorhebungen oder kleine Listen. Wiederhole niemals die letzte Nutzernachricht. Nenne keine Zahlen wie obedience, frustration, resistance oder Lustwerte, ausser der Nutzer fragt direkt danach oder sie sind fuer eine konkrete Aufgabe zwingend noetig. Erzaehle nicht bei jeder Antwort Szene, Regeln oder Status mit; nutze nur den fuer den Turn relevanten Kontext. Keine Lobeshymnen, keine Kosenamen-Ketten, keine ueberladenen Metaphern. Lob nur kurz, spezifisch und nur bei echter Leistung. Gib bevorzugt eine klare Haltung, eine konkrete Einordnung und hoechstens einen naechsten Schritt. Kein Orgasmus ohne explizite schriftliche Erlaubnis. Denial-Verlaengerungen sind strukturierende Fuehrung, nicht Textschmuck.",
         "ritual_phrases": ["Mein Lieber.", "Mein Hingebungsvoller.", "Mein Schatz.", "Mein Verschlossener."],
@@ -48,6 +63,19 @@ PERSONA_PRESETS = [
         "praise_style": "minimal",
         "repetition_guard": "strong",
         "context_exposition_style": "minimal",
+        "behavior_profile": {
+            "director": {
+                "task_eagerness": "high",
+                "state_update_aggressiveness": "high",
+                "consequence_style": "strict",
+                "scene_visibility": "minimal",
+            },
+            "reminder": {
+                "opening_firm": "Haltung halten.",
+                "opening_default": "Status sauber liefern.",
+                "max_sentences": 2,
+            },
+        },
         "strictness_level": 5,
         "system_prompt": "Du bist Mara. Gib kurze, eindeutige Anweisungen und fordere verbindliche Statusmeldungen.",
     },
@@ -62,6 +90,19 @@ PERSONA_PRESETS = [
         "praise_style": "situational",
         "repetition_guard": "strong",
         "context_exposition_style": "contextual",
+        "behavior_profile": {
+            "director": {
+                "task_eagerness": "balanced",
+                "state_update_aggressiveness": "low",
+                "consequence_style": "soft",
+                "scene_visibility": "contextual",
+            },
+            "reminder": {
+                "opening_soft": "Ruhig bleiben.",
+                "opening_default": "Bleib bei der Vereinbarung.",
+                "max_sentences": 3,
+            },
+        },
         "strictness_level": 3,
         "system_prompt": "Du bist Lina. Halte Regeln konsistent ein, bleibe ruhig, klar und sicherheitsorientiert.",
     },
@@ -150,6 +191,7 @@ class PersonaCreateRequest(BaseModel):
     praise_style: str | None = Field(default=None, max_length=30)
     repetition_guard: str | None = Field(default=None, max_length=30)
     context_exposition_style: str | None = Field(default=None, max_length=30)
+    behavior_profile: dict = Field(default_factory=dict)
     system_prompt: str | None = Field(default=None, max_length=4000)
     strictness_level: int = Field(default=3, ge=1, le=5)
     avatar_media_id: int | None = Field(default=None, ge=1)
@@ -165,6 +207,7 @@ class PersonaUpdateRequest(BaseModel):
     praise_style: str | None = Field(default=None, max_length=30)
     repetition_guard: str | None = Field(default=None, max_length=30)
     context_exposition_style: str | None = Field(default=None, max_length=30)
+    behavior_profile: dict | None = None
     system_prompt: str | None = Field(default=None, max_length=4000)
     strictness_level: int | None = Field(default=None, ge=1, le=5)
     avatar_media_id: int | None = Field(default=None, ge=1)
@@ -220,6 +263,7 @@ def _persona_to_dict(p: Persona) -> dict:
         "praise_style": p.praise_style,
         "repetition_guard": p.repetition_guard,
         "context_exposition_style": p.context_exposition_style,
+        "behavior_profile": parse_behavior_profile(p.behavior_profile_json),
         "system_prompt": p.system_prompt,
         "strictness_level": p.strictness_level,
         "avatar_media_id": p.avatar_media_id,
@@ -281,6 +325,7 @@ def create_persona(payload: PersonaCreateRequest, request: Request, db: Session 
         praise_style=payload.praise_style.strip().lower() if payload.praise_style else None,
         repetition_guard=payload.repetition_guard.strip().lower() if payload.repetition_guard else None,
         context_exposition_style=payload.context_exposition_style.strip().lower() if payload.context_exposition_style else None,
+        behavior_profile_json=dumps_behavior_profile(payload.behavior_profile),
         system_prompt=payload.system_prompt.strip() if payload.system_prompt else None,
         strictness_level=payload.strictness_level,
         avatar_media_id=payload.avatar_media_id,
@@ -558,6 +603,8 @@ def update_persona(persona_id: int, payload: PersonaUpdateRequest, request: Requ
         persona.repetition_guard = payload.repetition_guard.strip().lower() or None
     if payload.context_exposition_style is not None:
         persona.context_exposition_style = payload.context_exposition_style.strip().lower() or None
+    if payload.behavior_profile is not None:
+        persona.behavior_profile_json = dumps_behavior_profile(payload.behavior_profile)
     if payload.system_prompt is not None:
         persona.system_prompt = payload.system_prompt.strip() or None
     if payload.strictness_level is not None:
@@ -612,6 +659,7 @@ def _persona_to_card(p: Persona) -> dict:
             "repetition_guard": p.repetition_guard or "",
             "context_exposition_style": p.context_exposition_style or "",
         },
+        "behavior_profile": parse_behavior_profile(p.behavior_profile_json),
         "system_prompt": p.system_prompt or "",
         "strictness_level": p.strictness_level,
         "tags": ["exported"],
@@ -691,6 +739,9 @@ def import_persona(payload: PersonaImportRequest, request: Request, db: Session 
         praise_style = None
         repetition_guard = None
         context_exposition_style = None
+    behavior_profile = card.get("behavior_profile")
+    if not isinstance(behavior_profile, dict):
+        behavior_profile = {}
 
     try:
         strictness_level = max(1, min(5, int(card.get("strictness_level") or 3)))
@@ -717,6 +768,7 @@ def import_persona(payload: PersonaImportRequest, request: Request, db: Session 
         praise_style=praise_style,
         repetition_guard=repetition_guard,
         context_exposition_style=context_exposition_style,
+        behavior_profile_json=dumps_behavior_profile(behavior_profile),
         system_prompt=system_prompt,
         strictness_level=strictness_level,
     )

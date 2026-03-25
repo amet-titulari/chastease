@@ -16,6 +16,7 @@ class Persona(Base):
     praise_style = Column(String(30), nullable=True)
     repetition_guard = Column(String(30), nullable=True)
     context_exposition_style = Column(String(30), nullable=True)
+    behavior_profile_json = Column(Text, nullable=True)
     system_prompt = Column(Text, nullable=True)
     strictness_level = Column(Integer, default=3, nullable=False)
     avatar_media_id = Column(Integer, ForeignKey("media_assets.id", ondelete="SET NULL"), nullable=True)

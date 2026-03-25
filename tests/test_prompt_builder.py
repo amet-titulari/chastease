@@ -19,6 +19,7 @@ def test_prompt_builder_uses_external_templates_and_metadata():
         praise_style="minimal",
         repetition_guard="strong",
         context_exposition_style="minimal",
+        director_profile={"task_eagerness": "low", "state_update_aggressiveness": "low", "consequence_style": "soft", "scene_visibility": "minimal"},
         strictness_level=4,
         hard_limits=["blood", "breathplay"],
         active_phase={"title": "Warmup", "objective": "Focus", "guidance": "Steady breathing"},
@@ -51,6 +52,8 @@ def test_prompt_builder_uses_external_templates_and_metadata():
     assert "Wiederhole oder paraphrasiere die letzte Nutzernachricht nicht." in rendered
     assert "Nenne Szene, Statuswerte, Regeln oder Metadaten nur dann, wenn sie fuer die aktuelle Antwort zwingend noetig sind." in rendered
     assert "Wiederhole nicht in jeder Antwort die komplette Statuslage" in rendered
+    assert "Vergib nur selten neue persistente Aufgaben von dir aus." in rendered
+    assert "Konsequenzen eher sanft, korrigierend und deeskalierend formulieren." in rendered
 
 
 def test_prompt_builder_uses_persona_specific_template_when_available():
