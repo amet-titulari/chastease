@@ -195,38 +195,66 @@
 
     <section class="dash-card dash-card--lovense">
       <div class="dash-card-head">
-        <h3>Lovense und Toys</h3>
+        <div>
+          <h3>Lovense und Toys</h3>
+          <p class="dash-copy">Device-Link, Intensitaet und kurze Impulse steuerst du hier direkt aus der Session heraus.</p>
+        </div>
         <span id="dash-lovense-app-pill" class="dash-chip">inaktiv</span>
       </div>
-      <p id="dash-lovense-status" class="dash-copy">Lovense wird geprueft…</p>
-      <div class="dash-actions">
+      <div class="dash-lovense-statusbar">
+        <p id="dash-lovense-status" class="dash-copy">Lovense wird geprueft…</p>
+        <p id="dash-lovense-toy-meta" class="dash-copy">Der Edge 2 sollte nach dem Verbinden hier erscheinen.</p>
+      </div>
+      <div class="dash-actions dash-actions--lovense-top">
         <button id="dash-lovense-init" type="button">Lovense verbinden</button>
         <button id="dash-lovense-refresh" type="button" class="dash-link-secondary">QR erneuern</button>
         <button id="dash-lovense-open-app" type="button" class="dash-link-secondary">Connect App oeffnen</button>
       </div>
-      <div class="dash-lovense-qr-wrap">
+      <div id="dash-lovense-qr-wrap" class="dash-lovense-qr-wrap">
         <img id="dash-lovense-qr" class="dash-lovense-qr is-hidden" alt="Lovense QR" />
       </div>
-      <label class="dash-field">Aktives Toy
-        <select id="dash-lovense-toy-select">
-          <option value="">Noch kein Toy verbunden</option>
-        </select>
-      </label>
-      <div class="dash-lovense-control-grid">
-        <label class="dash-field">Intensitaet
-          <input id="dash-lovense-intensity" type="range" min="1" max="20" step="1" value="8" />
+      <div class="dash-lovense-console">
+        <label class="dash-field">Aktives Toy
+          <select id="dash-lovense-toy-select">
+            <option value="">Noch kein Toy verbunden</option>
+          </select>
         </label>
-        <label class="dash-field">Dauer (Sekunden)
-          <input id="dash-lovense-duration" type="number" min="1" max="300" step="1" value="20" />
-        </label>
+        <div class="dash-lovense-control-grid">
+          <label class="dash-field">Intensitaet
+            <div class="dash-lovense-slider-row">
+              <input id="dash-lovense-intensity" type="range" min="1" max="20" step="1" value="8" />
+              <span id="dash-lovense-intensity-value" class="dash-chip dash-chip--value">8/20</span>
+            </div>
+          </label>
+          <label class="dash-field">Dauer (Sekunden)
+            <input id="dash-lovense-duration" type="number" min="1" max="300" step="1" value="20" />
+          </label>
+          <label class="dash-field">Pause (Sekunden)
+            <input id="dash-lovense-pause" type="number" min="0" max="300" step="1" value="5" />
+          </label>
+          <label class="dash-field">Loops
+            <input id="dash-lovense-loops" type="number" min="1" max="20" step="1" value="1" />
+          </label>
+        </div>
+        <div class="dash-lovense-presets">
+          <label class="dash-field">Preset-Bibliothek
+            <select id="dash-lovense-preset">
+              <option value="tease_ramp">Tease Ramp</option>
+              <option value="strict_pulse">Strict Pulse</option>
+              <option value="wave_ladder">Wave Ladder</option>
+              <option value="deny_spikes">Deny Spikes</option>
+            </select>
+          </label>
+          <button id="dash-lovense-run-preset" type="button" class="dash-link-primary">Preset starten</button>
+        </div>
+        <p id="dash-lovense-preset-copy" class="dash-copy">Kurze Bibliothek fuer erste Routinen. Ein visueller Pattern-Designer kann spaeter darauf aufbauen.</p>
+        <div class="dash-actions dash-actions--lovense-commands">
+          <button id="dash-lovense-vibrate" type="button">Vibrieren</button>
+          <button id="dash-lovense-pulse" type="button" class="dash-link-secondary">Pulse</button>
+          <button id="dash-lovense-wave" type="button" class="dash-link-secondary">Wave</button>
+          <button id="dash-lovense-stop" type="button" class="dash-safety-btn dash-safety-btn--red">Stop</button>
+        </div>
       </div>
-      <div class="dash-actions">
-        <button id="dash-lovense-vibrate" type="button">Vibrieren</button>
-        <button id="dash-lovense-pulse" type="button" class="dash-link-secondary">Pulse</button>
-        <button id="dash-lovense-wave" type="button" class="dash-link-secondary">Wave</button>
-        <button id="dash-lovense-stop" type="button" class="dash-safety-btn dash-safety-btn--red">Stop</button>
-      </div>
-      <p id="dash-lovense-toy-meta" class="dash-copy">Der Edge 2 sollte nach dem Verbinden hier erscheinen.</p>
     </section>
 
     <section class="dash-card dash-card--wide">

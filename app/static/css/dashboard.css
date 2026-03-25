@@ -477,6 +477,10 @@
   background: rgba(255, 255, 255, 0.02);
 }
 
+.dash-lovense-qr-wrap.is-hidden {
+  display: none;
+}
+
 .dash-lovense-qr {
   width: min(220px, 100%);
   aspect-ratio: 1;
@@ -485,10 +489,74 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+.dash-lovense-statusbar {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid rgba(124, 180, 224, 0.12);
+  background: linear-gradient(180deg, rgba(10, 20, 31, 0.92), rgba(15, 24, 36, 0.78));
+}
+
+.dash-lovense-console {
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.9rem;
+  border-radius: 16px;
+  border: 1px solid rgba(124, 180, 224, 0.12);
+  background:
+    radial-gradient(circle at 88% 8%, rgba(124, 180, 224, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(18, 28, 42, 0.98), rgba(11, 18, 28, 0.96));
+}
+
 .dash-lovense-control-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.7rem;
+}
+
+.dash-lovense-presets {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  align-items: end;
+}
+
+.dash-lovense-slider-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.dash-chip--value {
+  min-width: 4.25rem;
+  justify-content: center;
+  font-family: "Space Mono", monospace;
+}
+
+.dash-actions--lovense-top {
+  margin-top: -0.1rem;
+}
+
+.dash-actions--lovense-commands {
+  padding-top: 0.1rem;
+}
+
+.dash-actions--lovense-commands button {
+  min-width: 120px;
+}
+
+.dash-lovense-presets button {
+  min-width: 180px;
+}
+
+.dash-field input[type="range"] {
+  padding: 0;
+  min-height: auto;
+  accent-color: #7cb4e0;
+  background: transparent;
+  border: 0;
 }
 
 .dash-field {
@@ -676,6 +744,10 @@
   .dash-meta-grid,
   .dash-safety-grid,
   .dash-lovense-control-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-lovense-presets {
     grid-template-columns: 1fr;
   }
 

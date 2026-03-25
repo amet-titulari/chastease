@@ -17,6 +17,58 @@ let dashLovenseSdk = null;
 let dashLovenseBootstrap = null;
 let dashLovenseToys = [];
 let dashLovensePollHandle = null;
+let dashLovenseSequenceTimeout = null;
+
+const DASH_LOVENSE_PRESETS = {
+  tease_ramp: {
+    label: "Tease Ramp",
+    kind: "pattern",
+    description: "Sanfter Aufbau ueber mehrere Stufen, dann kurzer Rueckzug.",
+    pattern: (intensity) => {
+      const level = Math.max(1, Math.min(20, intensity));
+      const low = Math.max(1, Math.round(level * 0.35));
+      const mid = Math.max(1, Math.round(level * 0.6));
+      const high = Math.max(1, Math.round(level * 0.85));
+      return `${low};${mid};${high};${level};${high};${mid}`;
+    },
+    interval: 220,
+  },
+  strict_pulse: {
+    label: "Strict Pulse",
+    kind: "pattern",
+    description: "Kurze harte Impulse mit klaren Pausen dazwischen.",
+    pattern: (intensity) => {
+      const level = Math.max(1, Math.min(20, intensity));
+      return `0;${level};0;${level};0;${Math.max(1, Math.round(level * 0.75))}`;
+    },
+    interval: 160,
+  },
+  wave_ladder: {
+    label: "Wave Ladder",
+    kind: "pattern",
+    description: "Glaettende Wellenbewegung mit progressiver Leiter.",
+    pattern: (intensity) => {
+      const level = Math.max(1, Math.min(20, intensity));
+      const one = Math.max(1, Math.round(level * 0.3));
+      const two = Math.max(1, Math.round(level * 0.5));
+      const three = Math.max(1, Math.round(level * 0.7));
+      return `${one};${two};${three};${level};${three};${two};${one};0`;
+    },
+    interval: 210,
+  },
+  deny_spikes: {
+    label: "Deny Spikes",
+    kind: "pattern",
+    description: "Unregelmaessige Spitzen mit abruptem Wegbrechen.",
+    pattern: (intensity) => {
+      const level = Math.max(1, Math.min(20, intensity));
+      const spike = Math.max(1, Math.round(level * 0.9));
+      const low = Math.max(1, Math.round(level * 0.25));
+      return `${low};${spike};0;${low};${level};0;${spike};0`;
+    },
+    interval: 150,
+  },
+};
 
 function dashEsc(value) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -116,6 +168,49 @@ function dashSetLovenseStatus(message, pill = null) {
   if (chip && pill) chip.textContent = pill;
 }
 
+function dashUpdateLovenseIntensityLabel() {
+  const input = document.getElementById("dash-lovense-intensity");
+  const el = document.getElementById("dash-lovense-intensity-value");
+  if (!input || !el) return;
+  const intensity = Math.max(1, Math.min(20, Number(input.value || 8)));
+  el.textContent = `${intensity}/20`;
+}
+
+function dashSelectedLovensePreset() {
+  const presetId = String(document.getElementById("dash-lovense-preset")?.value || "").trim();
+  return DASH_LOVENSE_PRESETS[presetId] || null;
+}
+
+function dashUpdateLovensePresetCopy() {
+  const el = document.getElementById("dash-lovense-preset-copy");
+  if (!el) return;
+  const preset = dashSelectedLovensePreset();
+  el.textContent = preset
+    ? `${preset.label}: ${preset.description}`
+    : "Kurze Bibliothek fuer erste Routinen. Ein visueller Pattern-Designer kann spaeter darauf aufbauen.";
+}
+
+function dashSetLovenseQrVisible(visible) {
+  const wrap = document.getElementById("dash-lovense-qr-wrap");
+  if (!wrap) return;
+  wrap.classList.toggle("is-hidden", !visible);
+}
+
+function dashLovenseCommandSettings() {
+  const intensity = Math.max(1, Math.min(20, Number(document.getElementById("dash-lovense-intensity")?.value || 8)));
+  const duration = Math.max(1, Math.min(300, Number(document.getElementById("dash-lovense-duration")?.value || 20)));
+  const pause = Math.max(0, Math.min(300, Number(document.getElementById("dash-lovense-pause")?.value || 5)));
+  const loops = Math.max(1, Math.min(20, Number(document.getElementById("dash-lovense-loops")?.value || 1)));
+  return { intensity, duration, pause, loops };
+}
+
+function dashClearLovenseSequence() {
+  if (dashLovenseSequenceTimeout) {
+    window.clearTimeout(dashLovenseSequenceTimeout);
+    dashLovenseSequenceTimeout = null;
+  }
+}
+
 function dashSelectedLovenseToyId() {
   return String(document.getElementById("dash-lovense-toy-select")?.value || "").trim();
 }
@@ -128,6 +223,7 @@ function dashRenderLovenseToys(toys) {
   if (!dashLovenseToys.length) {
     select.innerHTML = '<option value="">Noch kein Toy verbunden</option>';
     if (meta) meta.textContent = "Kein Lovense-Toy aktiv. Verbinde den Edge 2 ueber die Lovense Connect App.";
+    dashSetLovenseQrVisible(true);
     return;
   }
   const options = dashLovenseToys.map((toy, idx) => {
@@ -146,6 +242,7 @@ function dashRenderLovenseToys(toys) {
     const version = active.version ? ` · ${active.version}` : "";
     meta.textContent = `${label}${battery}${version}`;
   }
+  dashSetLovenseQrVisible(false);
 }
 
 async function dashLoadLovenseBootstrap() {
@@ -168,10 +265,63 @@ async function dashRefreshLovenseQr() {
     if (img && qrUrl) {
       img.src = qrUrl;
       img.classList.remove("is-hidden");
+      dashSetLovenseQrVisible(true);
     }
   } catch (err) {
     dashSetLovenseStatus(`Lovense QR fehlgeschlagen (${String(err)})`, "Fehler");
   }
+}
+
+function dashLovensePatternStrength(intensity, mode) {
+  const level = Math.max(1, Math.min(20, Number(intensity) || 8));
+  if (mode === "pulse") {
+    return `0;${level};0;${Math.max(1, Math.round(level * 0.85))};0;${level}`;
+  }
+  return `0;${Math.max(1, Math.round(level * 0.45))};${Math.max(1, Math.round(level * 0.7))};${level};${Math.max(1, Math.round(level * 0.7))};${Math.max(1, Math.round(level * 0.45))}`;
+}
+
+async function dashExecuteLovenseSegment(kind, payload) {
+  if (!dashLovenseSdk) {
+    throw new Error("Lovense ist noch nicht initialisiert.");
+  }
+  if (kind === "vibrate") {
+    if (typeof dashLovenseSdk.sendToyCommand !== "function") {
+      throw new Error("sendToyCommand wird vom geladenen SDK nicht angeboten.");
+    }
+    await dashLovenseSdk.sendToyCommand(payload);
+    return;
+  }
+  if (kind === "pattern") {
+    if (typeof dashLovenseSdk.sendPatternCommand !== "function") {
+      throw new Error("sendPatternCommand wird vom geladenen SDK nicht angeboten.");
+    }
+    await dashLovenseSdk.sendPatternCommand(payload);
+    return;
+  }
+  throw new Error(`Lovense-Segmenttyp wird nicht unterstuetzt: ${kind}`);
+}
+
+async function dashRunLovenseProgram(program) {
+  const toyId = dashSelectedLovenseToyId();
+  if (!toyId) {
+    dashSetLovenseStatus("Bitte zuerst ein verbundenes Toy waehlen.", "Toy");
+    return;
+  }
+  dashClearLovenseSequence();
+  const { intensity, duration, pause, loops } = dashLovenseCommandSettings();
+  const runOnce = async (step) => {
+    const payload = program.buildPayload({ toyId, intensity, duration });
+    await dashExecuteLovenseSegment(program.kind, payload);
+    const detail = loops > 1 ? ` Loop ${step}/${loops}` : "";
+    dashSetLovenseStatus(`${program.label}${detail} aktiv. ${duration}s on, ${pause}s pause.`, "aktiv");
+    if (step >= loops) return;
+    dashLovenseSequenceTimeout = window.setTimeout(() => {
+      runOnce(step + 1).catch((err) => {
+        dashSetLovenseStatus(`${program.label} fehlgeschlagen (${String(err)})`, "Fehler");
+      });
+    }, Math.max(0, (duration + pause) * 1000));
+  };
+  await runOnce(1);
 }
 
 async function dashSyncLovenseToys() {
@@ -248,34 +398,64 @@ async function dashSendLovenseCommand(action) {
     dashSetLovenseStatus("Bitte zuerst ein verbundenes Toy waehlen.", "Toy");
     return;
   }
-  const intensity = Math.max(1, Math.min(20, Number(document.getElementById("dash-lovense-intensity")?.value || 8)));
-  const duration = Math.max(1, Math.min(300, Number(document.getElementById("dash-lovense-duration")?.value || 20)));
-  const commandPayload = { toyId, timeSec: duration };
+  const { intensity, duration } = dashLovenseCommandSettings();
+  const commandPayload = { toyId };
   if (action === "stop") {
+    dashClearLovenseSequence();
     if (typeof dashLovenseSdk.stopToyAction === "function") {
       await dashLovenseSdk.stopToyAction(commandPayload);
     } else if (typeof dashLovenseSdk.sendToyCommand === "function") {
-      await dashLovenseSdk.sendToyCommand({ ...commandPayload, command: "Function", action: "Stop" });
+      await dashLovenseSdk.sendToyCommand({ ...commandPayload, vibrate: 0, time: 0 });
     }
     dashSetLovenseStatus("Toy gestoppt.", "Stop");
     return;
   }
-  const actionMap = {
-    vibrate: `Vibrate:${intensity}`,
-    pulse: `Pulse:${intensity}`,
-    wave: `Wave:${intensity}`,
-  };
-  if (typeof dashLovenseSdk.sendToyCommand === "function") {
-    await dashLovenseSdk.sendToyCommand({
-      ...commandPayload,
-      command: "Function",
-      action: actionMap[action] || actionMap.vibrate,
-      apiVer: 1,
+  if (action === "vibrate") {
+    await dashRunLovenseProgram({
+      label: `Vibrate ${intensity}/20`,
+      kind: "vibrate",
+      buildPayload: ({ toyId: activeToyId, intensity: activeIntensity, duration: activeDuration }) => ({
+        toyId: activeToyId,
+        vibrate: activeIntensity,
+        time: activeDuration,
+      }),
     });
-  } else {
-    throw new Error("sendToyCommand wird vom geladenen SDK nicht angeboten.");
+    return;
   }
-  dashSetLovenseStatus(`Befehl gesendet: ${actionMap[action] || actionMap.vibrate} fuer ${duration}s.`, "aktiv");
+  if (action === "pulse" || action === "wave") {
+    await dashRunLovenseProgram({
+      label: action === "pulse" ? "Pulse" : "Wave",
+      kind: "pattern",
+      buildPayload: ({ toyId: activeToyId, intensity: activeIntensity, duration: activeDuration }) => ({
+        toyId: activeToyId,
+        strength: dashLovensePatternStrength(activeIntensity, action),
+        time: activeDuration,
+        interval: 180,
+        vibrate: true,
+      }),
+    });
+    return;
+  }
+  throw new Error(`Lovense-Aktion wird vom geladenen SDK nicht unterstuetzt: ${action}`);
+}
+
+async function dashRunLovensePreset() {
+  const preset = dashSelectedLovensePreset();
+  if (!preset) {
+    dashSetLovenseStatus("Bitte zuerst ein Preset waehlen.", "Preset");
+    return;
+  }
+  await dashRunLovenseProgram({
+    label: preset.label,
+    kind: preset.kind,
+    buildPayload: ({ toyId, intensity, duration }) => ({
+      toyId,
+      strength: preset.pattern(intensity),
+      time: duration,
+      interval: preset.interval || 180,
+      vibrate: true,
+    }),
+  });
 }
 
 function dashPillList(id, items, emptyText) {
@@ -792,9 +972,19 @@ document.getElementById("dash-lovense-wave")?.addEventListener("click", () => {
 document.getElementById("dash-lovense-stop")?.addEventListener("click", () => {
   dashSendLovenseCommand("stop").catch((err) => dashSetLovenseStatus(`Stop fehlgeschlagen (${String(err)})`, "Fehler"));
 });
+document.getElementById("dash-lovense-intensity")?.addEventListener("input", dashUpdateLovenseIntensityLabel);
+document.getElementById("dash-lovense-toy-select")?.addEventListener("change", () => {
+  dashRenderLovenseToys(dashLovenseToys);
+});
+document.getElementById("dash-lovense-preset")?.addEventListener("change", dashUpdateLovensePresetCopy);
+document.getElementById("dash-lovense-run-preset")?.addEventListener("click", () => {
+  dashRunLovensePreset().catch((err) => dashSetLovenseStatus(`Preset fehlgeschlagen (${String(err)})`, "Fehler"));
+});
 
 document.addEventListener("DOMContentLoaded", async () => {
   if (!DASH_SESSION_ID) return;
+  dashUpdateLovenseIntensityLabel();
+  dashUpdateLovensePresetCopy();
   dashUpdateCountdown();
   setInterval(dashUpdateCountdown, 1000);
   await dashLoadPersonas();
