@@ -6,7 +6,7 @@ from jinja2 import Environment, FileSystemLoader
 
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
-PROMPT_VERSION = "2026-03-19.3"
+PROMPT_VERSION = "2026-03-25.1"
 
 _PROMPT_ENV = Environment(
     loader=FileSystemLoader(str(PROMPTS_DIR)),
@@ -45,11 +45,40 @@ class PromptModules:
 
 # Maps strictness_level (1-5) to a German style directive
 _STRICTNESS_STYLE = {
-    1: "Sei sehr warmherzig, großzügig mit Lob, ausführlich und fürsorglich in deinen Antworten.",
-    2: "Sei warm, eloquent, sinnlich und psychologisch feinfühlig. Verbinde liebevolles Lob mit sanfter Kontrolle. Antworte ausführlich und verbindend.",
-    3: "Antworte klar und verbindlich, aber mit Wärme. Mische ruhige Führung mit ehrlichem Lob.",
+    1: "Sei warmherzig und fürsorglich, aber bleibe konkret. Lob sparsam und nur mit Bezug auf den aktuellen Schritt.",
+    2: "Sei warm, feinfühlig und verbindlich. Verbinde sanfte Kontrolle mit zurückhaltendem Lob. Keine ausschweifenden Monologe.",
+    3: "Antworte klar und verbindlich, aber mit Wärme. Ruhige Führung, knappes situatives Lob, keine Wiederholungen.",
     4: "Antworte präzise, fordernd und strukturiert. Kurze, klare Anweisungen. Lob nur bei erkennbarer Leistung.",
     5: "Antworte knapp, diszipliniert und direkt. Keine Abschweifungen. Klare Befehle und verbindliche Statusmeldungen.",
+}
+
+_FORMATTING_STYLE = {
+    "plain": "Schreibe im Chat als Klartext, nicht als Markdown.",
+    "markdown": "Du darfst leichtes Markdown verwenden, aber nur wenn es der Lesbarkeit klar hilft.",
+}
+
+_VERBOSITY_STYLE = {
+    "brief": "Fasse dich kurz: meistens 1 bis 3 Saetze.",
+    "balanced": "Fasse dich kontrolliert: meistens 1 bis 4 Saetze oder kurze Abschnitte.",
+    "rich": "Du darfst etwas ausfuehrlicher sein, aber bleibe fokussiert und vermeide Monologe.",
+}
+
+_PRAISE_STYLE = {
+    "minimal": "Lob nur selten und nur bei klar erkennbarer Leistung. Keine Lobeshymnen.",
+    "situational": "Lob knapp, konkret und nur passend zur aktuellen Handlung.",
+    "warm": "Lob ist erlaubt, aber bleibe spezifisch, dosiert und ohne Ueberschwang.",
+}
+
+_REPETITION_GUARD = {
+    "off": "Du darfst Inhalte erneut aufgreifen, wenn es fuer die Fuehrung noetig ist.",
+    "medium": "Vermeide unnoetige Wiederholungen und paraphrasiere die letzte Nutzernachricht nicht.",
+    "strong": "Wiederhole oder paraphrasiere die letzte Nutzernachricht nicht. Formuliere bekannte Regeln und Anweisungen nur neu, wenn sich etwas geaendert hat.",
+}
+
+_CONTEXT_EXPOSITION_STYLE = {
+    "minimal": "Nenne Szene, Statuswerte, Regeln oder Metadaten nur dann, wenn sie fuer die aktuelle Antwort zwingend noetig sind.",
+    "contextual": "Nenne Szene, Regeln oder Status nur dann, wenn sie fuer die aktuelle Antwort konkret relevant sind.",
+    "full": "Du darfst Kontext, Szene und Regeln aktiv sichtbar machen, aber bleibe trotzdem klar und strukturiert.",
 }
 
 
@@ -82,6 +111,11 @@ def build_prompt_modules(
     persona_system_prompt: str | None = None,
     speech_style_tone: str | None = None,
     speech_style_dominance: str | None = None,
+    formatting_style: str | None = None,
+    verbosity_style: str | None = None,
+    praise_style: str | None = None,
+    repetition_guard: str | None = None,
+    context_exposition_style: str | None = None,
     strictness_level: int = 3,
     hard_limits: list[str] | None = None,
     active_phase: dict | None = None,
@@ -93,6 +127,14 @@ def build_prompt_modules(
 ) -> PromptModules:
     clamped = max(1, min(5, strictness_level))
     style_directive = _STRICTNESS_STYLE[clamped]
+    formatting_directive = _FORMATTING_STYLE.get((formatting_style or "plain").strip().lower(), _FORMATTING_STYLE["plain"])
+    verbosity_directive = _VERBOSITY_STYLE.get((verbosity_style or "balanced").strip().lower(), _VERBOSITY_STYLE["balanced"])
+    praise_directive = _PRAISE_STYLE.get((praise_style or "situational").strip().lower(), _PRAISE_STYLE["situational"])
+    repetition_directive = _REPETITION_GUARD.get((repetition_guard or "strong").strip().lower(), _REPETITION_GUARD["strong"])
+    context_exposition_directive = _CONTEXT_EXPOSITION_STYLE.get(
+        (context_exposition_style or "contextual").strip().lower(),
+        _CONTEXT_EXPOSITION_STYLE["contextual"],
+    )
 
     persona_template = _resolve_persona_template(persona_name)
     templates_used = [
@@ -143,6 +185,11 @@ def build_prompt_modules(
         style_module=_render_prompt_template(
             "style_directive.jinja2",
             style_directive=style_directive,
+            formatting_directive=formatting_directive,
+            verbosity_directive=verbosity_directive,
+            praise_directive=praise_directive,
+            repetition_directive=repetition_directive,
+            context_exposition_directive=context_exposition_directive,
         ),
         action_module=_render_prompt_template("action_contract.jinja2"),
         scenario_module=_render_prompt_template(

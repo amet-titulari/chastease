@@ -52,6 +52,7 @@ def map_external_persona_card(payload: dict) -> dict:
     speech_style = persona.get("speech_style", {}) if isinstance(persona, dict) else {}
     tone = str(speech_style.get("tone") or "neutral")
     dominance_style = str(speech_style.get("dominance_style") or "balanced")
+    formatting_style = str(speech_style.get("formatting_style") or "plain").strip().lower() or "plain"
     ritual_phrases = speech_style.get("ritual_phrases", [])
     if not isinstance(ritual_phrases, list):
         ritual_phrases = []
@@ -80,6 +81,10 @@ def map_external_persona_card(payload: dict) -> dict:
 
     strictness_level = _style_to_strictness(dominance_style)
     role_style = _map_role_style(tone=tone, dominance_style=dominance_style)
+    verbosity_style = "balanced" if strictness_level <= 3 else "brief"
+    praise_style = "warm" if strictness_level <= 2 else ("situational" if strictness_level <= 4 else "minimal")
+    repetition_guard = "strong"
+    context_exposition_style = "contextual" if strictness_level <= 3 else "minimal"
 
     lorebook_items = scenario.get("lorebook", []) if isinstance(scenario, dict) else []
     if not isinstance(lorebook_items, list):
@@ -97,6 +102,11 @@ def map_external_persona_card(payload: dict) -> dict:
             "description": description,
             "speech_style_tone": tone.strip() or None,
             "speech_style_dominance": dominance_style.strip() or None,
+            "formatting_style": formatting_style,
+            "verbosity_style": verbosity_style,
+            "praise_style": praise_style,
+            "repetition_guard": repetition_guard,
+            "context_exposition_style": context_exposition_style,
             "strictness_level": strictness_level,
             "system_prompt": (
                 f"Du bist {name}. Ton={tone}. Dominance={dominance_style}. "

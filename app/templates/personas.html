@@ -302,10 +302,57 @@
             <option value="soft">soft – sehr sanft</option>
             <option value="supportive">supportive – sanft</option>
             <option value="gentle-dominant">gentle-dominant – ausgewogen</option>
+            <option value="balanced">balanced – neutral fuehrend</option>
+            <option value="dominant">dominant – deutlich fuehrend</option>
+            <option value="strict">strict – hart und knapp</option>
             <option value="firm">firm – streng</option>
             <option value="hard-dominant">hard-dominant – sehr streng</option>
           </select>
           <small style="color:var(--color-text-muted,#8899aa);font-size:0.75rem;">Bestimmt automatisch die Strenge (1–5)</small>
+        </label>
+
+        <label>Formatstil
+          <select id="pm-formatting-style">
+            <option value="">Standard</option>
+            <option value="plain">plain – Klartext ohne Markdown</option>
+            <option value="markdown">markdown – leichte Formatierung erlaubt</option>
+          </select>
+        </label>
+
+        <label>Ausführlichkeit
+          <select id="pm-verbosity-style">
+            <option value="">Standard</option>
+            <option value="brief">brief – knapp</option>
+            <option value="balanced">balanced – ausgewogen</option>
+            <option value="rich">rich – etwas ausführlicher</option>
+          </select>
+        </label>
+
+        <label>Lobstil
+          <select id="pm-praise-style">
+            <option value="">Standard</option>
+            <option value="minimal">minimal – selten</option>
+            <option value="situational">situational – nur passend zur Leistung</option>
+            <option value="warm">warm – spürbar, aber dosiert</option>
+          </select>
+        </label>
+
+        <label>Wiederholungsbremse
+          <select id="pm-repetition-guard">
+            <option value="">Standard</option>
+            <option value="off">off – kaum Einschränkung</option>
+            <option value="medium">medium – unnötige Wiederholung vermeiden</option>
+            <option value="strong">strong – stark gegen Wiederholungen</option>
+          </select>
+        </label>
+
+        <label>Kontextsichtbarkeit
+          <select id="pm-context-exposition-style">
+            <option value="">Standard</option>
+            <option value="minimal">minimal – möglichst wenig Meta/Status</option>
+            <option value="contextual">contextual – nur wenn relevant</option>
+            <option value="full">full – Szene/Regeln aktiv sichtbar machen</option>
+          </select>
         </label>
 
         <label>Beschreibung
@@ -622,6 +669,11 @@ function pmLoadPreset(preset) {
   const dom = preset.speech_style_dominance || "";
   document.getElementById("pm-dominance").value = dom;
   pmAutoStrictness(dom);
+  document.getElementById("pm-formatting-style").value = preset.formatting_style || "";
+  document.getElementById("pm-verbosity-style").value = preset.verbosity_style || "";
+  document.getElementById("pm-praise-style").value = preset.praise_style || "";
+  document.getElementById("pm-repetition-guard").value = preset.repetition_guard || "";
+  document.getElementById("pm-context-exposition-style").value = preset.context_exposition_style || "";
   document.getElementById("pm-description").value = preset.description || "";
   document.getElementById("pm-system-prompt").value = preset.system_prompt || "";
   document.getElementById("pm-form-title").textContent = `Aus Preset: ${preset.name}`;
@@ -640,6 +692,11 @@ async function pmStartEdit(id) {
     const dom = p.speech_style_dominance || "";
     document.getElementById("pm-dominance").value = dom;
     pmAutoStrictness(dom);
+    document.getElementById("pm-formatting-style").value = p.formatting_style || "";
+    document.getElementById("pm-verbosity-style").value = p.verbosity_style || "";
+    document.getElementById("pm-praise-style").value = p.praise_style || "";
+    document.getElementById("pm-repetition-guard").value = p.repetition_guard || "";
+    document.getElementById("pm-context-exposition-style").value = p.context_exposition_style || "";
     document.getElementById("pm-description").value = p.description || "";
     document.getElementById("pm-system-prompt").value = p.system_prompt || "";
     pmAvatarMediaId = p.avatar_media_id || null;
@@ -684,6 +741,11 @@ document.getElementById("pm-form").addEventListener("submit", async (e) => {
     name: document.getElementById("pm-name").value.trim(),
     speech_style_tone: document.getElementById("pm-tone").value.trim() || null,
     speech_style_dominance: document.getElementById("pm-dominance").value || null,
+    formatting_style: document.getElementById("pm-formatting-style").value || null,
+    verbosity_style: document.getElementById("pm-verbosity-style").value || null,
+    praise_style: document.getElementById("pm-praise-style").value || null,
+    repetition_guard: document.getElementById("pm-repetition-guard").value || null,
+    context_exposition_style: document.getElementById("pm-context-exposition-style").value || null,
     description: document.getElementById("pm-description").value.trim() || null,
     system_prompt: document.getElementById("pm-system-prompt").value.trim() || null,
     strictness_level: parseInt(document.getElementById("pm-strictness").value, 10),
@@ -722,6 +784,11 @@ function pmResetForm() {
   document.getElementById("pm-form").reset();
   document.getElementById("pm-tone").value = "";
   document.getElementById("pm-dominance").value = "";
+  document.getElementById("pm-formatting-style").value = "";
+  document.getElementById("pm-verbosity-style").value = "";
+  document.getElementById("pm-praise-style").value = "";
+  document.getElementById("pm-repetition-guard").value = "";
+  document.getElementById("pm-context-exposition-style").value = "";
   document.getElementById("pm-strictness").value = "3";
   document.getElementById("pm-avatar-file").value = "";
   document.getElementById("pm-avatar-media-id").value = "";

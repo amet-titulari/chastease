@@ -2,7 +2,7 @@ import httpx
 import json
 from types import SimpleNamespace
 
-from app.services.ai_gateway import CustomOpenAIGateway, OllamaGateway, StubAIGateway
+from app.services.ai_gateway import CustomOpenAIGateway, OllamaGateway, StubAIGateway, _normalize_chat_message
 
 
 def test_stub_gateway_generates_contract_text():
@@ -106,6 +106,16 @@ def test_stub_chat_response_task_action_is_normalized():
     action = response.actions[0]
     assert action["type"] == "create_task"
     assert "title" in action
+
+
+def test_normalize_chat_message_strips_markdown_in_plain_mode():
+    result = _normalize_chat_message("**Status**: *gut* `ok`", "fallback")
+    assert result == "Status: gut ok"
+
+
+def test_normalize_chat_message_preserves_markdown_in_markdown_mode():
+    result = _normalize_chat_message("**Status**: *gut*", "fallback", formatting_style="markdown")
+    assert result == "**Status**: *gut*"
 
 
 def test_ollama_chat_response_invalid_json_falls_back_to_stub(monkeypatch):

@@ -13,6 +13,9 @@
         {% set meta_parts = [] %}
         {% if p.speech_style_tone %}{% set _ = meta_parts.append(p.speech_style_tone) %}{% endif %}
         {% if p.speech_style_dominance %}{% set _ = meta_parts.append(p.speech_style_dominance) %}{% endif %}
+        {% if p.formatting_style %}{% set _ = meta_parts.append("Format " ~ p.formatting_style) %}{% endif %}
+        {% if p.verbosity_style %}{% set _ = meta_parts.append("Laenge " ~ p.verbosity_style) %}{% endif %}
+        {% if p.praise_style %}{% set _ = meta_parts.append("Lob " ~ p.praise_style) %}{% endif %}
         {{ meta_parts | join(" · ") }}{% if meta_parts %} · {% endif %}Strenge {{ p.strictness_level }}
       </p>
     </div>

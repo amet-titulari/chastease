@@ -45,6 +45,18 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Experience-Onboarding bietet jetzt einen Quick-Start-Pfad fuer Solo-Sessions mit reduzierter Vorkonfiguration.
 - Chat-Kontext fuehrt jetzt einen kompakten Session-Memory-Block plus expliziten Roleplay-Status fuer stabilere narrative Kontinuität.
 
+## [0.3.5] - 2026-03-25
+
+### Geaendert
+
+- Persona-Stilregeln sind jetzt deutlich staerker persona-gesteuert statt global fest verdrahtet: Formatstil, Ausfuehrlichkeit, Lobstil, Wiederholungsbremse und Kontextsichtbarkeit koennen pro Persona festgelegt sowie importiert/exportiert werden.
+- Chat rendert jetzt leichtes Markdown in Nachrichten (`**fett**`, `*kursiv*`, `` `code` `` und Zeilenumbrueche), waehrend Klartext-Personas weiterhin von rohen Markdown-Markern bereinigt werden.
+- Ametara Titulari wurde auf kuerzere, klarere und weniger wiederholende Antworten mit dezentem Markdown, staerkerer Wiederholungsbremse und minimalerer Meta-Rezitation neu abgestimmt.
+
+### Hinzugefuegt
+
+- Neue Persona-Felder und Migration fuer `formatting_style`, `verbosity_style`, `praise_style`, `repetition_guard` und `context_exposition_style`.
+
 ## [0.3.4] - 2026-03-23
 
 ### Geaendert

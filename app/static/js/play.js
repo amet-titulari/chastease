@@ -1,4 +1,4 @@
-/* play.js – Play Mode (v0.1.5) */
+/* play.js – Play Mode (v0.3.5) */
 "use strict";
 
 // -- State from server-rendered dataset --
@@ -33,6 +33,15 @@ const voiceToggleBtn = document.getElementById("play-voice-toggle");
 
 function plEscapeHtml(value) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function plRenderMessageHtml(value) {
+  const escaped = plEscapeHtml(value);
+  return escaped
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
+    .replace(/\n/g, "<br>");
 }
 
 function plIsVoiceRunning() {
@@ -607,7 +616,7 @@ function plRenderChat(items) {
     .map((item) => {
       const role = item.role || "system";
       const cssRole = role === "user" ? "from-user" : "from-ai";
-      const content = String(item.content || "").replace(/</g, "&lt;");
+      const content = plRenderMessageHtml(item.content || "");
       const ts = plFormatMessageTime(item.created_at);
       const promptMeta = plFormatPromptMeta(item);
       const speakerName = plFormatSpeakerName(item);

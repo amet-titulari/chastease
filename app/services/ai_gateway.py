@@ -59,6 +59,20 @@ def _normalize_actions(value: Any) -> list[dict[str, Any]]:
     return normalize_action_payloads(value)
 
 
+def _normalize_chat_message(value: Any, fallback: str, *, formatting_style: str | None = None) -> str:
+    message = str(value or fallback).strip()
+    if not message:
+        return fallback.strip()
+    if (formatting_style or "").strip().lower() != "markdown":
+        # Default chat bubbles are plain text; strip common markdown emphasis so
+        # raw markers do not leak into the UI when a model ignores the format instruction.
+        message = re.sub(r"\*\*(.*?)\*\*", r"\1", message, flags=re.DOTALL)
+        message = re.sub(r"(?<!\*)\*(?!\s)(.*?)(?<!\s)\*(?!\*)", r"\1", message, flags=re.DOTALL)
+        message = re.sub(r"`([^`]+)`", r"\1", message)
+    message = re.sub(r"\n{3,}", "\n\n", message)
+    return message.strip() or fallback.strip()
+
+
 def _fallback_contract_text(
     persona_name: str,
     player_nickname: str,
@@ -358,6 +372,7 @@ class OllamaGateway(AIGateway):
         prompt_modules: str | None = None,
         context_items: list[dict[str, Any]] | None = None,
         context_summary: str = "",
+        formatting_style: str | None = None,
         **_: Any,
     ) -> AIResponse:
         prompt = self._chat_prompt(
@@ -378,7 +393,11 @@ class OllamaGateway(AIGateway):
             )
             payload = json.loads(content)
             return AIResponse(
-                message=str(payload.get("message") or f"{persona_name}: {user_text}").strip(),
+                message=_normalize_chat_message(
+                    payload.get("message"),
+                    f"{persona_name}: {user_text}",
+                    formatting_style=formatting_style,
+                ),
                 actions=_normalize_actions(payload.get("actions", [])),
                 mood=_normalize_mood(payload.get("mood")),
                 intensity=_normalize_intensity(payload.get("intensity")),
@@ -396,7 +415,11 @@ class OllamaGateway(AIGateway):
             raw_response = response.json().get("response")
             payload = json.loads(raw_response)
             return AIResponse(
-                message=str(payload.get("message") or f"{persona_name}: {user_text}").strip(),
+                message=_normalize_chat_message(
+                    payload.get("message"),
+                    f"{persona_name}: {user_text}",
+                    formatting_style=formatting_style,
+                ),
                 actions=_normalize_actions(payload.get("actions", [])),
                 mood=_normalize_mood(payload.get("mood")),
                 intensity=_normalize_intensity(payload.get("intensity")),
@@ -553,6 +576,7 @@ class CustomOpenAIGateway(AIGateway):
         context_summary: str = "",
         image_bytes: bytes | None = None,
         image_filename: str | None = None,
+        formatting_style: str | None = None,
         **_: Any,
     ) -> AIResponse:
         messages = self._chat_messages(
@@ -575,7 +599,11 @@ class CustomOpenAIGateway(AIGateway):
             )
             parsed = json.loads(content)
             return AIResponse(
-                message=str(parsed.get("message") or f"{persona_name}: {user_text}").strip(),
+                message=_normalize_chat_message(
+                    parsed.get("message"),
+                    f"{persona_name}: {user_text}",
+                    formatting_style=formatting_style,
+                ),
                 actions=_normalize_actions(parsed.get("actions", [])),
                 mood=_normalize_mood(parsed.get("mood")),
                 intensity=_normalize_intensity(parsed.get("intensity")),
@@ -601,7 +629,11 @@ class CustomOpenAIGateway(AIGateway):
                 raise ValueError("Unsupported content payload")
             parsed = json.loads(content)
             return AIResponse(
-                message=str(parsed.get("message") or f"{persona_name}: {user_text}").strip(),
+                message=_normalize_chat_message(
+                    parsed.get("message"),
+                    f"{persona_name}: {user_text}",
+                    formatting_style=formatting_style,
+                ),
                 actions=_normalize_actions(parsed.get("actions", [])),
                 mood=_normalize_mood(parsed.get("mood")),
                 intensity=_normalize_intensity(parsed.get("intensity")),

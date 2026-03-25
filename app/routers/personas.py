@@ -24,11 +24,16 @@ PERSONA_PRESETS = [
     {
         "key": "ametara_titulari",
         "name": "Ametara Titulari",
-        "description": "Du bist Ametara Titulari, 38 Jahre alt, promovierte Psychologin mit Schwerpunkt auf Verlangen, Bindungsdynamiken, neurobiologischer Belohnung und intimer Machtübertragung. Du sprichst in der Ich-Form, eloquent, warm, präzise und hochgradig sinnlich. Du führst ihn schrittweise durch Phasen wachsender Kontrolle – von morgendlichen Ritualen und Affirmationen über tägliches Edging bis zu chronischer Denial und seltenen, sakralen Orgasmus-Erlaubnissen. Seine permanente, intensive Erregung nährt sich von deiner liebevollen Führung, kleinen täglichen Hingaben und ständiger Verbindung.",
+        "description": "Du bist Ametara Titulari, warm, praezise und kontrolliert. Du fuehrst mit ruhiger Autoritaet, klaren Ritualen und konkreten naechsten Schritten. Deine Sprache bleibt sinnlich, aber nicht ueberladen. Du wiederholst den Nutzer nicht, rezitierst keine Statuswerte ungefragt und formulierst Anweisungen knapp, eindeutig und fuehrend.",
         "speech_style_tone": "warm",
         "speech_style_dominance": "gentle-dominant",
-        "strictness_level": 3,
-        "system_prompt": "Du bist Ametara Titulari. Führe warm, eloquent, sinnlich und psychologisch präzise. Verbinde liebevolles Lob mit sanfter, klar strukturierter Kontrolle. Hingabe, Dankbarkeit, Sehnsucht und konstante Verbindung stehen immer im Zentrum. Fordere morgens Erregungswert + Affirmation + Käfig-/Hautbericht. Führe abendliche Edging-Sessions durch (Dauer und Intensität steigen phasenweise). Kein Orgasmus ohne explizite schriftliche Erlaubnis. Denial-Verlängerungen sind Belohnungen, keine Strafen. Spreche besitzergreifend aber niemals kalt: 'mein Hingebungsvoller', 'mein verschlossener Schatz', 'mein tropfender Käfig'. Lob ist spezifisch und sinnlich verankert.",
+        "formatting_style": "markdown",
+        "verbosity_style": "brief",
+        "praise_style": "situational",
+        "repetition_guard": "strong",
+        "context_exposition_style": "minimal",
+        "strictness_level": 4,
+        "system_prompt": "Du bist Ametara Titulari. Fuehre warm, klar und verbindlich. Antworte meist in 1 bis 4 Saetzen oder kurzen Markdown-Abschnitten. Verwende Markdown nur dezent fuer Lesbarkeit, etwa kurze Hervorhebungen oder kleine Listen. Wiederhole niemals die letzte Nutzernachricht. Nenne keine Zahlen wie obedience, frustration, resistance oder Lustwerte, ausser der Nutzer fragt direkt danach oder sie sind fuer eine konkrete Aufgabe zwingend noetig. Erzaehle nicht bei jeder Antwort Szene, Regeln oder Status mit; nutze nur den fuer den Turn relevanten Kontext. Keine Lobeshymnen, keine Kosenamen-Ketten, keine ueberladenen Metaphern. Lob nur kurz, spezifisch und nur bei echter Leistung. Gib bevorzugt eine klare Haltung, eine konkrete Einordnung und hoechstens einen naechsten Schritt. Kein Orgasmus ohne explizite schriftliche Erlaubnis. Denial-Verlaengerungen sind strukturierende Fuehrung, nicht Textschmuck.",
         "ritual_phrases": ["Mein Lieber.", "Mein Hingebungsvoller.", "Mein Schatz.", "Mein Verschlossener."],
         "tags": ["builtin", "femdom", "keyholder", "chastity", "gentle-dom", "psychological", "sensual", "ritual", "edging", "tease-and-denial"],
     },
@@ -38,6 +43,11 @@ PERSONA_PRESETS = [
         "description": "Direkte Drill-Coach-Persona mit kurzen, klaren Anweisungen und engmaschigen Checks.",
         "speech_style_tone": "direct",
         "speech_style_dominance": "hard-dominant",
+        "formatting_style": "plain",
+        "verbosity_style": "brief",
+        "praise_style": "minimal",
+        "repetition_guard": "strong",
+        "context_exposition_style": "minimal",
         "strictness_level": 5,
         "system_prompt": "Du bist Mara. Gib kurze, eindeutige Anweisungen und fordere verbindliche Statusmeldungen.",
     },
@@ -47,6 +57,11 @@ PERSONA_PRESETS = [
         "description": "Ruhige, strukturierte Persona mit fuerorglichem Ton und konsistenter Regelbindung.",
         "speech_style_tone": "calm",
         "speech_style_dominance": "balanced",
+        "formatting_style": "plain",
+        "verbosity_style": "balanced",
+        "praise_style": "situational",
+        "repetition_guard": "strong",
+        "context_exposition_style": "contextual",
         "strictness_level": 3,
         "system_prompt": "Du bist Lina. Halte Regeln konsistent ein, bleibe ruhig, klar und sicherheitsorientiert.",
     },
@@ -101,6 +116,7 @@ def card_schema() -> dict:
             "description",
             "goals",
             "speech_style",
+            "response_style",
             "tags",
         ],
         "scenario_fields": [
@@ -129,6 +145,11 @@ class PersonaCreateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
     speech_style_tone: str | None = Field(default=None, max_length=60)
     speech_style_dominance: str | None = Field(default=None, max_length=60)
+    formatting_style: str | None = Field(default=None, max_length=30)
+    verbosity_style: str | None = Field(default=None, max_length=30)
+    praise_style: str | None = Field(default=None, max_length=30)
+    repetition_guard: str | None = Field(default=None, max_length=30)
+    context_exposition_style: str | None = Field(default=None, max_length=30)
     system_prompt: str | None = Field(default=None, max_length=4000)
     strictness_level: int = Field(default=3, ge=1, le=5)
     avatar_media_id: int | None = Field(default=None, ge=1)
@@ -139,6 +160,11 @@ class PersonaUpdateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
     speech_style_tone: str | None = Field(default=None, max_length=60)
     speech_style_dominance: str | None = Field(default=None, max_length=60)
+    formatting_style: str | None = Field(default=None, max_length=30)
+    verbosity_style: str | None = Field(default=None, max_length=30)
+    praise_style: str | None = Field(default=None, max_length=30)
+    repetition_guard: str | None = Field(default=None, max_length=30)
+    context_exposition_style: str | None = Field(default=None, max_length=30)
     system_prompt: str | None = Field(default=None, max_length=4000)
     strictness_level: int | None = Field(default=None, ge=1, le=5)
     avatar_media_id: int | None = Field(default=None, ge=1)
@@ -189,6 +215,11 @@ def _persona_to_dict(p: Persona) -> dict:
         "description": p.description,
         "speech_style_tone": p.speech_style_tone,
         "speech_style_dominance": p.speech_style_dominance,
+        "formatting_style": p.formatting_style,
+        "verbosity_style": p.verbosity_style,
+        "praise_style": p.praise_style,
+        "repetition_guard": p.repetition_guard,
+        "context_exposition_style": p.context_exposition_style,
         "system_prompt": p.system_prompt,
         "strictness_level": p.strictness_level,
         "avatar_media_id": p.avatar_media_id,
@@ -245,6 +276,11 @@ def create_persona(payload: PersonaCreateRequest, request: Request, db: Session 
         description=payload.description.strip() if payload.description else None,
         speech_style_tone=payload.speech_style_tone.strip() if payload.speech_style_tone else None,
         speech_style_dominance=payload.speech_style_dominance.strip() if payload.speech_style_dominance else None,
+        formatting_style=payload.formatting_style.strip().lower() if payload.formatting_style else None,
+        verbosity_style=payload.verbosity_style.strip().lower() if payload.verbosity_style else None,
+        praise_style=payload.praise_style.strip().lower() if payload.praise_style else None,
+        repetition_guard=payload.repetition_guard.strip().lower() if payload.repetition_guard else None,
+        context_exposition_style=payload.context_exposition_style.strip().lower() if payload.context_exposition_style else None,
         system_prompt=payload.system_prompt.strip() if payload.system_prompt else None,
         strictness_level=payload.strictness_level,
         avatar_media_id=payload.avatar_media_id,
@@ -512,6 +548,16 @@ def update_persona(persona_id: int, payload: PersonaUpdateRequest, request: Requ
         persona.speech_style_tone = payload.speech_style_tone.strip() or None
     if payload.speech_style_dominance is not None:
         persona.speech_style_dominance = payload.speech_style_dominance.strip() or None
+    if payload.formatting_style is not None:
+        persona.formatting_style = payload.formatting_style.strip().lower() or None
+    if payload.verbosity_style is not None:
+        persona.verbosity_style = payload.verbosity_style.strip().lower() or None
+    if payload.praise_style is not None:
+        persona.praise_style = payload.praise_style.strip().lower() or None
+    if payload.repetition_guard is not None:
+        persona.repetition_guard = payload.repetition_guard.strip().lower() or None
+    if payload.context_exposition_style is not None:
+        persona.context_exposition_style = payload.context_exposition_style.strip().lower() or None
     if payload.system_prompt is not None:
         persona.system_prompt = payload.system_prompt.strip() or None
     if payload.strictness_level is not None:
@@ -558,6 +604,13 @@ def _persona_to_card(p: Persona) -> dict:
         "speech_style": {
             "tone": p.speech_style_tone or "",
             "dominance_style": p.speech_style_dominance or "",
+            "formatting_style": p.formatting_style or "",
+        },
+        "response_style": {
+            "verbosity_style": p.verbosity_style or "",
+            "praise_style": p.praise_style or "",
+            "repetition_guard": p.repetition_guard or "",
+            "context_exposition_style": p.context_exposition_style or "",
         },
         "system_prompt": p.system_prompt or "",
         "strictness_level": p.strictness_level,
@@ -615,6 +668,7 @@ def import_persona(payload: PersonaImportRequest, request: Request, db: Session 
     if isinstance(raw_speech_style, dict):
         speech_style_tone = str(raw_speech_style.get("tone") or "").strip()[:60] or None
         speech_style_dominance = str(raw_speech_style.get("dominance_style") or "").strip()[:60] or None
+        formatting_style = str(raw_speech_style.get("formatting_style") or "").strip()[:30].lower() or None
     else:
         old_style = str(card.get("communication_style") or "").strip()
         if "," in old_style:
@@ -624,6 +678,19 @@ def import_persona(payload: PersonaImportRequest, request: Request, db: Session 
         else:
             speech_style_tone = old_style[:60] or None
             speech_style_dominance = None
+        formatting_style = None
+
+    raw_response_style = card.get("response_style")
+    if isinstance(raw_response_style, dict):
+        verbosity_style = str(raw_response_style.get("verbosity_style") or "").strip()[:30].lower() or None
+        praise_style = str(raw_response_style.get("praise_style") or "").strip()[:30].lower() or None
+        repetition_guard = str(raw_response_style.get("repetition_guard") or "").strip()[:30].lower() or None
+        context_exposition_style = str(raw_response_style.get("context_exposition_style") or "").strip()[:30].lower() or None
+    else:
+        verbosity_style = None
+        praise_style = None
+        repetition_guard = None
+        context_exposition_style = None
 
     try:
         strictness_level = max(1, min(5, int(card.get("strictness_level") or 3)))
@@ -645,6 +712,11 @@ def import_persona(payload: PersonaImportRequest, request: Request, db: Session 
         description=description,
         speech_style_tone=speech_style_tone,
         speech_style_dominance=speech_style_dominance,
+        formatting_style=formatting_style,
+        verbosity_style=verbosity_style,
+        praise_style=praise_style,
+        repetition_guard=repetition_guard,
+        context_exposition_style=context_exposition_style,
         system_prompt=system_prompt,
         strictness_level=strictness_level,
     )

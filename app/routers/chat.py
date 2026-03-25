@@ -456,6 +456,11 @@ def _persist_chat_turn(
         persona_system_prompt=persona.system_prompt if persona else None,
         speech_style_tone=persona.speech_style_tone if persona else None,
         speech_style_dominance=persona.speech_style_dominance if persona else None,
+        formatting_style=persona.formatting_style if persona else None,
+        verbosity_style=persona.verbosity_style if persona else None,
+        praise_style=persona.praise_style if persona else None,
+        repetition_guard=persona.repetition_guard if persona else None,
+        context_exposition_style=persona.context_exposition_style if persona else None,
         strictness_level=persona.strictness_level if persona else 3,
         hard_limits=hard_limits or None,
         active_phase=active_phase,
@@ -481,6 +486,7 @@ def _persist_chat_turn(
         context_summary=context_summary,
         image_bytes=image_bytes,
         image_filename=image_filename,
+        formatting_style=persona.formatting_style if persona else None,
     )
 
     reply_text = structured.message

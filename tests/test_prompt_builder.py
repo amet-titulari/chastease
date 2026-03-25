@@ -14,6 +14,11 @@ def test_prompt_builder_uses_external_templates_and_metadata():
         wearer_boundary="no injury",
         speech_style_tone="calm",
         speech_style_dominance="firm",
+        formatting_style="plain",
+        verbosity_style="brief",
+        praise_style="minimal",
+        repetition_guard="strong",
+        context_exposition_style="minimal",
         strictness_level=4,
         hard_limits=["blood", "breathplay"],
         active_phase={"title": "Warmup", "objective": "Focus", "guidance": "Steady breathing"},
@@ -41,6 +46,11 @@ def test_prompt_builder_uses_external_templates_and_metadata():
     assert "Aktive Phase: Warmup." in rendered
     assert "[ritual]: Follow the opening ritual." in rendered
     assert "create_task" in rendered
+    assert "Schreibe im Chat als Klartext, nicht als Markdown." in rendered
+    assert "Lob nur selten und nur bei klar erkennbarer Leistung. Keine Lobeshymnen." in rendered
+    assert "Wiederhole oder paraphrasiere die letzte Nutzernachricht nicht." in rendered
+    assert "Nenne Szene, Statuswerte, Regeln oder Metadaten nur dann, wenn sie fuer die aktuelle Antwort zwingend noetig sind." in rendered
+    assert "Wiederhole nicht in jeder Antwort die komplette Statuslage" in rendered
 
 
 def test_prompt_builder_uses_persona_specific_template_when_available():

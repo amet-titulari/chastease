@@ -156,6 +156,11 @@ def _build_ai_reminder(
         persona_system_prompt=persona.system_prompt if persona else None,
         speech_style_tone=persona.speech_style_tone if persona else None,
         speech_style_dominance=persona.speech_style_dominance if persona else None,
+        formatting_style=persona.formatting_style if persona else None,
+        verbosity_style=persona.verbosity_style if persona else None,
+        praise_style=persona.praise_style if persona else None,
+        repetition_guard=persona.repetition_guard if persona else None,
+        context_exposition_style=persona.context_exposition_style if persona else None,
         strictness_level=persona.strictness_level if persona else 3,
         hard_limits=hard_limits or None,
         active_phase=None,
@@ -173,6 +178,7 @@ def _build_ai_reminder(
         persona_name=persona_name,
         user_text=reminder_instruction,
         prompt_modules=prompt_modules.render(),
+        formatting_style=persona.formatting_style if persona else None,
         context_items=[
             {
                 "role": "system",

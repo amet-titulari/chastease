@@ -36,6 +36,7 @@ def test_persona_presets_include_core_personas():
         assert "calm_guardian_lina" in keys
         ametara = next(item for item in data["items"] if item["key"] == "ametara_titulari")
         assert ametara["strictness_level"] >= 1
+        assert ametara["formatting_style"] == "markdown"
 
 
 def test_scenario_presets_and_card_schema_exist():
@@ -70,6 +71,7 @@ def test_map_external_card_payload():
                     "speech_style": {
                         "tone": "warm",
                         "dominance_style": "gentle-dominant",
+                        "formatting_style": "plain",
                         "ritual_phrases": ["Mein Lieber."],
                     },
                 },
@@ -95,8 +97,43 @@ def test_map_external_card_payload():
         assert data["schema_version"] == "0.1.2"
         assert data["persona_preset"]["name"] == "Ametara Titulari"
         assert data["persona_preset"]["strictness_level"] == 3
+        assert data["persona_preset"]["formatting_style"] == "plain"
+        assert data["persona_preset"]["repetition_guard"] == "strong"
         assert data["setup_defaults"]["role_style"] == "supportive"
         assert data["scenario_preset"]["title"] == "Ametara Titulari Devotion Protocol"
+
+
+def test_persona_create_export_import_preserves_response_style_controls():
+    with TestClient(app) as client:
+        _register_admin(client)
+        created = client.post(
+            "/api/personas",
+            json={
+                "name": "Style Persona",
+                "strictness_level": 4,
+                "speech_style_tone": "precise",
+                "speech_style_dominance": "firm",
+                "formatting_style": "plain",
+                "verbosity_style": "brief",
+                "praise_style": "minimal",
+                "repetition_guard": "strong",
+                "context_exposition_style": "minimal",
+            },
+        )
+        assert created.status_code == 200
+        persona_id = created.json()["id"]
+        assert created.json()["verbosity_style"] == "brief"
+
+        exported = client.get(f"/api/personas/{persona_id}/export")
+        assert exported.status_code == 200
+        payload = exported.json()
+        assert payload["speech_style"]["formatting_style"] == "plain"
+        assert payload["response_style"]["praise_style"] == "minimal"
+
+        imported = client.post("/api/personas/import", json={"card": payload})
+        assert imported.status_code == 200
+        assert imported.json()["formatting_style"] == "plain"
+        assert imported.json()["context_exposition_style"] == "minimal"
 
 
 def test_map_card_requires_character_entry():
