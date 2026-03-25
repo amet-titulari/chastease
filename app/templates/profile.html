@@ -6,11 +6,11 @@
 {% endblock %}
 
 {% block content %}
-<section class="profile-shell full">
+<section class="profile-shell page-shell page-shell--app full">
     <section class="profile-card">
-      <p class="eyebrow">Profil</p>
-      <h1>Setup-Verwaltung fuer {{ current_user.username }}</h1>
-      <p class="subline">Hier kannst du deinen Setup-Stand anpassen oder den Wizard neu starten.</p>
+      <p class="eyebrow">Wearer-Profil</p>
+      <h1>Dein Wearer-Profil</h1>
+      <p class="subline">Hier pflegst du dein Wearer-Profil, deine Session-Vorgaben sowie deine KI- und Sprachkonfiguration.</p>
 
       {% if profile_message %}
       <p class="status success">{{ profile_message }}</p>
@@ -20,7 +20,7 @@
       {% endif %}
 
       <form method="post" action="/profile/setup" class="stack">
-        <label>Wearer Nickname
+        <label>Wearer-Name
           <input name="wearer_nickname" maxlength="80" value="{{ setup.wearer_nickname }}" />
         </label>
         <label>Erfahrungslevel
@@ -30,17 +30,17 @@
             <option value="advanced" {% if setup.experience_level == "advanced" %}selected{% endif %}>Advanced</option>
           </select>
         </label>
-        <label>Leitstil
+        <label>Bevorzugter Fuehrungsstil
           <select name="role_style" required>
             <option value="strict" {% if setup.style == "strict" %}selected{% endif %}>Strict</option>
             <option value="structured" {% if setup.style == "structured" %}selected{% endif %}>Structured</option>
             <option value="supportive" {% if setup.style == "supportive" %}selected{% endif %}>Supportive</option>
           </select>
         </label>
-        <label>Primaerziel
+        <label>Dein Hauptziel
           <input name="primary_goal" maxlength="120" required value="{{ setup.goal or '' }}" />
         </label>
-        <label>Boundary Note
+        <label>Grenzen und Hinweise
           <textarea name="boundary_note" rows="4" maxlength="1500" required>{{ setup.boundary or '' }}</textarea>
         </label>
         <label>Hard Limits (kommagetrennt)
@@ -55,17 +55,17 @@
             <option value="true" {% if setup.gentle_mode %}selected{% endif %}>Ja</option>
           </select>
         </label>
-        <button type="submit">Setup-Daten speichern</button>
+        <button type="submit">Wearer-Profil speichern</button>
       </form>
 
       <div class="action-row">
         <form method="post" action="/profile/restart-setup">
-          <button type="submit" class="warn">Onboarding-Defaults zuruecksetzen</button>
+          <button type="submit" class="warn">Wearer-Vorgaben zuruecksetzen</button>
         </form>
         {% if active_play_url %}
         <a class="ghost" href="{{ active_play_url }}">Zur laufenden Session</a>
         {% endif %}
-        <a class="ghost" href="/experience">Zur Experience</a>
+        <a class="ghost" href="/experience">Zum Session-Onboarding</a>
         <a class="ghost" href="/">Zur Landing</a>
       </div>
 
@@ -88,7 +88,7 @@
       <hr class="section-divider" />
 
       <details class="llm-section" {% if llm_message or llm_error %}open{% endif %}>
-        <summary><span class="eyebrow">LLM Konfiguration</span></summary>
+        <summary><span class="eyebrow">KI-Konfiguration</span></summary>
 
         {% if llm_message %}
         <p class="status success">{{ llm_message }}</p>
@@ -99,44 +99,44 @@
 
         <form method="post" action="/profile/llm" class="stack">
           <div class="llm-grid">
-            <label>Provider
+            <label>Anbieter
               <select name="provider" id="llm-provider">
                 <option value="stub" {% if not llm or llm.provider == "stub" %}selected{% endif %}>stub (Testmodus)</option>
                 <option value="custom" {% if llm and llm.provider == "custom" %}selected{% endif %}>custom (OpenAI-kompatibel)</option>
                 <option value="ollama" {% if llm and llm.provider == "ollama" %}selected{% endif %}>ollama (lokal)</option>
               </select>
             </label>
-            <label>LLM API URL
+            <label>Chat-API-URL
               <input name="api_url" type="url" placeholder="https://api.x.ai/v1/chat/completions"
                 value="{{ llm.api_url or '' }}" />
             </label>
-            <label>LLM API Key
+            <label>Chat-API-Key
               <input name="api_key" type="password" autocomplete="new-password"
                 placeholder="leer lassen um den bestehenden Key zu behalten" />
             </label>
-            <label>Chat model
+            <label>Chat-Modell
               <input name="chat_model" placeholder="z.B. grok-4-1-fast-non-reasoning"
                 value="{{ llm.chat_model or '' }}" />
             </label>
-            <label>Vision model
+            <label>Vision-Modell
               <input name="vision_model" placeholder="z.B. grok-4-1-fast-non-reasoning"
                 value="{{ llm.vision_model or '' }}" />
             </label>
-            <label>Profile active
+            <label>Profil aktiv
               <select name="profile_active">
-                <option value="true" {% if llm and llm.profile_active %}selected{% endif %}>enabled</option>
-                <option value="false" {% if not llm or not llm.profile_active %}selected{% endif %}>disabled</option>
+                <option value="true" {% if llm and llm.profile_active %}selected{% endif %}>Ja</option>
+                <option value="false" {% if not llm or not llm.profile_active %}selected{% endif %}>Nein</option>
               </select>
             </label>
           </div>
 
           {% if llm %}
-          <p class="hint">LLM-Profil geladen (bereit: {{ "ja" if llm.profile_active and llm.api_url and llm.chat_model else "nein" }}, API-Key gespeichert: {{ "ja" if llm.api_key else "nein" }}).</p>
+          <p class="hint">KI-Profil geladen (bereit: {{ "ja" if llm.profile_active and llm.api_url and llm.chat_model else "nein" }}, API-Key gespeichert: {{ "ja" if llm.api_key else "nein" }}).</p>
           {% endif %}
 
           <div class="llm-actions">
             <button type="submit">Speichern</button>
-            <button type="button" id="llm-test-btn" class="ghost">Test live</button>
+            <button type="button" id="llm-test-btn" class="ghost">Verbindung testen</button>
           </div>
           <p class="hint" id="llm-test-result"></p>
         </form>
@@ -145,8 +145,8 @@
       <hr class="section-divider" />
 
       <details class="llm-section">
-        <summary><span class="eyebrow">Audio Gateway</span></summary>
-        <p class="hint">Voice-Realtime und Transkription nutzen diese Konfiguration. API-Key kann leer bleiben, wenn dein LLM-Profil-Key genutzt werden soll.</p>
+        <summary><span class="eyebrow">Audio und Sprache</span></summary>
+        <p class="hint">Voice-Realtime und Transkription nutzen diese Konfiguration. Der API-Key kann leer bleiben, wenn dein KI-Profil-Key verwendet werden soll.</p>
         <p class="hint">Schnellvorschlaege: xAI Realtime + Whisper-kompatible Transkription vorausgefuellt.</p>
 
         <form method="post" action="/profile/audio" class="stack">
@@ -155,8 +155,8 @@
           <div class="llm-grid">
             <label>Transkription aktiviert
               <select name="transcription_enabled">
-                <option value="true" {% if audio and audio.transcription_enabled %}selected{% endif %}>enabled</option>
-                <option value="false" {% if not audio or not audio.transcription_enabled %}selected{% endif %}>disabled</option>
+                <option value="true" {% if audio and audio.transcription_enabled %}selected{% endif %}>Ja</option>
+                <option value="false" {% if not audio or not audio.transcription_enabled %}selected{% endif %}>Nein</option>
               </select>
             </label>
             <label>Transkription API URL
@@ -182,8 +182,8 @@
 
             <label>Voice Realtime aktiviert
               <select name="voice_realtime_enabled">
-                <option value="true" {% if audio and audio.voice_realtime_enabled %}selected{% endif %}>enabled</option>
-                <option value="false" {% if not audio or not audio.voice_realtime_enabled %}selected{% endif %}>disabled</option>
+                <option value="true" {% if audio and audio.voice_realtime_enabled %}selected{% endif %}>Ja</option>
+                <option value="false" {% if not audio or not audio.voice_realtime_enabled %}selected{% endif %}>Nein</option>
               </select>
             </label>
             <label>Realtime WS URL
@@ -214,7 +214,7 @@
 
           <p class="hint">Gespeicherte Keys: Transkription {{ "ja" if audio and audio.transcription_api_key_stored else "nein" }}, Voice {{ "ja" if audio and audio.voice_api_key_stored else "nein" }}.</p>
           <p class="hint" id="audio-test-result"></p>
-          <button type="submit">Audio-Gateway speichern</button>
+          <button type="submit">Audio-Konfiguration speichern</button>
         </form>
       </details>
 

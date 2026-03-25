@@ -5,17 +5,18 @@
   --xp-ink: var(--ink);
   --xp-muted: var(--muted);
   --xp-accent: var(--accent);
-  --xp-accent-2: #3f738f;
-  --xp-danger: #9b3f4f;
+  --xp-accent-2: #b95633;
+  --xp-danger: #b24f45;
   --xp-border: var(--line);
-  --xp-glow: rgba(124, 180, 224, 0.17);
+  --xp-glow: rgba(255, 145, 101, 0.17);
 }
 
 .xp-shell {
   background:
-    radial-gradient(circle at 100% 0, rgba(124, 180, 224, 0.12), transparent 24%),
-    linear-gradient(180deg, rgba(11, 18, 27, 0.98), rgba(9, 15, 23, 0.96));
-  border: 1px solid rgba(127, 163, 194, 0.16);
+    radial-gradient(circle at 100% 0, rgba(255, 145, 101, 0.12), transparent 24%),
+    radial-gradient(circle at 0 100%, rgba(160, 54, 28, 0.14), transparent 26%),
+    linear-gradient(180deg, rgba(17, 12, 14, 0.98), rgba(10, 9, 11, 0.96));
+  border: 1px solid rgba(255, 145, 101, 0.14);
   border-radius: 28px;
   padding: 1.35rem;
   box-shadow: var(--shadow-lg);
@@ -64,7 +65,7 @@
   border: 1px solid var(--xp-border);
   border-radius: 22px;
   padding: 1.15rem;
-  box-shadow: inset 0 0 0 1px rgba(139, 181, 216, 0.04), var(--shadow-md);
+  box-shadow: inset 0 0 0 1px rgba(255, 145, 101, 0.05), var(--shadow-md);
 }
 
 .xp-card.onboarding {
@@ -72,9 +73,9 @@
 }
 
 .xp-gate {
-  border: 1px solid rgba(88, 124, 156, 0.35);
+  border: 1px solid rgba(255, 145, 101, 0.22);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(17, 28, 41, 0.9), rgba(12, 20, 30, 0.78));
+  background: linear-gradient(180deg, rgba(30, 18, 18, 0.92), rgba(14, 11, 13, 0.82));
   padding: 1rem;
   margin-bottom: 1rem;
 }
@@ -104,8 +105,8 @@
   margin-bottom: 0.9rem;
   padding: 0.75rem 0.85rem;
   border-radius: 16px;
-  border: 1px solid rgba(88, 124, 156, 0.25);
-  background: linear-gradient(180deg, rgba(13, 22, 33, 0.72), rgba(10, 18, 28, 0.58));
+  border: 1px solid rgba(255, 145, 101, 0.16);
+  background: linear-gradient(180deg, rgba(24, 15, 17, 0.76), rgba(14, 11, 13, 0.6));
 }
 
 .xp-quickbar-copy {
@@ -176,9 +177,9 @@
   gap: 0.4rem;
   margin-bottom: 1rem;
   padding: 0.3rem;
-  border: 1px solid rgba(127, 163, 194, 0.14);
+  border: 1px solid rgba(255, 145, 101, 0.12);
   border-radius: 18px;
-  background: rgba(7, 12, 18, 0.46);
+  background: rgba(14, 10, 11, 0.52);
   overflow-x: auto;
 }
 
@@ -201,9 +202,9 @@
 }
 
 .step-tab.is-active {
-  background: linear-gradient(120deg, #1f3147, #253c56);
+  background: linear-gradient(120deg, #6f2d1d, #9a4428);
   color: var(--xp-ink);
-  border-color: rgba(139, 185, 212, 0.38);
+  border-color: rgba(255, 177, 109, 0.22);
   box-shadow: 0 0 0 1px var(--xp-glow);
 }
 
@@ -219,8 +220,8 @@
 
 .step-pane.is-active {
   display: block;
-  border-left: 3px solid #3f678f;
-  background: linear-gradient(180deg, rgba(17, 27, 40, 0.78), rgba(13, 21, 32, 0.58));
+  border-left: 3px solid #b95633;
+  background: linear-gradient(180deg, rgba(26, 16, 18, 0.82), rgba(15, 11, 13, 0.62));
   border-radius: 16px;
   padding: 1rem;
 }
@@ -229,12 +230,12 @@
   min-height: 540px;
 }
 
-.xp-card.onboarding[data-active-step="1"] .step-pane.is-active { border-left-color: #5f8ec8; }
-.xp-card.onboarding[data-active-step="2"] .step-pane.is-active { border-left-color: #4d9ab5; }
-.xp-card.onboarding[data-active-step="3"] .step-pane.is-active { border-left-color: #57a07d; }
-.xp-card.onboarding[data-active-step="4"] .step-pane.is-active { border-left-color: #b58f52; }
-.xp-card.onboarding[data-active-step="5"] .step-pane.is-active { border-left-color: #8f6fcb; }
-.xp-card.onboarding[data-active-step="6"] .step-pane.is-active { border-left-color: #bf6a77; }
+.xp-card.onboarding[data-active-step="1"] .step-pane.is-active { border-left-color: #ff7d4d; }
+.xp-card.onboarding[data-active-step="2"] .step-pane.is-active { border-left-color: #ff9a61; }
+.xp-card.onboarding[data-active-step="3"] .step-pane.is-active { border-left-color: #d99a5c; }
+.xp-card.onboarding[data-active-step="4"] .step-pane.is-active { border-left-color: #ffb16d; }
+.xp-card.onboarding[data-active-step="5"] .step-pane.is-active { border-left-color: #e27f76; }
+.xp-card.onboarding[data-active-step="6"] .step-pane.is-active { border-left-color: #ff8f6f; }
 
 label {
   display: block;
@@ -254,7 +255,7 @@ textarea {
   border-radius: 12px;
   padding: 0.7rem 0.78rem;
   font: inherit;
-  background: #0b121a;
+  background: #120d10;
   color: #e8f0fa;
   font-weight: 500;
 }
@@ -265,11 +266,11 @@ textarea::placeholder {
 }
 
 button {
-  background: linear-gradient(120deg, #36567a, var(--xp-accent));
+  background: linear-gradient(120deg, #843620, var(--xp-accent));
   color: #fff;
   border: none;
   font-weight: 700;
-  box-shadow: 0 12px 28px rgba(60, 105, 139, 0.2);
+  box-shadow: 0 12px 28px rgba(122, 43, 20, 0.24);
 }
 
 .inline-actions {

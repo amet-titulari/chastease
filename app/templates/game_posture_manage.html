@@ -2,7 +2,7 @@
 
 {% block extra_head %}
 <style>
-  .pm-shell { max-width: 1080px; margin: 0 auto; display: grid; gap: 0.9rem; }
+  .pm-shell { display: grid; gap: 0.9rem; }
   .pm-note { margin: 0; color: #9db1c7; }
   .pm-top-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; }
   .pm-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
@@ -129,7 +129,7 @@
 {% endblock %}
 
 {% block content %}
-<section class="pm-shell">
+<section class="pm-shell page-shell page-shell--app">
   <section class="card full" style="display:grid; gap:0.45rem;">
     <div style="display:flex; justify-content:space-between; gap:0.6rem; align-items:center; flex-wrap:wrap;">
       <h2 style="margin:0;">Postures verwalten</h2>

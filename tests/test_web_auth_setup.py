@@ -210,7 +210,8 @@ def test_profile_page_renders_audio_gateway_section():
 
         resp = client.get("/profile", follow_redirects=False)
         assert resp.status_code == 200
-        assert "Audio Gateway" in resp.text
+        assert "Audio und Sprache" in resp.text
+        assert "Dein Wearer-Profil" in resp.text
         assert "/profile/audio" in resp.text
         assert "/profile/audio/test" in resp.text
         assert "Voice Modus" not in resp.text
@@ -227,7 +228,7 @@ def test_profile_session_summary_partial_renders_for_authenticated_user():
         resp = client.get("/profile/partials/session-summary", follow_redirects=False)
         assert resp.status_code == 200
         assert "Session-Uebersicht" in resp.text
-        assert 'hx-trigger="load, every 30s"' in resp.text
+        assert 'hx-trigger="every 30s"' in resp.text
 
 
 def test_profile_audio_test_requires_authentication():

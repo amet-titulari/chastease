@@ -1,6 +1,6 @@
 <div class="persona-list" id="pm-list">
   {% if not items %}
-  <div class="empty-hint">Noch keine Personas gespeichert. Erstelle deine erste unten.</div>
+  <div class="empty-hint">Noch keine Keyholder-Profile gespeichert. Erstelle dein erstes unten.</div>
   {% else %}
   {% for p in items %}
   <div class="persona-card" data-id="{{ p.id }}">
@@ -8,7 +8,7 @@
     <img class="persona-avatar" src="/api/media/{{ p.avatar_media_id }}/content" alt="Avatar" />
     {% endif %}
     <div class="persona-card-info">
-      <p class="persona-card-name">{{ p.name }}</p>
+      <p class="persona-card-name">{{ p.name }}{% if p.is_system %} <span class="tpl-chip">System</span>{% endif %}</p>
       <p class="persona-card-meta">
         {% set meta_parts = [] %}
         {% if p.speech_style_tone %}{% set _ = meta_parts.append(p.speech_style_tone) %}{% endif %}
@@ -20,9 +20,14 @@
       </p>
     </div>
     <div class="persona-card-actions">
+      {% if p.is_system %}
+      <button type="button" data-pm-action="edit-system" data-system-key="{{ p.system_key }}" onclick="window.pmStartEditSystem && window.pmStartEditSystem('{{ p.system_key }}')" class="ghost">Anzeigen</button>
+      <a href="/api/personas/system/{{ p.system_key }}/export" data-pm-action="export-system" data-system-key="{{ p.system_key }}" data-persona-name="{{ p.name|e }}" download>&#8659; Export</a>
+      {% else %}
       <button type="button" data-pm-action="edit" data-persona-id="{{ p.id }}" onclick="window.pmStartEdit && window.pmStartEdit({{ p.id }})" class="ghost">Bearbeiten</button>
       <a href="/api/personas/{{ p.id }}/export" data-pm-action="export" data-persona-id="{{ p.id }}" data-persona-name="{{ p.name|e }}" download>&#8659; Export</a>
       <button type="button" data-pm-action="delete" data-persona-id="{{ p.id }}" data-persona-name="{{ p.name|e }}" class="warn">L&ouml;schen</button>
+      {% endif %}
     </div>
   </div>
   {% endfor %}

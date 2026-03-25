@@ -2,7 +2,7 @@
 
 {% block extra_head %}
 <style>
-  .gms-shell { max-width: 1180px; margin: 0 auto; display: grid; gap: 0.9rem; }
+  .gms-shell { display: grid; gap: 0.9rem; }
   .gms-note { margin: 0; color: #9db1c7; }
   .gms-cards {
     display: grid;
@@ -140,7 +140,7 @@
 {% endblock %}
 
 {% block content %}
-<section class="gms-shell">
+<section class="gms-shell page-shell page-shell--app">
   <section class="card full" style="display:grid; gap:0.55rem;">
     <h2 style="margin:0;">Spielekonfiguration</h2>
     <p class="gms-note">Globale Basiswerte gelten fuer alle Spiele. Modulspezifische Schwellenwerte pflegst du darunter in separaten Cards pro Modul.</p>

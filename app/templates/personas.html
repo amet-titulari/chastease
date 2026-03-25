@@ -4,6 +4,13 @@
 <link rel="stylesheet" href="/static/css/profile.css" />
 <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 <style>
+  .persona-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+  }
+
   .persona-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
 
   .persona-card {
@@ -219,20 +226,58 @@
       grid-template-columns: 1fr;
     }
   }
+
+  @media (max-width: 680px) {
+    .persona-toolbar {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .persona-toolbar > * {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .persona-card {
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .persona-card-meta {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+    }
+
+    .persona-card-actions {
+      width: 100%;
+    }
+
+    .persona-card-actions button,
+    .persona-card-actions a {
+      flex: 1 1 calc(50% - 0.2rem);
+      min-width: 0;
+    }
+
+    .create-toggle-row button {
+      width: 100%;
+      min-width: 0;
+    }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="profile-shell full">
+<section class="profile-shell page-shell page-shell--app full">
   <section class="profile-card">
-    <p class="eyebrow">Persona-Verwaltung</p>
-    <h1>Keyholderinnen</h1>
-    <p class="subline">Erstelle, bearbeite und verwalte deine Personas. Du kannst sie beim Starten einer Session auswählen.</p>
+    <p class="eyebrow">Keyholder-Verwaltung</p>
+    <h1>Keyholder-Profile</h1>
+    <p class="subline">Verwalte eigene und integrierte Keyholder-Profile. System-Profile koennen verwendet und exportiert, aber nicht veraendert oder geloescht werden.</p>
 
     <div id="pm-status"></div>
 
     <!-- ── Toolbar ── -->
-    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+    <div class="persona-toolbar">
       <button type="button" id="pm-export-all-btn" class="ghost" style="font-size:0.82rem;">&#8659; Alle exportieren</button>
       <label class="import-zone" id="pm-import-zone" title="JSON-Datei importieren">
         <input type="file" id="pm-import-input" accept=".json,application/json" multiple />
@@ -240,7 +285,7 @@
       </label>
     </div>
 
-    <!-- ── Persona-Liste ── -->
+    <!-- ── Keyholder-Liste ── -->
     <div class="persona-list" id="pm-list" hx-get="/personas/partials/list" hx-trigger="load" hx-swap="outerHTML">
       <div class="empty-hint">Wird geladen…</div>
     </div>
@@ -249,9 +294,9 @@
       <button type="button" id="pm-new-btn">Neu</button>
     </div>
 
-    <!-- ── Neue Persona / Bearbeiten ── -->
+    <!-- ── Neues Keyholder-Profil / Bearbeiten ── -->
     <div class="form-panel" id="pm-form-panel" style="display:none;">
-      <h3 id="pm-form-title">Neue Persona erstellen</h3>
+      <h3 id="pm-form-title">Neues Keyholder-Profil erstellen</h3>
 
       <!-- Preset-Auswahl -->
       <details id="pm-preset-section">
@@ -682,7 +727,7 @@ function pmLoadPreset(preset) {
   document.getElementById("pm-description").value = preset.description || "";
   document.getElementById("pm-system-prompt").value = preset.system_prompt || "";
   document.getElementById("pm-behavior-profile").value = preset.behavior_profile ? JSON.stringify(preset.behavior_profile, null, 2) : "";
-  document.getElementById("pm-form-title").textContent = `Aus Preset: ${preset.name}`;
+  document.getElementById("pm-form-title").textContent = `Aus System-Keyholder-Profil: ${preset.name}`;
   document.getElementById("pm-cancel-btn").style.display = "inline-flex";
   document.getElementById("pm-preset-section").removeAttribute("open");
 }
@@ -709,7 +754,7 @@ async function pmStartEdit(id) {
     pmAvatarMediaId = p.avatar_media_id || null;
     document.getElementById("pm-avatar-media-id").value = pmAvatarMediaId ? String(pmAvatarMediaId) : "";
     pmUpdateAvatarUi(p.avatar_url || null);
-    document.getElementById("pm-form-title").textContent = `Persona bearbeiten: ${p.name}`;
+    document.getElementById("pm-form-title").textContent = `Keyholder-Profil bearbeiten: ${p.name}`;
     document.getElementById("pm-save-btn").textContent = "Änderungen speichern";
     document.getElementById("pm-cancel-btn").style.display = "inline-flex";
     pmCurrentPersonaId = p.id;
@@ -728,12 +773,45 @@ async function pmStartEdit(id) {
 }
 window.pmStartEdit = pmStartEdit;
 
+async function pmStartEditSystem(systemKey) {
+  try {
+    const p = await pmFetch(`/api/personas/system/${systemKey}`);
+    pmShowForm();
+    document.getElementById("pm-edit-id").value = "";
+    document.getElementById("pm-name").value = p.name || "";
+    document.getElementById("pm-tone").value = p.speech_style_tone || "";
+    document.getElementById("pm-dominance").value = p.speech_style_dominance || "";
+    document.getElementById("pm-formatting-style").value = p.formatting_style || "";
+    document.getElementById("pm-verbosity-style").value = p.verbosity_style || "";
+    document.getElementById("pm-praise-style").value = p.praise_style || "";
+    document.getElementById("pm-repetition-guard").value = p.repetition_guard || "";
+    document.getElementById("pm-context-exposition-style").value = p.context_exposition_style || "";
+    document.getElementById("pm-description").value = p.description || "";
+    document.getElementById("pm-system-prompt").value = p.system_prompt || "";
+    document.getElementById("pm-behavior-profile").value = p.behavior_profile ? JSON.stringify(p.behavior_profile, null, 2) : "";
+    document.getElementById("pm-strictness").value = String(p.strictness_level || 3);
+    pmAvatarMediaId = null;
+    document.getElementById("pm-avatar-media-id").value = "";
+    pmUpdateAvatarUi(null);
+    document.getElementById("pm-form-title").textContent = `System-Keyholder-Profil: ${p.name}`;
+    document.getElementById("pm-save-btn").textContent = "Als neues Profil speichern";
+    document.getElementById("pm-cancel-btn").style.display = "inline-flex";
+    pmCurrentPersonaId = null;
+    document.getElementById("pm-task-lib-panel").style.display = "none";
+    pmRenderTemplates([]);
+    document.getElementById("pm-form-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    pmStatus("Fehler: " + e.message, true);
+  }
+}
+window.pmStartEditSystem = pmStartEditSystem;
+
 // ── Delete ──
 async function pmDelete(id, name) {
-  if (!confirm(`Persona "${name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
+  if (!confirm(`Keyholder-Profil "${name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
   try {
     await pmFetch(`/api/personas/${id}`, { method: "DELETE" });
-    pmStatus(`Persona "${name}" gelöscht.`);
+    pmStatus(`Keyholder-Profil "${name}" gelöscht.`);
     pmReloadList();
   } catch (e) {
     pmStatus("Fehler beim Löschen: " + e.message, true);
@@ -775,10 +853,10 @@ document.getElementById("pm-form").addEventListener("submit", async (e) => {
   try {
     if (editId) {
       await pmFetch(`/api/personas/${editId}`, { method: "PUT", body: JSON.stringify(payload) });
-      pmStatus(`Persona "${payload.name}" aktualisiert.`);
+      pmStatus(`Keyholder-Profil "${payload.name}" aktualisiert.`);
     } else {
       await pmFetch("/api/personas", { method: "POST", body: JSON.stringify(payload) });
-      pmStatus(`Persona "${payload.name}" erstellt.`);
+      pmStatus(`Keyholder-Profil "${payload.name}" erstellt.`);
     }
     pmResetForm();
     pmReloadList();
@@ -813,8 +891,8 @@ function pmResetForm() {
   document.getElementById("pm-avatar-media-id").value = "";
   pmAvatarMediaId = null;
   pmUpdateAvatarUi(null);
-  document.getElementById("pm-form-title").textContent = "Neue Persona erstellen";
-  document.getElementById("pm-save-btn").textContent = "Persona speichern";
+  document.getElementById("pm-form-title").textContent = "Neues Keyholder-Profil erstellen";
+  document.getElementById("pm-save-btn").textContent = "Keyholder-Profil speichern";
   document.getElementById("pm-cancel-btn").style.display = "none";
   pmCurrentPersonaId = null;
   pmCurrentTemplates = [];

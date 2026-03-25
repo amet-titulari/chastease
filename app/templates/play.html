@@ -4,13 +4,16 @@
 <link rel="stylesheet" href="/static/css/play.css?v=20260325a" />
 {% endblock %}
 
+{% block body_class %}page-layout-app page-layout-play{% endblock %}
+
 {% block content %}
 <div class="play-shell"
      data-session-id="{{ session_id }}"
      data-ws-token="{{ ws_token }}"
   data-lock-end="{{ lock_end or '' }}"
   data-persona-name="{{ persona_name }}"
-  data-player-name="{{ player_nickname }}">
+  data-player-name="{{ player_nickname }}"
+  data-app-version="0.3.7">
 
   <header class="play-header">
     <div class="play-header-left">
@@ -22,6 +25,7 @@
     </div>
     <div class="play-header-right">
       <a href="/dashboard/{{ session_id }}" class="play-head-link">Dashboard</a>
+      <button id="play-focus-toggle" class="play-head-link play-focus-toggle" type="button" aria-pressed="false" title="Fokusmodus umschalten">Fokus</button>
 
       <div class="play-roleplay-menu" id="play-roleplay-menu">
         <button id="play-roleplay-toggle" class="play-roleplay-toggle" type="button" aria-haspopup="true" aria-expanded="false">

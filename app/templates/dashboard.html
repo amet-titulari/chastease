@@ -4,6 +4,8 @@
 <link rel="stylesheet" href="/static/css/dashboard.css?v={{ dashboard_css_version }}" />
 {% endblock %}
 
+{% block body_class %}page-layout-app page-layout-dashboard{% endblock %}
+
 {% block content %}
 <div class="dashboard-shell"
      data-session-id="{{ session_id }}"
@@ -24,7 +26,7 @@
       <div class="dash-hero-actions">
         <a href="/play/{{ session_id }}" class="dash-link-primary">Zum Chat</a>
         <a href="/games" class="dash-link-secondary">Spiele</a>
-        <a href="/profile" class="dash-link-secondary">Profil</a>
+        <a href="/profile" class="dash-link-secondary">Wearer-Profil</a>
       </div>
     </div>
     <div class="dash-hero-bottom">
@@ -126,7 +128,7 @@
 
     <section class="dash-card dash-card--table dash-card--profile">
       <div class="dash-card-head">
-        <h3>Profil und Policy</h3>
+        <h3>Wearer-Profil und Policy</h3>
       </div>
       <dl class="dash-info-grid">
         <dt>Erfahrung</dt><dd id="dash-exp">—</dd>

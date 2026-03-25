@@ -47,6 +47,7 @@ def test_experience_page_renders():
         html = resp.text
         assert "Chastease Chat" in html
         assert "Onboarding" in html
+        assert "Wearer" in html
         assert "xp-create-session" in html
         assert "xp-scenario-preset" in html
         assert "xp-scenario-editor" in html
@@ -340,9 +341,11 @@ def test_experience_and_profile_redirect_to_play_when_active_session_exists():
 
         profile = client.get("/profile", follow_redirects=False)
         assert profile.status_code == 200
-        assert "Audio Gateway" in profile.text
+        assert "Audio und Sprache" in profile.text
         assert "Zur laufenden Session" in profile.text
         assert "Session-Uebersicht" in profile.text
+        assert "Wearer-Profil" in profile.text
+        assert "Dein Wearer-Profil" in profile.text
         assert 'hx-get="/profile/partials/session-summary"' in profile.text
 
 
@@ -368,6 +371,8 @@ def test_play_page_uses_versioned_play_script_url():
         assert play.status_code == 200
         assert '/static/js/play.js?v=' in play.text
         assert 'href="/dashboard/' in play.text
+        assert 'id="play-focus-toggle"' in play.text
+        assert 'data-app-version="0.3.7"' in play.text
         assert "Regenerate" not in play.text
         assert "Verlauf" not in play.text
 

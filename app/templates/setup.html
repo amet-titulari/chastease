@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block content %}
-<section class="setup-shell full">
+<section class="setup-shell page-shell page-shell--app full">
     <section class="setup-hero">
       <p class="eyebrow">Setup Wizard</p>
       <h1>Hi {{ current_user.username }}, wir richten jetzt alles gemeinsam ein.</h1>
@@ -24,7 +24,7 @@
         <section class="wizard-step is-active" data-step="1">
           <h2>Dein Wearer-Profil</h2>
           <p>Das hilft dem System, passende Aufgaben, Tonalitaet und Intensitaet auf dich abzustimmen.</p>
-          <label>Wearer Nickname
+          <label>Wearer-Name
             <input name="wearer_nickname" maxlength="80" value="{{ current_user.setup_wearer_nickname or current_user.username }}" />
           </label>
           <label>Erfahrungslevel
@@ -34,7 +34,7 @@
               <option value="advanced" {% if current_user.setup_experience_level == "advanced" %}selected{% endif %}>Advanced – ich kenne mich gut aus</option>
             </select>
           </label>
-          <label>Leitstil
+          <label>Bevorzugter Fuehrungsstil
             <select name="role_style" id="setup-role-style" required>
               <option value="strict">Strict</option>
               <option value="structured">Structured</option>
@@ -42,7 +42,7 @@
             </select>
           </label>
 
-          <div class="style-guide" aria-label="Leitstil Erklaerung">
+          <div class="style-guide" aria-label="Fuehrungsstil Erklaerung">
             <article class="style-card">
               <h3>Strict</h3>
               <p>Direkte Fuehrung, klare Ansagen, enger Takt bei Checks und Aufgaben.</p>
@@ -112,7 +112,7 @@
               Eigenes Ziel frei eingeben
             </label>
           </fieldset>
-          <label>Primarziel
+          <label>Dein Hauptziel
             <input id="setup-primary-goal" name="primary_goal" maxlength="120" placeholder="z.B. Routine und bessere Compliance" required value="Routine und taegliche Compliance stabilisieren" />
           </label>
           <p class="hint">Du kannst einen Vorschlag nutzen oder mit "Eigenes Ziel" einen freien Text eintragen.</p>
@@ -155,8 +155,8 @@
           <label>Eigene Ergaenzung (optional)
             <input id="setup-boundary-custom" placeholder="z.B. Kein Kontakt nach 23:00" />
           </label>
-          <button id="setup-boundary-apply" type="button">Auswahl in Boundary Note uebernehmen</button>
-          <label>Boundary Note
+          <button id="setup-boundary-apply" type="button">Auswahl in Grenzen und Hinweise uebernehmen</button>
+          <label>Grenzen und Hinweise
             <textarea id="setup-boundary-note" name="boundary_note" rows="4" maxlength="1500" placeholder="z.B. Keine Aufgaben waehrend Arbeitszeit" required></textarea>
           </label>
           <p class="hint">Nutze die Mehrfachauswahl als Vorlage und ergaenze bei Bedarf individuell.</p>
@@ -164,8 +164,8 @@
 
         <section class="wizard-step" data-step="4">
           <h2>KI-Anbindung</h2>
-          <p>Chastease benoetigt eine funktionierende LLM-Verbindung. Konfiguriere deinen KI-Provider und teste die Verbindung &mdash; ohne erfolgreichem Test kann das Setup nicht abgeschlossen werden.</p>
-          <label>Provider
+          <p>Chastease benoetigt eine funktionierende KI-Verbindung. Konfiguriere deinen KI-Anbieter und teste die Verbindung &mdash; ohne erfolgreichen Test kann das Setup nicht abgeschlossen werden.</p>
+          <label>Anbieter
             <select name="llm_provider" id="setup-llm-provider">
               <option value="custom" {% if not llm or llm.provider in ('custom', 'stub') %}selected{% endif %}>OpenAI-kompatibel (xAI, OpenRouter, LM Studio ...)</option>
               <option value="ollama" {% if llm and llm.provider == 'ollama' %}selected{% endif %}>Ollama (lokal)</option>

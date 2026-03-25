@@ -43,7 +43,7 @@
       <div class="step-tabs" role="tablist" aria-label="Onboarding Steps">
         <button class="step-tab is-active" data-step="1" type="button">Keyholderin</button>
         <button class="step-tab" data-step="2" type="button">Scenario</button>
-        <button class="step-tab" data-step="3" type="button">Profil</button>
+        <button class="step-tab" data-step="3" type="button">Wearer</button>
         <button class="step-tab" data-step="4" type="button">Regeln</button>
         <button class="step-tab" data-step="5" type="button">LLM</button>
         <button class="step-tab" data-step="6" type="button">Vertrag</button>
@@ -131,7 +131,7 @@
       </section>
 
       <section class="step-pane" data-step="3">
-        <p class="step-title">Spielerprofil</p>
+        <p class="step-title">Wearer-Profil</p>
         <label>Dein Nickname
           <input id="xp-player-nickname" value="{{ setup.wearer_nickname if setup else (current_user.username if current_user else 'Player') }}" />
         </label>
@@ -280,8 +280,8 @@
       </section>
 
       <section class="step-pane" data-step="5">
-        <p class="step-title">LLM Konfiguration (pro Session)</p>
-        <label>Provider
+        <p class="step-title">KI-Konfiguration (pro Session)</p>
+        <label>Anbieter
           <select id="xp-llm-provider">
             <option value="custom">OpenAI-kompatibel</option>
             <option value="ollama">Ollama</option>

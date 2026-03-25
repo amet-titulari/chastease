@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/static/css/style.css?v=20260322d" />
   {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   {% set current_path = request.url.path if request else '' %}
   {% set admin_active = current_path.startswith('/admin') or current_path in ['/personas', '/scenarios', '/inventory', '/contracts', '/history'] or current_path.startswith('/games/module-settings') or current_path.startswith('/games/postures') %}
   {% set show_top_navigation = not (not current_user and current_path == '/') %}
@@ -25,6 +25,10 @@
           height="30"
           style="width:30px;height:30px;max-width:30px;max-height:30px;object-fit:cover;border-radius:8px;"
         />
+        <span class="brand-wordmark">
+          <span class="brand-title">Chastease</span>
+          <span class="brand-sub">Control Protocol</span>
+        </span>
       </a>
       {% if show_top_navigation %}
       <nav class="topnav" aria-label="Hauptnavigation">
@@ -73,7 +77,7 @@
     </div>
     {% endif %}
   </header>
-  <main class="container main-grid">
+  <main class="container main-grid {% block main_class %}{% endblock %}">
     {% block content %}{% endblock %}
   </main>
   <script>

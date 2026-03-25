@@ -3,8 +3,6 @@
 {% block extra_head %}
 <style>
 .contract-view-shell {
-  max-width: 820px;
-  margin: 0 auto;
   padding: 1.5rem 1rem 3rem;
 }
 .contract-view-header {
@@ -88,7 +86,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="contract-view-shell">
+<div class="contract-view-shell page-shell page-shell--app">
   <div class="contract-view-header">
     <div>
       <a href="/play/{{ session_id }}" class="contract-back-link">&#8592; Zurück zur Session</a>

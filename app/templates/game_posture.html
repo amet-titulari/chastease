@@ -2,7 +2,7 @@
 
 {% block extra_head %}
 <style>
-  .game-shell { max-width: 1080px; margin: 0 auto; display: grid; gap: 0.9rem; }
+  .game-shell { display: grid; gap: 0.9rem; }
   .hidden { display: none !important; }
   .game-card {
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -366,7 +366,7 @@
 {% endblock %}
 
 {% block content %}
-<section class="game-shell">
+<section class="game-shell page-shell page-shell--app">
   <section id="gm-setup-section" class="game-card">
     <div class="top-row" style="align-items:center;">
       <h1 style="margin:0;">{{ module_title }}</h1>

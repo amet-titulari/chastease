@@ -31,10 +31,11 @@ def _normalize_local_path(path_value: str) -> str:
 
 class Settings(BaseSettings):
     app_name: str = "Chastease"
-    debug: bool = True
+    debug: bool = False
     cookie_secure: bool = False
     database_url: str = "sqlite:///./data/chastease.db"
     media_dir: str = "./data/media"
+    allow_insecure_dev_mode: bool = False
     hygiene_overdue_penalty_seconds: int = 600
     hygiene_opening_max_duration_seconds: int = 900
     local_timezone: str = "Europe/Berlin"
@@ -80,11 +81,13 @@ class Settings(BaseSettings):
     voice_realtime_agent_id: str | None = None
     voice_realtime_default_voice: str = "Eve"
     voice_realtime_expires_seconds: int = 300
+    verification_media_retention_enabled: bool = True
+    verification_media_retention_hours: int = 72
     # Audit log – set CHASTEASE_AUDIT_LOG_ENABLED=true to activate
     audit_log_enabled: bool = False
     audit_log_path: str = "./data/audit.log"
     # WebSocket debug output panel in play view
-    play_ws_debug_enabled: bool = True
+    play_ws_debug_enabled: bool = False
 
     model_config = SettingsConfigDict(
         env_prefix="CHASTEASE_",

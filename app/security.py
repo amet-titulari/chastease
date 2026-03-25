@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models.auth_user import AuthUser
+from app.services.access_control import is_admin_user
 
 
 AUTH_COOKIE_NAME = "chastease_auth"
@@ -77,6 +78,6 @@ def require_admin_session_user(request: Request, db: Session = Depends(get_db)) 
     user = db.query(AuthUser).filter(AuthUser.session_token == token).first()
     if user is None:
         raise HTTPException(status_code=401, detail="unauthorized")
-    if not bool(getattr(user, "is_admin", False)):
+    if not is_admin_user(user):
         raise HTTPException(status_code=403, detail="admin_required")
     return user

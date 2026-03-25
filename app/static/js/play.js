@@ -1,4 +1,4 @@
-/* play.js – Play Mode (v0.3.5) */
+/* play.js – Play Mode (v0.3.7) */
 "use strict";
 
 // -- State from server-rendered dataset --
@@ -8,6 +8,8 @@ const WS_TOKEN = _shell?.dataset.wsToken || "";
 const LOCK_END = _shell?.dataset.lockEnd || "";
 const PERSONA_NAME = _shell?.dataset.personaName || "Keyholderin";
 const PLAYER_NAME = _shell?.dataset.playerName || "Du";
+const APP_VERSION = _shell?.dataset.appVersion || "0.3.7";
+const FOCUS_STORAGE_KEY = `chastease.play.focus.${SESSION_ID || "default"}.${APP_VERSION}`;
 
 let plSocket = null;
 let plVoiceSocket = null;
@@ -30,6 +32,36 @@ const debugOut = document.getElementById("play-output");
 const wsBtn = document.getElementById("play-connect-ws");
 const voiceStatusEl = document.getElementById("play-voice-status");
 const voiceToggleBtn = document.getElementById("play-voice-toggle");
+const focusToggleBtn = document.getElementById("play-focus-toggle");
+
+function plApplyFocusMode(enabled) {
+  if (!_shell) return;
+  _shell.classList.toggle("is-focus-mode", Boolean(enabled));
+  document.body.classList.toggle("play-focus-mode", Boolean(enabled));
+  if (focusToggleBtn) {
+    focusToggleBtn.setAttribute("aria-pressed", enabled ? "true" : "false");
+    focusToggleBtn.textContent = enabled ? "Fokus an" : "Fokus";
+  }
+}
+
+function plInitFocusMode() {
+  let enabled = false;
+  try {
+    enabled = window.localStorage.getItem(FOCUS_STORAGE_KEY) === "1";
+  } catch (_) {}
+  plApplyFocusMode(enabled);
+}
+
+function plToggleFocusMode() {
+  const enabled = !_shell?.classList.contains("is-focus-mode");
+  plApplyFocusMode(enabled);
+  closeRoleplayDropdown();
+  closeTasksDropdown();
+  closeSafetyDropdown();
+  try {
+    window.localStorage.setItem(FOCUS_STORAGE_KEY, enabled ? "1" : "0");
+  } catch (_) {}
+}
 
 function plEscapeHtml(value) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -1061,6 +1093,7 @@ chatInput?.addEventListener("keydown", (e) => {
 
 document.getElementById("play-connect-ws")?.addEventListener("click", plConnectWs);
 document.getElementById("play-voice-toggle")?.addEventListener("click", plToggleVoiceMode);
+focusToggleBtn?.addEventListener("click", plToggleFocusMode);
 
 document.getElementById("play-resume-session")?.addEventListener("click", async () => {
   if (!SESSION_ID) return;
@@ -1399,6 +1432,7 @@ document.getElementById("play-verify-submit")?.addEventListener("click", async (
 // -- Auto-load on page ready --
 document.addEventListener("DOMContentLoaded", async () => {
   if (!SESSION_ID) return;
+  plInitFocusMode();
   await plInitVoiceAvailability();
   // Pre-load persona avatar for chat rendering
   try {

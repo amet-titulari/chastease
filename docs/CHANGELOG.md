@@ -9,12 +9,18 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ### Hinzugefuegt
 
+- Fokusmodus fuer `/play`, der die Sessionflaeche auf Chat, Tasks und Safety reduziert und sekundaere UI-Elemente ausblendet.
+- In-Memory-Rate-Limits fuer teure Endpunkte wie Medien-Uploads, Verifikations-Uploads und Voice-Session-Bootstrap.
+- Automatische Bereinigung alter Verifikationsbilder per Retention-Job (`CHASTEASE_VERIFICATION_MEDIA_RETENTION_*`).
 - Browserorientierter CSRF-Schutz fuer mutierende Requests via Same-Origin-Pruefung und CSRF-Header im Frontend-Basislayout.
 - Moderne Passwort-Hashes via `pwdlib` mit Argon2-Backend fuer neue Accounts.
 - Login-Migrationspfad: bestehende Legacy-SHA-256-Salt-Hashes werden beim erfolgreichen Login automatisch auf das neue Format umgestellt.
 
 ### Geaendert
 
+- Release-Stand auf `0.3.7` angehoben.
+- Produktive Defaults gehaertet: `debug` und Play-WS-Debug sind jetzt standardmaessig deaktiviert; ohne `CHASTEASE_SECRET_ENCRYPTION_KEY` startet die App ausserhalb eines expliziten Dev-Modus nicht mehr.
+- Rollenlogik fuer `owner`/`admin` zentralisiert, um das spaetere Identity-Konzept sauberer vorzubereiten.
 - Auth- und CSRF-Cookies koennen jetzt ueber `CHASTEASE_COOKIE_SECURE` fuer HTTPS-nahe Setups auf `Secure` gesetzt werden.
 - Dokumentation (README, Architektur, Security) auf den aktuellen Sicherheits- und Feature-Stand synchronisiert.
 - Authentifizierte Seiten verwenden jetzt konsistent dieselbe Hauptnavigation; Landing/Login bleiben bewusst ohne volles App-Menue.
@@ -44,6 +50,10 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Play-Mode zeigt degradierte AI-/Reminder-Zustände jetzt zusätzlich sichtbar als Banner im UI.
 - Experience-Onboarding bietet jetzt einen Quick-Start-Pfad fuer Solo-Sessions mit reduzierter Vorkonfiguration.
 - Chat-Kontext fuehrt jetzt einen kompakten Session-Memory-Block plus expliziten Roleplay-Status fuer stabilere narrative Kontinuität.
+- Terminologie im UI vereinheitlicht: `Keyholder-Profile` und `Wearer-Profil` ersetzen die alte Mischung aus `Persona`, `Spielerprofil` und `Setup-Verwaltung`.
+- Integrierte System-Keyholder erscheinen jetzt zusammen mit eigenen Keyholder-Profilen in derselben Verwaltung, bleiben dort aber bewusst schreibgeschuetzt.
+- Seitenbreiten werden jetzt zentral ueber gemeinsame Layout-Klassen gesteuert statt pro Template mit lokalen `max-width`-Werten.
+- Mobile Breakpoints fuer Header und Keyholder-Verwaltung nachgeschaerft, damit Brand-Zeile, Toolbar und Karten auf kleinen Displays wieder sauber umbrechen.
 
 ## [0.3.5] - 2026-03-25
 

@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, text
 
 from app.config import settings
+from app.release import APP_VERSION
 from app.models import (  # noqa: F401
     auth_user,
     contract,
@@ -41,7 +42,9 @@ from app.models import (  # noqa: F401
 )
 from app.routers import chat, games, health, hygiene, inventory, inventory_postures, media, personas, push, safety, scenarios, sessions, tasks, verification as verification_router, voice, web
 from app.security import CSRF_COOKIE_NAME, SAFE_HTTP_METHODS, csrf_tokens_match, extract_csrf_token, generate_csrf_token, is_cookie_secure, is_same_origin_request
+from app.services.media_retention import prune_expired_verification_media
 from app.services.proactive_messaging import sweep_proactive_messages_for_active_sessions
+from app.services.request_limits import check_request_limit
 from app.services.session_timer_sweeper import sweep_expired_active_sessions
 from app.services.task_sweeper import sweep_overdue_tasks_for_active_sessions
 
@@ -50,8 +53,19 @@ scheduler: BackgroundScheduler | None = None
 logger = logging.getLogger("uvicorn.error")
 
 
+def validate_runtime_configuration() -> None:
+    if settings.debug or settings.allow_insecure_dev_mode:
+        return
+    if not str(settings.secret_encryption_key or "").strip():
+        raise RuntimeError(
+            "CHASTEASE_SECRET_ENCRYPTION_KEY is required unless CHASTEASE_DEBUG=true "
+            "or CHASTEASE_ALLOW_INSECURE_DEV_MODE=true is set."
+        )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_runtime_configuration()
     init_app_storage()
     global scheduler
     if scheduler is None:
@@ -80,6 +94,14 @@ async def lifespan(_: FastAPI):
                 id="session_timer_sweeper",
                 replace_existing=True,
             )
+        if settings.verification_media_retention_enabled:
+            scheduler.add_job(
+                prune_expired_verification_media,
+                "interval",
+                hours=1,
+                id="verification_media_retention",
+                replace_existing=True,
+            )
 
         if scheduler.get_jobs():
             scheduler.start()
@@ -91,7 +113,20 @@ async def lifespan(_: FastAPI):
         scheduler = None
 
 
-app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version=APP_VERSION, debug=settings.debug, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def request_throttle_middleware(request: Request, call_next):
+    allowed, rule = check_request_limit(request)
+    if not allowed and rule is not None:
+        return _error_response(
+            status_code=429,
+            code="rate_limited",
+            message=f"Zu viele Anfragen fuer {rule.key}. Bitte kurz warten.",
+            details={"window_seconds": rule.window_seconds, "max_requests": rule.max_requests},
+        )
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -200,6 +235,7 @@ def init_app_storage() -> None:
 
 
 # Initialize immediately so imports in tests have a migrated schema available.
+validate_runtime_configuration()
 init_app_storage()
 
 

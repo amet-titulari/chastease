@@ -26,7 +26,9 @@ from app.models.scenario import Scenario
 from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
 from app.models.task import Task
+from app.routers.personas import PERSONA_PRESETS, get_system_persona_by_key
 from app.security import AUTH_COOKIE_NAME, is_cookie_secure
+from app.services.access_control import is_admin_user
 from app.services.auth_password import hash_password, is_legacy_password_hash, verify_legacy_password, verify_password_and_update
 from app.services.contract_service import default_contract_preferences, normalize_contract_preferences
 from app.services.games import as_public_module_payload, get_module, list_modules
@@ -107,7 +109,7 @@ def _admin_bootstrap_emails() -> set[str]:
 
 
 def _is_admin_user(user: AuthUser | None) -> bool:
-    return bool(user and bool(getattr(user, "is_admin", False)))
+    return is_admin_user(user)
 
 
 def _require_admin_user(request: Request, db: Session) -> AuthUser | RedirectResponse:
@@ -296,7 +298,7 @@ def _render_profile_page(
         request=request,
         name="profile.html",
         context={
-            "title": f"{settings.app_name} Profile",
+            "title": f"{settings.app_name} Wearer-Profil",
             "current_user": user,
             "profile_message": profile_message,
             "profile_error": profile_error,
@@ -878,7 +880,7 @@ def save_llm_profile(
         request=request,
         user=user,
         db=db,
-        llm_message="LLM-Profil gespeichert.",
+        llm_message="KI-Profil gespeichert.",
     )
 
 
@@ -889,7 +891,7 @@ async def test_llm_profile(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
     if not llm or not llm.api_url or not llm.chat_model:
-        return JSONResponse({"ok": False, "error": "Kein LLM-Profil konfiguriert."})
+        return JSONResponse({"ok": False, "error": "Kein KI-Profil konfiguriert."})
     try:
         headers = {"Content-Type": "application/json"}
         if llm.api_key:
@@ -1024,7 +1026,7 @@ async def test_audio_gateway(request: Request, db: Session = Depends(get_db)):
     llm = db.query(LlmProfile).filter(LlmProfile.profile_key == "default").first()
     api_key = (settings.voice_realtime_api_key or "").strip() or ((llm.api_key if llm else "") or "").strip()
     if not api_key:
-        return JSONResponse({"ok": False, "error": "Kein Voice API-Key gefunden (Audio Gateway oder LLM Profil)."})
+        return JSONResponse({"ok": False, "error": "Kein Voice-API-Key gefunden (Audio und Sprache oder KI-Profil)."})
 
     if mode == "voice-agent" and not (settings.voice_realtime_agent_id or "").strip():
         return JSONResponse({"ok": False, "error": "Voice Agent ID fehlt (Mode A)."})
@@ -1151,7 +1153,7 @@ def personas_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request=request,
         name="personas.html",
-        context={"title": f"{settings.app_name} – Personas", "current_user": user},
+        context={"title": f"{settings.app_name} – Keyholder-Profile", "current_user": user},
     )
 
 
@@ -1161,13 +1163,21 @@ def personas_list_partial(request: Request, db: Session = Depends(get_db)):
     if isinstance(user, RedirectResponse):
         return user
     rows = db.query(Persona).order_by(Persona.id.asc()).all()
+    items = list(rows)
+    existing_names = {str(row.name).strip() for row in rows}
+    for preset in PERSONA_PRESETS:
+        if str(preset.get("name") or "").strip() in existing_names:
+            continue
+        system_persona = get_system_persona_by_key(str(preset.get("key") or ""))
+        if system_persona:
+            items.append(system_persona)
     return templates.TemplateResponse(
         request=request,
         name="partials/persona_list.html",
         context={
-            "title": f"{settings.app_name} – Personas",
+            "title": f"{settings.app_name} – Keyholder-Profile",
             "current_user": user,
-            "items": rows,
+            "items": items,
         },
     )
 

@@ -1,6 +1,4 @@
 .setup-shell {
-  width: min(860px, 100%);
-  margin: 0;
   display: grid;
   gap: 0.9rem;
 }

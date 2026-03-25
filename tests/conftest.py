@@ -23,6 +23,8 @@ TEST_AUDIT_LOG_PATH = TEST_DATA_DIR / "audit.log"
 os.environ.setdefault("CHASTEASE_DATABASE_URL", f"sqlite:///./{TEST_DB_PATH.as_posix()}")
 os.environ.setdefault("CHASTEASE_MEDIA_DIR", f"./{TEST_MEDIA_DIR.as_posix()}")
 os.environ.setdefault("CHASTEASE_AUDIT_LOG_PATH", f"./{TEST_AUDIT_LOG_PATH.as_posix()}")
+os.environ.setdefault("CHASTEASE_DEBUG", "true")
+os.environ.setdefault("CHASTEASE_SECRET_ENCRYPTION_KEY", "test-secret-key")
 
 TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -53,6 +55,7 @@ from app.models.session import Session
 from app.models.session_item import SessionItem
 from app.models.task import Task
 from app.models.verification import Verification
+from app.services.request_limits import reset_request_limits
 
 
 SNAPSHOT_MODELS = [
@@ -132,3 +135,10 @@ def cleanup_test_data():
         query.delete(synchronize_session=False)
     db.commit()
     db.close()
+
+
+@pytest.fixture(autouse=True)
+def reset_runtime_limiters():
+    reset_request_limits()
+    yield
+    reset_request_limits()

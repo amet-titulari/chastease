@@ -40,6 +40,9 @@ def test_personas_partial_renders_for_admin():
         assert resp.status_code == 200
         assert 'id="pm-list"' in resp.text
         assert 'hx-get="/personas/partials/list"' not in resp.text
+        assert "Ametara Titulari" in resp.text
+        assert 'data-pm-action="edit-system"' in resp.text
+        assert "/api/personas/system/ametara_titulari/export" in resp.text
 
 
 def test_personas_partial_uses_resilient_action_hooks():
@@ -63,6 +66,17 @@ def test_personas_partial_uses_resilient_action_hooks():
         assert f'data-persona-id="{persona_id}"' in resp.text
         assert f'href="/api/personas/{persona_id}/export"' in resp.text
         assert 'window.pmStartEdit && window.pmStartEdit' in resp.text
+
+
+def test_system_persona_detail_endpoint_returns_builtin_profile():
+    with TestClient(app) as client:
+        _register_admin(client)
+        resp = client.get("/api/personas/system/ametara_titulari")
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["is_system"] is True
+        assert payload["can_edit"] is False
+        assert payload["name"] == "Ametara Titulari"
 
 
 def test_personas_partial_redirects_for_non_admin():

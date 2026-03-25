@@ -137,6 +137,39 @@ SCENARIO_PRESETS = [
 ]
 
 
+def _system_persona_from_preset(preset: dict) -> dict:
+    return {
+        "id": f"system:{preset['key']}",
+        "system_key": preset["key"],
+        "name": preset["name"],
+        "description": preset.get("description"),
+        "speech_style_tone": preset.get("speech_style_tone"),
+        "speech_style_dominance": preset.get("speech_style_dominance"),
+        "formatting_style": preset.get("formatting_style"),
+        "verbosity_style": preset.get("verbosity_style"),
+        "praise_style": preset.get("praise_style"),
+        "repetition_guard": preset.get("repetition_guard"),
+        "context_exposition_style": preset.get("context_exposition_style"),
+        "behavior_profile": preset.get("behavior_profile") or {},
+        "system_prompt": preset.get("system_prompt"),
+        "strictness_level": preset.get("strictness_level") or 3,
+        "avatar_media_id": None,
+        "avatar_url": None,
+        "created_at": None,
+        "is_system": True,
+        "can_edit": False,
+        "can_delete": False,
+    }
+
+
+def get_system_persona_by_key(persona_key: str) -> dict | None:
+    key = str(persona_key or "").strip()
+    for preset in PERSONA_PRESETS:
+        if preset.get("key") == key:
+            return _system_persona_from_preset(preset)
+    return None
+
+
 @router.get("/presets")
 def list_persona_presets() -> dict:
     return {"items": PERSONA_PRESETS}
@@ -269,6 +302,9 @@ def _persona_to_dict(p: Persona) -> dict:
         "avatar_media_id": p.avatar_media_id,
         "avatar_url": f"/api/media/{p.avatar_media_id}/content" if p.avatar_media_id else None,
         "created_at": p.created_at.isoformat() if p.created_at else None,
+        "is_system": False,
+        "can_edit": True,
+        "can_delete": True,
     }
 
 
@@ -344,6 +380,15 @@ def get_persona(persona_id: int, request: Request, db: Session = Depends(get_db)
     if not persona:
         raise HTTPException(status_code=404, detail="Persona not found")
     return _persona_to_dict(persona)
+
+
+@router.get("/system/{persona_key}")
+def get_system_persona(persona_key: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    require_session_user(request, db)
+    persona = get_system_persona_by_key(persona_key)
+    if persona is None:
+        raise HTTPException(status_code=404, detail="System persona not found")
+    return persona
 
 
 @router.get("/{persona_id}/task-templates")
@@ -676,6 +721,41 @@ def export_persona(persona_id: int, request: Request, db: Session = Depends(get_
     slug = re.sub(r"[^a-z0-9]+", "-", persona.name.lower()).strip("-") or f"persona-{persona_id}"
     return JSONResponse(
         content=_persona_to_card(persona),
+        headers={"Content-Disposition": f'attachment; filename="persona-{slug}.json"'},
+    )
+
+
+@router.get("/system/{persona_key}/export")
+def export_system_persona(persona_key: str, request: Request, db: Session = Depends(get_db)) -> JSONResponse:
+    require_admin_session_user(request, db)
+    persona = get_system_persona_by_key(persona_key)
+    if persona is None:
+        raise HTTPException(status_code=404, detail="System persona not found")
+    slug = str(persona["name"]).lower().replace(" ", "-")
+    return JSONResponse(
+        content={
+            "schema_version": SCHEMA_VERSION,
+            "kind": "character_card",
+            "name": persona["name"],
+            "key": persona["system_key"],
+            "archetype": "keyholder",
+            "description": persona.get("description") or "",
+            "speech_style": {
+                "tone": persona.get("speech_style_tone") or "",
+                "dominance_style": persona.get("speech_style_dominance") or "",
+                "formatting_style": persona.get("formatting_style") or "",
+            },
+            "response_style": {
+                "verbosity_style": persona.get("verbosity_style") or "",
+                "praise_style": persona.get("praise_style") or "",
+                "repetition_guard": persona.get("repetition_guard") or "",
+                "context_exposition_style": persona.get("context_exposition_style") or "",
+            },
+            "behavior_profile": persona.get("behavior_profile") or {},
+            "system_prompt": persona.get("system_prompt") or "",
+            "strictness_level": persona.get("strictness_level") or 3,
+            "tags": ["builtin", "exported"],
+        },
         headers={"Content-Disposition": f'attachment; filename="persona-{slug}.json"'},
     )
 
