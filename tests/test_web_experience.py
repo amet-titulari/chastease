@@ -372,7 +372,7 @@ def test_play_page_uses_versioned_play_script_url():
         assert '/static/js/play.js?v=' in play.text
         assert 'href="/dashboard/' in play.text
         assert 'id="play-focus-toggle"' in play.text
-        assert 'data-app-version="0.3.7"' in play.text
+        assert 'data-app-version="0.4.0"' in play.text
         assert "Regenerate" not in play.text
         assert "Verlauf" not in play.text
 

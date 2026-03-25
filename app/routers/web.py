@@ -32,6 +32,7 @@ from app.services.access_control import is_admin_user
 from app.services.auth_password import hash_password, is_legacy_password_hash, verify_legacy_password, verify_password_and_update
 from app.services.contract_service import default_contract_preferences, normalize_contract_preferences
 from app.services.games import as_public_module_payload, get_module, list_modules
+from app.services.lovense import lovense_status_payload
 
 router = APIRouter(tags=["web"])
 templates = Jinja2Templates(directory="app/templates")
@@ -1674,6 +1675,7 @@ def dashboard_page(session_id: int, request: Request, db: Session = Depends(get_
             "lock_end": session_obj.lock_end.isoformat() if session_obj.lock_end else None,
             "dashboard_css_version": _asset_version("css/dashboard.css"),
             "dashboard_js_version": _asset_version("js/dashboard.js"),
+            "lovense_status": lovense_status_payload(),
         },
     )
 

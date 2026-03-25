@@ -223,6 +223,10 @@
   grid-column: span 5;
 }
 
+.dash-card--lovense {
+  grid-column: span 7;
+}
+
 .dash-card-head {
   display: flex;
   align-items: center;
@@ -464,6 +468,29 @@
   color: #ffb4b4;
 }
 
+.dash-lovense-qr-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem;
+  border-radius: 14px;
+  border: 1px dashed rgba(124, 180, 224, 0.16);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dash-lovense-qr {
+  width: min(220px, 100%);
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dash-lovense-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
 .dash-field {
   display: grid;
   gap: 0.35rem;
@@ -620,7 +647,8 @@
   .dash-card--relationship,
   .dash-card--protocol,
   .dash-card--profile,
-  .dash-card--safety {
+  .dash-card--safety,
+  .dash-card--lovense {
     grid-column: auto;
   }
 }
@@ -646,7 +674,8 @@
   }
 
   .dash-meta-grid,
-  .dash-safety-grid {
+  .dash-safety-grid,
+  .dash-lovense-control-grid {
     grid-template-columns: 1fr;
   }
 

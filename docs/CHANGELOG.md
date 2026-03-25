@@ -15,10 +15,11 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Browserorientierter CSRF-Schutz fuer mutierende Requests via Same-Origin-Pruefung und CSRF-Header im Frontend-Basislayout.
 - Moderne Passwort-Hashes via `pwdlib` mit Argon2-Backend fuer neue Accounts.
 - Login-Migrationspfad: bestehende Legacy-SHA-256-Salt-Hashes werden beim erfolgreichen Login automatisch auf das neue Format umgestellt.
+- Erste Lovense-Integration fuer `0.4.0`: serverseitiger Bootstrap fuer das Lovense Standard JS SDK, Dashboard-Panel mit QR-/App-Connect, Toy-Liste und Basisbefehlen fuer Vibrate/Pulse/Wave/Stop.
 
 ### Geaendert
 
-- Release-Stand auf `0.3.7` angehoben.
+- Release-Stand auf `0.4.0` angehoben.
 - Produktive Defaults gehaertet: `debug` und Play-WS-Debug sind jetzt standardmaessig deaktiviert; ohne `CHASTEASE_SECRET_ENCRYPTION_KEY` startet die App ausserhalb eines expliziten Dev-Modus nicht mehr.
 - Rollenlogik fuer `owner`/`admin` zentralisiert, um das spaetere Identity-Konzept sauberer vorzubereiten.
 - Auth- und CSRF-Cookies koennen jetzt ueber `CHASTEASE_COOKIE_SECURE` fuer HTTPS-nahe Setups auf `Secure` gesetzt werden.
@@ -54,6 +55,7 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Integrierte System-Keyholder erscheinen jetzt zusammen mit eigenen Keyholder-Profilen in derselben Verwaltung, bleiben dort aber bewusst schreibgeschuetzt.
 - Seitenbreiten werden jetzt zentral ueber gemeinsame Layout-Klassen gesteuert statt pro Template mit lokalen `max-width`-Werten.
 - Mobile Breakpoints fuer Header und Keyholder-Verwaltung nachgeschaerft, damit Brand-Zeile, Toolbar und Karten auf kleinen Displays wieder sauber umbrechen.
+- Roadmap neu geschnitten: Device-/Toy-Fundament priorisiert vor Gamification.
 
 ## [0.3.5] - 2026-03-25
 

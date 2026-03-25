@@ -8,6 +8,15 @@ let dashLockEnd = dashShell?.dataset.lockEnd || "";
 let dashHygieneOpeningId = null;
 let dashHygieneUsesSeal = false;
 let dashHygieneConfiguredDurationSeconds = 900;
+const dashLovenseEnabled = String(dashShell?.dataset.lovenseEnabled || "") === "1";
+const dashLovenseConfigured = String(dashShell?.dataset.lovenseConfigured || "") === "1";
+const dashLovensePlatform = String(dashShell?.dataset.lovensePlatform || "").trim();
+const dashLovenseAppType = String(dashShell?.dataset.lovenseAppType || "connect").trim() || "connect";
+const dashLovenseDebug = String(dashShell?.dataset.lovenseDebug || "") === "1";
+let dashLovenseSdk = null;
+let dashLovenseBootstrap = null;
+let dashLovenseToys = [];
+let dashLovensePollHandle = null;
 
 function dashEsc(value) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -98,6 +107,175 @@ function dashSetAvatar(id, url) {
   } else {
     img.classList.add("is-hidden");
   }
+}
+
+function dashSetLovenseStatus(message, pill = null) {
+  const el = document.getElementById("dash-lovense-status");
+  if (el) el.textContent = message || "—";
+  const chip = document.getElementById("dash-lovense-app-pill");
+  if (chip && pill) chip.textContent = pill;
+}
+
+function dashSelectedLovenseToyId() {
+  return String(document.getElementById("dash-lovense-toy-select")?.value || "").trim();
+}
+
+function dashRenderLovenseToys(toys) {
+  dashLovenseToys = Array.isArray(toys) ? toys.filter(Boolean) : [];
+  const select = document.getElementById("dash-lovense-toy-select");
+  const meta = document.getElementById("dash-lovense-toy-meta");
+  if (!select) return;
+  if (!dashLovenseToys.length) {
+    select.innerHTML = '<option value="">Noch kein Toy verbunden</option>';
+    if (meta) meta.textContent = "Kein Lovense-Toy aktiv. Verbinde den Edge 2 ueber die Lovense Connect App.";
+    return;
+  }
+  const options = dashLovenseToys.map((toy, idx) => {
+    const id = String(toy.id || toy.toyId || toy.toy_id || idx);
+    const name = String(toy.name || toy.nickName || toy.nickname || toy.type || "Toy");
+    const state = String(toy.status || toy.connectStatus || toy.connection || "verbunden");
+    return `<option value="${dashEsc(id)}">${dashEsc(name)} (${dashEsc(state)})</option>`;
+  });
+  select.innerHTML = options.join("");
+  const chosen = dashSelectedLovenseToyId() || String(dashLovenseToys[0].id || dashLovenseToys[0].toyId || dashLovenseToys[0].toy_id || "");
+  if (chosen) select.value = chosen;
+  const active = dashLovenseToys.find((toy) => String(toy.id || toy.toyId || toy.toy_id || "") === select.value) || dashLovenseToys[0];
+  if (meta && active) {
+    const label = String(active.name || active.nickName || active.nickname || active.type || "Toy");
+    const battery = active.battery != null ? ` · Akku ${active.battery}%` : "";
+    const version = active.version ? ` · ${active.version}` : "";
+    meta.textContent = `${label}${battery}${version}`;
+  }
+}
+
+async function dashLoadLovenseBootstrap() {
+  const data = await dashPost(`/api/lovense/sessions/${DASH_SESSION_ID}/bootstrap`, {});
+  dashLovenseBootstrap = data;
+  return data;
+}
+
+function dashResolveLovenseQr(payload) {
+  if (!payload || typeof payload !== "object") return "";
+  return String(payload.qrcodeUrl || payload.qrCodeUrl || payload.url || payload.qrcode || "").trim();
+}
+
+async function dashRefreshLovenseQr() {
+  if (!dashLovenseSdk || typeof dashLovenseSdk.getQrcode !== "function") return;
+  try {
+    const qr = await dashLovenseSdk.getQrcode();
+    const qrUrl = dashResolveLovenseQr(qr);
+    const img = document.getElementById("dash-lovense-qr");
+    if (img && qrUrl) {
+      img.src = qrUrl;
+      img.classList.remove("is-hidden");
+    }
+  } catch (err) {
+    dashSetLovenseStatus(`Lovense QR fehlgeschlagen (${String(err)})`, "Fehler");
+  }
+}
+
+async function dashSyncLovenseToys() {
+  if (!dashLovenseSdk) return;
+  try {
+    let toys = [];
+    if (typeof dashLovenseSdk.getToys === "function") {
+      toys = await dashLovenseSdk.getToys();
+    } else if (typeof dashLovenseSdk.getOnlineToys === "function") {
+      toys = await dashLovenseSdk.getOnlineToys();
+    }
+    dashRenderLovenseToys(Array.isArray(toys) ? toys : Object.values(toys || {}));
+    dashSetLovenseStatus(
+      dashLovenseToys.length ? `${dashLovenseToys.length} Lovense-Toy(s) verbunden.` : "SDK aktiv. Warte auf verbundenes Toy…",
+      dashLovenseToys.length ? "verbunden" : "bereit"
+    );
+  } catch (err) {
+    dashSetLovenseStatus(`Toy-Status konnte nicht geladen werden (${String(err)})`, "Fehler");
+  }
+}
+
+async function dashInitLovense() {
+  if (!DASH_SESSION_ID) return;
+  if (!dashLovenseEnabled) {
+    dashSetLovenseStatus("Lovense ist serverseitig deaktiviert.", "aus");
+    return;
+  }
+  if (!dashLovenseConfigured) {
+    dashSetLovenseStatus("Lovense ist noch nicht vollstaendig konfiguriert. Es fehlen Plattformname oder Developer-Token.", "Konfig");
+    return;
+  }
+  if (typeof window.LovenseBasicSdk !== "function") {
+    dashSetLovenseStatus("Lovense SDK konnte im Browser nicht geladen werden.", "Fehler");
+    return;
+  }
+  const bootstrap = dashLovenseBootstrap || await dashLoadLovenseBootstrap();
+  dashSetLovenseStatus(`Lovense wird fuer ${bootstrap.uname || bootstrap.uid} initialisiert…`, "Start");
+  dashLovenseSdk = new window.LovenseBasicSdk({
+    platform: bootstrap.platform || dashLovensePlatform,
+    authToken: bootstrap.auth_token,
+    uid: bootstrap.uid,
+    appType: bootstrap.app_type || dashLovenseAppType,
+    debug: dashLovenseDebug,
+  });
+
+  if (typeof dashLovenseSdk.on === "function") {
+    dashLovenseSdk.on("ready", async () => {
+      dashSetLovenseStatus("Lovense SDK bereit. Verbinde jetzt deinen Edge 2 ueber die App oder den QR-Code.", "bereit");
+      await dashRefreshLovenseQr();
+      await dashSyncLovenseToys();
+    });
+    dashLovenseSdk.on("sdkError", (data) => {
+      const message = data && data.message ? data.message : "Lovense SDK Fehler";
+      dashSetLovenseStatus(message, "Fehler");
+    });
+  } else {
+    await dashRefreshLovenseQr();
+    await dashSyncLovenseToys();
+  }
+
+  if (dashLovensePollHandle) window.clearInterval(dashLovensePollHandle);
+  dashLovensePollHandle = window.setInterval(() => {
+    dashSyncLovenseToys().catch(() => {});
+  }, 6000);
+}
+
+async function dashSendLovenseCommand(action) {
+  if (!dashLovenseSdk) {
+    dashSetLovenseStatus("Lovense ist noch nicht initialisiert.", "Start");
+    return;
+  }
+  const toyId = dashSelectedLovenseToyId();
+  if (!toyId) {
+    dashSetLovenseStatus("Bitte zuerst ein verbundenes Toy waehlen.", "Toy");
+    return;
+  }
+  const intensity = Math.max(1, Math.min(20, Number(document.getElementById("dash-lovense-intensity")?.value || 8)));
+  const duration = Math.max(1, Math.min(300, Number(document.getElementById("dash-lovense-duration")?.value || 20)));
+  const commandPayload = { toyId, timeSec: duration };
+  if (action === "stop") {
+    if (typeof dashLovenseSdk.stopToyAction === "function") {
+      await dashLovenseSdk.stopToyAction(commandPayload);
+    } else if (typeof dashLovenseSdk.sendToyCommand === "function") {
+      await dashLovenseSdk.sendToyCommand({ ...commandPayload, command: "Function", action: "Stop" });
+    }
+    dashSetLovenseStatus("Toy gestoppt.", "Stop");
+    return;
+  }
+  const actionMap = {
+    vibrate: `Vibrate:${intensity}`,
+    pulse: `Pulse:${intensity}`,
+    wave: `Wave:${intensity}`,
+  };
+  if (typeof dashLovenseSdk.sendToyCommand === "function") {
+    await dashLovenseSdk.sendToyCommand({
+      ...commandPayload,
+      command: "Function",
+      action: actionMap[action] || actionMap.vibrate,
+      apiVer: 1,
+    });
+  } else {
+    throw new Error("sendToyCommand wird vom geladenen SDK nicht angeboten.");
+  }
+  dashSetLovenseStatus(`Befehl gesendet: ${actionMap[action] || actionMap.vibrate} fuer ${duration}s.`, "aktiv");
 }
 
 function dashPillList(id, items, emptyText) {
@@ -587,6 +765,33 @@ document.getElementById("dash-safety-safeword")?.addEventListener("click", () =>
 document.getElementById("dash-persona-save")?.addEventListener("click", () => {
   dashSavePersona().catch(() => {});
 });
+document.getElementById("dash-lovense-init")?.addEventListener("click", () => {
+  dashInitLovense().catch((err) => dashSetLovenseStatus(`Lovense Start fehlgeschlagen (${String(err)})`, "Fehler"));
+});
+document.getElementById("dash-lovense-refresh")?.addEventListener("click", () => {
+  dashRefreshLovenseQr().catch((err) => dashSetLovenseStatus(`QR konnte nicht erneuert werden (${String(err)})`, "Fehler"));
+});
+document.getElementById("dash-lovense-open-app")?.addEventListener("click", () => {
+  if (dashLovenseSdk && typeof dashLovenseSdk.connectLovenseAPP === "function") {
+    Promise.resolve(dashLovenseSdk.connectLovenseAPP()).catch((err) => {
+      dashSetLovenseStatus(`Connect App konnte nicht geoeffnet werden (${String(err)})`, "Fehler");
+    });
+    return;
+  }
+  dashSetLovenseStatus("Die Connect-App-Funktion ist in diesem Browser nicht verfuegbar.", "Hinweis");
+});
+document.getElementById("dash-lovense-vibrate")?.addEventListener("click", () => {
+  dashSendLovenseCommand("vibrate").catch((err) => dashSetLovenseStatus(`Vibration fehlgeschlagen (${String(err)})`, "Fehler"));
+});
+document.getElementById("dash-lovense-pulse")?.addEventListener("click", () => {
+  dashSendLovenseCommand("pulse").catch((err) => dashSetLovenseStatus(`Pulse fehlgeschlagen (${String(err)})`, "Fehler"));
+});
+document.getElementById("dash-lovense-wave")?.addEventListener("click", () => {
+  dashSendLovenseCommand("wave").catch((err) => dashSetLovenseStatus(`Wave fehlgeschlagen (${String(err)})`, "Fehler"));
+});
+document.getElementById("dash-lovense-stop")?.addEventListener("click", () => {
+  dashSendLovenseCommand("stop").catch((err) => dashSetLovenseStatus(`Stop fehlgeschlagen (${String(err)})`, "Fehler"));
+});
 
 document.addEventListener("DOMContentLoaded", async () => {
   if (!DASH_SESSION_ID) return;
@@ -597,6 +802,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   await dashLoadSessionState();
   await dashLoadHygieneQuota();
   await dashLoadRunHistory();
+  dashSetLovenseStatus(
+    !dashLovenseEnabled
+      ? "Lovense ist serverseitig deaktiviert."
+      : (!dashLovenseConfigured ? "Lovense ist noch nicht vollstaendig konfiguriert." : "Lovense bereit. Initialisiere die Verbindung, um deinen Edge 2 zu koppeln."),
+    !dashLovenseEnabled ? "aus" : (!dashLovenseConfigured ? "Konfig" : "bereit")
+  );
   setInterval(() => {
     dashLoadSessionState().catch(() => {});
   }, 8000);

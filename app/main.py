@@ -40,7 +40,7 @@ from app.models import (  # noqa: F401
     task,
     verification,
 )
-from app.routers import chat, games, health, hygiene, inventory, inventory_postures, media, personas, push, safety, scenarios, sessions, tasks, verification as verification_router, voice, web
+from app.routers import chat, games, health, hygiene, inventory, inventory_postures, lovense, media, personas, push, safety, scenarios, sessions, tasks, verification as verification_router, voice, web
 from app.security import CSRF_COOKIE_NAME, SAFE_HTTP_METHODS, csrf_tokens_match, extract_csrf_token, generate_csrf_token, is_cookie_secure, is_same_origin_request
 from app.services.media_retention import prune_expired_verification_media
 from app.services.proactive_messaging import sweep_proactive_messages_for_active_sessions
@@ -254,6 +254,7 @@ app.include_router(inventory.router)
 app.include_router(inventory_postures.router)
 app.include_router(media.router)
 app.include_router(voice.router)
+app.include_router(lovense.router)
 app.include_router(web.router)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.mount("/media", StaticFiles(directory=settings.media_dir), name="media")

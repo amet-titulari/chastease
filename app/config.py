@@ -81,6 +81,13 @@ class Settings(BaseSettings):
     voice_realtime_agent_id: str | None = None
     voice_realtime_default_voice: str = "Eve"
     voice_realtime_expires_seconds: int = 300
+    lovense_enabled: bool = False
+    lovense_platform: str | None = None
+    lovense_developer_token: str | None = None
+    lovense_app_type: str = "connect"
+    lovense_sdk_url: str = "https://api.lovense-api.com/basic-sdk/core.min.js"
+    lovense_api_base_url: str = "https://api.lovense-api.com/api/basicApi"
+    lovense_debug: bool = False
     verification_media_retention_enabled: bool = True
     verification_media_retention_hours: int = 72
     # Audit log – set CHASTEASE_AUDIT_LOG_ENABLED=true to activate

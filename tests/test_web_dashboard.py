@@ -22,6 +22,43 @@ def _register_admin(client: TestClient):
     assert resp.status_code == 303
 
 
+def _register_user_and_create_session(client: TestClient) -> int:
+    email = f"lovense-{uuid4().hex[:8]}@example.com"
+    existing_bootstrap = settings.admin_bootstrap_emails or ""
+    settings.admin_bootstrap_emails = ",".join([entry for entry in [existing_bootstrap, email] if entry])
+    register_resp = client.post(
+        "/auth/register",
+        data={
+            "username": f"lovense-{uuid4().hex[:8]}",
+            "email": email,
+            "password": "verysecure1",
+            "password_confirm": "verysecure1",
+        },
+        follow_redirects=False,
+    )
+    assert register_resp.status_code == 303
+    setup_resp = client.post(
+        "/setup/complete",
+        data={
+            "role_style": "structured",
+            "primary_goal": "Edge 2 testen",
+            "boundary_note": "Keine oeffentlichen Aufgaben",
+        },
+    )
+    assert setup_resp.status_code == 200
+    created = client.post(
+        "/api/sessions",
+        json={
+            "persona_name": "Lovense Persona",
+            "player_nickname": "Wearer",
+            "min_duration_seconds": 300,
+            "max_duration_seconds": 900,
+        },
+    )
+    assert created.status_code == 200
+    return int(created.json()["session_id"])
+
+
 def test_landing_page_renders_auth_ui():
     with TestClient(app) as client:
         resp = client.get("/")
@@ -64,3 +101,86 @@ def test_history_route_exists():
         _register_admin(client)
         resp = client.get("/history")
         assert resp.status_code == 200
+
+
+def test_dashboard_includes_lovense_card_when_enabled():
+    previous_enabled = settings.lovense_enabled
+    previous_platform = settings.lovense_platform
+    previous_token = settings.lovense_developer_token
+    try:
+        settings.lovense_enabled = True
+        settings.lovense_platform = "Chastease"
+        settings.lovense_developer_token = "dev-token"
+        with TestClient(app) as client:
+            session_id = _register_user_and_create_session(client)
+            resp = client.get(f"/dashboard/{session_id}")
+            assert resp.status_code == 200
+            html = resp.text
+            assert "Lovense und Toys" in html
+            assert 'id="dash-lovense-init"' in html
+            assert "basic-sdk/core.min.js" in html
+    finally:
+        settings.lovense_enabled = previous_enabled
+        settings.lovense_platform = previous_platform
+        settings.lovense_developer_token = previous_token
+
+
+def test_lovense_status_endpoint_reports_configuration():
+    previous_enabled = settings.lovense_enabled
+    previous_platform = settings.lovense_platform
+    previous_token = settings.lovense_developer_token
+    try:
+        settings.lovense_enabled = True
+        settings.lovense_platform = "Chastease"
+        settings.lovense_developer_token = "dev-token"
+        with TestClient(app) as client:
+            session_id = _register_user_and_create_session(client)
+            resp = client.get(f"/api/lovense/sessions/{session_id}/status")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["enabled"] is True
+            assert data["configured"] is True
+            assert data["platform"] == "Chastease"
+    finally:
+        settings.lovense_enabled = previous_enabled
+        settings.lovense_platform = previous_platform
+        settings.lovense_developer_token = previous_token
+
+
+def test_lovense_bootstrap_returns_server_issued_auth_token(monkeypatch):
+    previous_enabled = settings.lovense_enabled
+    previous_platform = settings.lovense_platform
+    previous_token = settings.lovense_developer_token
+    try:
+        settings.lovense_enabled = True
+        settings.lovense_platform = "Chastease"
+        settings.lovense_developer_token = "dev-token"
+
+        def _fake_request_lovense_auth_token(*, user, player=None):
+            return {
+                "enabled": True,
+                "configured": True,
+                "platform": "Chastease",
+                "app_type": "connect",
+                "sdk_url": "https://api.lovense-api.com/basic-sdk/core.min.js",
+                "debug": False,
+                "uid": f"chastease-user-{user.id}",
+                "uname": player.nickname if player else user.username,
+                "utoken": "signed",
+                "auth_token": "lovense-auth-token",
+            }
+
+        monkeypatch.setattr("app.routers.lovense.request_lovense_auth_token", _fake_request_lovense_auth_token)
+
+        with TestClient(app) as client:
+            session_id = _register_user_and_create_session(client)
+            resp = client.post(f"/api/lovense/sessions/{session_id}/bootstrap")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["auth_token"] == "lovense-auth-token"
+            assert data["platform"] == "Chastease"
+            assert data["app_type"] == "connect"
+    finally:
+        settings.lovense_enabled = previous_enabled
+        settings.lovense_platform = previous_platform
+        settings.lovense_developer_token = previous_token
