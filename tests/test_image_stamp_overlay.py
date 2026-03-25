@@ -46,3 +46,26 @@ def test_top_overlay_uses_minimum_box_width_for_readability(monkeypatch):
     box = draw.rounded_rectangles[0]["coords"]
     assert box[2] - box[0] >= int(4032 * 0.16)
     assert draw.text_calls
+
+
+def test_bottom_overlay_uses_smaller_fonts_for_longer_detected_text(monkeypatch):
+    draw = _FakeDraw()
+
+    monkeypatch.setattr(
+        image_stamp,
+        "_load_font",
+        lambda size, bold=False: _FakeFont(size),
+    )
+
+    image_stamp._draw_text_box(
+        draw,
+        anchor="bottom",
+        image_width=4032,
+        image_height=3024,
+        title="Erkannt",
+        body="Sehr langes Ergebnis das im unteren Overlay mit kleinerer Schrift dargestellt werden soll",
+    )
+
+    assert len(draw.text_calls) >= 2
+    assert draw.text_calls[0]["font"].size < 113
+    assert draw.text_calls[1]["font"].size <= 88

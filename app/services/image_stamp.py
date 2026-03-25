@@ -140,14 +140,15 @@ def _draw_text_box(
         return
 
     scale_base = max(image_width, image_height)
-    title_font = _load_font(max(38, int(scale_base * 0.028)), bold=True)
-    body_font = _load_font(max(30, int(scale_base * 0.022)))
+    is_bottom_overlay = anchor == "bottom"
+    title_font = _load_font(max(32 if is_bottom_overlay else 38, int(scale_base * (0.022 if is_bottom_overlay else 0.028))), bold=True)
+    body_font = _load_font(max(24 if is_bottom_overlay else 30, int(scale_base * (0.017 if is_bottom_overlay else 0.022))))
     pad_x = max(20, int(scale_base * 0.015))
     pad_y = max(16, int(scale_base * 0.012))
     line_gap = max(8, int(scale_base * 0.006))
     max_box_width = max(300, int(image_width * (0.48 if anchor.startswith("top") else 0.86)))
     min_box_width = max(220, int(image_width * (0.16 if anchor.startswith("top") else 0.44)))
-    content_max_lines = 3 if anchor.startswith("top") else 4
+    content_max_lines = 3 if anchor.startswith("top") else 5
     content_lines = _fit_text_lines(
         draw,
         value,

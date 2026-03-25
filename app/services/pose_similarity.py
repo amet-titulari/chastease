@@ -81,6 +81,19 @@ ANGLE_TRIPLETS: dict[str, tuple[str, str, str]] = {
     "right_hip": ("right_shoulder", "right_hip", "right_knee"),
 }
 
+POINT_AXIS_WEIGHTS: dict[str, tuple[float, float]] = {
+    "left_shoulder": (1.0, 0.55),
+    "right_shoulder": (1.0, 0.55),
+    "left_elbow": (1.0, 0.6),
+    "right_elbow": (1.0, 0.6),
+    "left_wrist": (1.0, 0.65),
+    "right_wrist": (1.0, 0.65),
+    "left_knee": (1.0, 0.9),
+    "right_knee": (1.0, 0.9),
+    "left_ankle": (1.0, 0.9),
+    "right_ankle": (1.0, 0.9),
+}
+
 
 def _has_legacy_pose_api() -> bool:
     return bool(mp is not None and hasattr(mp, "solutions") and hasattr(mp.solutions, "pose"))
@@ -344,6 +357,13 @@ def _joint_angle_deg(a: tuple[float, float], b: tuple[float, float], c: tuple[fl
     return math.degrees(math.acos(cosv))
 
 
+def _weighted_point_distance(name: str, rp: dict[str, float], cp: dict[str, float]) -> float:
+    x_weight, y_weight = POINT_AXIS_WEIGHTS.get(name, (1.0, 1.0))
+    dx = (float(rp.get("x", 0.0)) - float(cp.get("x", 0.0))) * x_weight
+    dy = (float(rp.get("y", 0.0)) - float(cp.get("y", 0.0))) * y_weight
+    return math.hypot(dx, dy)
+
+
 def extract_reference_landmarks_json(image_bytes: bytes) -> str | None:
     detected = _detect_landmarks(image_bytes)
     if detected is None:
@@ -374,7 +394,7 @@ def score_against_reference(image_bytes: bytes, reference_landmarks_json: str) -
         weight = min(float(rp.get("visibility", 0.0)), float(cp.get("visibility", 0.0)))
         if weight < 0.2:
             continue
-        dist = math.dist((float(rp.get("x", 0.0)), float(rp.get("y", 0.0))), (float(cp.get("x", 0.0)), float(cp.get("y", 0.0))))
+        dist = _weighted_point_distance(name, rp, cp)
         pos_error_sum += weight * dist
         pos_weight_sum += weight
 

@@ -102,6 +102,25 @@ def test_start_game_run_with_dont_move_module():
         assert int(payload["current_step"]["raw_target_seconds"]) == 8 * 60
 
 
+def test_dont_move_module_settings_use_new_defaults_when_not_saved():
+    with TestClient(app) as client:
+        _register_admin(client)
+
+        resp = client.get("/api/games/modules/dont_move/settings")
+        assert resp.status_code == 200
+        payload = resp.json()
+
+        assert float(payload["pose_similarity_min_score_easy"]) == 80.0
+        assert float(payload["pose_similarity_min_score_medium"]) == 85.0
+        assert float(payload["pose_similarity_min_score_hard"]) == 95.0
+        assert float(payload["movement_easy_pose_deviation"]) == 0.15
+        assert float(payload["movement_medium_pose_deviation"]) == 0.13
+        assert float(payload["movement_hard_pose_deviation"]) == 0.10
+        assert float(payload["movement_easy_stillness"]) == 0.04
+        assert float(payload["movement_medium_stillness"]) == 0.037
+        assert float(payload["movement_hard_stillness"]) == 0.035
+
+
 def test_start_game_run_with_tiptoeing_module():
     with TestClient(app) as client:
         _register_admin(client)
@@ -1933,7 +1952,7 @@ def test_run_step_order_randomizes_equal_positive_sort_bucket():
 def test_upload_posture_image_returns_content_url():
     with TestClient(app) as client:
         _register_admin(client)
-        img = _ppm_bytes(768, 1024)
+        img = _ppm_bytes(1024, 1365)
         uploaded = client.post(
             "/api/games/modules/posture_training/postures/upload-image",
             files={"file": ("pose.jpg", img, "image/jpeg")},
@@ -1958,6 +1977,33 @@ def test_upload_posture_image_accepts_small_resolution():
         assert payload["content_url"].startswith("/api/media/")
 
 
+def test_upload_posture_image_keeps_full_image_visible_without_cropping():
+    with TestClient(app) as client:
+        _register_admin(client)
+
+        source = io.BytesIO()
+        Image.new("RGB", (1400, 700), (220, 80, 60)).save(source, format="PNG")
+        uploaded = client.post(
+            "/api/games/modules/posture_training/postures/upload-image",
+            files={"file": ("wide.png", source.getvalue(), "image/png")},
+        )
+        assert uploaded.status_code == 200
+
+        content_url = uploaded.json()["content_url"]
+        stored = client.get(content_url)
+        assert stored.status_code == 200
+
+        image = Image.open(io.BytesIO(stored.content)).convert("RGB")
+        assert image.size == (1024, 1365)
+
+        top_pixel = image.getpixel((512, 20))
+        center_pixel = image.getpixel((512, 682))
+        bottom_pixel = image.getpixel((512, 1345))
+
+        assert top_pixel != center_pixel
+        assert bottom_pixel != center_pixel
+
+
 def test_uploaded_posture_image_url_can_be_persisted_on_posture():
     with TestClient(app) as client:
         _register_admin(client)
@@ -1975,7 +2021,7 @@ def test_uploaded_posture_image_url_can_be_persisted_on_posture():
         assert created.status_code == 200
         posture_id = created.json()["id"]
 
-        img = _ppm_bytes(768, 1024, rgb=(64, 90, 120))
+        img = _ppm_bytes(1024, 1365, rgb=(64, 90, 120))
         uploaded = client.post(
             "/api/games/modules/posture_training/postures/upload-image",
             files={"file": ("pose.png", img, "image/png")},
@@ -2000,7 +2046,7 @@ def test_posture_zip_export_and_import_roundtrip_with_images():
             removed = client.delete(f"/api/games/modules/posture_training/postures/{row['id']}")
             assert removed.status_code == 200
 
-        img_a = _ppm_bytes(768, 1024, rgb=(20, 60, 120))
+        img_a = _ppm_bytes(1024, 1365, rgb=(20, 60, 120))
         up_a = client.post(
             "/api/games/modules/posture_training/postures/upload-image",
             files={"file": ("pose-a.png", img_a, "image/png")},
@@ -2153,7 +2199,7 @@ def test_posture_zip_import_reports_missing_reference_when_detection_returns_non
     with TestClient(app) as client:
         _register_admin(client)
 
-        img = _ppm_bytes(768, 1024, rgb=(30, 90, 150))
+        img = _ppm_bytes(1024, 1365, rgb=(30, 90, 150))
         archive_io = io.BytesIO()
         with zipfile.ZipFile(archive_io, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
             manifest = {

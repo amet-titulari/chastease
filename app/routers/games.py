@@ -48,9 +48,9 @@ ALLOWED_IMAGE_MIME_TYPES = {
     "image/heif": ".heif",
 }
 MAX_POSTURE_IMAGE_BYTES = 8 * 1024 * 1024
-POSTURE_MIN_WIDTH = 768
-POSTURE_MIN_HEIGHT = 1024
-POSTURE_TARGET_SIZE = (768, 1024)
+POSTURE_MIN_WIDTH = 1024
+POSTURE_MIN_HEIGHT = 1365
+POSTURE_TARGET_SIZE = (1024, 1365)
 DEFAULT_EASY_TARGET_MULTIPLIER = 0.75
 DEFAULT_HARD_TARGET_MULTIPLIER = 1.5
 DEFAULT_TARGET_RANDOMIZATION_PERCENT = 10
@@ -63,9 +63,9 @@ POSE_SIMILARITY_THRESHOLD_BY_DIFFICULTY = {
 }
 DEFAULT_MOVEMENT_THRESHOLDS_BY_MODULE = {
     "dont_move": {
-        "easy": {"pose_deviation": 0.28, "stillness": 0.0450},
-        "medium": {"pose_deviation": 0.25, "stillness": 0.0380},
-        "hard": {"pose_deviation": 0.22, "stillness": 0.0320},
+        "easy": {"pose_deviation": 0.15, "stillness": 0.0400},
+        "medium": {"pose_deviation": 0.13, "stillness": 0.0370},
+        "hard": {"pose_deviation": 0.10, "stillness": 0.0350},
     },
     "tiptoeing": {
         # Tiptoeing uses these fields as mask color thresholds:
@@ -383,14 +383,23 @@ def _process_posture_image(raw: bytes, filename: str | None, content_type: str |
     except (UnidentifiedImageError, OSError):
         raise HTTPException(status_code=415, detail="Uploaded image cannot be decoded")
 
-    # Normalize all posture images to a consistent portrait format.
-    # Smaller images are upscaled to keep admin UX simple and predictable.
-    normalized = ImageOps.fit(
-        image.convert("RGB"),
-        POSTURE_TARGET_SIZE,
-        method=Image.Resampling.LANCZOS,
-        centering=(0.5, 0.5),
+    # Normalize to a consistent portrait canvas without cropping.
+    # Imported images are resized to fit entirely and padded on the canvas.
+    source = ImageOps.exif_transpose(image).convert("RGB")
+    target_w, target_h = POSTURE_TARGET_SIZE
+    scale = max(
+        min(target_w / max(1, source.width), target_h / max(1, source.height)),
+        1e-6,
     )
+    resized_w = max(1, int(round(source.width * scale)))
+    resized_h = max(1, int(round(source.height * scale)))
+    resized = source.resize((resized_w, resized_h), Image.Resampling.LANCZOS)
+
+    normalized = Image.new("RGB", POSTURE_TARGET_SIZE, (5, 8, 12))
+    paste_x = max(0, (target_w - resized_w) // 2)
+    paste_y = max(0, (target_h - resized_h) // 2)
+    normalized.paste(resized, (paste_x, paste_y))
+
     out = io.BytesIO()
     normalized.save(out, format="JPEG", quality=90, optimize=True)
     processed = out.getvalue()
@@ -849,9 +858,9 @@ def _default_pose_similarity_thresholds_for_module(module_key: str) -> dict:
         }
     if module_key == "dont_move":
         return {
-            "easy": 45.0,
-            "medium": 55.0,
-            "hard": 65.0,
+            "easy": 80.0,
+            "medium": 85.0,
+            "hard": 95.0,
         }
     if module_key == "tiptoeing":
         return {
