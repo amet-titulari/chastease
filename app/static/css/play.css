@@ -589,6 +589,49 @@
   flex-wrap: wrap;
 }
 
+.play-device-plan-status {
+  padding: 0 0.75rem 0.8rem;
+  border-top: 1px solid rgba(124, 180, 224, 0.08);
+  background: var(--card-soft);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.play-device-plan-chip,
+.play-device-plan-text {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.9rem;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(124, 180, 224, 0.18);
+  background: rgba(124, 180, 224, 0.08);
+  color: var(--ink);
+  font-size: 0.76rem;
+  line-height: 1.2;
+}
+
+.play-device-plan-chip {
+  background: rgba(76, 175, 130, 0.16);
+  border-color: rgba(76, 175, 130, 0.34);
+  color: #d3ffe2;
+  font-weight: 700;
+}
+
+.play-device-plan-status.is-idle .play-device-plan-chip {
+  background: rgba(124, 180, 224, 0.1);
+  border-color: rgba(124, 180, 224, 0.22);
+  color: var(--muted);
+}
+
+.play-device-plan-status.is-error .play-device-plan-chip {
+  background: rgba(196, 74, 74, 0.15);
+  border-color: rgba(196, 74, 74, 0.32);
+  color: #ffd7d7;
+}
+
 .play-device-btn {
   padding: 0.4rem 0.7rem;
   border-radius: 8px;
@@ -687,6 +730,10 @@
   }
 
   .play-device-status-row {
+    align-items: flex-start;
+  }
+
+  .play-device-plan-status {
     align-items: flex-start;
   }
 

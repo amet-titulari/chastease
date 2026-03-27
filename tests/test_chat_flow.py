@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 from uuid import uuid4
 
@@ -5,9 +7,10 @@ from app.config import settings
 from app.database import SessionLocal
 from app.main import app
 from app.models.message import Message
-from app.models.task import Task
 from app.models.persona import Persona
 from app.models.persona_task_template import PersonaTaskTemplate
+from app.models.player_profile import PlayerProfile
+from app.models.session import Session as SessionModel
 from app.models.task import Task
 from app.services.transcription_service import TranscriptionResult
 
@@ -564,6 +567,95 @@ def test_chat_filters_stimulating_lovense_session_plans_when_session_is_paused(m
                 "mode": "replace",
                 "steps": [{"command": "stop"}],
             }
+        ]
+
+
+def test_chat_clamps_lovense_actions_to_saved_policy(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message="Clamp test",
+                actions=[
+                    {
+                        "type": "lovense_control",
+                        "command": "pulse",
+                        "intensity": 20,
+                        "duration_seconds": 80,
+                        "pause_seconds": 0,
+                        "loops": 2,
+                    },
+                    {
+                        "type": "lovense_session_plan",
+                        "title": "Clamp me",
+                        "mode": "append",
+                        "steps": [
+                            {"command": "wave", "intensity": 18, "duration_seconds": 40},
+                            {"command": "pause", "duration_seconds": 1},
+                            {"command": "preset", "preset": "tease_ramp", "duration_seconds": 30},
+                        ],
+                    },
+                ],
+                mood="strict",
+                intensity=4,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda session_obj: _DummyAI())
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        with SessionLocal() as db:
+            session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+            prefs = json.loads(profile.preferences_json or "{}")
+            prefs["toys"] = {
+                "lovense_policy": {
+                    "min_intensity": 4,
+                    "max_intensity": 12,
+                    "min_step_duration_seconds": 5,
+                    "max_step_duration_seconds": 25,
+                    "min_pause_seconds": 3,
+                    "max_pause_seconds": 10,
+                    "max_plan_duration_seconds": 20,
+                    "max_plan_steps": 2,
+                    "allow_presets": False,
+                    "allow_append_mode": False,
+                    "allowed_commands": {
+                        "vibrate": True,
+                        "pulse": True,
+                        "wave": True,
+                        "preset": False,
+                    },
+                }
+            }
+            profile.preferences_json = json.dumps(prefs)
+            db.add(profile)
+            db.commit()
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Clamp please"},
+        )
+        assert send_resp.status_code == 200
+        assert send_resp.json()["client_actions"] == [
+            {
+                "type": "lovense_control",
+                "command": "pulse",
+                "intensity": 12,
+                "duration_seconds": 25,
+                "pause_seconds": 3,
+                "loops": 2,
+            },
+            {
+                "type": "lovense_session_plan",
+                "title": "Clamp me",
+                "mode": "replace",
+                "steps": [
+                    {"command": "wave", "intensity": 12, "duration_seconds": 20},
+                ],
+            },
         ]
 
 

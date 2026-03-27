@@ -22,6 +22,11 @@ from app.models.session import Session as SessionModel
 from app.models.session_item import SessionItem
 from app.models.task import Task
 from app.services.ai_gateway import get_ai_gateway
+from app.services.lovense_policy import (
+    apply_lovense_policy_to_control_action,
+    apply_lovense_policy_to_session_plan,
+    get_lovense_policy_for_profile,
+)
 from app.services.audit_logger import audit_log
 from app.services.behavior_profile import (
     behavior_profile_from_entities,
@@ -236,6 +241,7 @@ def _collect_client_actions(
     safety_mode: str | None,
     session_status: str,
     degraded: bool,
+    lovense_policy: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     if degraded:
         return []
@@ -252,10 +258,16 @@ def _collect_client_actions(
         if action.get("type") not in _CLIENT_ACTION_TYPES:
             continue
         if action.get("type") == "lovense_control":
+            action = apply_lovense_policy_to_control_action(action, lovense_policy or {})
+            if not action:
+                continue
             command = str(action.get("command") or "").strip().lower()
             if command in _LOVENSE_STIMULATION_COMMANDS and not allow_stimulation:
                 continue
         if action.get("type") == "lovense_session_plan":
+            action = apply_lovense_policy_to_session_plan(action, lovense_policy or {})
+            if not action:
+                continue
             steps = action.get("steps") if isinstance(action.get("steps"), list) else []
             if not steps:
                 continue
@@ -809,6 +821,7 @@ def _persist_chat_turn(
         safety_mode=safety_mode,
         session_status=session_obj.status,
         degraded=structured.degraded,
+        lovense_policy=get_lovense_policy_for_profile(profile),
     )
 
     db.add(user_msg)

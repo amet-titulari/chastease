@@ -1,8 +1,13 @@
+import json
+
 from fastapi.testclient import TestClient
 from uuid import uuid4
 
 from app.config import settings
+from app.database import SessionLocal
 from app.main import app
+from app.models.player_profile import PlayerProfile
+from app.models.session import Session as SessionModel
 
 
 def _register_admin(client: TestClient):
@@ -116,7 +121,7 @@ def test_toys_page_includes_lovense_card_when_enabled():
             resp = client.get(f"/toys/{session_id}")
             assert resp.status_code == 200
             html = resp.text
-            assert ">Lovense<" in html
+            assert "Lovense Verbindung" in html
             assert 'id="dash-lovense-init"' in html
             assert "basic-sdk/core.min.js" in html
     finally:
@@ -184,3 +189,43 @@ def test_lovense_bootstrap_returns_server_issued_auth_token(monkeypatch):
         settings.lovense_enabled = previous_enabled
         settings.lovense_platform = previous_platform
         settings.lovense_developer_token = previous_token
+
+
+def test_lovense_policy_roundtrip_allows_open_limits():
+    with TestClient(app) as client:
+        session_id = _register_user_and_create_session(client)
+
+        save_resp = client.post(
+            f"/api/lovense/sessions/{session_id}/policy",
+            json={
+                "min_intensity": None,
+                "max_intensity": 14,
+                "min_step_duration_seconds": None,
+                "max_step_duration_seconds": 45,
+                "min_pause_seconds": None,
+                "max_pause_seconds": None,
+                "max_plan_duration_seconds": None,
+                "max_plan_steps": 8,
+                "allow_presets": False,
+                "allow_append_mode": False,
+                "allowed_commands": {"vibrate": True, "pulse": True, "wave": False, "preset": False},
+            },
+        )
+        assert save_resp.status_code == 200
+        payload = save_resp.json()["policy"]
+        assert payload["min_intensity"] is None
+        assert payload["max_intensity"] == 14
+        assert payload["max_plan_duration_seconds"] is None
+        assert payload["allowed_commands"]["wave"] is False
+        assert payload["allow_append_mode"] is False
+
+        get_resp = client.get(f"/api/lovense/sessions/{session_id}/policy")
+        assert get_resp.status_code == 200
+        fetched = get_resp.json()["policy"]
+        assert fetched == payload
+
+        with SessionLocal() as db:
+            session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+            prefs = json.loads(profile.preferences_json or "{}")
+            assert prefs["toys"]["lovense_policy"]["max_step_duration_seconds"] == 45

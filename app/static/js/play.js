@@ -15,6 +15,8 @@ const plLovenseConfigured = String(_shell?.dataset.lovenseConfigured || "") === 
 const plLovensePlatform = String(_shell?.dataset.lovensePlatform || "").trim();
 const plLovenseAppType = String(_shell?.dataset.lovenseAppType || "connect").trim() || "connect";
 const plLovenseDebug = String(_shell?.dataset.lovenseDebug || "") === "1";
+const PL_LOVENSE_AUTO_INIT_KEY = `chastease.lovense.auto_init.${SESSION_ID || "default"}`;
+const PL_LOVENSE_TOY_KEY = `chastease.lovense.toy.${SESSION_ID || "default"}`;
 
 let plSocket = null;
 let plVoiceSocket = null;
@@ -35,6 +37,9 @@ let plLovensePlanQueue = [];
 let plLovensePlanRunning = false;
 let plLovensePlanRunId = 0;
 let plLovensePlanTitle = "";
+let plLovensePlanTotal = 0;
+let plLovensePlanCurrentIndex = 0;
+let plLovensePlanCurrentCommand = "";
 const plHandledClientActionKeys = new Set();
 
 const PL_LOVENSE_PRESETS = {
@@ -76,9 +81,125 @@ const voiceStatusEl = document.getElementById("play-voice-status");
 const voiceToggleBtn = document.getElementById("play-voice-toggle");
 const focusToggleBtn = document.getElementById("play-focus-toggle");
 const lovenseStatusEl = document.getElementById("play-lovense-status");
+const lovensePlanStatusEl = document.getElementById("play-lovense-plan-status");
+const lovensePlanModeEl = document.getElementById("play-lovense-plan-mode");
+const lovensePlanTitleEl = document.getElementById("play-lovense-plan-title");
+const lovensePlanStepEl = document.getElementById("play-lovense-plan-step");
+const lovensePlanCommandEl = document.getElementById("play-lovense-plan-command");
 
 function plSetLovenseStatus(text) {
   if (lovenseStatusEl) lovenseStatusEl.textContent = text;
+}
+
+function plRememberLovenseAutoInit() {
+  try {
+    window.sessionStorage.setItem(PL_LOVENSE_AUTO_INIT_KEY, "1");
+  } catch (_) {}
+}
+
+function plShouldAutoInitLovense() {
+  try {
+    return window.sessionStorage.getItem(PL_LOVENSE_AUTO_INIT_KEY) === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function plRememberSelectedToyId(toyId) {
+  if (!toyId) return;
+  try {
+    window.sessionStorage.setItem(PL_LOVENSE_TOY_KEY, String(toyId));
+  } catch (_) {}
+}
+
+function plRestoreSelectedToyId() {
+  try {
+    return String(window.sessionStorage.getItem(PL_LOVENSE_TOY_KEY) || "").trim();
+  } catch (_) {
+    return "";
+  }
+}
+
+function plFormatLovensePlanCommand(command) {
+  const value = String(command || "").trim().toLowerCase();
+  if (!value) return "wartet";
+  const labels = {
+    vibrate: "Vibrate",
+    pulse: "Pulse",
+    wave: "Wave",
+    stop: "Stop",
+    preset: "Preset",
+    pause: "Pause",
+  };
+  return labels[value] || value;
+}
+
+function plRenderLovensePlanStatus(options = {}) {
+  if (!lovensePlanStatusEl) return;
+  const state = String(options.state || "").trim().toLowerCase();
+  const title = String(options.title || "").trim() || "Session-Plan";
+  const total = Math.max(0, Number(options.total) || 0);
+  const current = Math.max(0, Number(options.current) || 0);
+  const command = plFormatLovensePlanCommand(options.command);
+
+  lovensePlanStatusEl.classList.remove("is-hidden", "is-idle", "is-error");
+  if (state === "idle") lovensePlanStatusEl.classList.add("is-idle");
+  if (state === "error") lovensePlanStatusEl.classList.add("is-error");
+
+  if (lovensePlanModeEl) {
+    lovensePlanModeEl.textContent =
+      state === "running"
+        ? "KI-Steuerung aktiv"
+        : state === "queued"
+        ? "KI-Plan geladen"
+        : state === "done"
+        ? "KI-Plan abgeschlossen"
+        : state === "error"
+        ? "KI-Plan Fehler"
+        : "KI-Steuerung inaktiv";
+  }
+  if (lovensePlanTitleEl) lovensePlanTitleEl.textContent = title;
+  if (lovensePlanStepEl) lovensePlanStepEl.textContent = total > 0 ? `Schritt ${current}/${total}` : "Schritt 0/0";
+  if (lovensePlanCommandEl) {
+    if (state === "done") lovensePlanCommandEl.textContent = "fertig";
+    else if (state === "idle") lovensePlanCommandEl.textContent = "wartet";
+    else lovensePlanCommandEl.textContent = command;
+  }
+}
+
+function plResetLovensePlanStatus() {
+  plLovensePlanTotal = 0;
+  plLovensePlanCurrentIndex = 0;
+  plLovensePlanCurrentCommand = "";
+  plRenderLovensePlanStatus({ state: "idle", title: "Keine aktive KI-Session", total: 0, current: 0, command: "" });
+}
+
+function plSetLovensePlanQueued(title, total) {
+  plLovensePlanTitle = String(title || "").trim();
+  plLovensePlanTotal = Math.max(0, Number(total) || 0);
+  plLovensePlanCurrentIndex = 0;
+  plLovensePlanCurrentCommand = "";
+  plRenderLovensePlanStatus({
+    state: "queued",
+    title: plLovensePlanTitle || "Session-Plan",
+    total: plLovensePlanTotal,
+    current: 0,
+    command: "",
+  });
+}
+
+function plSetLovensePlanProgress(command, index, total, title) {
+  plLovensePlanTitle = String(title || plLovensePlanTitle || "").trim();
+  plLovensePlanCurrentCommand = String(command || "").trim();
+  plLovensePlanCurrentIndex = Math.max(0, Number(index) || 0);
+  plLovensePlanTotal = Math.max(plLovensePlanCurrentIndex, Number(total) || 0);
+  plRenderLovensePlanStatus({
+    state: "running",
+    title: plLovensePlanTitle || "Session-Plan",
+    total: plLovensePlanTotal,
+    current: plLovensePlanCurrentIndex,
+    command: plLovensePlanCurrentCommand,
+  });
 }
 
 function plApplyFocusMode(enabled) {
@@ -386,12 +507,19 @@ function plClearLovenseSequence() {
 }
 
 function plSelectLovenseToyId() {
+  const remembered = plRestoreSelectedToyId();
+  if (remembered) {
+    const matched = plLovenseToys.find((toy) => String(toy.id || toy.toyId || toy.toy_id || "") === remembered);
+    if (matched) return remembered;
+  }
   const preferred = plLovenseToys.find((toy) => {
     const label = String(toy.name || toy.nickName || toy.nickname || toy.type || "").toLowerCase();
     return label.includes("edge");
   });
   const active = preferred || plLovenseToys[0];
-  return String(active?.id || active?.toyId || active?.toy_id || "").trim();
+  const toyId = String(active?.id || active?.toyId || active?.toy_id || "").trim();
+  plRememberSelectedToyId(toyId);
+  return toyId;
 }
 
 async function plLoadLovenseBootstrap() {
@@ -454,6 +582,7 @@ async function plInitLovense() {
   }
 
   const bootstrap = plLovenseBootstrap || await plLoadLovenseBootstrap();
+  plRememberLovenseAutoInit();
   plSetLovenseStatus(`Lovense: Initialisierung fuer ${bootstrap.uname || bootstrap.uid}...`);
   plLovenseSdk = new window.LovenseBasicSdk({
     platform: bootstrap.platform || plLovensePlatform,
@@ -536,6 +665,7 @@ function plCancelLovensePlan(clearQueue = true) {
   plLovensePlanRunning = false;
   plLovensePlanTitle = "";
   if (clearQueue) plLovensePlanQueue = [];
+  plResetLovensePlanStatus();
 }
 
 function plNormalizeLovensePlanStep(step) {
@@ -565,6 +695,7 @@ function plWaitCancelable(ms, runId) {
 
 async function plExecuteLovensePlanStep(step, runId, index, total, title) {
   if (runId !== plLovensePlanRunId) return false;
+  plSetLovensePlanProgress(step.command, index, total, title);
   const labelPrefix = title ? `${title} ` : "";
   if (step.command === "pause") {
     await plStopLovenseAction();
@@ -626,12 +757,27 @@ async function plEnsureLovensePlanProcessor() {
     if (runId === plLovensePlanRunId) {
       plLovensePlanRunning = false;
       plLovensePlanTitle = "";
+      plRenderLovensePlanStatus({
+        state: "done",
+        title: "Session-Plan",
+        total: plLovensePlanTotal,
+        current: plLovensePlanTotal,
+        command: "",
+      });
       plSetLovenseStatus("Lovense: Session-Plan abgeschlossen.");
     }
   } catch (err) {
     if (runId === plLovensePlanRunId) {
       plLovensePlanRunning = false;
+      const failedTitle = plLovensePlanTitle || "Session-Plan";
       plLovensePlanTitle = "";
+      plRenderLovensePlanStatus({
+        state: "error",
+        title: failedTitle,
+        total: plLovensePlanTotal,
+        current: plLovensePlanCurrentIndex,
+        command: plLovensePlanCurrentCommand,
+      });
       plSetLovenseStatus(`Lovense: Session-Plan fehlgeschlagen (${String(err)})`);
       plWrite("Lovense Plan Fehler", { error: String(err) });
     }
@@ -651,6 +797,7 @@ async function plQueueLovenseSessionPlan(action) {
   steps.forEach((step, index) => {
     plLovensePlanQueue.push({ step, index: index + 1, total: steps.length, title });
   });
+  plSetLovensePlanQueued(title, steps.length);
   plSetLovenseStatus(`Lovense: Session-Plan${title ? ` '${title}'` : ""} geladen (${steps.length} Schritte).`);
   await plEnsureLovensePlanProcessor();
 }
@@ -1898,6 +2045,7 @@ document.getElementById("play-verify-submit")?.addEventListener("click", async (
 document.addEventListener("DOMContentLoaded", async () => {
   if (!SESSION_ID) return;
   plInitFocusMode();
+  plResetLovensePlanStatus();
   await plInitVoiceAvailability();
   plSetLovenseStatus(
     !plLovenseEnabled
@@ -1905,7 +2053,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       : (!plLovenseConfigured ? "Lovense: Konfiguration unvollstaendig." : "Lovense: bereit. Verbinde den Edge 2 fuer KI-Steuerung.")
   );
   if (plLovenseEnabled && plLovenseConfigured) {
-    plInitLovense().catch(() => {});
+    if (plShouldAutoInitLovense()) {
+      plInitLovense().catch(() => {});
+    }
   }
   // Pre-load persona avatar for chat rendering
   try {

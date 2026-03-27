@@ -7,6 +7,8 @@ const toysLovenseConfigured = String(toysShell?.dataset.lovenseConfigured || "")
 const toysLovensePlatform = String(toysShell?.dataset.lovensePlatform || "").trim();
 const toysLovenseAppType = String(toysShell?.dataset.lovenseAppType || "connect").trim() || "connect";
 const toysLovenseDebug = String(toysShell?.dataset.lovenseDebug || "") === "1";
+const TOYS_LOVENSE_AUTO_INIT_KEY = `chastease.lovense.auto_init.${TOYS_SESSION_ID || "default"}`;
+const TOYS_LOVENSE_TOY_KEY = `chastease.lovense.toy.${TOYS_SESSION_ID || "default"}`;
 let toysLovenseSdk = null;
 let toysLovenseBootstrap = null;
 let toysLovenseToys = [];
@@ -62,6 +64,60 @@ const TOYS_LOVENSE_PRESETS = {
 
 function toysEsc(value) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function toysSetPolicyStatus(message, isError = false) {
+  const el = document.getElementById("toy-policy-status");
+  if (!el) return;
+  el.textContent = message || "—";
+  el.classList.toggle("dash-copy-warn", Boolean(isError));
+}
+
+function toysSetNullableNumberInput(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = value == null ? "" : String(value);
+}
+
+function toysReadNullableNumberInput(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const text = String(el.value || "").trim();
+  return text ? Number(text) : null;
+}
+
+function toysReadCheckbox(id, fallback = true) {
+  const el = document.getElementById(id);
+  return el ? Boolean(el.checked) : fallback;
+}
+
+function toysRememberLovenseAutoInit() {
+  try {
+    window.sessionStorage.setItem(TOYS_LOVENSE_AUTO_INIT_KEY, "1");
+  } catch (_) {}
+}
+
+function toysShouldAutoInitLovense() {
+  try {
+    return window.sessionStorage.getItem(TOYS_LOVENSE_AUTO_INIT_KEY) === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function toysRememberSelectedToyId(toyId) {
+  if (!toyId) return;
+  try {
+    window.sessionStorage.setItem(TOYS_LOVENSE_TOY_KEY, String(toyId));
+  } catch (_) {}
+}
+
+function toysRestoreSelectedToyId() {
+  try {
+    return String(window.sessionStorage.getItem(TOYS_LOVENSE_TOY_KEY) || "").trim();
+  } catch (_) {
+    return "";
+  }
 }
 
 async function toysGet(url) {
@@ -154,8 +210,10 @@ function toysRenderLovenseToys(toys) {
     return `<option value="${toysEsc(id)}">${toysEsc(name)} (${toysEsc(state)})</option>`;
   });
   select.innerHTML = options.join("");
-  const chosen = toysSelectedLovenseToyId() || String(toysLovenseToys[0].id || toysLovenseToys[0].toyId || toysLovenseToys[0].toy_id || "");
+  const rememberedToyId = toysRestoreSelectedToyId();
+  const chosen = toysSelectedLovenseToyId() || rememberedToyId || String(toysLovenseToys[0].id || toysLovenseToys[0].toyId || toysLovenseToys[0].toy_id || "");
   if (chosen) select.value = chosen;
+  toysRememberSelectedToyId(select.value);
   const active = toysLovenseToys.find((toy) => String(toy.id || toy.toyId || toy.toy_id || "") === select.value) || toysLovenseToys[0];
   if (meta && active) {
     const label = String(active.name || active.nickName || active.nickname || active.type || "Toy");
@@ -222,6 +280,21 @@ async function toysExecuteLovenseSegment(kind, payload) {
   throw new Error(`Lovense-Segmenttyp wird nicht unterstuetzt: ${kind}`);
 }
 
+async function toysStopActiveLovenseAction() {
+  const toyId = toysSelectedLovenseToyId();
+  if (!toysLovenseSdk || !toyId) return false;
+  toysClearLovenseSequence();
+  if (typeof toysLovenseSdk.stopToyAction === "function") {
+    await toysLovenseSdk.stopToyAction({ toyId });
+  } else if (typeof toysLovenseSdk.sendToyCommand === "function") {
+    await toysLovenseSdk.sendToyCommand({ toyId, vibrate: 0, time: 0 });
+  } else {
+    return false;
+  }
+  toysSetLovenseStatus("Toy gestoppt.", "Stop");
+  return true;
+}
+
 async function toysRunLovenseProgram(program) {
   const toyId = toysSelectedLovenseToyId();
   if (!toyId) {
@@ -279,6 +352,7 @@ async function toysInitLovense() {
     return;
   }
   const bootstrap = toysLovenseBootstrap || await toysLoadLovenseBootstrap();
+  toysRememberLovenseAutoInit();
   toysSetLovenseStatus(`Lovense wird fuer ${bootstrap.uname || bootstrap.uid} initialisiert…`, "Start");
   toysLovenseSdk = new window.LovenseBasicSdk({
     platform: bootstrap.platform || toysLovensePlatform,
@@ -322,13 +396,7 @@ async function toysSendLovenseCommand(action) {
   const { intensity, duration } = toysLovenseCommandSettings();
   const commandPayload = { toyId };
   if (action === "stop") {
-    toysClearLovenseSequence();
-    if (typeof toysLovenseSdk.stopToyAction === "function") {
-      await toysLovenseSdk.stopToyAction(commandPayload);
-    } else if (typeof toysLovenseSdk.sendToyCommand === "function") {
-      await toysLovenseSdk.sendToyCommand({ ...commandPayload, vibrate: 0, time: 0 });
-    }
-    toysSetLovenseStatus("Toy gestoppt.", "Stop");
+    await toysStopActiveLovenseAction();
     return;
   }
   if (action === "vibrate") {
@@ -379,6 +447,77 @@ async function toysRunLovensePreset() {
   });
 }
 
+function toysApplyLovensePolicy(policy) {
+  const value = policy && typeof policy === "object" ? policy : {};
+  const allowed = value.allowed_commands && typeof value.allowed_commands === "object" ? value.allowed_commands : {};
+  toysSetNullableNumberInput("toy-policy-min-intensity", value.min_intensity);
+  toysSetNullableNumberInput("toy-policy-max-intensity", value.max_intensity);
+  toysSetNullableNumberInput("toy-policy-min-step-duration", value.min_step_duration_seconds);
+  toysSetNullableNumberInput("toy-policy-max-step-duration", value.max_step_duration_seconds);
+  toysSetNullableNumberInput("toy-policy-min-pause", value.min_pause_seconds);
+  toysSetNullableNumberInput("toy-policy-max-pause", value.max_pause_seconds);
+  toysSetNullableNumberInput("toy-policy-max-plan-duration", value.max_plan_duration_seconds);
+  toysSetNullableNumberInput("toy-policy-max-plan-steps", value.max_plan_steps);
+  const presetAllowed = value.allow_presets !== false && allowed.preset !== false;
+  const vibrateEl = document.getElementById("toy-policy-allow-vibrate");
+  const pulseEl = document.getElementById("toy-policy-allow-pulse");
+  const waveEl = document.getElementById("toy-policy-allow-wave");
+  const presetEl = document.getElementById("toy-policy-allow-preset");
+  const appendEl = document.getElementById("toy-policy-allow-append");
+  if (vibrateEl) vibrateEl.checked = allowed.vibrate !== false;
+  if (pulseEl) pulseEl.checked = allowed.pulse !== false;
+  if (waveEl) waveEl.checked = allowed.wave !== false;
+  if (presetEl) presetEl.checked = presetAllowed;
+  if (appendEl) appendEl.checked = value.allow_append_mode !== false;
+}
+
+function toysCollectLovensePolicyPayload() {
+  const allowPresets = toysReadCheckbox("toy-policy-allow-preset", true);
+  return {
+    min_intensity: toysReadNullableNumberInput("toy-policy-min-intensity"),
+    max_intensity: toysReadNullableNumberInput("toy-policy-max-intensity"),
+    min_step_duration_seconds: toysReadNullableNumberInput("toy-policy-min-step-duration"),
+    max_step_duration_seconds: toysReadNullableNumberInput("toy-policy-max-step-duration"),
+    min_pause_seconds: toysReadNullableNumberInput("toy-policy-min-pause"),
+    max_pause_seconds: toysReadNullableNumberInput("toy-policy-max-pause"),
+    max_plan_duration_seconds: toysReadNullableNumberInput("toy-policy-max-plan-duration"),
+    max_plan_steps: toysReadNullableNumberInput("toy-policy-max-plan-steps"),
+    allow_presets: allowPresets,
+    allow_append_mode: toysReadCheckbox("toy-policy-allow-append", true),
+    allowed_commands: {
+      vibrate: toysReadCheckbox("toy-policy-allow-vibrate", true),
+      pulse: toysReadCheckbox("toy-policy-allow-pulse", true),
+      wave: toysReadCheckbox("toy-policy-allow-wave", true),
+      preset: allowPresets,
+    },
+  };
+}
+
+async function toysLoadLovensePolicy() {
+  try {
+    const data = await toysGet(`/api/lovense/sessions/${TOYS_SESSION_ID}/policy`);
+    toysApplyLovensePolicy(data.policy || {});
+    toysSetPolicyStatus("KI-Policy bereit. Leere Felder bleiben offen.");
+  } catch (err) {
+    toysSetPolicyStatus(`KI-Policy konnte nicht geladen werden (${String(err)})`, true);
+  }
+}
+
+async function toysSaveLovensePolicy() {
+  const button = document.getElementById("toy-policy-save");
+  if (button) button.disabled = true;
+  toysSetPolicyStatus("KI-Policy wird gespeichert…");
+  try {
+    const data = await toysPost(`/api/lovense/sessions/${TOYS_SESSION_ID}/policy`, toysCollectLovensePolicyPayload());
+    toysApplyLovensePolicy(data.policy || {});
+    toysSetPolicyStatus("KI-Policy gespeichert.");
+  } catch (err) {
+    toysSetPolicyStatus(`Speichern fehlgeschlagen (${String(err)})`, true);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 document.getElementById("dash-lovense-init")?.addEventListener("click", () => {
   toysInitLovense().catch((err) => toysSetLovenseStatus(`Lovense Start fehlgeschlagen (${String(err)})`, "Fehler"));
 });
@@ -408,21 +547,29 @@ document.getElementById("dash-lovense-stop")?.addEventListener("click", () => {
 });
 document.getElementById("dash-lovense-intensity")?.addEventListener("input", toysUpdateLovenseIntensityLabel);
 document.getElementById("dash-lovense-toy-select")?.addEventListener("change", () => {
+  toysRememberSelectedToyId(toysSelectedLovenseToyId());
   toysRenderLovenseToys(toysLovenseToys);
 });
 document.getElementById("dash-lovense-preset")?.addEventListener("change", toysUpdateLovensePresetCopy);
 document.getElementById("dash-lovense-run-preset")?.addEventListener("click", () => {
   toysRunLovensePreset().catch((err) => toysSetLovenseStatus(`Preset fehlgeschlagen (${String(err)})`, "Fehler"));
 });
+document.getElementById("toy-policy-save")?.addEventListener("click", () => {
+  toysSaveLovensePolicy().catch((err) => toysSetPolicyStatus(`Speichern fehlgeschlagen (${String(err)})`, true));
+});
 
 document.addEventListener("DOMContentLoaded", async () => {
   if (!TOYS_SESSION_ID) return;
   toysUpdateLovenseIntensityLabel();
   toysUpdateLovensePresetCopy();
+  await toysLoadLovensePolicy();
   toysSetLovenseStatus(
     !toysLovenseEnabled
       ? "Lovense ist serverseitig deaktiviert."
       : (!toysLovenseConfigured ? "Lovense ist noch nicht vollstaendig konfiguriert." : "Lovense bereit. Initialisiere die Verbindung, um deinen Edge 2 zu koppeln."),
     !toysLovenseEnabled ? "aus" : (!toysLovenseConfigured ? "Konfig" : "bereit")
   );
+  if (toysLovenseEnabled && toysLovenseConfigured && toysShouldAutoInitLovense()) {
+    toysInitLovense().catch(() => {});
+  }
 });

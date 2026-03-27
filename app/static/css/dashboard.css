@@ -227,6 +227,15 @@
   grid-column: span 7;
 }
 
+.dash-grid--toys {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
+.dash-card--toys-column {
+  align-self: start;
+}
+
 .dash-card-head {
   display: flex;
   align-items: center;
@@ -238,6 +247,10 @@
 .dash-card-head h4 {
   margin: 0;
   color: var(--ink);
+}
+
+.dash-card-head--stack {
+  align-items: start;
 }
 
 .dash-subhead {
@@ -509,6 +522,68 @@
     linear-gradient(180deg, rgba(18, 28, 42, 0.98), rgba(11, 18, 28, 0.96));
 }
 
+.dash-lovense-manual {
+  border-radius: 14px;
+  border: 1px solid rgba(124, 180, 224, 0.12);
+  background: rgba(7, 16, 26, 0.42);
+  overflow: hidden;
+}
+
+.dash-lovense-manual-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.85rem 0.95rem;
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.dash-lovense-manual-summary::-webkit-details-marker {
+  display: none;
+}
+
+.dash-lovense-manual-summary::after {
+  content: "+";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(124, 180, 224, 0.16);
+  color: #7cb4e0;
+  flex-shrink: 0;
+}
+
+.dash-lovense-manual[open] .dash-lovense-manual-summary::after {
+  content: "−";
+}
+
+.dash-lovense-manual-hint {
+  margin-left: auto;
+  color: #8fa4b9;
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.dash-lovense-manual-body {
+  display: grid;
+  gap: 0.8rem;
+  padding: 0 0.95rem 0.95rem;
+}
+
+.dash-toy-provider {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid rgba(124, 180, 224, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .dash-lovense-control-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -576,6 +651,22 @@
   background: rgba(255,255,255,0.04);
   color: var(--ink);
   padding: 0.65rem 0.8rem;
+}
+
+.dash-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 40px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.03);
+  color: var(--ink);
+}
+
+.dash-toggle input {
+  accent-color: #7cb4e0;
 }
 
 .dash-run-list {
@@ -716,13 +807,18 @@
   .dash-card--protocol,
   .dash-card--profile,
   .dash-card--safety,
-  .dash-card--lovense {
+  .dash-card--lovense,
+  .dash-card--toys-column {
     grid-column: auto;
   }
 }
 
 @media (max-width: 760px) {
   .dash-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-grid--toys {
     grid-template-columns: 1fr;
   }
 
