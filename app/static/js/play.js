@@ -10,6 +10,11 @@ const PERSONA_NAME = _shell?.dataset.personaName || "Keyholderin";
 const PLAYER_NAME = _shell?.dataset.playerName || "Du";
 const APP_VERSION = _shell?.dataset.appVersion || "0.4.0";
 const FOCUS_STORAGE_KEY = `chastease.play.focus.${SESSION_ID || "default"}.${APP_VERSION}`;
+const plLovenseEnabled = String(_shell?.dataset.lovenseEnabled || "") === "1";
+const plLovenseConfigured = String(_shell?.dataset.lovenseConfigured || "") === "1";
+const plLovensePlatform = String(_shell?.dataset.lovensePlatform || "").trim();
+const plLovenseAppType = String(_shell?.dataset.lovenseAppType || "connect").trim() || "connect";
+const plLovenseDebug = String(_shell?.dataset.lovenseDebug || "") === "1";
 
 let plSocket = null;
 let plVoiceSocket = null;
@@ -21,6 +26,43 @@ let plVoiceSessionReady = false;
 let plVoicePlayCursor = 0;
 let plVoiceAvailable = false;
 let plVoiceMode = "realtime-manual";
+let plLovenseSdk = null;
+let plLovenseBootstrap = null;
+let plLovenseToys = [];
+let plLovensePollHandle = null;
+let plLovenseSequenceTimeout = null;
+let plLovensePlanQueue = [];
+let plLovensePlanRunning = false;
+let plLovensePlanRunId = 0;
+let plLovensePlanTitle = "";
+const plHandledClientActionKeys = new Set();
+
+const PL_LOVENSE_PRESETS = {
+  tease_ramp: { interval: 220, pattern: (intensity) => {
+    const level = Math.max(1, Math.min(20, intensity));
+    const low = Math.max(1, Math.round(level * 0.35));
+    const mid = Math.max(1, Math.round(level * 0.6));
+    const high = Math.max(1, Math.round(level * 0.85));
+    return `${low};${mid};${high};${level};${high};${mid}`;
+  } },
+  strict_pulse: { interval: 160, pattern: (intensity) => {
+    const level = Math.max(1, Math.min(20, intensity));
+    return `0;${level};0;${level};0;${Math.max(1, Math.round(level * 0.75))}`;
+  } },
+  wave_ladder: { interval: 210, pattern: (intensity) => {
+    const level = Math.max(1, Math.min(20, intensity));
+    const one = Math.max(1, Math.round(level * 0.3));
+    const two = Math.max(1, Math.round(level * 0.5));
+    const three = Math.max(1, Math.round(level * 0.7));
+    return `${one};${two};${three};${level};${three};${two};${one};0`;
+  } },
+  deny_spikes: { interval: 150, pattern: (intensity) => {
+    const level = Math.max(1, Math.min(20, intensity));
+    const spike = Math.max(1, Math.round(level * 0.9));
+    const low = Math.max(1, Math.round(level * 0.25));
+    return `${low};${spike};0;${low};${level};0;${spike};0`;
+  } },
+};
 
 // -- DOM refs --
 const statusPillEl = document.getElementById("play-status-pill");
@@ -33,6 +75,11 @@ const wsBtn = document.getElementById("play-connect-ws");
 const voiceStatusEl = document.getElementById("play-voice-status");
 const voiceToggleBtn = document.getElementById("play-voice-toggle");
 const focusToggleBtn = document.getElementById("play-focus-toggle");
+const lovenseStatusEl = document.getElementById("play-lovense-status");
+
+function plSetLovenseStatus(text) {
+  if (lovenseStatusEl) lovenseStatusEl.textContent = text;
+}
 
 function plApplyFocusMode(enabled) {
   if (!_shell) return;
@@ -324,6 +371,401 @@ async function plToggleVoiceMode() {
     return;
   }
   await plStartVoiceMode();
+}
+
+function plResolveLovenseQr(payload) {
+  if (!payload || typeof payload !== "object") return "";
+  return String(payload.qrcodeUrl || payload.qrCodeUrl || payload.url || payload.qrcode || "").trim();
+}
+
+function plClearLovenseSequence() {
+  if (plLovenseSequenceTimeout) {
+    window.clearTimeout(plLovenseSequenceTimeout);
+    plLovenseSequenceTimeout = null;
+  }
+}
+
+function plSelectLovenseToyId() {
+  const preferred = plLovenseToys.find((toy) => {
+    const label = String(toy.name || toy.nickName || toy.nickname || toy.type || "").toLowerCase();
+    return label.includes("edge");
+  });
+  const active = preferred || plLovenseToys[0];
+  return String(active?.id || active?.toyId || active?.toy_id || "").trim();
+}
+
+async function plLoadLovenseBootstrap() {
+  const data = await plPost(`/api/lovense/sessions/${SESSION_ID}/bootstrap`, {});
+  plLovenseBootstrap = data;
+  return data;
+}
+
+async function plRefreshLovenseQr() {
+  if (!plLovenseSdk || typeof plLovenseSdk.getQrcode !== "function") return;
+  try {
+    const qr = await plLovenseSdk.getQrcode();
+    const qrUrl = plResolveLovenseQr(qr);
+    if (qrUrl) {
+      plSetLovenseStatus(`Lovense: QR bereit. Scanne den Code in der Connect App.`);
+    }
+  } catch (err) {
+    plSetLovenseStatus(`Lovense: QR Fehler (${String(err)})`);
+  }
+}
+
+async function plSyncLovenseToys() {
+  if (!plLovenseSdk) return;
+  try {
+    let toys = [];
+    if (typeof plLovenseSdk.getToys === "function") {
+      toys = await plLovenseSdk.getToys();
+    } else if (typeof plLovenseSdk.getOnlineToys === "function") {
+      toys = await plLovenseSdk.getOnlineToys();
+    }
+    plLovenseToys = Array.isArray(toys) ? toys.filter(Boolean) : Object.values(toys || {});
+    if (!plLovenseToys.length) {
+      plSetLovenseStatus("Lovense: SDK bereit. Verbinde jetzt den Edge 2 ueber die Connect App.");
+      return;
+    }
+    const activeToyId = plSelectLovenseToyId();
+    const activeToy = plLovenseToys.find((toy) => String(toy.id || toy.toyId || toy.toy_id || "") === activeToyId) || plLovenseToys[0];
+    const label = String(activeToy?.name || activeToy?.nickName || activeToy?.nickname || activeToy?.type || "Toy");
+    const battery = activeToy?.battery != null ? ` · Akku ${activeToy.battery}%` : "";
+    plSetLovenseStatus(`Lovense: ${label} verbunden${battery}. KI-Steuerung bereit.`);
+  } catch (err) {
+    plSetLovenseStatus(`Lovense: Toy-Status Fehler (${String(err)})`);
+  }
+}
+
+async function plInitLovense() {
+  if (!SESSION_ID) return false;
+  if (plLovenseSdk) return true;
+  if (!plLovenseEnabled) {
+    plSetLovenseStatus("Lovense: serverseitig deaktiviert.");
+    return false;
+  }
+  if (!plLovenseConfigured) {
+    plSetLovenseStatus("Lovense: Konfiguration unvollstaendig.");
+    return false;
+  }
+  if (typeof window.LovenseBasicSdk !== "function") {
+    plSetLovenseStatus("Lovense: SDK im Browser nicht geladen.");
+    return false;
+  }
+
+  const bootstrap = plLovenseBootstrap || await plLoadLovenseBootstrap();
+  plSetLovenseStatus(`Lovense: Initialisierung fuer ${bootstrap.uname || bootstrap.uid}...`);
+  plLovenseSdk = new window.LovenseBasicSdk({
+    platform: bootstrap.platform || plLovensePlatform,
+    authToken: bootstrap.auth_token,
+    uid: bootstrap.uid,
+    appType: bootstrap.app_type || plLovenseAppType,
+    debug: plLovenseDebug,
+  });
+
+  if (typeof plLovenseSdk.on === "function") {
+    plLovenseSdk.on("ready", async () => {
+      plSetLovenseStatus("Lovense: SDK bereit. Verbinde jetzt den Edge 2 ueber die App.");
+      await plRefreshLovenseQr();
+      await plSyncLovenseToys();
+    });
+    plLovenseSdk.on("sdkError", (data) => {
+      const message = data && data.message ? data.message : "Lovense SDK Fehler";
+      plSetLovenseStatus(`Lovense: ${message}`);
+    });
+  } else {
+    await plRefreshLovenseQr();
+    await plSyncLovenseToys();
+  }
+
+  if (plLovensePollHandle) window.clearInterval(plLovensePollHandle);
+  plLovensePollHandle = window.setInterval(() => {
+    plSyncLovenseToys().catch(() => {});
+  }, 6000);
+  return true;
+}
+
+function plLovensePatternStrength(intensity, mode) {
+  const level = Math.max(1, Math.min(20, Number(intensity) || 8));
+  if (mode === "pulse") {
+    return `0;${level};0;${Math.max(1, Math.round(level * 0.85))};0;${level}`;
+  }
+  return `0;${Math.max(1, Math.round(level * 0.45))};${Math.max(1, Math.round(level * 0.7))};${level};${Math.max(1, Math.round(level * 0.7))};${Math.max(1, Math.round(level * 0.45))}`;
+}
+
+async function plExecuteLovenseSegment(kind, payload) {
+  if (!plLovenseSdk) {
+    throw new Error("Lovense ist noch nicht initialisiert.");
+  }
+  if (kind === "vibrate") {
+    if (typeof plLovenseSdk.sendToyCommand !== "function") {
+      throw new Error("sendToyCommand wird vom geladenen SDK nicht angeboten.");
+    }
+    await plLovenseSdk.sendToyCommand(payload);
+    return;
+  }
+  if (kind === "pattern") {
+    if (typeof plLovenseSdk.sendPatternCommand !== "function") {
+      throw new Error("sendPatternCommand wird vom geladenen SDK nicht angeboten.");
+    }
+    await plLovenseSdk.sendPatternCommand(payload);
+    return;
+  }
+  throw new Error(`Lovense-Segmenttyp wird nicht unterstuetzt: ${kind}`);
+}
+
+async function plStopLovenseAction() {
+  if (!(await plInitLovense())) return false;
+  const toyId = plSelectLovenseToyId();
+  if (!toyId) {
+    plSetLovenseStatus("Lovense: Kein verbundenes Toy fuer Stop gefunden.");
+    return false;
+  }
+  plClearLovenseSequence();
+  if (typeof plLovenseSdk.stopToyAction === "function") {
+    await plLovenseSdk.stopToyAction({ toyId });
+  } else if (typeof plLovenseSdk.sendToyCommand === "function") {
+    await plLovenseSdk.sendToyCommand({ toyId, vibrate: 0, time: 0 });
+  }
+  plSetLovenseStatus("Lovense: Toy gestoppt.");
+  return true;
+}
+
+function plCancelLovensePlan(clearQueue = true) {
+  plLovensePlanRunId += 1;
+  plLovensePlanRunning = false;
+  plLovensePlanTitle = "";
+  if (clearQueue) plLovensePlanQueue = [];
+}
+
+function plNormalizeLovensePlanStep(step) {
+  if (!step || typeof step !== "object") return null;
+  const command = String(step.command || "").trim().toLowerCase();
+  if (!["vibrate", "pulse", "wave", "stop", "preset", "pause"].includes(command)) return null;
+  const normalized = { command };
+  if (step.intensity != null && step.intensity !== "") {
+    normalized.intensity = Math.max(1, Math.min(20, Number(step.intensity) || 1));
+  }
+  if (step.duration_seconds != null && step.duration_seconds !== "") {
+    normalized.duration_seconds = Math.max(1, Math.min(180, Number(step.duration_seconds) || 1));
+  }
+  if (step.preset != null && step.preset !== "") {
+    normalized.preset = String(step.preset).trim();
+  }
+  return normalized;
+}
+
+function plWaitCancelable(ms, runId) {
+  return new Promise((resolve) => {
+    window.setTimeout(() => {
+      resolve(runId === plLovensePlanRunId);
+    }, Math.max(0, ms));
+  });
+}
+
+async function plExecuteLovensePlanStep(step, runId, index, total, title) {
+  if (runId !== plLovensePlanRunId) return false;
+  const labelPrefix = title ? `${title} ` : "";
+  if (step.command === "pause") {
+    await plStopLovenseAction();
+    plSetLovenseStatus(`Lovense: ${labelPrefix}Pause ${index}/${total} fuer ${step.duration_seconds}s.`);
+    return await plWaitCancelable((Number(step.duration_seconds) || 1) * 1000, runId);
+  }
+  if (step.command === "stop") {
+    await plStopLovenseAction();
+    plSetLovenseStatus(`Lovense: ${labelPrefix}Stop ${index}/${total}.`);
+    return await plWaitCancelable(250, runId);
+  }
+
+  if (step.command === "preset") {
+    const preset = PL_LOVENSE_PRESETS[String(step.preset || "").trim()];
+    if (!preset) {
+      throw new Error(`Unbekanntes Preset: ${String(step.preset || "")}`);
+    }
+    await plRunLovenseProgram(
+      {
+        label: `${labelPrefix}Preset ${step.preset}`.trim(),
+        kind: "pattern",
+        buildPayload: ({ toyId, intensity, duration }) => ({
+          toyId,
+          strength: preset.pattern(intensity),
+          time: duration,
+          interval: preset.interval || 180,
+          vibrate: true,
+        }),
+      },
+      step
+    );
+    plSetLovenseStatus(`Lovense: ${labelPrefix}Schritt ${index}/${total} laeuft (${step.command}).`);
+    return await plWaitCancelable((Number(step.duration_seconds) || 1) * 1000, runId);
+  }
+
+  await plRunLovenseAction(step);
+  plSetLovenseStatus(`Lovense: ${labelPrefix}Schritt ${index}/${total} laeuft (${step.command}).`);
+  return await plWaitCancelable((Number(step.duration_seconds) || 1) * 1000, runId);
+}
+
+async function plEnsureLovensePlanProcessor() {
+  if (plLovensePlanRunning) return;
+  plLovensePlanRunning = true;
+  const runId = plLovensePlanRunId;
+  try {
+    while (runId === plLovensePlanRunId && plLovensePlanQueue.length) {
+      const current = plLovensePlanQueue.shift();
+      if (!current) continue;
+      const total = Number(current.total || 0) || 1;
+      const keepRunning = await plExecuteLovensePlanStep(
+        current.step,
+        runId,
+        Number(current.index || 1),
+        total,
+        current.title || ""
+      );
+      if (!keepRunning) return;
+    }
+    if (runId === plLovensePlanRunId) {
+      plLovensePlanRunning = false;
+      plLovensePlanTitle = "";
+      plSetLovenseStatus("Lovense: Session-Plan abgeschlossen.");
+    }
+  } catch (err) {
+    if (runId === plLovensePlanRunId) {
+      plLovensePlanRunning = false;
+      plLovensePlanTitle = "";
+      plSetLovenseStatus(`Lovense: Session-Plan fehlgeschlagen (${String(err)})`);
+      plWrite("Lovense Plan Fehler", { error: String(err) });
+    }
+  }
+}
+
+async function plQueueLovenseSessionPlan(action) {
+  const mode = String(action?.mode || "replace").trim().toLowerCase() === "append" ? "append" : "replace";
+  const title = String(action?.title || "").trim();
+  const steps = Array.isArray(action?.steps) ? action.steps.map(plNormalizeLovensePlanStep).filter(Boolean) : [];
+  if (!steps.length) return;
+  if (mode === "replace") {
+    plCancelLovensePlan(true);
+    await plStopLovenseAction();
+  }
+  plLovensePlanTitle = title;
+  steps.forEach((step, index) => {
+    plLovensePlanQueue.push({ step, index: index + 1, total: steps.length, title });
+  });
+  plSetLovenseStatus(`Lovense: Session-Plan${title ? ` '${title}'` : ""} geladen (${steps.length} Schritte).`);
+  await plEnsureLovensePlanProcessor();
+}
+
+async function plRunLovenseProgram(program, settings = {}) {
+  if (!(await plInitLovense())) return false;
+  const toyId = plSelectLovenseToyId();
+  if (!toyId) {
+    plSetLovenseStatus("Lovense: Kein verbundenes Toy gefunden.");
+    return false;
+  }
+  plClearLovenseSequence();
+  const intensity = Math.max(1, Math.min(20, Number(settings.intensity) || 8));
+  const duration = Math.max(1, Math.min(120, Number(settings.duration_seconds) || 15));
+  const pause = Math.max(0, Math.min(60, Number(settings.pause_seconds) || 0));
+  const loops = Math.max(1, Math.min(10, Number(settings.loops) || 1));
+  const runOnce = async (step) => {
+    const payload = program.buildPayload({ toyId, intensity, duration });
+    await plExecuteLovenseSegment(program.kind, payload);
+    const loopText = loops > 1 ? ` Loop ${step}/${loops}` : "";
+    plSetLovenseStatus(`Lovense: ${program.label}${loopText} aktiv.`);
+    if (step >= loops) return;
+    plLovenseSequenceTimeout = window.setTimeout(() => {
+      runOnce(step + 1).catch((err) => {
+        plSetLovenseStatus(`Lovense: ${program.label} fehlgeschlagen (${String(err)})`);
+      });
+    }, Math.max(0, (duration + pause) * 1000));
+  };
+  await runOnce(1);
+  return true;
+}
+
+async function plRunLovenseAction(action) {
+  const command = String(action?.command || "").trim().toLowerCase();
+  if (!command) return;
+  if (command === "stop") {
+    await plStopLovenseAction();
+    return;
+  }
+  if (command === "vibrate") {
+    await plRunLovenseProgram(
+      {
+        label: `Vibrate ${Math.max(1, Math.min(20, Number(action.intensity) || 8))}/20`,
+        kind: "vibrate",
+        buildPayload: ({ toyId, intensity, duration }) => ({ toyId, vibrate: intensity, time: duration }),
+      },
+      action
+    );
+    return;
+  }
+  if (command === "pulse" || command === "wave") {
+    await plRunLovenseProgram(
+      {
+        label: command === "pulse" ? "Pulse" : "Wave",
+        kind: "pattern",
+        buildPayload: ({ toyId, intensity, duration }) => ({
+          toyId,
+          strength: plLovensePatternStrength(intensity, command),
+          time: duration,
+          interval: 180,
+          vibrate: true,
+        }),
+      },
+      action
+    );
+    return;
+  }
+  if (command === "preset") {
+    const presetId = String(action.preset || "").trim();
+    const preset = PL_LOVENSE_PRESETS[presetId];
+    if (!preset) {
+      throw new Error(`Unbekanntes Preset: ${presetId}`);
+    }
+    await plRunLovenseProgram(
+      {
+        label: `Preset ${presetId}`,
+        kind: "pattern",
+        buildPayload: ({ toyId, intensity, duration }) => ({
+          toyId,
+          strength: preset.pattern(intensity),
+          time: duration,
+          interval: preset.interval || 180,
+          vibrate: true,
+        }),
+      },
+      action
+    );
+  }
+}
+
+async function plHandleClientActions(actions, messageId = null) {
+  const list = Array.isArray(actions) ? actions.filter(Boolean) : [];
+  for (let index = 0; index < list.length; index += 1) {
+    const action = list[index];
+    const key = `${messageId || "standalone"}:${index}:${JSON.stringify(action)}`;
+    if (plHandledClientActionKeys.has(key)) continue;
+    plHandledClientActionKeys.add(key);
+    try {
+      if (action.type === "lovense_control") {
+        if (String(action.command || "").trim().toLowerCase() === "stop") {
+          plCancelLovensePlan(true);
+        } else if (plLovensePlanRunning || plLovensePlanQueue.length) {
+          plCancelLovensePlan(true);
+        }
+        await plRunLovenseAction(action);
+        continue;
+      }
+      if (action.type === "lovense_session_plan") {
+        await plQueueLovenseSessionPlan(action);
+      }
+    } catch (err) {
+      plSetLovenseStatus(`Lovense: KI-Aktion fehlgeschlagen (${String(err)})`);
+      plWrite("Lovense Fehler", { action, error: String(err) });
+    }
+  }
 }
 
 // -- Attach-image state --
@@ -986,6 +1428,9 @@ function plConnectWs() {
   plSocket.onmessage = async (event) => {
     try {
       const payload = JSON.parse(event.data);
+      if (payload.client_actions) {
+        await plHandleClientActions(payload.client_actions, payload.message_id || null);
+      }
       if (payload.message_type && payload.message_type !== "timer_tick") {
         await plLoadSessionState();
         await plLoadChat();   // chat first so AI message appears before task card
@@ -1039,6 +1484,25 @@ document.getElementById("play-file-input")?.addEventListener("change", (e) => {
   plSetAttachedFile(file);
 });
 
+document.getElementById("play-lovense-init")?.addEventListener("click", () => {
+  plInitLovense().catch((err) => plSetLovenseStatus(`Lovense: Start fehlgeschlagen (${String(err)})`));
+});
+
+document.getElementById("play-lovense-open-app")?.addEventListener("click", () => {
+  if (plLovenseSdk && typeof plLovenseSdk.connectLovenseAPP === "function") {
+    Promise.resolve(plLovenseSdk.connectLovenseAPP()).catch((err) => {
+      plSetLovenseStatus(`Lovense: Connect App konnte nicht geoeffnet werden (${String(err)})`);
+    });
+    return;
+  }
+  plSetLovenseStatus("Lovense: Connect-App-Funktion ist noch nicht verfuegbar.");
+});
+
+document.getElementById("play-lovense-stop")?.addEventListener("click", () => {
+  plCancelLovensePlan(true);
+  plStopLovenseAction().catch((err) => plSetLovenseStatus(`Lovense: Stop fehlgeschlagen (${String(err)})`));
+});
+
 document.getElementById("play-send")?.addEventListener("click", async () => {
   if (!SESSION_ID) return;
   const content = chatInput?.value?.trim() || "";
@@ -1071,6 +1535,7 @@ document.getElementById("play-send")?.addEventListener("click", async () => {
       data = await plPost(`/api/sessions/${SESSION_ID}/messages`, { content });
     }
     plWrite("Chat Reply", data);
+    await plHandleClientActions(data.client_actions || [], data.reply_message_id || null);
     await plLoadSessionState();
     await plLoadChat();
     await plListTasks();
@@ -1434,6 +1899,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!SESSION_ID) return;
   plInitFocusMode();
   await plInitVoiceAvailability();
+  plSetLovenseStatus(
+    !plLovenseEnabled
+      ? "Lovense: serverseitig deaktiviert."
+      : (!plLovenseConfigured ? "Lovense: Konfiguration unvollstaendig." : "Lovense: bereit. Verbinde den Edge 2 fuer KI-Steuerung.")
+  );
+  if (plLovenseEnabled && plLovenseConfigured) {
+    plInitLovense().catch(() => {});
+  }
   // Pre-load persona avatar for chat rendering
   try {
     const summary = await plGet(`/api/settings/summary?session_id=${SESSION_ID}`);

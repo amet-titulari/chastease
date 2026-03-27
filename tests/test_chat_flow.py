@@ -122,6 +122,7 @@ def test_chat_reply_switches_to_care_mode_on_yellow():
         )
         assert send_resp.status_code == 200
         assert "Fuersorge-Modus" in send_resp.json()["reply"]
+        assert send_resp.json()["client_actions"] == []
 
 
 def test_chat_reply_respects_pause_on_red():
@@ -386,6 +387,184 @@ def test_chat_can_update_roleplay_state(monkeypatch):
             assert "Inspection" in update_msg.content
         finally:
             db.close()
+
+
+def test_chat_returns_lovense_client_actions(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message="Kurzer Impuls fuer den Edge 2.",
+                actions=[
+                    {
+                        "type": "lovense_control",
+                        "command": "pulse",
+                        "intensity": 9,
+                        "duration_seconds": 15,
+                        "pause_seconds": 3,
+                        "loops": 2,
+                    }
+                ],
+                mood="strict",
+                intensity=4,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda session_obj: _DummyAI())
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Uebernimm die Toy-Steuerung."},
+        )
+        assert send_resp.status_code == 200
+        assert send_resp.json()["client_actions"] == [
+            {
+                "type": "lovense_control",
+                "command": "pulse",
+                "intensity": 9,
+                "duration_seconds": 15,
+                "pause_seconds": 3,
+                "loops": 2,
+            }
+        ]
+
+
+def test_chat_returns_lovense_session_plan(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message="Ich starte jetzt eine gefuehrte Sequenz.",
+                actions=[
+                    {
+                        "type": "lovense_session_plan",
+                        "title": "Warmup Block",
+                        "steps": [
+                            {"command": "pulse", "intensity": 7, "duration_seconds": 12},
+                            {"command": "pause", "duration_seconds": 5},
+                            {"command": "preset", "preset": "tease_ramp", "duration_seconds": 18},
+                        ],
+                    }
+                ],
+                mood="strict",
+                intensity=4,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda session_obj: _DummyAI())
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Starte eine laengere Edge-2-Session."},
+        )
+        assert send_resp.status_code == 200
+        assert send_resp.json()["client_actions"] == [
+            {
+                "type": "lovense_session_plan",
+                "title": "Warmup Block",
+                "mode": "replace",
+                "steps": [
+                    {"command": "pulse", "intensity": 7, "duration_seconds": 12},
+                    {"command": "pause", "duration_seconds": 5},
+                    {"command": "preset", "preset": "tease_ramp", "duration_seconds": 18},
+                ],
+            }
+        ]
+
+
+def test_chat_filters_stimulating_lovense_actions_when_session_is_paused(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message="Ich stoppe und beruhige die Lage.",
+                actions=[
+                    {"type": "lovense_control", "command": "pulse", "intensity": 10, "duration_seconds": 12},
+                    {"type": "lovense_control", "command": "stop"},
+                ],
+                mood="caring",
+                intensity=2,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda session_obj: _DummyAI())
+
+    with TestClient(app) as client:
+        _register_user(client, prefix="chat-admin-pause", make_admin=True)
+        session_id = _create_and_sign(client)
+
+        red = client.post(
+            f"/api/sessions/{session_id}/safety/traffic-light",
+            json={"color": "red"},
+            headers=_admin_headers(),
+        )
+        assert red.status_code == 200
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Was jetzt?"},
+        )
+        assert send_resp.status_code == 200
+        assert send_resp.json()["client_actions"] == [{"type": "lovense_control", "command": "stop"}]
+
+
+def test_chat_filters_stimulating_lovense_session_plans_when_session_is_paused(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message="Ich breche die Sequenz ab.",
+                actions=[
+                    {
+                        "type": "lovense_session_plan",
+                        "title": "Unsafe Block",
+                        "steps": [
+                            {"command": "pulse", "intensity": 9, "duration_seconds": 10},
+                            {"command": "stop"},
+                        ],
+                    }
+                ],
+                mood="caring",
+                intensity=2,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda session_obj: _DummyAI())
+
+    with TestClient(app) as client:
+        _register_user(client, prefix="chat-admin-planpause", make_admin=True)
+        session_id = _create_and_sign(client)
+
+        red = client.post(
+            f"/api/sessions/{session_id}/safety/traffic-light",
+            json={"color": "red"},
+            headers=_admin_headers(),
+        )
+        assert red.status_code == 200
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Beruhige alles sofort."},
+        )
+        assert send_resp.status_code == 200
+        assert send_resp.json()["client_actions"] == [
+            {
+                "type": "lovense_session_plan",
+                "title": "Unsafe Block",
+                "mode": "replace",
+                "steps": [{"command": "stop"}],
+            }
+        ]
 
 
 def test_chat_infers_roleplay_update_from_reply_text(monkeypatch):

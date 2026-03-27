@@ -120,6 +120,81 @@ def test_rotate_ws_token_invalidates_existing_connection():
             assert payload["message_type"] == "chat"
 
 
+def test_websocket_includes_lovense_client_actions(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message="Kurzer Pulse-Befehl.",
+                actions=[{"type": "lovense_control", "command": "pulse", "intensity": 8, "duration_seconds": 10}],
+                mood="strict",
+                intensity=3,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda session_obj: _DummyAI())
+
+    with TestClient(app) as client:
+        _register_user(client, prefix="ws-admin-lovense", make_admin=True)
+        session_id, ws_auth_token = _create_and_sign(client)
+
+        with client.websocket_connect(f"/api/sessions/{session_id}/chat/ws?token={ws_auth_token}") as ws:
+            ws.send_text("Steuere den Edge 2.")
+            payload = ws.receive_json()
+            assert payload["message_type"] == "chat"
+            assert payload["client_actions"] == [
+                {"type": "lovense_control", "command": "pulse", "intensity": 8, "duration_seconds": 10}
+            ]
+
+
+def test_websocket_includes_lovense_session_plan(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message="Ich uebergebe einen kleinen Session-Plan.",
+                actions=[
+                    {
+                        "type": "lovense_session_plan",
+                        "title": "WS Plan",
+                        "steps": [
+                            {"command": "pulse", "intensity": 6, "duration_seconds": 10},
+                            {"command": "pause", "duration_seconds": 4},
+                            {"command": "wave", "intensity": 8, "duration_seconds": 9},
+                        ],
+                    }
+                ],
+                mood="strict",
+                intensity=4,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda session_obj: _DummyAI())
+
+    with TestClient(app) as client:
+        _register_user(client, prefix="ws-admin-plan", make_admin=True)
+        session_id, ws_auth_token = _create_and_sign(client)
+
+        with client.websocket_connect(f"/api/sessions/{session_id}/chat/ws?token={ws_auth_token}") as ws:
+            ws.send_text("Plane jetzt mehrere Schritte.")
+            payload = ws.receive_json()
+            assert payload["message_type"] == "chat"
+            assert payload["client_actions"] == [
+                {
+                    "type": "lovense_session_plan",
+                    "title": "WS Plan",
+                    "mode": "replace",
+                    "steps": [
+                        {"command": "pulse", "intensity": 6, "duration_seconds": 10},
+                        {"command": "pause", "duration_seconds": 4},
+                        {"command": "wave", "intensity": 8, "duration_seconds": 9},
+                    ],
+                }
+            ]
+
+
 def test_rotate_ws_token_requires_admin_secret_when_configured():
     previous = settings.admin_secret
     settings.admin_secret = "top-secret"

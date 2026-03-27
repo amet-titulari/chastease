@@ -133,6 +133,8 @@ _RELATIONSHIP_SCORE_KEYS = (
     "frustration",
     "attachment",
 )
+_CLIENT_ACTION_TYPES = {"lovense_control", "lovense_session_plan"}
+_LOVENSE_STIMULATION_COMMANDS = {"vibrate", "pulse", "wave", "preset"}
 
 
 def _infer_task_action_from_reply(reply_text: str) -> dict | None:
@@ -228,6 +230,54 @@ def _infer_roleplay_update_from_reply(reply_text: str, current_relationship: dic
     return {"type": "update_roleplay_state", "relationship": patch}
 
 
+def _collect_client_actions(
+    actions: list[dict[str, Any]],
+    *,
+    safety_mode: str | None,
+    session_status: str,
+    degraded: bool,
+) -> list[dict[str, Any]]:
+    if degraded:
+        return []
+
+    allow_stimulation = safety_mode not in {"yellow", "red"} and session_status not in {
+        "paused",
+        "safeword_stopped",
+        "emergency_stopped",
+    }
+    client_actions: list[dict[str, Any]] = []
+    for action in actions:
+        if not isinstance(action, dict):
+            continue
+        if action.get("type") not in _CLIENT_ACTION_TYPES:
+            continue
+        if action.get("type") == "lovense_control":
+            command = str(action.get("command") or "").strip().lower()
+            if command in _LOVENSE_STIMULATION_COMMANDS and not allow_stimulation:
+                continue
+        if action.get("type") == "lovense_session_plan":
+            steps = action.get("steps") if isinstance(action.get("steps"), list) else []
+            if not steps:
+                continue
+            plan_action = dict(action)
+            plan_action.setdefault("mode", "replace")
+            if not allow_stimulation:
+                filtered_steps = [
+                    dict(step)
+                    for step in steps
+                    if isinstance(step, dict) and str(step.get("command") or "").strip().lower() == "stop"
+                ]
+                if not filtered_steps:
+                    continue
+                plan_action["steps"] = filtered_steps
+                client_actions.append(plan_action)
+                continue
+            client_actions.append(plan_action)
+            continue
+        client_actions.append(dict(action))
+    return client_actions
+
+
 def _message_prompt_templates(row: Message) -> list[str]:
     if not row.prompt_templates_json:
         return []
@@ -256,7 +306,7 @@ def _persist_chat_turn(
     image_bytes: bytes | None = None,
     image_filename: str | None = None,
     session_obj: SessionModel | None = None,
-) -> Message:
+ ) -> tuple[Message, list[dict[str, Any]]]:
     session_obj = session_obj or _load_session(db, session_id)
     persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
     persona_name = persona.name if persona else "Keyholderin"
@@ -651,6 +701,12 @@ def _persist_chat_turn(
                 roleplay_state = next_state
                 continue
 
+            if action.get("type") == "lovense_control":
+                continue
+
+            if action.get("type") == "lovense_session_plan":
+                continue
+
             if action.get("type") != "create_task":
                 continue
             title = str(action.get("title", "")).strip()[:200]
@@ -748,6 +804,13 @@ def _persist_chat_turn(
             )
         )
 
+    client_actions = _collect_client_actions(
+        actions,
+        safety_mode=safety_mode,
+        session_status=session_obj.status,
+        degraded=structured.degraded,
+    )
+
     db.add(user_msg)
     db.add(assistant_msg)
     db.commit()
@@ -760,7 +823,7 @@ def _persist_chat_turn(
         prompt_version=assistant_msg.prompt_version,
         prompt_templates=prompt_modules.templates_used,
     )
-    return assistant_msg
+    return assistant_msg, client_actions
 
 
 def _persist_error_fallback_turn(
@@ -769,7 +832,7 @@ def _persist_error_fallback_turn(
     user_text: str,
     session_obj: SessionModel,
     reason: str | None = None,
-) -> Message:
+ ) -> tuple[Message, list[dict[str, Any]]]:
     persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
     persona_name = persona.name if persona and persona.name else "Keyholderin"
     reply_text = (
@@ -792,7 +855,7 @@ def _persist_error_fallback_turn(
     db.add(warning_msg)
     db.commit()
     db.refresh(assistant_msg)
-    return assistant_msg
+    return assistant_msg, []
 
 
 def _latest_assistant_message_id(db: Session, session_id: int) -> int:
@@ -829,6 +892,7 @@ async def _push_new_assistant_messages(
                 "assistant": row.content,
                 "message_id": row.id,
                 "message_type": row.message_type,
+                "client_actions": [],
             }
         )
         last_sent_assistant_id = row.id
@@ -883,10 +947,10 @@ def list_messages(session_id: int, request: Request, db: Session = Depends(get_d
 def send_message(session_id: int, payload: SendMessageRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     session_obj = get_owned_session(request, db, session_id)
     try:
-        assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=payload.content, session_obj=session_obj)
+        assistant_msg, client_actions = _persist_chat_turn(db=db, session_id=session_id, user_text=payload.content, session_obj=session_obj)
     except Exception as exc:
         logger.exception("send_message failed for session_id=%s", session_id)
-        assistant_msg = _persist_error_fallback_turn(
+        assistant_msg, client_actions = _persist_error_fallback_turn(
             db=db,
             session_id=session_id,
             user_text=payload.content,
@@ -897,6 +961,7 @@ def send_message(session_id: int, payload: SendMessageRequest, request: Request,
         "session_id": session_id,
         "reply": assistant_msg.content,
         "reply_message_id": assistant_msg.id,
+        "client_actions": client_actions,
         "prompt_version": assistant_msg.prompt_version,
         "prompt_templates": _message_prompt_templates(assistant_msg),
     }
@@ -998,7 +1063,7 @@ async def send_message_with_media(
                 audio_note += f" [Transkript nicht verfügbar: {result.error}]"
             user_text = f"{user_text}\n\n{audio_note}".strip() if user_text else audio_note
     try:
-        assistant_msg = _persist_chat_turn(
+        assistant_msg, client_actions = _persist_chat_turn(
             db=db,
             session_id=session_id,
             user_text=user_text,
@@ -1008,7 +1073,7 @@ async def send_message_with_media(
         )
     except Exception as exc:
         logger.exception("send_message_with_media failed for session_id=%s", session_id)
-        assistant_msg = _persist_error_fallback_turn(
+        assistant_msg, client_actions = _persist_error_fallback_turn(
             db=db,
             session_id=session_id,
             user_text=user_text,
@@ -1025,6 +1090,7 @@ async def send_message_with_media(
         "reply": assistant_msg.content,
         "reply_message_id": assistant_msg.id,
         "message_type": response_message_type,
+        "client_actions": client_actions,
         "prompt_version": assistant_msg.prompt_version,
         "prompt_templates": _message_prompt_templates(assistant_msg),
     }
@@ -1067,10 +1133,10 @@ def regenerate_last_message(
         user_text = row.content
 
     try:
-        assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=user_text, session_obj=session_obj)
+        assistant_msg, client_actions = _persist_chat_turn(db=db, session_id=session_id, user_text=user_text, session_obj=session_obj)
     except Exception as exc:
         logger.exception("regenerate_last_message failed for session_id=%s", session_id)
-        assistant_msg = _persist_error_fallback_turn(
+        assistant_msg, client_actions = _persist_error_fallback_turn(
             db=db,
             session_id=session_id,
             user_text=user_text,
@@ -1085,6 +1151,7 @@ def regenerate_last_message(
         "reply": assistant_msg.content,
         "reply_message_id": assistant_msg.id,
         "message_type": assistant_msg.message_type,
+        "client_actions": client_actions,
         "prompt_version": assistant_msg.prompt_version,
         "prompt_templates": _message_prompt_templates(assistant_msg),
     }
@@ -1116,7 +1183,7 @@ async def chat_ws(websocket: WebSocket, session_id: int):
                 if _fresh_ws_token(session_id) != token_at_connect:
                     await websocket.close(code=1008, reason="Websocket token rotated")
                     return
-                assistant_msg = _persist_chat_turn(db=db, session_id=session_id, user_text=user_text)
+                assistant_msg, client_actions = _persist_chat_turn(db=db, session_id=session_id, user_text=user_text)
                 await websocket.send_json(
                     {
                         "session_id": session_id,
@@ -1124,6 +1191,7 @@ async def chat_ws(websocket: WebSocket, session_id: int):
                         "assistant": assistant_msg.content,
                         "message_id": assistant_msg.id,
                         "message_type": assistant_msg.message_type,
+                        "client_actions": client_actions,
                     }
                 )
                 last_sent_assistant_id = assistant_msg.id

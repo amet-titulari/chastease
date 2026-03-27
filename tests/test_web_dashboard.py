@@ -103,7 +103,7 @@ def test_history_route_exists():
         assert resp.status_code == 200
 
 
-def test_dashboard_includes_lovense_card_when_enabled():
+def test_toys_page_includes_lovense_card_when_enabled():
     previous_enabled = settings.lovense_enabled
     previous_platform = settings.lovense_platform
     previous_token = settings.lovense_developer_token
@@ -113,10 +113,10 @@ def test_dashboard_includes_lovense_card_when_enabled():
         settings.lovense_developer_token = "dev-token"
         with TestClient(app) as client:
             session_id = _register_user_and_create_session(client)
-            resp = client.get(f"/dashboard/{session_id}")
+            resp = client.get(f"/toys/{session_id}")
             assert resp.status_code == 200
             html = resp.text
-            assert "Lovense und Toys" in html
+            assert ">Lovense<" in html
             assert 'id="dash-lovense-init"' in html
             assert "basic-sdk/core.min.js" in html
     finally:

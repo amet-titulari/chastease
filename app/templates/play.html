@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="/static/css/play.css?v=20260325a" />
+<link rel="stylesheet" href="/static/css/play.css?v={{ play_css_version }}" />
 {% endblock %}
 
 {% block body_class %}page-layout-app page-layout-play{% endblock %}
@@ -13,6 +13,12 @@
   data-lock-end="{{ lock_end or '' }}"
   data-persona-name="{{ persona_name }}"
   data-player-name="{{ player_nickname }}"
+  data-lovense-enabled="{{ '1' if lovense_status.enabled else '0' }}"
+  data-lovense-configured="{{ '1' if lovense_status.configured else '0' }}"
+  data-lovense-platform="{{ lovense_status.platform or '' }}"
+  data-lovense-app-type="{{ lovense_status.app_type or 'connect' }}"
+  data-lovense-sdk-url="{{ lovense_status.sdk_url or '' }}"
+  data-lovense-debug="{{ '1' if lovense_status.debug else '0' }}"
   data-app-version="0.4.0">
 
   <header class="play-header">
@@ -136,6 +142,14 @@
       <div class="play-voice-status-row">
         <span id="play-voice-status" class="hint">Voice: pruefe Verfuegbarkeit...</span>
       </div>
+      <div class="play-device-status-row">
+        <span id="play-lovense-status" class="hint">Lovense: pruefe Verfuegbarkeit...</span>
+        <div class="play-device-actions">
+          <button id="play-lovense-init" type="button" class="play-device-btn">Verbinden</button>
+          <button id="play-lovense-open-app" type="button" class="play-device-btn">App</button>
+          <button id="play-lovense-stop" type="button" class="play-device-btn play-device-btn--danger">Stop</button>
+        </div>
+      </div>
     </section>
 
   </div>
@@ -147,5 +161,8 @@
 {% endblock %}
 
 {% block scripts %}
+{% if lovense_status.enabled and lovense_status.sdk_url %}
+<script src="{{ lovense_status.sdk_url }}"></script>
+{% endif %}
 <script src="/static/js/play.js?v={{ play_js_version }}"></script>
 {% endblock %}

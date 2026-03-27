@@ -10,6 +10,17 @@ def test_normalize_action_payloads_drops_invalid_and_coerces_valid_items():
             {"type": "update_task", "task_id": "42", "deadline_minutes": "30", "title": "New title"},
             {"type": "fail_task", "task_id": "7"},
             {"type": "update_roleplay_state", "scene": {"title": "Inspection"}, "relationship": {"obedience": 73}},
+            {"type": "lovense_control", "command": "pulse", "intensity": "12", "duration_seconds": "18", "loops": "2"},
+            {"type": "lovense_control", "command": "preset"},
+            {
+                "type": "lovense_session_plan",
+                "title": "Warmup",
+                "steps": [
+                    {"command": "pulse", "intensity": "7", "duration_seconds": "12"},
+                    {"command": "pause", "duration_seconds": "5"},
+                    {"command": "preset", "preset": "tease_ramp", "duration_seconds": "20"},
+                ],
+            },
         ]
     )
 
@@ -18,4 +29,15 @@ def test_normalize_action_payloads_drops_invalid_and_coerces_valid_items():
         {"type": "update_task", "task_id": 42, "title": "New title", "deadline_minutes": 30},
         {"type": "fail_task", "task_id": 7},
         {"type": "update_roleplay_state", "scene": {"title": "Inspection"}, "relationship": {"obedience": 73}},
+        {"type": "lovense_control", "command": "pulse", "intensity": 12, "duration_seconds": 18, "loops": 2},
+        {
+            "type": "lovense_session_plan",
+            "title": "Warmup",
+            "mode": "replace",
+            "steps": [
+                {"command": "pulse", "intensity": 7, "duration_seconds": 12},
+                {"command": "pause", "duration_seconds": 5},
+                {"command": "preset", "duration_seconds": 20, "preset": "tease_ramp"},
+            ],
+        },
     ]

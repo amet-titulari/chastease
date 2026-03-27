@@ -1627,7 +1627,9 @@ def play_page(session_id: int, request: Request, db: Session = Depends(get_db)):
             "player_nickname": player.nickname if player else user.username,
             "lock_end": session_obj.lock_end.isoformat() if session_obj.lock_end else None,
             "ws_debug_enabled": settings.play_ws_debug_enabled,
+            "lovense_status": lovense_status_payload(),
             "play_js_version": _asset_version("js/play.js"),
+            "play_css_version": _asset_version("css/play.css"),
         },
     )
 
@@ -1675,6 +1677,52 @@ def dashboard_page(session_id: int, request: Request, db: Session = Depends(get_
             "lock_end": session_obj.lock_end.isoformat() if session_obj.lock_end else None,
             "dashboard_css_version": _asset_version("css/dashboard.css"),
             "dashboard_js_version": _asset_version("js/dashboard.js"),
+            "lovense_status": lovense_status_payload(),
+        },
+    )
+
+
+@router.get("/toys", response_class=HTMLResponse)
+def toys_redirect(request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    target_session = None
+    if user.active_session_id:
+        target_session = db.query(SessionModel).filter(SessionModel.id == user.active_session_id).first()
+    if target_session is None:
+        target_session = db.query(SessionModel).order_by(SessionModel.id.desc()).first()
+    if target_session is None:
+        return RedirectResponse(url="/experience", status_code=303)
+    return RedirectResponse(url=f"/toys/{target_session.id}", status_code=303)
+
+
+@router.get("/toys/{session_id}", response_class=HTMLResponse)
+def toys_page(session_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _get_current_user(request, db)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if session_obj is None:
+        return RedirectResponse(url="/experience", status_code=303)
+    user.active_session_id = session_id
+    db.commit()
+    persona = db.query(Persona).filter(Persona.id == session_obj.persona_id).first()
+    player = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+    return templates.TemplateResponse(
+        request=request,
+        name="toys.html",
+        context={
+            "title": f"Toys – {settings.app_name}",
+            "current_user": user,
+            "session_id": session_id,
+            "session_status": session_obj.status,
+            "ws_token": session_obj.ws_auth_token or "",
+            "persona_name": persona.name if persona else "Keyholderin",
+            "player_nickname": player.nickname if player else user.username,
+            "lock_end": session_obj.lock_end.isoformat() if session_obj.lock_end else None,
+            "dashboard_css_version": _asset_version("css/dashboard.css"),
+            "toys_js_version": _asset_version("js/toys.js"),
             "lovense_status": lovense_status_payload(),
         },
     )

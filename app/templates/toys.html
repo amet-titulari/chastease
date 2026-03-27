@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/dashboard.css?v={{ dashboard_css_version }}" />
+{% endblock %}
+
+{% block body_class %}page-layout-app page-layout-dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-shell"
+     data-session-id="{{ session_id }}"
+     data-lock-end="{{ lock_end or '' }}"
+     data-persona-name="{{ persona_name }}"
+     data-player-name="{{ player_nickname }}"
+     data-lovense-enabled="{{ '1' if lovense_status.enabled else '0' }}"
+     data-lovense-configured="{{ '1' if lovense_status.configured else '0' }}"
+     data-lovense-platform="{{ lovense_status.platform or '' }}"
+     data-lovense-app-type="{{ lovense_status.app_type or 'connect' }}"
+     data-lovense-sdk-url="{{ lovense_status.sdk_url or '' }}"
+     data-lovense-debug="{{ '1' if lovense_status.debug else '0' }}">
+  <section class="dash-hero">
+    <div class="dash-hero-top">
+      <div class="dash-hero-left">
+        <span class="dash-live-dot" aria-hidden="true"></span>
+        <span class="dash-hero-persona">Toys</span>
+        <span class="dash-hero-sep">&middot;</span>
+        <span class="dash-hero-session">Session #{{ session_id }}</span>
+        <span class="status-pill">{{ session_status }}</span>
+      </div>
+      <div class="dash-hero-actions">
+        <a href="/play/{{ session_id }}" class="dash-link-primary">Zum Chat</a>
+        <a href="/dashboard/{{ session_id }}" class="dash-link-secondary">Dashboard</a>
+        <a href="/games" class="dash-link-secondary">Spiele</a>
+      </div>
+    </div>
+    <div class="dash-hero-bottom">
+      <div class="dash-hero-copy">
+        <p class="dash-eyebrow">Device Hub</p>
+        <p class="dash-subline">Verbindungen, Teststeuerung und spaetere Hardware-Integrationen leben hier getrennt vom Session-Dashboard.</p>
+      </div>
+      <div class="dash-count-block">
+        <span class="dash-count-label">Wearer</span>
+        <strong class="dash-countdown">{{ player_nickname }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <div class="dash-grid">
+    <section class="dash-card dash-card--lovense">
+      <div class="dash-card-head">
+        <div>
+          <h3>Lovense</h3>
+          <p class="dash-copy">Connection, Toy-Erkennung und Teststeuerung fuer KI-Plansitzungen und manuelle Checks.</p>
+        </div>
+        <span id="dash-lovense-app-pill" class="dash-chip">inaktiv</span>
+      </div>
+      <div class="dash-lovense-statusbar">
+        <p id="dash-lovense-status" class="dash-copy">Lovense wird geprueft…</p>
+        <p id="dash-lovense-toy-meta" class="dash-copy">Der Edge 2 sollte nach dem Verbinden hier erscheinen.</p>
+      </div>
+      <div class="dash-actions dash-actions--lovense-top">
+        <button id="dash-lovense-init" type="button">Lovense verbinden</button>
+        <button id="dash-lovense-refresh" type="button" class="dash-link-secondary">QR erneuern</button>
+        <button id="dash-lovense-open-app" type="button" class="dash-link-secondary">Connect App oeffnen</button>
+      </div>
+      <div id="dash-lovense-qr-wrap" class="dash-lovense-qr-wrap">
+        <img id="dash-lovense-qr" class="dash-lovense-qr is-hidden" alt="Lovense QR" />
+      </div>
+      <div class="dash-lovense-console">
+        <label class="dash-field">Aktives Toy
+          <select id="dash-lovense-toy-select">
+            <option value="">Noch kein Toy verbunden</option>
+          </select>
+        </label>
+        <div class="dash-lovense-control-grid">
+          <label class="dash-field">Intensitaet
+            <div class="dash-lovense-slider-row">
+              <input id="dash-lovense-intensity" type="range" min="1" max="20" step="1" value="8" />
+              <span id="dash-lovense-intensity-value" class="dash-chip dash-chip--value">8/20</span>
+            </div>
+          </label>
+          <label class="dash-field">Dauer (Sekunden)
+            <input id="dash-lovense-duration" type="number" min="1" max="300" step="1" value="20" />
+          </label>
+          <label class="dash-field">Pause (Sekunden)
+            <input id="dash-lovense-pause" type="number" min="0" max="300" step="1" value="5" />
+          </label>
+          <label class="dash-field">Loops
+            <input id="dash-lovense-loops" type="number" min="1" max="20" step="1" value="1" />
+          </label>
+        </div>
+        <div class="dash-lovense-presets">
+          <label class="dash-field">Preset-Bibliothek
+            <select id="dash-lovense-preset">
+              <option value="tease_ramp">Tease Ramp</option>
+              <option value="strict_pulse">Strict Pulse</option>
+              <option value="wave_ladder">Wave Ladder</option>
+              <option value="deny_spikes">Deny Spikes</option>
+            </select>
+          </label>
+          <button id="dash-lovense-run-preset" type="button" class="dash-link-primary">Preset starten</button>
+        </div>
+        <p id="dash-lovense-preset-copy" class="dash-copy">Kurze Bibliothek fuer erste Routinen. Ein visueller Pattern-Designer kann spaeter darauf aufbauen.</p>
+        <div class="dash-actions dash-actions--lovense-commands">
+          <button id="dash-lovense-vibrate" type="button">Vibrieren</button>
+          <button id="dash-lovense-pulse" type="button" class="dash-link-secondary">Pulse</button>
+          <button id="dash-lovense-wave" type="button" class="dash-link-secondary">Wave</button>
+          <button id="dash-lovense-stop" type="button" class="dash-safety-btn dash-safety-btn--red">Stop</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="dash-card dash-card--table">
+      <div class="dash-card-head">
+        <h3>Aktive Session</h3>
+      </div>
+      <dl class="dash-info-grid">
+        <dt>Session</dt><dd>#{{ session_id }}</dd>
+        <dt>Keyholderin</dt><dd>{{ persona_name }}</dd>
+        <dt>Wearer</dt><dd>{{ player_nickname }}</dd>
+        <dt>Status</dt><dd>{{ session_status }}</dd>
+      </dl>
+      <div class="dash-divider"></div>
+      <p class="dash-copy">Die eigentliche Live-Steuerung der KI laeuft im Chat. Diese Seite bleibt der Ort fuer Devices, Policies und kuenftige Integrationen.</p>
+    </section>
+
+    <section class="dash-card dash-card--table">
+      <div class="dash-card-head">
+        <h3>Weitere Integrationen</h3>
+      </div>
+      <p class="dash-copy"><strong>TTLock</strong> ist als naechster Provider vorbereitet. Der Bereich ist absichtlich generisch gehalten, damit weitere Hardware spaeter dieselbe Struktur nutzen kann.</p>
+      <div class="dash-divider"></div>
+      <p class="dash-copy">Geplante Bausteine:</p>
+      <dl class="dash-info-grid">
+        <dt>Provider</dt><dd>Lovense, TTLock, weitere APIs</dd>
+        <dt>Policies</dt><dd>Grenzen, Freigaben, erlaubte Aktionen</dd>
+        <dt>Audit</dt><dd>Verbindungs- und Steuerhistorie</dd>
+      </dl>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if lovense_status.enabled and lovense_status.sdk_url %}
+<script src="{{ lovense_status.sdk_url }}"></script>
+{% endif %}
+<script src="/static/js/toys.js?v={{ toys_js_version }}"></script>
+{% endblock %}
