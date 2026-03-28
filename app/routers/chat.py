@@ -101,6 +101,28 @@ def _assistant_reply(persona_name: str, user_text: str, safety_mode: str | None,
     return f"{persona_name}: Ich habe dich gehoert. Du sagtest: '{user_text}'. Bleib diszipliniert."
 
 
+def _normalize_echo_text(value: str, persona_name: str) -> str:
+    text = str(value or "").strip()
+    persona_prefix = f"{persona_name}:"
+    if text.lower().startswith(persona_prefix.lower()):
+        text = text[len(persona_prefix):].strip()
+    text = re.sub(r"\s+", " ", text)
+    text = text.strip(" \t\n\r'\"“”„‚’`.,:;!?-")
+    return text.casefold()
+
+
+def _looks_like_echo_reply(reply_text: str, user_text: str, persona_name: str) -> bool:
+    normalized_reply = _normalize_echo_text(reply_text, persona_name)
+    normalized_user = _normalize_echo_text(user_text, persona_name)
+    if not normalized_reply or not normalized_user:
+        return False
+    if normalized_reply == normalized_user:
+        return True
+    if normalized_reply.startswith(normalized_user):
+        return len(normalized_reply) - len(normalized_user) <= 24
+    return False
+
+
 def _as_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -575,6 +597,11 @@ def _persist_chat_turn(
             user_text,
             safety_mode=safety_mode,
             session_status=session_obj.status,
+        )
+    elif _looks_like_echo_reply(reply_text, user_text, persona_name):
+        reply_text = (
+            f"{persona_name}: Ich habe deine Nachricht registriert. "
+            "Der letzte Antwortpfad wirkte wie ein Echo; ich bleibe deshalb kurz und stabil."
         )
 
     created_task_ids: list[int] = []

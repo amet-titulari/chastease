@@ -75,6 +75,31 @@ def test_chat_message_roundtrip():
         assert items[-1]["role"] == "assistant"
 
 
+def test_chat_replaces_echo_like_assistant_reply(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            user_text = kwargs["user_text"]
+            return AIResponse(
+                message=f"Chat Persona: {user_text}",
+                actions=[],
+                mood="strict",
+                intensity=3,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda **_: _DummyAI())
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Bitte wiederhole das nicht einfach."},
+        )
+        assert send_resp.status_code == 200
+        assert "wirkte wie ein Echo" in send_resp.json()["reply"]
+
+
 def test_chat_surfaces_degraded_ai_mode(monkeypatch):
     class _DummyAI:
         def generate_chat_response(self, **kwargs):

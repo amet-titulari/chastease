@@ -186,11 +186,19 @@ def _fallback_chat_response(persona_name: str, user_text: str) -> AIResponse:
             action["deadline_minutes"] = deadline_minutes
         actions.append(action)
 
+    follow_up = " Wenn du etwas Konkretes willst, formuliere es kurz und eindeutig."
+    if actions:
+        follow_up = " Ich habe daraus eine strukturierte Folgeaktion vorbereitet."
     return AIResponse(
-        message=f"{persona_name}: Ich habe dich gehoert. {user_text}".strip(),
+        message=(
+            f"{persona_name}: Ich antworte gerade im Fallback-Modus und halte es bewusst knapp."
+            f"{follow_up}"
+        ).strip(),
         actions=actions,
         mood="strict",
-        intensity=3,
+        intensity=2,
+        degraded=True,
+        degraded_reason="stub fallback active",
     )
 
 

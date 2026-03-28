@@ -103,6 +103,8 @@ def test_stub_chat_response_task_action_is_normalized():
         user_text="Bitte Aufgabe: 20 Kniebeugen in 10 Minuten",
     )
     assert response.actions
+    assert "20 Kniebeugen" not in response.message
+    assert response.degraded is True
     action = response.actions[0]
     assert action["type"] == "create_task"
     assert "title" in action
