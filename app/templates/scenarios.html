@@ -26,9 +26,14 @@
     font-size: 0.78rem;
     color: var(--color-text-muted, #8899aa);
     margin: 0 0 0.2rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .scenario-card-meta code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .scenario-card-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
   .scenario-tag {
@@ -39,6 +44,10 @@
     padding: 0.1rem 0.45rem;
     font-size: 0.7rem;
     font-weight: 600;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .scenario-card-actions { display: flex; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; }
   .scenario-card-actions button { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
@@ -177,6 +186,19 @@
   }
 
   @media (max-width: 760px) {
+    .scenario-card {
+      flex-direction: column;
+      gap: 0.7rem;
+    }
+    .scenario-card-actions {
+      width: 100%;
+    }
+    .scenario-card-actions button {
+      flex: 1 1 auto;
+    }
+    .scenario-tag {
+      font-size: 0.68rem;
+    }
     .inventory-row {
       grid-template-columns: 24px minmax(0, 1fr) 84px;
       gap: 0.5rem;
@@ -189,6 +211,8 @@
   }
 </style>
 {% endblock %}
+
+{% block body_class %}page-layout-app page-layout-dashboard{% endblock %}
 
 {% block content %}
 <section class="profile-shell page-shell page-shell--app full">

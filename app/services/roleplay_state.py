@@ -77,7 +77,7 @@ def default_scene_state(
     phase = active_phase or {}
     title = str(phase.get("title") or "").strip() or "Einstimmung"
     objective = str(phase.get("objective") or "").strip() or "Praesenz, Gehorsam und ruhige Fuehrung etablieren"
-    pressure = str(phase.get("guidance") or "").strip() or "niedrig"
+    pressure = str(phase.get("pressure") or "").strip() or "niedrig"
     base = {
         "arc": str(scenario_title or "Keyholder Session").strip()[:120] or "Keyholder Session",
         "title": title[:120],
@@ -88,9 +88,6 @@ def default_scene_state(
     }
     defaults = roleplay_defaults_from_profile(behavior_profile)
     scene = defaults.get("scene")
-    if isinstance(scene, dict):
-        base.update(scene)
-    return base
     if isinstance(scene, dict):
         base.update(scene)
     return base
@@ -135,6 +132,28 @@ def _normalize_scene_state(
         base["pressure"] = _text(value.get("pressure"), base["pressure"], limit=200)
         base["last_consequence"] = _text(value.get("last_consequence"), base["last_consequence"], limit=240)
         base["next_beat"] = _text(value.get("next_beat"), base["next_beat"], limit=240)
+    phase = active_phase if isinstance(active_phase, dict) else {}
+    phase_title = str(phase.get("title") or "").strip()
+    phase_objective = str(phase.get("objective") or "").strip()
+    phase_pressure = str(phase.get("pressure") or "").strip()
+    phase_guidance = str(phase.get("guidance") or "").strip()
+    if phase_title and (not str(value.get("title") if isinstance(value, dict) else "").strip() or base["title"] == "Einstimmung"):
+        base["title"] = phase_title[:120]
+    if phase_objective and (
+        not str(value.get("objective") if isinstance(value, dict) else "").strip()
+        or base["objective"] == "Praesenz, Gehorsam und ruhige Fuehrung etablieren"
+    ):
+        base["objective"] = phase_objective[:240]
+    current_pressure = str(value.get("pressure") if isinstance(value, dict) else "").strip()
+    legacy_guidance_pressure = phase_guidance[:200] if phase_guidance else ""
+    if phase_pressure and (
+        not current_pressure
+        or base["pressure"] == "niedrig"
+        or (legacy_guidance_pressure and base["pressure"] == legacy_guidance_pressure)
+    ):
+        base["pressure"] = phase_pressure[:200]
+    elif legacy_guidance_pressure and base["pressure"] == legacy_guidance_pressure:
+        base["pressure"] = "niedrig"
     return base
 
 

@@ -18,6 +18,7 @@ from app.models.message import Message
 from app.models.persona import Persona
 from app.models.player_profile import PlayerProfile
 from app.models.safety_log import SafetyLog
+from app.models.scenario import Scenario
 from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
 from app.models.task import Task
@@ -33,6 +34,39 @@ from app.services.session_access import bind_session_profile_to_user, get_access
 from app.security import require_admin_session_user, verify_admin_secret
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+
+
+def _resolve_active_scenario_phase(db: Session, scenario_key: str | None, preferred_phase_id: str | None = None) -> dict | None:
+    key = str(scenario_key or "").strip()
+    if not key:
+        return None
+
+    phases: list[dict] = []
+    db_scenario = db.query(Scenario).filter(Scenario.key == key).first()
+    if db_scenario:
+        try:
+            parsed = json.loads(db_scenario.phases_json or "[]")
+            if isinstance(parsed, list):
+                phases = [item for item in parsed if isinstance(item, dict)]
+        except Exception:
+            phases = []
+    else:
+        from app.routers.scenarios import SCENARIO_PRESETS
+
+        preset = next((item for item in SCENARIO_PRESETS if str(item.get("key") or "").strip() == key), None)
+        raw_phases = preset.get("phases", []) if isinstance(preset, dict) else []
+        if isinstance(raw_phases, list):
+            phases = [item for item in raw_phases if isinstance(item, dict)]
+
+    if not phases:
+        return None
+
+    phase_id = str(preferred_phase_id or "").strip()
+    if phase_id:
+        matched = next((phase for phase in phases if str(phase.get("phase_id") or "").strip() == phase_id), None)
+        if matched is not None:
+            return matched
+    return phases[0]
 
 
 class CreateSessionRequest(BaseModel):
@@ -380,13 +414,15 @@ def _addendum_payload(
     }
 
 
-def _apply_protocol_addendum(session_obj: SessionModel, proposed_changes: dict) -> list[str]:
+def _apply_protocol_addendum(db: Session, session_obj: SessionModel, proposed_changes: dict) -> list[str]:
+    profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first() if session_obj.player_profile_id else None
+    prefs = _load_json_dict(profile.preferences_json if profile else None)
     roleplay_state = build_roleplay_state(
         relationship_json=session_obj.relationship_state_json,
         protocol_json=session_obj.protocol_state_json,
         scene_json=session_obj.scene_state_json,
-        scenario_title=None,
-        active_phase=None,
+        scenario_title=prefs.get("scenario_preset"),
+        active_phase=_resolve_active_scenario_phase(db, prefs.get("scenario_preset"), prefs.get("scenario_phase_id")),
     )
     protocol = dict(roleplay_state["protocol"])
     active_rules = list(protocol.get("active_rules") or [])
@@ -468,7 +504,7 @@ def _session_blueprint(db: Session, session_obj: SessionModel) -> dict:
             protocol_json=session_obj.protocol_state_json,
             scene_json=session_obj.scene_state_json,
             scenario_title=prefs.get("scenario_preset"),
-            active_phase=None,
+            active_phase=_resolve_active_scenario_phase(db, prefs.get("scenario_preset"), prefs.get("scenario_phase_id")),
         ),
     }
 
@@ -557,6 +593,16 @@ def update_draft_session(
     prefs = _load_json_dict(profile.preferences_json)
     if payload.scenario_preset is not None:
         prefs["scenario_preset"] = payload.scenario_preset
+    active_phase = _resolve_active_scenario_phase(
+        db,
+        prefs.get("scenario_preset"),
+        prefs.get("scenario_phase_id"),
+    )
+    if active_phase is not None:
+        active_phase_id = str(active_phase.get("phase_id") or "").strip()
+        if active_phase_id:
+            prefs["scenario_phase_id"] = active_phase_id
+        prefs["scenario_phase_progress"] = 0
     if payload.wearer_style is not None:
         prefs["wearer_style"] = payload.wearer_style
     if payload.wearer_goal is not None:
@@ -681,13 +727,13 @@ def get_session(session_id: int, request: Request, db: Session = Depends(get_db)
         db.commit()
         db.refresh(session_obj)
     profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
-    prefs = json.loads(profile.preferences_json) if profile else {}
+    prefs = _load_json_dict(profile.preferences_json if profile else None)
     roleplay_state = build_roleplay_state(
         relationship_json=session_obj.relationship_state_json,
         protocol_json=session_obj.protocol_state_json,
         scene_json=session_obj.scene_state_json,
         scenario_title=prefs.get("scenario_preset"),
-        active_phase=None,
+        active_phase=_resolve_active_scenario_phase(db, prefs.get("scenario_preset"), prefs.get("scenario_phase_id")),
     )
     relationship_memory = build_relationship_memory(db, session_obj)
 
@@ -1106,6 +1152,16 @@ def create_session(payload: CreateSessionRequest, request: Request, db: Session 
     prefs: dict = dict(template_prefs)
     if payload.scenario_preset is not None:
         prefs["scenario_preset"] = payload.scenario_preset
+    active_phase = _resolve_active_scenario_phase(
+        db,
+        prefs.get("scenario_preset"),
+        prefs.get("scenario_phase_id"),
+    )
+    if active_phase is not None:
+        active_phase_id = str(active_phase.get("phase_id") or "").strip()
+        if active_phase_id:
+            prefs["scenario_phase_id"] = active_phase_id
+        prefs["scenario_phase_progress"] = 0
     if payload.wearer_style is not None:
         prefs["wearer_style"] = payload.wearer_style
     if payload.wearer_goal is not None:
@@ -1177,6 +1233,7 @@ def create_session(payload: CreateSessionRequest, request: Request, db: Session 
         initial_roleplay_behavior = behavior_profile_from_scenario_key(db, prefs.get("scenario_preset"))
     initial_roleplay_state = initialize_roleplay_state(
         scenario_title=prefs.get("scenario_preset"),
+        active_phase=active_phase,
         behavior_profile=initial_roleplay_behavior,
     )
 
@@ -1548,7 +1605,7 @@ def consent_contract_addendum(
                     )
             session_obj.lock_end = session_obj.lock_start + timedelta(seconds=next_duration_seconds)
 
-        protocol_notes = _apply_protocol_addendum(session_obj, proposed_changes)
+        protocol_notes = _apply_protocol_addendum(db, session_obj, proposed_changes)
         applied_summary.extend(protocol_notes)
 
         if profile is not None and reaction != _load_json_dict(profile.reaction_patterns_json):

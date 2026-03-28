@@ -30,13 +30,16 @@
       <span id="play-status-pill" class="status-pill">{{ session_status }}</span>
     </div>
     <div class="play-header-right">
-      <a href="/dashboard/{{ session_id }}" class="play-head-link">Dashboard</a>
-      <button id="play-focus-toggle" class="play-head-link play-focus-toggle" type="button" aria-pressed="false" title="Fokusmodus umschalten">Fokus</button>
+      <a href="/dashboard/{{ session_id }}" class="play-head-link" title="Dashboard" aria-label="Dashboard">
+        Dashboard
+      </a>
+      <button id="play-focus-toggle" class="play-head-link play-focus-toggle" type="button" aria-pressed="false" title="Fokusmodus umschalten" aria-label="Fokusmodus umschalten">
+        Fokus
+      </button>
 
       <div class="play-roleplay-menu" id="play-roleplay-menu">
-        <button id="play-roleplay-toggle" class="play-roleplay-toggle" type="button" aria-haspopup="true" aria-expanded="false">
-          <span id="play-roleplay-scene-mini" class="roleplay-mini-scene">Szene</span>
-          <span id="play-roleplay-mini-chip" class="roleplay-mini-chip">Status</span>
+        <button id="play-roleplay-toggle" class="play-roleplay-toggle" type="button" aria-haspopup="true" aria-expanded="false" title="Einstimmung" aria-label="Einstimmung">
+          Einstimmung
         </button>
         <div class="play-roleplay-dropdown" id="play-roleplay-dropdown" role="dialog" aria-label="Roleplay Status">
           <section class="roleplay-card">
@@ -96,8 +99,7 @@
 
       <!-- Tasks Dropdown -->
       <div class="play-tasks-menu" id="play-tasks-menu">
-        <button id="play-tasks-toggle" class="play-tasks-toggle" type="button" title="Tasks" aria-haspopup="true" aria-expanded="false">
-          <span class="tasks-chevron">&#9662;</span>
+        <button id="play-tasks-toggle" class="play-tasks-toggle" type="button" title="Tasks" aria-haspopup="true" aria-expanded="false" aria-label="Tasks">
           Tasks
           <span id="play-tasks-badge" class="tasks-badge is-hidden">0</span>
         </button>
@@ -109,10 +111,8 @@
 
       <!-- Safety Dropdown -->
       <div class="play-safety-menu" id="play-safety-menu">
-        <button id="play-safety-toggle" class="play-safety-toggle" type="button" title="Safety" aria-haspopup="true" aria-expanded="false">
-          <span class="safety-indicator" id="play-safety-indicator">&#9679;</span>
+        <button id="play-safety-toggle" class="play-safety-toggle" type="button" title="Safety" aria-haspopup="true" aria-expanded="false" aria-label="Safety">
           Safety
-          <span class="safety-chevron">&#9662;</span>
         </button>
         <div class="play-safety-dropdown" id="play-safety-dropdown" role="menu">
           <button id="play-safety-green" class="sdrop-green" type="button" role="menuitem">&#9679; Gr&uuml;n</button>
@@ -142,19 +142,44 @@
       <div class="play-voice-status-row">
         <span id="play-voice-status" class="hint">Voice: pruefe Verfuegbarkeit...</span>
       </div>
-      <div class="play-device-status-row">
-        <span id="play-lovense-status" class="hint">Lovense: pruefe Verfuegbarkeit...</span>
-        <div class="play-device-actions">
+      <div id="play-lovense-console" class="play-toy-console is-idle is-collapsed" aria-live="polite">
+        <div class="play-toy-console-compact">
+          <div class="play-toy-console-compact-copy">
+            <span class="play-toy-console-kicker">Toy Console</span>
+            <span id="play-lovense-compact-status" class="play-toy-console-compact-status">Kein Toy verbunden</span>
+          </div>
+          <button id="play-lovense-compact-init" type="button" class="play-device-btn play-toy-console-compact-btn">Toy verbinden</button>
+        </div>
+        <div class="play-toy-console-details">
+        <div class="play-toy-console-head">
+          <div class="play-toy-console-heading">
+            <span class="play-toy-console-kicker">Toy Console</span>
+            <span id="play-lovense-plan-mode" class="play-toy-console-mode">KI-Steuerung inaktiv</span>
+          </div>
+          <button id="play-lovense-stop" type="button" class="play-device-btn play-device-btn--danger play-toy-console-stop">Stop</button>
+        </div>
+        <div class="play-toy-console-grid">
+          <section class="play-toy-console-card">
+            <span class="play-toy-console-label">Verbindung</span>
+            <strong id="play-lovense-toy" class="play-toy-console-value">Kein Toy verbunden</strong>
+            <span id="play-lovense-status" class="play-toy-console-meta">Lovense: pruefe Verfuegbarkeit...</span>
+          </section>
+          <section class="play-toy-console-card">
+            <span class="play-toy-console-label">Aktuell</span>
+            <strong id="play-lovense-plan-command" class="play-toy-console-value">wartet</strong>
+            <span id="play-lovense-plan-title" class="play-toy-console-meta">Keine aktive KI-Session</span>
+          </section>
+          <section class="play-toy-console-card">
+            <span class="play-toy-console-label">Plan</span>
+            <strong id="play-lovense-plan-step" class="play-toy-console-value">Schritt 0/0</strong>
+            <span id="play-lovense-next-step" class="play-toy-console-meta">Als Naechstes: nichts geplant</span>
+          </section>
+        </div>
+        <div class="play-toy-console-actions">
           <button id="play-lovense-init" type="button" class="play-device-btn">Verbinden</button>
           <button id="play-lovense-open-app" type="button" class="play-device-btn">App</button>
-          <button id="play-lovense-stop" type="button" class="play-device-btn play-device-btn--danger">Stop</button>
         </div>
-      </div>
-      <div id="play-lovense-plan-status" class="play-device-plan-status is-hidden" aria-live="polite">
-        <span id="play-lovense-plan-mode" class="play-device-plan-chip">KI-Steuerung aktiv</span>
-        <span id="play-lovense-plan-title" class="play-device-plan-text">Session-Plan</span>
-        <span id="play-lovense-plan-step" class="play-device-plan-text">Schritt 0/0</span>
-        <span id="play-lovense-plan-command" class="play-device-plan-text">wartet</span>
+        </div>
       </div>
     </section>
 

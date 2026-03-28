@@ -17,6 +17,10 @@ from app.services.roleplay_state import (
 )
 
 
+_PHASE_SUCCESS_EVENTS = {"task_completed", "verification_confirmed"}
+_PHASE_RESET_EVENTS = {"task_failed", "verification_suspicious"}
+
+
 def _scenario_title_for_session(db: Session, session_obj: SessionModel) -> str | None:
     if not session_obj.player_profile_id:
         return None
@@ -31,6 +35,98 @@ def _scenario_title_for_session(db: Session, session_obj: SessionModel) -> str |
         return None
     value = str(prefs.get("scenario_preset") or "").strip()
     return value[:120] if value else None
+
+
+def _scenario_profile_and_prefs(db: Session, session_obj: SessionModel) -> tuple[PlayerProfile | None, dict[str, Any]]:
+    if not session_obj.player_profile_id:
+        return None, {}
+    profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+    if not profile or not profile.preferences_json:
+        return profile, {}
+    try:
+        prefs = json.loads(profile.preferences_json)
+    except Exception:
+        return profile, {}
+    return profile, prefs if isinstance(prefs, dict) else {}
+
+
+def _scenario_phases_for_session(db: Session, session_obj: SessionModel) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    profile, prefs = _scenario_profile_and_prefs(db, session_obj)
+    scenario_key = str(prefs.get("scenario_preset") or "").strip()
+    if not scenario_key:
+        return [], prefs
+
+    scenario = db.query(Scenario).filter(Scenario.key == scenario_key).first()
+    phases: list[dict[str, Any]] = []
+    if scenario:
+        try:
+            parsed = json.loads(scenario.phases_json or "[]")
+            if isinstance(parsed, list):
+                phases = [item for item in parsed if isinstance(item, dict)]
+        except Exception:
+            phases = []
+    return phases, prefs
+
+
+def _active_phase_for_session(db: Session, session_obj: SessionModel) -> dict[str, Any] | None:
+    phases, prefs = _scenario_phases_for_session(db, session_obj)
+    if not phases:
+        return None
+    current_phase_id = str(prefs.get("scenario_phase_id") or "").strip()
+    if current_phase_id:
+        matched = next((phase for phase in phases if str(phase.get("phase_id") or "").strip() == current_phase_id), None)
+        if matched is not None:
+            return matched
+    return phases[0]
+
+
+def _advance_phase_for_event(
+    db: Session,
+    session_obj: SessionModel,
+    *,
+    event_type: str,
+) -> tuple[dict[str, Any] | None, str | None]:
+    phases, prefs = _scenario_phases_for_session(db, session_obj)
+    profile, _ = _scenario_profile_and_prefs(db, session_obj)
+    if not profile or len(phases) < 2:
+        return None, None
+
+    current_phase_id = str(prefs.get("scenario_phase_id") or "").strip()
+    current_index = 0
+    if current_phase_id:
+        for index, phase in enumerate(phases):
+            if str(phase.get("phase_id") or "").strip() == current_phase_id:
+                current_index = index
+                break
+
+    current_phase = phases[current_index]
+    progress = max(0, int(prefs.get("scenario_phase_progress") or 0))
+    normalized = str(event_type or "").strip().lower()
+
+    if normalized in _PHASE_SUCCESS_EVENTS:
+        progress += 1
+        threshold = max(1, int(current_phase.get("advance_after_successes") or 3))
+        if progress >= threshold and current_index < len(phases) - 1:
+            next_phase = phases[current_index + 1]
+            next_phase_id = str(next_phase.get("phase_id") or "").strip()
+            if next_phase_id:
+                prefs["scenario_phase_id"] = next_phase_id
+            prefs["scenario_phase_progress"] = 0
+            profile.preferences_json = json.dumps(prefs, ensure_ascii=False)
+            db.add(profile)
+            return next_phase, f"Phase gewechselt: {str(next_phase.get('title') or next_phase_id or 'naechste Phase').strip()}"
+        prefs["scenario_phase_progress"] = progress
+        profile.preferences_json = json.dumps(prefs, ensure_ascii=False)
+        db.add(profile)
+        return current_phase, None
+
+    if normalized in _PHASE_RESET_EVENTS:
+        prefs["scenario_phase_progress"] = 0
+        profile.preferences_json = json.dumps(prefs, ensure_ascii=False)
+        db.add(profile)
+        return current_phase, None
+
+    return current_phase, None
 
 
 def _clamp_score(value: int) -> int:
@@ -176,23 +272,34 @@ def advance_roleplay_state_from_event(
 ) -> bool:
     scenario_title = _scenario_title_for_session(db, session_obj)
     behavior_profile = _behavior_profile_for_session(db, session_obj)
+    active_phase = _active_phase_for_session(db, session_obj)
     current_state = build_roleplay_state(
         relationship_json=session_obj.relationship_state_json,
         protocol_json=session_obj.protocol_state_json,
         scene_json=session_obj.scene_state_json,
         scenario_title=scenario_title,
-        active_phase=None,
+        active_phase=active_phase,
         behavior_profile=behavior_profile,
     )
     patch = roleplay_patch_for_event(current_state, event_type=event_type, behavior_profile=behavior_profile, **kwargs)
-    if not patch:
+    phase_after_event, phase_message = _advance_phase_for_event(db, session_obj, event_type=event_type)
+    if not patch and phase_after_event is None:
         return False
+    if patch is None:
+        patch = {}
+    if phase_after_event is not None:
+        patch["scene"] = {
+            **(patch.get("scene") or {}),
+            "title": str(phase_after_event.get("title") or "").strip(),
+            "objective": str(phase_after_event.get("objective") or "").strip(),
+            "pressure": str(phase_after_event.get("pressure") or "").strip(),
+        }
 
     next_state = merge_roleplay_state(
         current_state=current_state,
         patch=patch,
         scenario_title=scenario_title,
-        active_phase=None,
+        active_phase=phase_after_event or active_phase,
         behavior_profile=behavior_profile,
     )
     if next_state == current_state:
@@ -203,12 +310,15 @@ def advance_roleplay_state_from_event(
     session_obj.protocol_state_json = serialized["protocol_state_json"]
     session_obj.scene_state_json = serialized["scene_state_json"]
     db.add(session_obj)
+    summary = summarize_roleplay_state_changes(current_state, next_state)
+    if phase_message:
+        summary = f"{summary}\n{phase_message}".strip() if summary else phase_message
     db.add(
         Message(
             session_id=session_obj.id,
             role="system",
             message_type=message_type,
-            content=summarize_roleplay_state_changes(current_state, next_state),
+            content=summary,
         )
     )
     return True
