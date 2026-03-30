@@ -469,7 +469,7 @@ function dashPillList(id, items, emptyText) {
   el.innerHTML = list.map((item) => `<span class="dash-pill">${dashEsc(item)}</span>`).join("");
 }
 
-function dashRenderRoleplayState(roleplayState) {
+function dashRenderRoleplayState(roleplayState, phaseProgress = {}) {
   const relationship = roleplayState?.relationship || {};
   const protocol = roleplayState?.protocol || {};
   const scene = roleplayState?.scene || {};
@@ -492,21 +492,67 @@ function dashRenderRoleplayState(roleplayState) {
   dashSetText("dash-scene-consequence", scene.last_consequence || "keine");
   dashSetText("dash-control-level", relationship.control_level || "structured");
 
+  const phaseMeterEl = document.getElementById("dash-phase-progress-meters");
+  if (phaseMeterEl) {
+    const phaseMetric = (item) => {
+      const total = Math.max(1, Number(item?.progress_total) || 1);
+      const value = Math.max(0, Math.min(total, Number(item?.progress_value) || 0));
+      const percent = Math.max(0, Math.min(100, (value / total) * 100));
+      const currentValue = Math.max(0, Math.min(100, Number(item?.current_value) || 0));
+      const goalValue = Math.max(0, Math.min(100, Number(item?.goal_value) || 0));
+      const status = item?.goal_reached ? "Ziel erreicht" : `Noch ${item?.remaining ?? 0} Punkte`;
+      return `
+        <div class="dash-meter">
+          <div class="dash-meter-top">
+            <span>${dashEsc(item?.label || "Wert")}</span>
+            <strong>${value}/${total}</strong>
+          </div>
+          <div class="dash-meter-track">
+            <span class="dash-meter-fill dash-meter-fill--growth" style="left:0;width:${percent}%"></span>
+          </div>
+          <div class="dash-meter-meta">
+            <span class="dash-meter-delta">Phase startet bei 0 · Ziel ${goalValue}</span>
+            <span class="dash-meter-phase">${dashEsc(status)} · Aktuell ${currentValue}</span>
+          </div>
+        </div>
+      `;
+    };
+    const phaseIndex = Number(phaseProgress?.phase_index || 0);
+    const phaseCount = Number(phaseProgress?.phase_count || 0);
+    const scoreCount = Math.max(0, Number(phaseProgress?.score_count) || 0);
+    const targetScoreCount = Math.max(0, Number(phaseProgress?.target_score_count) || 0);
+    const remainingScoreCount = Math.max(0, Number(phaseProgress?.remaining_score_count) || 0);
+    const criteriaPercent = targetScoreCount > 0 ? Math.max(0, Math.min(100, (scoreCount / targetScoreCount) * 100)) : 0;
+    dashSetText("dash-phase-chip", phaseIndex && phaseCount ? `Phase ${phaseIndex}/${phaseCount}` : "—");
+    dashSetText("dash-phase-title", phaseProgress?.active_phase_title || "Keine Phase aktiv");
+    dashSetText(
+      "dash-phase-summary",
+      phaseIndex && phaseCount
+        ? "Jedes Kriterium startet pro Phase neu bei 0 und muss in dieser Phase erarbeitet werden."
+        : "Kein Szenario aktiv."
+    );
+    phaseMeterEl.innerHTML = phaseIndex && phaseCount
+      ? `
+        <div class="dash-meter">
+          <div class="dash-meter-top">
+            <span>Erfuellte Kriterien dieser Phase</span>
+            <strong>${scoreCount}/${targetScoreCount}</strong>
+          </div>
+          <div class="dash-meter-track">
+            <span class="dash-meter-fill dash-meter-fill--growth" style="left:0;width:${criteriaPercent}%"></span>
+          </div>
+          <div class="dash-meter-meta">
+            <span class="dash-meter-delta">Alle Phasenpunkte starten bei 0</span>
+            <span class="dash-meter-phase">${remainingScoreCount} Kriterien bis zum Wechsel</span>
+          </div>
+        </div>
+        ${(Array.isArray(phaseProgress?.metrics) ? phaseProgress.metrics : []).map((item) => phaseMetric(item)).join("")}
+      `
+      : "Keine Phasendaten";
+  }
+
   const meterEl = document.getElementById("dash-relationship-meters");
   if (meterEl) {
-    const nextPhase = (score, key) => {
-      const safe = Math.max(0, Math.min(100, Number(score) || 0));
-      if (key === "resistance") {
-        const targets = [15, 10, 5, 0];
-        const target = targets.find((item) => safe > item);
-        if (target == null) return { label: "Naechste Phase: erreicht", target: null };
-        return { label: `Naechste Phase: ${target} (${safe - target} Punkte weniger)`, target };
-      }
-      const targets = [60, 70, 80, 90, 100];
-      const target = targets.find((item) => safe < item);
-      if (!target) return { label: "Naechste Phase: erreicht", target: null };
-      return { label: `Naechste Phase: ${target} (${target - safe} Punkte)`, target };
-    };
     const metric = (label, value, key) => {
       const safe = Math.max(0, Math.min(100, Number(value) || 0));
       const baseline = Number(growthBaseline[key]);
@@ -515,10 +561,8 @@ function dashRenderRoleplayState(roleplayState) {
       const deltaText = delta > 0 ? `+${delta}` : `${delta}`;
       const deltaClass = delta > 0 ? "is-up" : (delta < 0 ? "is-down" : "is-flat");
       const resistanceClass = key === "resistance" ? " is-resistance" : "";
-      const phase = nextPhase(safe, key);
       const baseWidth = Math.min(safe, baseSafe);
       const growthWidth = Math.max(0, safe - baseSafe);
-      const targetMarker = Number.isFinite(Number(phase.target)) ? Math.max(0, Math.min(100, Number(phase.target))) : null;
       return `
         <div class="dash-meter">
           <div class="dash-meter-top">
@@ -528,11 +572,10 @@ function dashRenderRoleplayState(roleplayState) {
           <div class="dash-meter-track">
             <span class="dash-meter-fill dash-meter-fill--base" style="width:${baseWidth}%"></span>
             ${growthWidth > 0 ? `<span class="dash-meter-fill dash-meter-fill--growth" style="left:${baseWidth}%;width:${growthWidth}%"></span>` : ""}
-            ${targetMarker != null ? `<span class="dash-meter-target" style="left:${targetMarker}%"></span>` : ""}
           </div>
           <div class="dash-meter-meta">
             <span class="dash-meter-delta ${deltaClass}${resistanceClass}">Seit Start: ${deltaText}</span>
-            <span class="dash-meter-phase">${dashEsc(phase.label)}</span>
+            <span class="dash-meter-phase">Skala: 0-100</span>
           </div>
         </div>
       `;
@@ -707,7 +750,7 @@ async function dashSavePersona() {
 
 async function dashLoadSessionState() {
   const data = await dashGet(`/api/sessions/${DASH_SESSION_ID}`);
-  if (data.roleplay_state) dashRenderRoleplayState(data.roleplay_state);
+  if (data.roleplay_state) dashRenderRoleplayState(data.roleplay_state, data.phase_progress || {});
   dashRenderRelationshipMemory(data.relationship_memory || {});
 }
 

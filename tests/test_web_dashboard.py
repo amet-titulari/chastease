@@ -291,6 +291,69 @@ def test_lovense_event_endpoint_persists_session_event_message():
             assert any("Toy executed: Warmup (tease_ramp)" in str(item.content) for item in rows)
 
 
+def test_session_detail_exposes_phase_progress_snapshot():
+    with TestClient(app) as client:
+        session_id = _register_user_and_create_session(client)
+
+        with SessionLocal() as db:
+            session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+            prefs = json.loads(profile.preferences_json or "{}")
+            prefs["scenario_preset"] = "ametara_titulari_devotion_protocol"
+            prefs["scenario_phase_id"] = "phase_3"
+            prefs["scenario_phase_progress"] = 1
+            profile.preferences_json = json.dumps(prefs)
+            session_obj.relationship_state_json = json.dumps(
+                {
+                    "trust": 86,
+                    "obedience": 83,
+                    "resistance": 4,
+                    "favor": 80,
+                    "strictness": 90,
+                    "frustration": 88,
+                    "attachment": 84,
+                }
+            )
+            session_obj.phase_state_json = json.dumps(
+                {
+                    "phase_id": "phase_3",
+                    "phase_index": 3,
+                    "started_at": "2026-03-30T12:00:00+00:00",
+                    "targets": {
+                        "trust": 6,
+                        "obedience": 8,
+                        "resistance": 5,
+                        "favor": 5,
+                        "strictness": 5,
+                        "frustration": 6,
+                        "attachment": 5,
+                    },
+                    "scores": {
+                        "trust": 6,
+                        "obedience": 4,
+                        "resistance": 1,
+                        "favor": 5,
+                        "strictness": 5,
+                        "frustration": 3,
+                        "attachment": 5,
+                    },
+                }
+            )
+            db.add(profile)
+            db.add(session_obj)
+            db.commit()
+
+        resp = client.get(f"/api/sessions/{session_id}")
+        assert resp.status_code == 200
+        payload = resp.json()["phase_progress"]
+        assert payload["phase_index"] == 3
+        assert payload["score_count"] == 4
+        assert payload["target_score_count"] == 7
+        resistance = next(item for item in payload["metrics"] if item["key"] == "resistance")
+        assert resistance["goal_value"] == 5
+        assert resistance["progress_total"] == 5
+
+
 def test_toys_page_exposes_simulator_flag():
     previous_simulator = settings.lovense_simulator_enabled
     try:

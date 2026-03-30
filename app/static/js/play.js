@@ -1253,7 +1253,7 @@ function plFormatSpeakerName(item) {
   return "System";
 }
 
-function plRenderRoleplayState(roleplayState, relationshipMemory = {}) {
+function plRenderRoleplayState(roleplayState, relationshipMemory = {}, phaseProgress = {}) {
   const relationship = roleplayState?.relationship || {};
   const protocol = roleplayState?.protocol || {};
   const scene = roleplayState?.scene || {};
@@ -1283,19 +1283,6 @@ function plRenderRoleplayState(roleplayState, relationshipMemory = {}) {
     if (!el) return;
     el.innerHTML = html || fallback;
   };
-  const nextPhase = (score, key) => {
-    const safe = Math.max(0, Math.min(100, Number(score) || 0));
-    if (key === "resistance") {
-      const targets = [15, 10, 5, 0];
-      const target = targets.find((item) => safe > item);
-      if (target == null) return { label: "Naechste Phase: erreicht", target: null };
-      return { label: `Naechste Phase: ${target} (${safe - target} Punkte weniger)`, target };
-    }
-    const targets = [60, 70, 80, 90, 100];
-    const target = targets.find((item) => safe < item);
-    if (!target) return { label: "Naechste Phase: erreicht", target: null };
-    return { label: `Naechste Phase: ${target} (${target - safe} Punkte)`, target };
-  };
   const metric = (label, value, key) => {
     const num = Number(value);
     const safe = Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : 0;
@@ -1305,10 +1292,8 @@ function plRenderRoleplayState(roleplayState, relationshipMemory = {}) {
     const deltaText = delta > 0 ? `+${delta}` : `${delta}`;
     const deltaClass = delta > 0 ? "is-up" : (delta < 0 ? "is-down" : "is-flat");
     const resistanceClass = key === "resistance" ? " is-resistance" : "";
-    const phase = nextPhase(safe, key);
     const baseWidth = Math.min(safe, baseSafe);
     const growthWidth = Math.max(0, safe - baseSafe);
-    const targetMarker = Number.isFinite(Number(phase.target)) ? Math.max(0, Math.min(100, Number(phase.target))) : null;
     return `
       <div class="roleplay-meter">
         <div class="roleplay-meter-top">
@@ -1318,11 +1303,34 @@ function plRenderRoleplayState(roleplayState, relationshipMemory = {}) {
         <div class="roleplay-meter-track">
           <span class="roleplay-meter-fill roleplay-meter-fill--base" style="width:${baseWidth}%"></span>
           ${growthWidth > 0 ? `<span class="roleplay-meter-fill roleplay-meter-fill--growth" style="left:${baseWidth}%;width:${growthWidth}%"></span>` : ""}
-          ${targetMarker != null ? `<span class="roleplay-meter-target" style="left:${targetMarker}%"></span>` : ""}
         </div>
         <div class="roleplay-meter-meta">
           <span class="roleplay-meter-delta ${deltaClass}${resistanceClass}">Seit Start: ${deltaText}</span>
-          <span class="roleplay-meter-phase">${plEscapeHtml(phase.label)}</span>
+          <span class="roleplay-meter-phase">Skala: 0-100</span>
+        </div>
+      </div>
+    `;
+  };
+  const phaseMetric = (item) => {
+    const total = Math.max(1, Number(item?.progress_total) || 1);
+    const value = Math.max(0, Math.min(total, Number(item?.progress_value) || 0));
+    const percent = Math.max(0, Math.min(100, (value / total) * 100));
+    const currentValue = Math.max(0, Math.min(100, Number(item?.current_value) || 0));
+    const goalValue = Math.max(0, Math.min(100, Number(item?.goal_value) || 0));
+    const label = item?.label || "Wert";
+    const status = item?.goal_reached ? "Ziel erreicht" : `Noch ${item?.remaining ?? 0} Punkte`;
+    return `
+      <div class="roleplay-meter">
+        <div class="roleplay-meter-top">
+          <span>${plEscapeHtml(label)}</span>
+          <strong>${value}/${total}</strong>
+        </div>
+        <div class="roleplay-meter-track">
+          <span class="roleplay-meter-fill roleplay-meter-fill--growth" style="left:0;width:${percent}%"></span>
+        </div>
+        <div class="roleplay-meter-meta">
+          <span class="roleplay-meter-delta">Phase startet bei 0 · Ziel ${goalValue}</span>
+          <span class="roleplay-meter-phase">${plEscapeHtml(status)} · Aktuell ${currentValue}</span>
         </div>
       </div>
     `;
@@ -1332,6 +1340,30 @@ function plRenderRoleplayState(roleplayState, relationshipMemory = {}) {
     if (!list.length) return `<span class="roleplay-empty">${plEscapeHtml(emptyText)}</span>`;
     return list.map((item) => `<span class="roleplay-pill">${plEscapeHtml(item)}</span>`).join("");
   };
+  const phaseIndex = Number(phaseProgress?.phase_index || 0);
+  const phaseCount = Number(phaseProgress?.phase_count || 0);
+  const scoreCount = Math.max(0, Number(phaseProgress?.score_count) || 0);
+  const targetScoreCount = Math.max(0, Number(phaseProgress?.target_score_count) || 0);
+  const remainingScoreCount = Math.max(0, Number(phaseProgress?.remaining_score_count) || 0);
+  const criteriaPercent = targetScoreCount > 0 ? Math.max(0, Math.min(100, (scoreCount / targetScoreCount) * 100)) : 0;
+  const phaseMeters = phaseIndex && phaseCount
+    ? `
+      <div class="roleplay-meter">
+        <div class="roleplay-meter-top">
+          <span>Erfuellte Kriterien dieser Phase</span>
+          <strong>${scoreCount}/${targetScoreCount}</strong>
+        </div>
+        <div class="roleplay-meter-track">
+          <span class="roleplay-meter-fill roleplay-meter-fill--growth" style="left:0;width:${criteriaPercent}%"></span>
+        </div>
+        <div class="roleplay-meter-meta">
+          <span class="roleplay-meter-delta">Alle Phasenpunkte starten bei 0</span>
+          <span class="roleplay-meter-phase">${remainingScoreCount} Kriterien bis zum Wechsel</span>
+        </div>
+      </div>
+      ${(Array.isArray(phaseProgress?.metrics) ? phaseProgress.metrics : []).map((item) => phaseMetric(item)).join("")}
+    `
+    : "";
 
   setText("play-scene-pressure", scene.pressure || "—");
   setText("play-scene-title", sceneHeading);
@@ -1339,6 +1371,15 @@ function plRenderRoleplayState(roleplayState, relationshipMemory = {}) {
   setText("play-scene-next-beat", scene.next_beat || "—");
   setText("play-scene-consequence", scene.last_consequence || "keine");
   setText("play-control-level", relationship.control_level || "structured");
+  setText("play-phase-chip", phaseIndex && phaseCount ? `Phase ${phaseIndex}/${phaseCount}` : "—");
+  setText("play-phase-title", phaseProgress?.active_phase_title || "Keine Phase aktiv");
+  setText(
+    "play-phase-summary",
+    phaseIndex && phaseCount
+      ? "Jedes Kriterium startet pro Phase neu bei 0 und muss in dieser Phase erarbeitet werden."
+      : "Kein Szenario aktiv."
+  );
+  setHtml("play-phase-progress-meters", phaseMeters, "Keine Phasendaten");
 
   setHtml(
     "play-relationship-meters",
@@ -1724,7 +1765,7 @@ async function plLoadSessionState() {
   try {
     const data = await plGet(`/api/sessions/${SESSION_ID}`);
     if (statusPillEl) statusPillEl.textContent = data.status || "—";
-    plRenderRoleplayState(data.roleplay_state || {}, data.relationship_memory || {});
+    plRenderRoleplayState(data.roleplay_state || {}, data.relationship_memory || {}, data.phase_progress || {});
   } catch (err) {
     plWrite("Fehler Roleplay-State", { error: String(err) });
   }

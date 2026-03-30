@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import json
 from typing import Any
 
@@ -11,14 +12,23 @@ from app.models.session import Session as SessionModel
 from app.services.behavior_profile import behavior_profile_from_entities, behavior_profile_from_scenario_key, progression_profile_from_behavior
 from app.services.roleplay_state import (
     build_roleplay_state,
+    default_relationship_state,
     merge_roleplay_state,
     serialize_roleplay_state,
     summarize_roleplay_state_changes,
 )
 
 
-_PHASE_SUCCESS_EVENTS = {"task_completed", "verification_confirmed"}
-_PHASE_RESET_EVENTS = {"task_failed", "verification_suspicious"}
+_PHASE_SCORE_KEYS = ("trust", "obedience", "resistance", "favor", "strictness", "frustration", "attachment")
+_PHASE_TARGET_DEFAULTS = {
+    "trust": [4, 5, 6, 7, 8, 9],
+    "obedience": [5, 6, 8, 9, 10, 11],
+    "resistance": [2, 3, 4, 5, 6, 6],
+    "favor": [3, 4, 5, 6, 7, 8],
+    "strictness": [3, 4, 5, 6, 7, 8],
+    "frustration": [3, 4, 6, 7, 8, 9],
+    "attachment": [3, 4, 5, 6, 7, 8],
+}
 
 
 def _scenario_title_for_session(db: Session, session_obj: SessionModel) -> str | None:
@@ -65,7 +75,157 @@ def _scenario_phases_for_session(db: Session, session_obj: SessionModel) -> tupl
                 phases = [item for item in parsed if isinstance(item, dict)]
         except Exception:
             phases = []
+    if not phases and scenario_key:
+        from app.routers.scenarios import SCENARIO_PRESETS
+
+        preset = next((item for item in SCENARIO_PRESETS if str(item.get("key") or "").strip() == scenario_key), None)
+        raw_phases = preset.get("phases", []) if isinstance(preset, dict) else []
+        if isinstance(raw_phases, list):
+            phases = [item for item in raw_phases if isinstance(item, dict)]
     return phases, prefs
+
+
+def _phase_duration_scale(session_obj: SessionModel) -> float:
+    min_seconds = max(0, int(session_obj.min_duration_seconds or 0))
+    max_seconds = max(min_seconds, int(session_obj.max_duration_seconds or 0))
+    reference_seconds = max_seconds if max_seconds > min_seconds else min_seconds
+    if reference_seconds <= 0:
+        return 1.0
+    reference_days = reference_seconds / 86400
+    return max(0.75, min(1.75, reference_days / 7.0))
+
+
+def _resolve_phase_targets(session_obj: SessionModel, active_phase: dict[str, Any], current_index: int) -> dict[str, int]:
+    explicit = active_phase.get("score_targets") if isinstance(active_phase, dict) else None
+    if isinstance(explicit, dict) and explicit:
+        targets: dict[str, int] = {}
+        for key in _PHASE_SCORE_KEYS:
+            try:
+                targets[key] = max(0, int(explicit.get(key) or 0))
+            except (TypeError, ValueError):
+                targets[key] = 0
+        return targets
+
+    scale = _phase_duration_scale(session_obj)
+    targets: dict[str, int] = {}
+    for key in _PHASE_SCORE_KEYS:
+        defaults = _PHASE_TARGET_DEFAULTS.get(key) or [4]
+        base = defaults[min(current_index, len(defaults) - 1)]
+        targets[key] = max(1, int(round(float(base) * scale)))
+    return targets
+
+
+def _initialize_phase_state(session_obj: SessionModel, active_phase: dict[str, Any], current_index: int) -> dict[str, Any]:
+    targets = _resolve_phase_targets(session_obj, active_phase, current_index)
+    return {
+        "phase_id": str(active_phase.get("phase_id") or "").strip() or None,
+        "phase_index": current_index + 1,
+        "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "targets": targets,
+        "scores": {key: 0 for key in _PHASE_SCORE_KEYS},
+    }
+
+
+def _ensure_phase_state_for_phase(
+    db: Session,
+    session_obj: SessionModel,
+    *,
+    active_phase: dict[str, Any],
+    current_index: int,
+) -> dict[str, Any]:
+    try:
+        parsed = json.loads(session_obj.phase_state_json or "{}")
+    except Exception:
+        parsed = {}
+    phase_id = str(active_phase.get("phase_id") or "").strip() or None
+    if not isinstance(parsed, dict) or parsed.get("phase_id") != phase_id:
+        parsed = _initialize_phase_state(session_obj, active_phase, current_index)
+        session_obj.phase_state_json = json.dumps(parsed, ensure_ascii=False)
+        db.add(session_obj)
+    return parsed
+
+
+def phase_progress_snapshot(
+    db: Session,
+    session_obj: SessionModel,
+    *,
+    roleplay_state: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    phases, prefs = _scenario_phases_for_session(db, session_obj)
+    if not phases:
+        return {
+            "active_phase_id": None,
+            "active_phase_title": None,
+            "phase_index": 0,
+            "phase_count": 0,
+            "score_count": 0,
+            "target_score_count": 0,
+            "remaining_score_count": 0,
+            "metrics": [],
+        }
+
+    current_phase_id = str(prefs.get("scenario_phase_id") or "").strip()
+    current_index = 0
+    if current_phase_id:
+        for index, phase in enumerate(phases):
+            if str(phase.get("phase_id") or "").strip() == current_phase_id:
+                current_index = index
+                break
+
+    active_phase = phases[current_index]
+    phase_state = _ensure_phase_state_for_phase(db, session_obj, active_phase=active_phase, current_index=current_index)
+    scores = phase_state.get("scores", {}) if isinstance(phase_state, dict) else {}
+    targets = phase_state.get("targets", {}) if isinstance(phase_state, dict) else {}
+    state = roleplay_state or build_roleplay_state(
+        relationship_json=session_obj.relationship_state_json,
+        protocol_json=session_obj.protocol_state_json,
+        scene_json=session_obj.scene_state_json,
+        scenario_title=_scenario_title_for_session(db, session_obj),
+        active_phase=active_phase,
+        behavior_profile=_behavior_profile_for_session(db, session_obj),
+    )
+    relationship = state.get("relationship", {}) if isinstance(state, dict) else {}
+    defaults = default_relationship_state()
+
+    metrics: list[dict[str, Any]] = []
+    for key, label in (
+        ("trust", "Trust"),
+        ("obedience", "Obedience"),
+        ("resistance", "Resistance"),
+        ("favor", "Favor"),
+        ("strictness", "Strictness"),
+        ("frustration", "Frustration"),
+        ("attachment", "Attachment"),
+    ):
+        current_value = max(0, min(100, int(relationship.get(key) or defaults.get(key) or 0)))
+        target_value = max(0, int(targets.get(key) or 0))
+        score_value = max(0, min(target_value, int(scores.get(key) or 0)))
+        remaining = max(0, target_value - score_value)
+        metrics.append(
+            {
+                "key": key,
+                "label": label,
+                "current_value": current_value,
+                "goal_value": target_value,
+                "progress_value": score_value,
+                "progress_total": max(1, target_value),
+                "remaining": remaining,
+                "goal_reached": target_value == 0 or remaining == 0,
+            }
+        )
+    score_count = sum(1 for item in metrics if item["goal_reached"])
+    target_score_count = len(metrics)
+    remaining_score_count = max(0, target_score_count - score_count)
+    return {
+        "active_phase_id": str(active_phase.get("phase_id") or "").strip() or None,
+        "active_phase_title": str(active_phase.get("title") or "").strip() or None,
+        "phase_index": current_index + 1,
+        "phase_count": len(phases),
+        "score_count": score_count,
+        "target_score_count": target_score_count,
+        "remaining_score_count": remaining_score_count,
+        "metrics": metrics,
+    }
 
 
 def _active_phase_for_session(db: Session, session_obj: SessionModel) -> dict[str, Any] | None:
@@ -100,32 +260,57 @@ def _advance_phase_for_event(
                 break
 
     current_phase = phases[current_index]
-    progress = max(0, int(prefs.get("scenario_phase_progress") or 0))
     normalized = str(event_type or "").strip().lower()
+    behavior_profile = _behavior_profile_for_session(db, session_obj)
+    progression_profile = progression_profile_from_behavior(behavior_profile)
+    event_patch = ((progression_profile.get("events") or {}).get(normalized) or {}) if isinstance(progression_profile, dict) else {}
+    relationship_deltas = event_patch.get("relationship_deltas") if isinstance(event_patch, dict) else {}
+    if not isinstance(relationship_deltas, dict):
+        relationship_deltas = {}
 
-    if normalized in _PHASE_SUCCESS_EVENTS:
-        progress += 1
-        threshold = max(1, int(current_phase.get("advance_after_successes") or 3))
-        if progress >= threshold and current_index < len(phases) - 1:
-            next_phase = phases[current_index + 1]
-            next_phase_id = str(next_phase.get("phase_id") or "").strip()
-            if next_phase_id:
-                prefs["scenario_phase_id"] = next_phase_id
-            prefs["scenario_phase_progress"] = 0
-            profile.preferences_json = json.dumps(prefs, ensure_ascii=False)
-            db.add(profile)
-            return next_phase, f"Phase gewechselt: {str(next_phase.get('title') or next_phase_id or 'naechste Phase').strip()}"
-        prefs["scenario_phase_progress"] = progress
-        profile.preferences_json = json.dumps(prefs, ensure_ascii=False)
-        db.add(profile)
-        return current_phase, None
+    phase_state = _ensure_phase_state_for_phase(db, session_obj, active_phase=current_phase, current_index=current_index)
+    scores = dict(phase_state.get("scores") or {})
+    targets = dict(phase_state.get("targets") or {})
+    changed = False
+    for key in _PHASE_SCORE_KEYS:
+        target_value = max(0, int(targets.get(key) or 0))
+        current_value = max(0, min(target_value, int(scores.get(key) or 0)))
+        try:
+            delta = int(relationship_deltas.get(key) or 0)
+        except (TypeError, ValueError):
+            delta = 0
+        progress_delta = (-delta) if key == "resistance" else delta
+        next_value = max(0, min(target_value, current_value + progress_delta))
+        if next_value != current_value:
+            scores[key] = next_value
+            changed = True
+    if changed:
+        phase_state["scores"] = scores
+        session_obj.phase_state_json = json.dumps(phase_state, ensure_ascii=False)
+        db.add(session_obj)
 
-    if normalized in _PHASE_RESET_EVENTS:
+    reached = sum(
+        1
+        for key in _PHASE_SCORE_KEYS
+        if max(0, int(targets.get(key) or 0)) == 0 or max(0, int(scores.get(key) or 0)) >= max(0, int(targets.get(key) or 0))
+    )
+    prefs["scenario_phase_progress"] = reached
+
+    if reached >= len(_PHASE_SCORE_KEYS) and current_index < len(phases) - 1:
+        next_phase = phases[current_index + 1]
+        next_phase_id = str(next_phase.get("phase_id") or "").strip()
+        if next_phase_id:
+            prefs["scenario_phase_id"] = next_phase_id
         prefs["scenario_phase_progress"] = 0
         profile.preferences_json = json.dumps(prefs, ensure_ascii=False)
         db.add(profile)
-        return current_phase, None
+        next_state = _initialize_phase_state(session_obj, next_phase, current_index + 1)
+        session_obj.phase_state_json = json.dumps(next_state, ensure_ascii=False)
+        db.add(session_obj)
+        return next_phase, f"Phase gewechselt: {str(next_phase.get('title') or next_phase_id or 'naechste Phase').strip()}"
 
+    profile.preferences_json = json.dumps(prefs, ensure_ascii=False)
+    db.add(profile)
     return current_phase, None
 
 

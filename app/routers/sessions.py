@@ -26,6 +26,7 @@ from app.models.verification import Verification
 from app.services.contract_service import build_contract_context, build_contract_text, normalize_contract_preferences
 from app.services.pdf_export import build_simple_text_pdf
 from app.services.relationship_memory import build_relationship_memory
+from app.services.roleplay_progression import phase_progress_snapshot
 from app.services.roleplay_state import build_roleplay_state, initialize_roleplay_state, serialize_roleplay_state
 from app.services.session_service import SessionService
 from app.services.audit_logger import audit_log
@@ -470,6 +471,13 @@ def _session_blueprint(db: Session, session_obj: SessionModel) -> dict:
     hard_limits = json.loads(profile.hard_limits_json) if profile else []
     reaction = json.loads(profile.reaction_patterns_json) if profile else {}
     needs = json.loads(profile.needs_json) if profile else {}
+    roleplay_state = build_roleplay_state(
+        relationship_json=session_obj.relationship_state_json,
+        protocol_json=session_obj.protocol_state_json,
+        scene_json=session_obj.scene_state_json,
+        scenario_title=prefs.get("scenario_preset"),
+        active_phase=_resolve_active_scenario_phase(db, prefs.get("scenario_preset"), prefs.get("scenario_phase_id")),
+    )
     return {
         "session_id": session_obj.id,
         "status": session_obj.status,
@@ -499,13 +507,8 @@ def _session_blueprint(db: Session, session_obj: SessionModel) -> dict:
             "active": bool(session_obj.llm_profile_active),
             "api_key_stored": bool(session_obj.llm_api_key),
         },
-        "roleplay_state": build_roleplay_state(
-            relationship_json=session_obj.relationship_state_json,
-            protocol_json=session_obj.protocol_state_json,
-            scene_json=session_obj.scene_state_json,
-            scenario_title=prefs.get("scenario_preset"),
-            active_phase=_resolve_active_scenario_phase(db, prefs.get("scenario_preset"), prefs.get("scenario_phase_id")),
-        ),
+        "roleplay_state": roleplay_state,
+        "phase_progress": phase_progress_snapshot(db, session_obj, roleplay_state=roleplay_state),
     }
 
 
@@ -603,6 +606,7 @@ def update_draft_session(
         if active_phase_id:
             prefs["scenario_phase_id"] = active_phase_id
         prefs["scenario_phase_progress"] = 0
+        session_obj.phase_state_json = None
     if payload.wearer_style is not None:
         prefs["wearer_style"] = payload.wearer_style
     if payload.wearer_goal is not None:
@@ -736,6 +740,7 @@ def get_session(session_id: int, request: Request, db: Session = Depends(get_db)
         active_phase=_resolve_active_scenario_phase(db, prefs.get("scenario_preset"), prefs.get("scenario_phase_id")),
     )
     relationship_memory = build_relationship_memory(db, session_obj)
+    phase_progress = phase_progress_snapshot(db, session_obj, roleplay_state=roleplay_state)
 
     return {
         "session_id": session_obj.id,
@@ -759,6 +764,7 @@ def get_session(session_id: int, request: Request, db: Session = Depends(get_db)
         "ws_auth_token": session_obj.ws_auth_token,
         "contract_signed": bool(contract and contract.signed_at),
         "roleplay_state": roleplay_state,
+        "phase_progress": phase_progress,
         "relationship_memory": relationship_memory,
         "player_profile": {
             "id": profile.id,
@@ -1257,11 +1263,13 @@ def create_session(payload: CreateSessionRequest, request: Request, db: Session 
         relationship_state_json=initial_roleplay_state["relationship_state_json"],
         protocol_state_json=initial_roleplay_state["protocol_state_json"],
         scene_state_json=initial_roleplay_state["scene_state_json"],
+        phase_state_json=None,
         status="draft",
     )
     _ensure_ws_auth_token(session_obj)
     db.add(session_obj)
     db.flush()
+    phase_progress_snapshot(db, session_obj)
 
     if current_user is not None:
         if current_user.default_player_profile_id is None:

@@ -417,6 +417,109 @@ def test_chat_can_update_roleplay_state(monkeypatch):
             db.close()
 
 
+def test_chat_avoids_creating_duplicate_open_tasks(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message="Ich halte die Aufgabe aktiv, ohne sie doppelt anzulegen.",
+                actions=[
+                    {
+                        "type": "create_task",
+                        "title": "Edge-Session #115: 8 Kanten mit Dank",
+                        "description": "8 Kanten sauber und ruhig ausfuehren",
+                        "deadline_minutes": 20,
+                        "requires_verification": True,
+                        "verification_criteria": "Foto vom Zustand danach",
+                    }
+                ],
+                mood="strict",
+                intensity=4,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda **_: _DummyAI())
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        with SessionLocal() as db:
+            db.add(
+                Task(
+                    session_id=session_id,
+                    title="Edge-Session #999: 8 Kanten mit Dank",
+                    description="8 Kanten sauber und ruhig ausfuehren",
+                    status="pending",
+                    requires_verification=True,
+                    verification_criteria="Foto vom Zustand danach",
+                )
+            )
+            db.commit()
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Was ist der naechste Schritt?"},
+        )
+        assert send_resp.status_code == 200
+
+        with SessionLocal() as db:
+            rows = db.query(Task).filter(Task.session_id == session_id).all()
+            assert len(rows) == 1
+
+
+def test_chat_fail_task_resets_phase_progress(monkeypatch):
+    target_task_id = {"value": None}
+
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message="Diese Pflicht gilt als verfehlt.",
+                actions=[
+                    {
+                        "type": "fail_task",
+                        "task_id": target_task_id["value"],
+                    }
+                ],
+                mood="strict",
+                intensity=4,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda **_: _DummyAI())
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        with SessionLocal() as db:
+            session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+            prefs = json.loads(profile.preferences_json or "{}")
+            prefs["scenario_preset"] = "ametara_titulari_devotion_protocol"
+            prefs["scenario_phase_id"] = "phase_2"
+            prefs["scenario_phase_progress"] = 2
+            profile.preferences_json = json.dumps(prefs)
+            task = Task(session_id=session_id, title="Morgenritual", status="pending")
+            db.add(task)
+            db.commit()
+            task_id = task.id
+            target_task_id["value"] = task_id
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Markiere die Pflicht als fehlgeschlagen."},
+        )
+        assert send_resp.status_code == 200
+
+        with SessionLocal() as db:
+            session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+            prefs = json.loads(profile.preferences_json or "{}")
+            assert prefs["scenario_phase_progress"] == 0
+            failed = db.query(Task).filter(Task.id == task_id).first()
+            assert failed.status == "failed"
+
+
 def test_chat_returns_lovense_client_actions(monkeypatch):
     class _DummyAI:
         def generate_chat_response(self, **kwargs):

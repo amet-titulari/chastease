@@ -31,6 +31,7 @@ class Session(Base):
     relationship_state_json = Column(EncryptedText(), nullable=True)
     protocol_state_json = Column(EncryptedText(), nullable=True)
     scene_state_json = Column(EncryptedText(), nullable=True)
+    phase_state_json = Column(EncryptedText(), nullable=True)
     ws_auth_token = Column(String(80), nullable=True, unique=True)
     ws_auth_token_created_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

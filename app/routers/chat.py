@@ -37,6 +37,7 @@ from app.services.behavior_profile import (
 from app.services.context_window import build_context_window
 from app.services.prompt_builder import build_prompt_modules
 from app.services.relationship_memory import build_relationship_memory
+from app.services.roleplay_progression import advance_roleplay_state_from_event
 from app.services.roleplay_state import build_roleplay_state, merge_roleplay_state, serialize_roleplay_state, summarize_roleplay_state_changes
 from app.services.session_access import get_owned_session
 from app.services.task_template_pool import build_template_task_action, select_task_template, user_requested_task
@@ -77,6 +78,47 @@ def _latest_safety_mode(db: Session, session_id: int) -> str | None:
         .first()
     )
     return row.event_type if row else None
+
+
+def _task_fingerprint(*, title: str, description: str | None = None, verification_criteria: str | None = None) -> str:
+    raw = " ".join(
+        part.strip().lower()
+        for part in [title, description or "", verification_criteria or ""]
+        if str(part or "").strip()
+    )
+    raw = re.sub(r"#\d+", " ", raw)
+    raw = re.sub(r"\b(erfuellt|erledigt|neu|sofort|erneut|nochmal)\b", " ", raw)
+    raw = re.sub(r"[^a-z0-9]+", " ", raw)
+    return re.sub(r"\s+", " ", raw).strip()
+
+
+def _find_duplicate_open_task(
+    db: Session,
+    *,
+    session_id: int,
+    title: str,
+    description: str | None,
+    verification_criteria: str | None,
+) -> Task | None:
+    fingerprint = _task_fingerprint(title=title, description=description, verification_criteria=verification_criteria)
+    if not fingerprint:
+        return None
+    rows = (
+        db.query(Task)
+        .filter(Task.session_id == session_id, Task.status.in_(["pending", "overdue"]))
+        .order_by(Task.id.desc())
+        .limit(12)
+        .all()
+    )
+    for row in rows:
+        candidate = _task_fingerprint(
+            title=str(row.title or ""),
+            description=str(row.description or ""),
+            verification_criteria=str(row.verification_criteria or ""),
+        )
+        if candidate and candidate == fingerprint:
+            return row
+    return None
 
 
 def _assistant_reply(persona_name: str, user_text: str, safety_mode: str | None, session_status: str) -> str:
@@ -670,6 +712,12 @@ def _persist_chat_turn(
                             content=f"Task '{fail_task.title}' als fehlgeschlagen markiert (KI-Entscheidung).",
                             message_type="task_failed",
                         ))
+                        advance_roleplay_state_from_event(
+                            db,
+                            session_obj,
+                            event_type="task_failed",
+                            task_title=fail_task.title,
+                        )
                 continue
 
             if action.get("type") == "update_task":
@@ -781,6 +829,22 @@ def _persist_chat_turn(
             verification_criteria_value = action.get("verification_criteria")
             if verification_criteria_value:
                 verification_criteria_value = str(verification_criteria_value).strip()[:500] or None
+
+            duplicate_task = _find_duplicate_open_task(
+                db,
+                session_id=session_id,
+                title=title,
+                description=description_value[:2000] if description_value else None,
+                verification_criteria=verification_criteria_value,
+            )
+            if duplicate_task:
+                if deadline_at is not None:
+                    duplicate_task.deadline_at = deadline_at
+                    db.add(duplicate_task)
+                updated_task_details.append(
+                    f"#{duplicate_task.id} '{duplicate_task.title}' (Duplikat vermieden)"
+                )
+                continue
 
             task = Task(
                 session_id=session_id,
