@@ -121,7 +121,7 @@ class LovenseControlAction(_BaseActionModel):
     duration_seconds: int | None = None
     pause_seconds: int | None = None
     loops: int | None = None
-    preset: Literal["tease_ramp", "strict_pulse", "wave_ladder", "deny_spikes"] | None = None
+    preset: str | None = Field(default=None, max_length=80)
 
     @field_validator("intensity", mode="before")
     @classmethod
@@ -168,7 +168,7 @@ class LovenseSessionStep(_BaseActionModel):
     command: Literal["vibrate", "pulse", "wave", "stop", "preset", "pause"]
     intensity: int | None = None
     duration_seconds: int | None = None
-    preset: Literal["tease_ramp", "strict_pulse", "wave_ladder", "deny_spikes"] | None = None
+    preset: str | None = Field(default=None, max_length=80)
 
     @field_validator("intensity", mode="before")
     @classmethod

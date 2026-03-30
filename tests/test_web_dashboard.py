@@ -6,6 +6,7 @@ from uuid import uuid4
 from app.config import settings
 from app.database import SessionLocal
 from app.main import app
+from app.models.message import Message
 from app.models.player_profile import PlayerProfile
 from app.models.session import Session as SessionModel
 
@@ -229,3 +230,75 @@ def test_lovense_policy_roundtrip_allows_open_limits():
             profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
             prefs = json.loads(profile.preferences_json or "{}")
             assert prefs["toys"]["lovense_policy"]["max_step_duration_seconds"] == 45
+
+
+def test_lovense_preset_library_supports_wearer_and_persona_presets():
+    with TestClient(app) as client:
+        session_id = _register_user_and_create_session(client)
+
+        wearer_resp = client.post(
+            f"/api/lovense/sessions/{session_id}/presets",
+            json={
+                "name": "Wearer Warmup",
+                "command": "preset",
+                "preset": "tease_ramp",
+                "duration_seconds": 20,
+                "loops": 1,
+            },
+        )
+        assert wearer_resp.status_code == 200
+
+        persona_resp = client.post(
+            f"/api/lovense/sessions/{session_id}/persona-presets",
+            json={
+                "name": "Persona Pattern",
+                "command": "pattern",
+                "pattern": "3;6;9;6;3;0",
+                "duration_seconds": 18,
+                "interval": 180,
+            },
+        )
+        assert persona_resp.status_code == 200
+
+        library = client.get(f"/api/lovense/sessions/{session_id}/preset-library")
+        assert library.status_code == 200
+        payload = library.json()["library"]
+        assert any(item["key"] == "wearer_warmup" for item in payload["wearer"])
+        assert any(item["key"] == "persona_pattern" for item in payload["persona"])
+        assert any(item["key"] == "tease_ramp" for item in payload["builtin"])
+        assert any(item["key"] == "wearer_warmup" for item in payload["combined"])
+        assert any(item["key"] == "persona_pattern" for item in payload["combined"])
+
+
+def test_lovense_event_endpoint_persists_session_event_message():
+    with TestClient(app) as client:
+        session_id = _register_user_and_create_session(client)
+
+        resp = client.post(
+            f"/api/lovense/sessions/{session_id}/events",
+            json={
+                "source": "manual",
+                "phase": "executed",
+                "command": "preset",
+                "title": "Warmup",
+                "preset": "tease_ramp",
+            },
+        )
+        assert resp.status_code == 200
+
+        with SessionLocal() as db:
+            rows = db.query(Message).filter(Message.session_id == session_id).all()
+            assert any("Toy executed: Warmup (tease_ramp)" in str(item.content) for item in rows)
+
+
+def test_toys_page_exposes_simulator_flag():
+    previous_simulator = settings.lovense_simulator_enabled
+    try:
+        settings.lovense_simulator_enabled = True
+        with TestClient(app) as client:
+            session_id = _register_user_and_create_session(client)
+            resp = client.get(f"/toys/{session_id}")
+            assert resp.status_code == 200
+            assert 'data-lovense-simulator="1"' in resp.text
+    finally:
+        settings.lovense_simulator_enabled = previous_simulator

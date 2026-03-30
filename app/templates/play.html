@@ -19,7 +19,8 @@
   data-lovense-app-type="{{ lovense_status.app_type or 'connect' }}"
   data-lovense-sdk-url="{{ lovense_status.sdk_url or '' }}"
   data-lovense-debug="{{ '1' if lovense_status.debug else '0' }}"
-  data-app-version="0.4.0">
+  data-lovense-simulator="{{ '1' if lovense_status.simulator_enabled else '0' }}"
+  data-app-version="0.4.1">
 
   <header class="play-header">
     <div class="play-header-left">

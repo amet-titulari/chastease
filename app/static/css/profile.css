@@ -57,8 +57,32 @@
   margin-top: 0.9rem;
 }
 
+.profile-subsection {
+  border: 1px solid rgba(127, 163, 194, 0.14);
+  border-radius: 18px;
+  padding: 0.95rem 1rem;
+  background: rgba(7, 14, 22, 0.24);
+}
+
+.profile-subsection-head {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.profile-subsection-head .hint {
+  margin: 0;
+}
+
+.profile-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 0.85rem;
+}
+
 @media (max-width: 560px) {
-  .llm-grid { grid-template-columns: 1fr; }
+  .llm-grid,
+  .profile-mini-grid { grid-template-columns: 1fr; }
 }
 
 .llm-actions {

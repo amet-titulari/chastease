@@ -1,4 +1,4 @@
-/* play.js – Play Mode (v0.4.0) */
+/* play.js – Play Mode (v0.4.1) */
 "use strict";
 
 // -- State from server-rendered dataset --
@@ -8,13 +8,14 @@ const WS_TOKEN = _shell?.dataset.wsToken || "";
 const LOCK_END = _shell?.dataset.lockEnd || "";
 const PERSONA_NAME = _shell?.dataset.personaName || "Keyholderin";
 const PLAYER_NAME = _shell?.dataset.playerName || "Du";
-const APP_VERSION = _shell?.dataset.appVersion || "0.4.0";
+const APP_VERSION = _shell?.dataset.appVersion || "0.4.1";
 const FOCUS_STORAGE_KEY = `chastease.play.focus.${SESSION_ID || "default"}.${APP_VERSION}`;
 const plLovenseEnabled = String(_shell?.dataset.lovenseEnabled || "") === "1";
 const plLovenseConfigured = String(_shell?.dataset.lovenseConfigured || "") === "1";
 const plLovensePlatform = String(_shell?.dataset.lovensePlatform || "").trim();
 const plLovenseAppType = String(_shell?.dataset.lovenseAppType || "connect").trim() || "connect";
 const plLovenseDebug = String(_shell?.dataset.lovenseDebug || "") === "1";
+const plLovenseSimulator = String(_shell?.dataset.lovenseSimulator || "") === "1";
 const PL_LOVENSE_AUTO_INIT_KEY = `chastease.lovense.auto_init.${SESSION_ID || "default"}`;
 const PL_LOVENSE_TOY_KEY = `chastease.lovense.toy.${SESSION_ID || "default"}`;
 
@@ -40,6 +41,7 @@ let plLovensePlanTitle = "";
 let plLovensePlanTotal = 0;
 let plLovensePlanCurrentIndex = 0;
 let plLovensePlanCurrentCommand = "";
+let plLovensePresetLibrary = { builtin: [], wearer: [], persona: [], combined: [] };
 const plHandledClientActionKeys = new Set();
 
 const PL_LOVENSE_PRESETS = {
@@ -68,6 +70,31 @@ const PL_LOVENSE_PRESETS = {
     return `${low};${spike};0;${low};${level};0;${spike};0`;
   } },
 };
+
+function plCombinedLovensePresetMap() {
+  const map = { ...PL_LOVENSE_PRESETS };
+  const items = Array.isArray(plLovensePresetLibrary?.combined) ? plLovensePresetLibrary.combined : [];
+  items.forEach((item) => {
+    if (!item || !item.key) return;
+    if (item.command === "pattern") {
+      if (String(item.pattern || "").startsWith("builtin:")) {
+        const builtinKey = String(item.pattern || "").split(":").slice(1).join(":");
+        const builtin = PL_LOVENSE_PRESETS[builtinKey];
+        if (builtin) map[item.key] = builtin;
+        return;
+      }
+      map[item.key] = {
+        interval: Number(item.interval || 180) || 180,
+        pattern: () => String(item.pattern || ""),
+      };
+      return;
+    }
+    if (item.command === "preset" && item.preset && PL_LOVENSE_PRESETS[item.preset]) {
+      map[item.key] = PL_LOVENSE_PRESETS[item.preset];
+    }
+  });
+  return map;
+}
 
 // -- DOM refs --
 const statusPillEl = document.getElementById("play-status-pill");
@@ -608,7 +635,13 @@ async function plLoadLovenseBootstrap() {
   return data;
 }
 
+async function plLoadLovensePresetLibrary() {
+  const data = await plGet(`/api/lovense/sessions/${SESSION_ID}/preset-library`);
+  plLovensePresetLibrary = data.library || { builtin: [], wearer: [], persona: [], combined: [] };
+}
+
 async function plRefreshLovenseQr() {
+  if (plLovenseSimulator) return;
   if (!plLovenseSdk || typeof plLovenseSdk.getQrcode !== "function") return;
   try {
     const qr = await plLovenseSdk.getQrcode();
@@ -622,6 +655,12 @@ async function plRefreshLovenseQr() {
 }
 
 async function plSyncLovenseToys() {
+  if (plLovenseSimulator) {
+    plLovenseToys = [{ id: "sim-edge-2", name: "Simulator Edge 2", battery: 100, status: "simulated" }];
+    plLovenseToyLabel = "Simulator Edge 2 · Akku 100%";
+    plSetLovenseStatus("Lovense: Simulator aktiv. Virtuelles Toy bereit.");
+    return;
+  }
   if (!plLovenseSdk) return;
   try {
     let toys = [];
@@ -656,6 +695,11 @@ async function plInitLovense() {
     return false;
   }
   if (!plLovenseConfigured) {
+    if (plLovenseSimulator) {
+      plRememberLovenseAutoInit();
+      await plSyncLovenseToys();
+      return true;
+    }
     plSetLovenseStatus("Lovense: Konfiguration unvollstaendig.");
     return false;
   }
@@ -706,6 +750,10 @@ function plLovensePatternStrength(intensity, mode) {
 }
 
 async function plExecuteLovenseSegment(kind, payload) {
+  if (plLovenseSimulator) {
+    await new Promise((resolve) => window.setTimeout(resolve, 120));
+    return;
+  }
   if (!plLovenseSdk) {
     throw new Error("Lovense ist noch nicht initialisiert.");
   }
@@ -741,6 +789,9 @@ async function plStopLovenseAction() {
   }
   plLovenseCurrentLabel = "Stop";
   plSetLovenseStatus("Lovense: Toy gestoppt.");
+  try {
+    await plPost(`/api/lovense/sessions/${SESSION_ID}/events`, { source: "play", phase: "executed", command: "stop", title: "Stop", toy_id: toyId });
+  } catch (_) {}
   return true;
 }
 
@@ -796,7 +847,7 @@ async function plExecuteLovensePlanStep(step, runId, index, total, title) {
   }
 
   if (step.command === "preset") {
-    const preset = PL_LOVENSE_PRESETS[String(step.preset || "").trim()];
+    const preset = plCombinedLovensePresetMap()[String(step.preset || "").trim()];
     if (!preset) {
       throw new Error(`Unbekanntes Preset: ${String(step.preset || "")}`);
     }
@@ -890,6 +941,15 @@ async function plQueueLovenseSessionPlan(action) {
   });
   plSetLovensePlanQueued(title, steps.length);
   plSetLovenseStatus(`Lovense: Session-Plan${title ? ` '${title}'` : ""} geladen (${steps.length} Schritte).`);
+  try {
+    await plPost(`/api/lovense/sessions/${SESSION_ID}/events`, {
+      source: "ai",
+      phase: "queued",
+      command: "plan",
+      title: title || "Session-Plan",
+      detail: `${steps.length} Schritte`,
+    });
+  } catch (_) {}
   await plEnsureLovensePlanProcessor();
 }
 
@@ -910,6 +970,19 @@ async function plRunLovenseProgram(program, settings = {}) {
   const runOnce = async (step) => {
     const payload = program.buildPayload({ toyId, intensity, duration });
     await plExecuteLovenseSegment(program.kind, payload);
+    try {
+      await plPost(`/api/lovense/sessions/${SESSION_ID}/events`, {
+        source: "play",
+        phase: "executed",
+        command: program.kind,
+        title: program.label,
+        intensity,
+        duration_seconds: duration,
+        pause_seconds: pause,
+        loops,
+        toy_id: toyId,
+      });
+    } catch (_) {}
     const loopText = loops > 1 ? ` Loop ${step}/${loops}` : "";
     plSetLovenseStatus(`Lovense: ${program.label}${loopText} aktiv.`);
     if (step >= loops) return;
@@ -961,7 +1034,7 @@ async function plRunLovenseAction(action) {
   }
   if (command === "preset") {
     const presetId = String(action.preset || "").trim();
-    const preset = PL_LOVENSE_PRESETS[presetId];
+    const preset = plCombinedLovensePresetMap()[presetId];
     if (!preset) {
       throw new Error(`Unbekanntes Preset: ${presetId}`);
     }
@@ -2147,13 +2220,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!SESSION_ID) return;
   plInitFocusMode();
   plResetLovensePlanStatus();
+  await plLoadLovensePresetLibrary().catch(() => {});
   await plInitVoiceAvailability();
   plSetLovenseStatus(
     !plLovenseEnabled
       ? "Lovense: serverseitig deaktiviert."
-      : (!plLovenseConfigured ? "Lovense: Konfiguration unvollstaendig." : "Lovense: bereit. Verbinde den Edge 2 fuer KI-Steuerung.")
+      : (!plLovenseConfigured && !plLovenseSimulator ? "Lovense: Konfiguration unvollstaendig." : "Lovense: bereit. Verbinde den Edge 2 fuer KI-Steuerung.")
   );
-  if (plLovenseEnabled && plLovenseConfigured) {
+  if (plLovenseEnabled && (plLovenseConfigured || plLovenseSimulator)) {
     if (plShouldAutoInitLovense()) {
       plInitLovense().catch(() => {});
     }

@@ -18,15 +18,15 @@ Abgeschlossene Punkte wurden nach [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md) a
 
 ### v0.4 – Device Foundation
 - [x] Lovense-Basisintegration fuer Web/Dashboard
-- [ ] Wearer-Profil um Device-/Tool-Auswahl und bevorzugte Toy-Konfiguration erweitern
-- [ ] Eigene Toy-Presets speichern und verwalten
-- [ ] Toy-Presets pro Keyholder-Profil hinterlegen
-- [ ] Toy-Status im Play-Modus sichtbar machen
-- [ ] Toy-Kommandos als Session-Actions/Audit-Events persistieren
-- [ ] Toy-Simulator fuer lokale Entwicklung
-- [ ] Safety-Limits und Freigaberegeln fuer Toy-Steuerung
-- [ ] Admin-Programm-/Pattern-Editor fuer Lovense anbieten, wenn im Wearer-Profil Lovense/Toys aktiviert sind
-- [ ] KI darf in der Session freigegebene Toy-Presets ausloesen
+- [x] Wearer-Profil um Device-/Tool-Auswahl und bevorzugte Toy-Konfiguration erweitern
+- [x] Eigene Toy-Presets speichern und verwalten
+- [x] Toy-Presets pro Keyholder-Profil hinterlegen
+- [x] Toy-Status im Play-Modus sichtbar machen
+- [x] Toy-Kommandos als Session-Actions/Audit-Events persistieren
+- [x] Toy-Simulator fuer lokale Entwicklung
+- [x] Safety-Limits und Freigaberegeln fuer Toy-Steuerung
+- [x] Admin-Programm-/Pattern-Editor fuer Lovense anbieten, wenn im Wearer-Profil Lovense/Toys aktiviert sind
+- [x] KI darf in der Session freigegebene Toy-Presets ausloesen
 
 ### v0.5 – Gamification
 - [ ] Achievements / Abzeichen

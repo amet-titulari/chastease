@@ -1123,6 +1123,8 @@ def create_session(payload: CreateSessionRequest, request: Request, db: Session 
             raise HTTPException(status_code=409, detail="Template session is not completed")
         template_persona = db.query(Persona).filter(Persona.id == template_session.persona_id).first()
         template_profile = db.query(PlayerProfile).filter(PlayerProfile.id == template_session.player_profile_id).first()
+    elif current_user and current_user.default_player_profile_id:
+        template_profile = db.query(PlayerProfile).filter(PlayerProfile.id == current_user.default_player_profile_id).first()
 
     persona_name = payload.persona_name or (template_persona.name if template_persona else None)
     player_nickname = payload.player_nickname or (template_profile.nickname if template_profile else None)

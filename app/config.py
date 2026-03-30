@@ -88,6 +88,7 @@ class Settings(BaseSettings):
     lovense_sdk_url: str = "https://api.lovense-api.com/basic-sdk/core.min.js"
     lovense_api_base_url: str = "https://api.lovense-api.com/api/basicApi"
     lovense_debug: bool = False
+    lovense_simulator_enabled: bool = False
     verification_media_retention_enabled: bool = True
     verification_media_retention_hours: int = 72
     # Audit log – set CHASTEASE_AUDIT_LOG_ENABLED=true to activate

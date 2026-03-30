@@ -7,6 +7,16 @@ const toysLovenseConfigured = String(toysShell?.dataset.lovenseConfigured || "")
 const toysLovensePlatform = String(toysShell?.dataset.lovensePlatform || "").trim();
 const toysLovenseAppType = String(toysShell?.dataset.lovenseAppType || "connect").trim() || "connect";
 const toysLovenseDebug = String(toysShell?.dataset.lovenseDebug || "") === "1";
+const toysLovenseSimulator = String(toysShell?.dataset.lovenseSimulator || "") === "1";
+const toysPreferredProvider = String(toysShell?.dataset.toyProvider || "none").trim().toLowerCase();
+const toysProfileEnabled = String(toysShell?.dataset.toyEnabled || "") === "1";
+const toysPreferredToyName = String(toysShell?.dataset.toyPreferredName || "").trim();
+const toysPreferredToyId = String(toysShell?.dataset.toyPreferredId || "").trim();
+const toysPreferredPreset = String(toysShell?.dataset.toyPreferredPreset || "").trim();
+const toysDefaultIntensity = Number(toysShell?.dataset.toyDefaultIntensity || 8) || 8;
+const toysDefaultDuration = Number(toysShell?.dataset.toyDefaultDuration || 20) || 20;
+const toysDefaultPause = Number(toysShell?.dataset.toyDefaultPause || 5) || 5;
+const toysDefaultLoops = Number(toysShell?.dataset.toyDefaultLoops || 1) || 1;
 const TOYS_LOVENSE_AUTO_INIT_KEY = `chastease.lovense.auto_init.${TOYS_SESSION_ID || "default"}`;
 const TOYS_LOVENSE_TOY_KEY = `chastease.lovense.toy.${TOYS_SESSION_ID || "default"}`;
 let toysLovenseSdk = null;
@@ -14,6 +24,7 @@ let toysLovenseBootstrap = null;
 let toysLovenseToys = [];
 let toysLovensePollHandle = null;
 let toysLovenseSequenceTimeout = null;
+let toysPresetLibrary = { builtin: [], wearer: [], persona: [], combined: [] };
 
 const TOYS_LOVENSE_PRESETS = {
   tease_ramp: {
@@ -61,6 +72,33 @@ const TOYS_LOVENSE_PRESETS = {
     interval: 150,
   },
 };
+
+function toysCombinedPresetMap() {
+  const map = { ...TOYS_LOVENSE_PRESETS };
+  const items = Array.isArray(toysPresetLibrary?.combined) ? toysPresetLibrary.combined : [];
+  items.forEach((item) => {
+    if (!item || !item.key) return;
+    if (item.command === "pattern") {
+      if (String(item.pattern || "").startsWith("builtin:")) {
+        const builtinKey = String(item.pattern || "").split(":").slice(1).join(":");
+        const builtin = TOYS_LOVENSE_PRESETS[builtinKey];
+        if (builtin) map[item.key] = { ...builtin, label: item.name || builtinKey };
+        return;
+      }
+      map[item.key] = {
+        label: item.name || item.key,
+        description: `${item.owner_type === "persona" ? "Keyholder" : "Wearer"}-Preset`,
+        interval: Number(item.interval || 180) || 180,
+        pattern: () => String(item.pattern || ""),
+      };
+      return;
+    }
+    if (item.command === "preset" && item.preset && TOYS_LOVENSE_PRESETS[item.preset]) {
+      map[item.key] = { ...TOYS_LOVENSE_PRESETS[item.preset], label: item.name || item.key };
+    }
+  });
+  return map;
+}
 
 function toysEsc(value) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -138,11 +176,40 @@ async function toysPost(url, payload) {
   return data;
 }
 
+async function toysDelete(url) {
+  const resp = await fetch(url, { method: "DELETE" });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
+  return data;
+}
+
+async function toysLogEvent(payload) {
+  if (!TOYS_SESSION_ID) return;
+  try {
+    await toysPost(`/api/lovense/sessions/${TOYS_SESSION_ID}/events`, payload);
+  } catch (_) {}
+}
+
 function toysSetLovenseStatus(message, pill = null) {
   const el = document.getElementById("dash-lovense-status");
   if (el) el.textContent = message || "—";
   const chip = document.getElementById("dash-lovense-app-pill");
   if (chip && pill) chip.textContent = pill;
+}
+
+function toysApplyProfileDefaults() {
+  const intensity = document.getElementById("dash-lovense-intensity");
+  const duration = document.getElementById("dash-lovense-duration");
+  const pause = document.getElementById("dash-lovense-pause");
+  const loops = document.getElementById("dash-lovense-loops");
+  const preset = document.getElementById("dash-lovense-preset");
+  if (intensity) intensity.value = String(Math.max(1, Math.min(20, toysDefaultIntensity)));
+  if (duration) duration.value = String(Math.max(1, Math.min(300, toysDefaultDuration)));
+  if (pause) pause.value = String(Math.max(0, Math.min(300, toysDefaultPause)));
+  if (loops) loops.value = String(Math.max(1, Math.min(20, toysDefaultLoops)));
+  if (preset && toysPreferredPreset && toysCombinedPresetMap()[toysPreferredPreset]) {
+    preset.value = toysPreferredPreset;
+  }
 }
 
 function toysUpdateLovenseIntensityLabel() {
@@ -155,7 +222,7 @@ function toysUpdateLovenseIntensityLabel() {
 
 function toysSelectedLovensePreset() {
   const presetId = String(document.getElementById("dash-lovense-preset")?.value || "").trim();
-  return TOYS_LOVENSE_PRESETS[presetId] || null;
+  return toysCombinedPresetMap()[presetId] || null;
 }
 
 function toysUpdateLovensePresetCopy() {
@@ -163,7 +230,7 @@ function toysUpdateLovensePresetCopy() {
   if (!el) return;
   const preset = toysSelectedLovensePreset();
   el.textContent = preset
-    ? `${preset.label}: ${preset.description}`
+    ? `${preset.label}: ${preset.description || "Gespeicherte Routine fuer kurze Toy-Sequenzen."}`
     : "Kurze Bibliothek fuer erste Routinen. Ein visueller Pattern-Designer kann spaeter darauf aufbauen.";
 }
 
@@ -211,7 +278,13 @@ function toysRenderLovenseToys(toys) {
   });
   select.innerHTML = options.join("");
   const rememberedToyId = toysRestoreSelectedToyId();
-  const chosen = toysSelectedLovenseToyId() || rememberedToyId || String(toysLovenseToys[0].id || toysLovenseToys[0].toyId || toysLovenseToys[0].toy_id || "");
+  const preferredMatch = toysLovenseToys.find((toy) => {
+    const id = String(toy.id || toy.toyId || toy.toy_id || "").trim();
+    const name = String(toy.name || toy.nickName || toy.nickname || toy.type || "").trim().toLowerCase();
+    return (toysPreferredToyId && id === toysPreferredToyId) || (toysPreferredToyName && name === toysPreferredToyName.toLowerCase());
+  });
+  const preferredId = preferredMatch ? String(preferredMatch.id || preferredMatch.toyId || preferredMatch.toy_id || "") : "";
+  const chosen = toysSelectedLovenseToyId() || rememberedToyId || preferredId || String(toysLovenseToys[0].id || toysLovenseToys[0].toyId || toysLovenseToys[0].toy_id || "");
   if (chosen) select.value = chosen;
   toysRememberSelectedToyId(select.value);
   const active = toysLovenseToys.find((toy) => String(toy.id || toy.toyId || toy.toy_id || "") === select.value) || toysLovenseToys[0];
@@ -236,6 +309,7 @@ function toysResolveLovenseQr(payload) {
 }
 
 async function toysRefreshLovenseQr() {
+  if (toysLovenseSimulator) return;
   if (!toysLovenseSdk || typeof toysLovenseSdk.getQrcode !== "function") return;
   try {
     const qr = await toysLovenseSdk.getQrcode();
@@ -260,6 +334,10 @@ function toysLovensePatternStrength(intensity, mode) {
 }
 
 async function toysExecuteLovenseSegment(kind, payload) {
+  if (toysLovenseSimulator) {
+    await new Promise((resolve) => window.setTimeout(resolve, 120));
+    return;
+  }
   if (!toysLovenseSdk) {
     throw new Error("Lovense ist noch nicht initialisiert.");
   }
@@ -282,8 +360,13 @@ async function toysExecuteLovenseSegment(kind, payload) {
 
 async function toysStopActiveLovenseAction() {
   const toyId = toysSelectedLovenseToyId();
-  if (!toysLovenseSdk || !toyId) return false;
+  if ((!toysLovenseSdk && !toysLovenseSimulator) || !toyId) return false;
   toysClearLovenseSequence();
+  if (toysLovenseSimulator) {
+    toysSetLovenseStatus("Toy gestoppt.", "Stop");
+    await toysLogEvent({ source: "manual", phase: "executed", command: "stop", title: "Stop", toy_id: toyId });
+    return true;
+  }
   if (typeof toysLovenseSdk.stopToyAction === "function") {
     await toysLovenseSdk.stopToyAction({ toyId });
   } else if (typeof toysLovenseSdk.sendToyCommand === "function") {
@@ -306,6 +389,17 @@ async function toysRunLovenseProgram(program) {
   const runOnce = async (step) => {
     const payload = program.buildPayload({ toyId, intensity, duration });
     await toysExecuteLovenseSegment(program.kind, payload);
+    await toysLogEvent({
+      source: "manual",
+      phase: "executed",
+      command: program.kind,
+      title: program.label,
+      intensity,
+      duration_seconds: duration,
+      pause_seconds: pause,
+      loops,
+      toy_id: toyId,
+    });
     const detail = loops > 1 ? ` Loop ${step}/${loops}` : "";
     toysSetLovenseStatus(`${program.label}${detail} aktiv. ${duration}s on, ${pause}s pause.`, "aktiv");
     if (step >= loops) return;
@@ -319,6 +413,11 @@ async function toysRunLovenseProgram(program) {
 }
 
 async function toysSyncLovenseToys() {
+  if (toysLovenseSimulator) {
+    toysRenderLovenseToys([{ id: "sim-edge-2", name: "Simulator Edge 2", battery: 100, status: "simulated", version: "sim" }]);
+    toysSetLovenseStatus("Simulator aktiv. Virtuelles Toy verbunden.", "sim");
+    return;
+  }
   if (!toysLovenseSdk) return;
   try {
     let toys = [];
@@ -344,6 +443,11 @@ async function toysInitLovense() {
     return;
   }
   if (!toysLovenseConfigured) {
+    if (toysLovenseSimulator) {
+      toysRememberLovenseAutoInit();
+      await toysSyncLovenseToys();
+      return;
+    }
     toysSetLovenseStatus("Lovense ist noch nicht vollstaendig konfiguriert. Es fehlen Plattformname oder Developer-Token.", "Konfig");
     return;
   }
@@ -384,7 +488,7 @@ async function toysInitLovense() {
 }
 
 async function toysSendLovenseCommand(action) {
-  if (!toysLovenseSdk) {
+  if (!toysLovenseSdk && !toysLovenseSimulator) {
     toysSetLovenseStatus("Lovense ist noch nicht initialisiert.", "Start");
     return;
   }
@@ -445,6 +549,117 @@ async function toysRunLovensePreset() {
       vibrate: true,
     }),
   });
+  await toysLogEvent({
+    source: "manual",
+    phase: "executed",
+    command: "preset",
+    title: preset.label,
+    preset: String(document.getElementById("dash-lovense-preset")?.value || ""),
+  });
+}
+
+async function toysLoadPresetLibrary() {
+  const data = await toysGet(`/api/lovense/sessions/${TOYS_SESSION_ID}/preset-library`);
+  toysPresetLibrary = data.library || { builtin: [], wearer: [], persona: [], combined: [] };
+  const select = document.getElementById("dash-lovense-preset");
+  if (select) {
+    const items = Array.isArray(toysPresetLibrary.combined) ? toysPresetLibrary.combined : [];
+    select.innerHTML = items
+      .map((item) => `<option value="${toysEsc(item.key)}">${toysEsc(item.name || item.key)}${item.owner_type === "persona" ? " · Persona" : item.owner_type === "wearer" ? " · Wearer" : ""}</option>`)
+      .join("");
+  }
+  toysRenderSavedPresetLists();
+}
+
+function toysRenderSavedPresetLists() {
+  const wearerEl = document.getElementById("toy-wearer-presets");
+  const personaEl = document.getElementById("toy-persona-presets");
+  const render = (items, scope) => {
+    if (!Array.isArray(items) || !items.length) return "<p class=\"dash-copy\">Noch keine Presets gespeichert.</p>";
+    return items.map((item) => `
+      <div class="task-card">
+        <div class="task-card-title">${toysEsc(item.name)} <span class="task-num">${toysEsc(item.command)}</span></div>
+        <div class="dash-actions">
+          <button type="button" class="dash-link-secondary" data-preset-run="${toysEsc(item.key)}">Starten</button>
+          <button type="button" class="dash-link-secondary" data-preset-load="${toysEsc(item.key)}" data-preset-scope="${toysEsc(scope)}">Laden</button>
+          <button type="button" class="dash-safety-btn dash-safety-btn--red" data-preset-delete="${toysEsc(item.key)}" data-preset-scope="${toysEsc(scope)}">Loeschen</button>
+        </div>
+      </div>`).join("");
+  };
+  if (wearerEl) wearerEl.innerHTML = render(toysPresetLibrary.wearer, "wearer");
+  if (personaEl) personaEl.innerHTML = render(toysPresetLibrary.persona, "persona");
+}
+
+function toysReadPresetEditorPayload() {
+  return {
+    key: String(document.getElementById("toy-preset-key")?.value || "").trim() || undefined,
+    name: String(document.getElementById("toy-preset-name")?.value || "").trim(),
+    command: String(document.getElementById("toy-preset-command")?.value || "pattern").trim(),
+    preset: String(document.getElementById("toy-preset-base")?.value || "").trim() || undefined,
+    pattern: String(document.getElementById("toy-preset-pattern")?.value || "").trim() || undefined,
+    intensity: toysReadNullableNumberInput("toy-preset-intensity"),
+    duration_seconds: toysReadNullableNumberInput("toy-preset-duration"),
+    pause_seconds: toysReadNullableNumberInput("toy-preset-pause"),
+    loops: toysReadNullableNumberInput("toy-preset-loops"),
+    interval: toysReadNullableNumberInput("toy-preset-interval"),
+  };
+}
+
+function toysLoadPresetIntoEditor(scope, key) {
+  const source = scope === "persona" ? toysPresetLibrary.persona : toysPresetLibrary.wearer;
+  const item = (Array.isArray(source) ? source : []).find((entry) => entry.key === key);
+  if (!item) return;
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value == null ? "" : String(value);
+  };
+  set("toy-preset-scope", scope);
+  set("toy-preset-key", item.key);
+  set("toy-preset-name", item.name);
+  set("toy-preset-command", item.command);
+  set("toy-preset-base", item.preset || "");
+  set("toy-preset-pattern", item.pattern || "");
+  set("toy-preset-intensity", item.intensity || "");
+  set("toy-preset-duration", item.duration_seconds || "");
+  set("toy-preset-pause", item.pause_seconds || "");
+  set("toy-preset-loops", item.loops || "");
+  set("toy-preset-interval", item.interval || "");
+}
+
+function toysFillPresetEditorFromCurrent() {
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value == null ? "" : String(value);
+  };
+  set("toy-preset-intensity", document.getElementById("dash-lovense-intensity")?.value || "");
+  set("toy-preset-duration", document.getElementById("dash-lovense-duration")?.value || "");
+  set("toy-preset-pause", document.getElementById("dash-lovense-pause")?.value || "");
+  set("toy-preset-loops", document.getElementById("dash-lovense-loops")?.value || "");
+  set("toy-preset-base", document.getElementById("dash-lovense-preset")?.value || "");
+}
+
+async function toysSaveNamedPreset() {
+  const scope = String(document.getElementById("toy-preset-scope")?.value || "wearer").trim();
+  const payload = toysReadPresetEditorPayload();
+  if (!payload.name) {
+    toysSetPolicyStatus("Preset-Name fehlt.", true);
+    return;
+  }
+  const url = scope === "persona"
+    ? `/api/lovense/sessions/${TOYS_SESSION_ID}/persona-presets`
+    : `/api/lovense/sessions/${TOYS_SESSION_ID}/presets`;
+  await toysPost(url, payload);
+  await toysLoadPresetLibrary();
+  toysSetPolicyStatus(`Preset '${payload.name}' gespeichert.`);
+}
+
+async function toysDeleteNamedPreset(scope, key) {
+  const url = scope === "persona"
+    ? `/api/lovense/sessions/${TOYS_SESSION_ID}/persona-presets/${encodeURIComponent(key)}`
+    : `/api/lovense/sessions/${TOYS_SESSION_ID}/presets/${encodeURIComponent(key)}`;
+  await toysDelete(url);
+  await toysLoadPresetLibrary();
+  toysSetPolicyStatus(`Preset '${key}' geloescht.`);
 }
 
 function toysApplyLovensePolicy(policy) {
@@ -557,19 +772,49 @@ document.getElementById("dash-lovense-run-preset")?.addEventListener("click", ()
 document.getElementById("toy-policy-save")?.addEventListener("click", () => {
   toysSaveLovensePolicy().catch((err) => toysSetPolicyStatus(`Speichern fehlgeschlagen (${String(err)})`, true));
 });
+document.getElementById("toy-preset-fill-current")?.addEventListener("click", toysFillPresetEditorFromCurrent);
+document.getElementById("toy-preset-save")?.addEventListener("click", () => {
+  toysSaveNamedPreset().catch((err) => toysSetPolicyStatus(`Preset speichern fehlgeschlagen (${String(err)})`, true));
+});
+document.getElementById("toy-preset-lists")?.addEventListener("click", (event) => {
+  const target = event.target;
+  const runKey = target?.getAttribute?.("data-preset-run");
+  const loadKey = target?.getAttribute?.("data-preset-load");
+  const deleteKey = target?.getAttribute?.("data-preset-delete");
+  const scope = target?.getAttribute?.("data-preset-scope") || "wearer";
+  if (runKey) {
+    const select = document.getElementById("dash-lovense-preset");
+    if (select) select.value = runKey;
+    toysUpdateLovensePresetCopy();
+    toysRunLovensePreset().catch((err) => toysSetLovenseStatus(`Preset fehlgeschlagen (${String(err)})`, "Fehler"));
+    return;
+  }
+  if (loadKey) {
+    toysLoadPresetIntoEditor(scope, loadKey);
+    return;
+  }
+  if (deleteKey) {
+    toysDeleteNamedPreset(scope, deleteKey).catch((err) => toysSetPolicyStatus(`Preset loeschen fehlgeschlagen (${String(err)})`, true));
+  }
+});
 
 document.addEventListener("DOMContentLoaded", async () => {
   if (!TOYS_SESSION_ID) return;
+  await toysLoadPresetLibrary();
+  toysApplyProfileDefaults();
   toysUpdateLovenseIntensityLabel();
   toysUpdateLovensePresetCopy();
   await toysLoadLovensePolicy();
   toysSetLovenseStatus(
     !toysLovenseEnabled
       ? "Lovense ist serverseitig deaktiviert."
-      : (!toysLovenseConfigured ? "Lovense ist noch nicht vollstaendig konfiguriert." : "Lovense bereit. Initialisiere die Verbindung, um deinen Edge 2 zu koppeln."),
+      : (!toysLovenseConfigured && !toysLovenseSimulator ? "Lovense ist noch nicht vollstaendig konfiguriert." : "Lovense bereit. Initialisiere die Verbindung, um dein bevorzugtes Toy zu koppeln."),
     !toysLovenseEnabled ? "aus" : (!toysLovenseConfigured ? "Konfig" : "bereit")
   );
-  if (toysLovenseEnabled && toysLovenseConfigured && toysShouldAutoInitLovense()) {
+  if (toysPreferredProvider && toysPreferredProvider !== "none" && !toysProfileEnabled) {
+    toysSetLovenseStatus(`Profil bevorzugt ${toysPreferredProvider}, Toy-Steuerung ist aber im Wearer-Profil deaktiviert.`, "Profil");
+  }
+  if (toysLovenseEnabled && (toysLovenseConfigured || toysLovenseSimulator) && toysShouldAutoInitLovense()) {
     toysInitLovense().catch(() => {});
   }
 });

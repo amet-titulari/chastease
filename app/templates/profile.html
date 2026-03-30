@@ -55,6 +55,56 @@
             <option value="true" {% if setup.gentle_mode %}selected{% endif %}>Ja</option>
           </select>
         </label>
+        <section class="profile-subsection">
+          <div class="profile-subsection-head">
+            <p class="eyebrow">Devices und Toys</p>
+            <p class="hint">Lege fest, welche Device-Struktur dein Wearer-Profil bevorzugt und welche Standardwerte im Toy-Hub vorbelegt werden.</p>
+          </div>
+          <div class="profile-mini-grid">
+            <label>Bevorzugter Provider
+              <select name="toy_provider">
+                {% for provider in toy_provider_options %}
+                <option value="{{ provider }}" {% if setup.toy_profile.provider == provider %}selected{% endif %}>
+                  {% if provider == "none" %}Kein Device{% elif provider == "lovense" %}Lovense{% elif provider == "ttlock" %}TTLock{% else %}Custom{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>Toy-Steuerung im Profil aktiv
+              <select name="toy_control_enabled">
+                <option value="false" {% if not setup.toy_profile.enabled %}selected{% endif %}>Nein</option>
+                <option value="true" {% if setup.toy_profile.enabled %}selected{% endif %}>Ja</option>
+              </select>
+            </label>
+            <label>Bevorzugter Toy-Name
+              <input name="preferred_toy_name" maxlength="120" value="{{ setup.toy_profile.preferred_toy_name or '' }}" placeholder="z.B. Edge 2" />
+            </label>
+            <label>Bevorzugte Toy-ID
+              <input name="preferred_toy_id" maxlength="160" value="{{ setup.toy_profile.preferred_toy_id or '' }}" placeholder="optional, falls bekannt" />
+            </label>
+            <label>Standard-Preset
+              <select name="preferred_preset">
+                {% for preset in toy_preset_options %}
+                <option value="{{ preset }}" {% if setup.toy_profile.preferred_preset == preset %}selected{% endif %}>
+                  {% if not preset %}Kein Standard-Preset{% elif preset == "tease_ramp" %}Tease Ramp{% elif preset == "strict_pulse" %}Strict Pulse{% elif preset == "wave_ladder" %}Wave Ladder{% else %}Deny Spikes{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>Standard-Intensitaet
+              <input name="default_intensity" type="number" min="1" max="20" step="1" value="{{ setup.toy_profile.default_intensity }}" />
+            </label>
+            <label>Standard-Dauer (Sek.)
+              <input name="default_duration_seconds" type="number" min="1" max="300" step="1" value="{{ setup.toy_profile.default_duration_seconds }}" />
+            </label>
+            <label>Standard-Pause (Sek.)
+              <input name="default_pause_seconds" type="number" min="0" max="300" step="1" value="{{ setup.toy_profile.default_pause_seconds }}" />
+            </label>
+            <label>Standard-Loops
+              <input name="default_loops" type="number" min="1" max="20" step="1" value="{{ setup.toy_profile.default_loops }}" />
+            </label>
+          </div>
+        </section>
         <button type="submit">Wearer-Profil speichern</button>
       </form>
 

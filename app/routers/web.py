@@ -33,6 +33,7 @@ from app.services.auth_password import hash_password, is_legacy_password_hash, v
 from app.services.contract_service import default_contract_preferences, normalize_contract_preferences
 from app.services.games import as_public_module_payload, get_module, list_modules
 from app.services.lovense import lovense_status_payload
+from app.services.toy_profile import TOY_PRESET_CHOICES, TOY_PROVIDER_CHOICES, get_toy_profile_from_preferences, merge_toy_profile
 
 router = APIRouter(tags=["web"])
 templates = Jinja2Templates(directory="app/templates")
@@ -219,6 +220,7 @@ def _setup_context_from_user_and_profile(user: AuthUser, profile: PlayerProfile 
             "penalty_multiplier": 1.0,
             "gentle_mode": False,
             "contract": contract,
+            "toy_profile": get_toy_profile_from_preferences({}),
         }
 
     prefs = _load_json_dict(profile.preferences_json)
@@ -240,6 +242,7 @@ def _setup_context_from_user_and_profile(user: AuthUser, profile: PlayerProfile 
         ),
         "gentle_mode": bool(needs.get("gentle_mode", False)),
         "contract": contract,
+        "toy_profile": get_toy_profile_from_preferences(prefs),
     }
 
 
@@ -321,6 +324,8 @@ def _render_profile_page(
                 "transcription_api_key_stored": bool(settings.transcription_api_key),
                 "voice_api_key_stored": bool(settings.voice_realtime_api_key),
             },
+            "toy_provider_options": TOY_PROVIDER_CHOICES,
+            "toy_preset_options": TOY_PRESET_CHOICES,
         },
     )
 
@@ -922,6 +927,15 @@ def update_profile_setup(
     hard_limits: str = Form(default=""),
     penalty_multiplier: float = Form(default=1.0),
     gentle_mode: str = Form(default="false"),
+    toy_provider: str = Form(default="none"),
+    toy_control_enabled: str = Form(default="false"),
+    preferred_toy_name: str = Form(default=""),
+    preferred_toy_id: str = Form(default=""),
+    preferred_preset: str = Form(default=""),
+    default_intensity: int | None = Form(default=None),
+    default_duration_seconds: int | None = Form(default=None),
+    default_pause_seconds: int | None = Form(default=None),
+    default_loops: int | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     user = _get_current_user(request, db)
@@ -954,6 +968,21 @@ def update_profile_setup(
         prefs["wearer_style"] = style
         prefs["wearer_goal"] = goal
         prefs["wearer_boundary"] = boundary
+        existing_toys = prefs.get("toys") if isinstance(prefs.get("toys"), dict) else {}
+        prefs["toys"] = merge_toy_profile(
+            existing_toys,
+            {
+                "provider": toy_provider,
+                "enabled": toy_control_enabled,
+                "preferred_toy_name": preferred_toy_name,
+                "preferred_toy_id": preferred_toy_id,
+                "preferred_preset": preferred_preset,
+                "default_intensity": default_intensity,
+                "default_duration_seconds": default_duration_seconds,
+                "default_pause_seconds": default_pause_seconds,
+                "default_loops": default_loops,
+            },
+        )
         profile.preferences_json = json.dumps(prefs)
         profile.hard_limits_json = json.dumps(limits)
         reaction = _load_json_dict(profile.reaction_patterns_json)
@@ -1724,6 +1753,7 @@ def toys_page(session_id: int, request: Request, db: Session = Depends(get_db)):
             "dashboard_css_version": _asset_version("css/dashboard.css"),
             "toys_js_version": _asset_version("js/toys.js"),
             "lovense_status": lovense_status_payload(),
+            "toy_profile": get_toy_profile_from_preferences(_load_json_dict(player.preferences_json) if player else {}),
         },
     )
 

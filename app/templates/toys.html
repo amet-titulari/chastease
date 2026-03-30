@@ -17,7 +17,17 @@
      data-lovense-platform="{{ lovense_status.platform or '' }}"
      data-lovense-app-type="{{ lovense_status.app_type or 'connect' }}"
      data-lovense-sdk-url="{{ lovense_status.sdk_url or '' }}"
-     data-lovense-debug="{{ '1' if lovense_status.debug else '0' }}">
+     data-lovense-debug="{{ '1' if lovense_status.debug else '0' }}"
+     data-lovense-simulator="{{ '1' if lovense_status.simulator_enabled else '0' }}"
+     data-toy-provider="{{ toy_profile.provider or 'none' }}"
+     data-toy-enabled="{{ '1' if toy_profile.enabled else '0' }}"
+     data-toy-preferred-name="{{ toy_profile.preferred_toy_name or '' }}"
+     data-toy-preferred-id="{{ toy_profile.preferred_toy_id or '' }}"
+     data-toy-preferred-preset="{{ toy_profile.preferred_preset or '' }}"
+     data-toy-default-intensity="{{ toy_profile.default_intensity }}"
+     data-toy-default-duration="{{ toy_profile.default_duration_seconds }}"
+     data-toy-default-pause="{{ toy_profile.default_pause_seconds }}"
+     data-toy-default-loops="{{ toy_profile.default_loops }}">
   <section class="dash-hero">
     <div class="dash-hero-top">
       <div class="dash-hero-left">
@@ -113,6 +123,82 @@
               <button id="dash-lovense-pulse" type="button" class="dash-link-secondary">Pulse</button>
               <button id="dash-lovense-wave" type="button" class="dash-link-secondary">Wave</button>
               <button id="dash-lovense-stop" type="button" class="dash-safety-btn dash-safety-btn--red">Stop</button>
+            </div>
+          </div>
+        </details>
+        <details class="dash-lovense-manual">
+          <summary class="dash-lovense-manual-summary">
+            <span>Preset- und Pattern-Editor</span>
+            <span class="dash-lovense-manual-hint">Wearer- und Keyholder-Presets fuer KI und manuelle Steuerung</span>
+          </summary>
+          <div class="dash-lovense-manual-body">
+            <div class="dash-lovense-control-grid">
+              <label class="dash-field">Ablage
+                <select id="toy-preset-scope">
+                  <option value="wearer">Wearer-Preset</option>
+                  <option value="persona">Keyholder-Preset</option>
+                </select>
+              </label>
+              <label class="dash-field">Preset-Key
+                <input id="toy-preset-key" maxlength="80" placeholder="optional, sonst aus Name" />
+              </label>
+              <label class="dash-field">Name
+                <input id="toy-preset-name" maxlength="120" placeholder="z.B. Warmup Edge" />
+              </label>
+              <label class="dash-field">Typ
+                <select id="toy-preset-command">
+                  <option value="pattern">Pattern</option>
+                  <option value="preset">Bibliotheks-Preset</option>
+                  <option value="vibrate">Vibrate</option>
+                  <option value="pulse">Pulse</option>
+                  <option value="wave">Wave</option>
+                </select>
+              </label>
+              <label class="dash-field">Bibliotheks-Preset
+                <select id="toy-preset-base">
+                  <option value="">Keins</option>
+                  <option value="tease_ramp">Tease Ramp</option>
+                  <option value="strict_pulse">Strict Pulse</option>
+                  <option value="wave_ladder">Wave Ladder</option>
+                  <option value="deny_spikes">Deny Spikes</option>
+                </select>
+              </label>
+              <label class="dash-field">Pattern / Strength
+                <input id="toy-preset-pattern" maxlength="240" placeholder="z.B. 4;8;12;8;4;0" />
+              </label>
+              <label class="dash-field">Intensitaet
+                <input id="toy-preset-intensity" type="number" min="1" max="20" step="1" />
+              </label>
+              <label class="dash-field">Dauer (Sek.)
+                <input id="toy-preset-duration" type="number" min="1" max="180" step="1" />
+              </label>
+              <label class="dash-field">Pause (Sek.)
+                <input id="toy-preset-pause" type="number" min="0" max="60" step="1" />
+              </label>
+              <label class="dash-field">Loops
+                <input id="toy-preset-loops" type="number" min="1" max="10" step="1" />
+              </label>
+              <label class="dash-field">Interval (ms)
+                <input id="toy-preset-interval" type="number" min="100" max="1000" step="10" />
+              </label>
+            </div>
+            <div class="dash-actions">
+              <button id="toy-preset-fill-current" type="button" class="dash-link-secondary">Aktuelle Werte uebernehmen</button>
+              <button id="toy-preset-save" type="button">Preset speichern</button>
+            </div>
+            <div id="toy-preset-lists" class="dash-grid dash-grid--toys">
+              <section class="dash-card">
+                <div class="dash-card-head">
+                  <h4>Wearer Presets</h4>
+                </div>
+                <div id="toy-wearer-presets"></div>
+              </section>
+              <section class="dash-card">
+                <div class="dash-card-head">
+                  <h4>Keyholder Presets</h4>
+                </div>
+                <div id="toy-persona-presets"></div>
+              </section>
             </div>
           </div>
         </details>

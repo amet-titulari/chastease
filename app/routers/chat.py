@@ -851,6 +851,32 @@ def _persist_chat_turn(
         lovense_policy=get_lovense_policy_for_profile(profile),
     )
 
+    if client_actions:
+        summarized: list[str] = []
+        for action in client_actions:
+            if not isinstance(action, dict):
+                continue
+            action_type = str(action.get("type") or "").strip().lower()
+            if action_type == "lovense_control":
+                command = str(action.get("command") or "").strip().lower()
+                if command == "preset":
+                    summarized.append(f"Toy-Preset vorgemerkt: {str(action.get('preset') or '').strip() or 'preset'}")
+                else:
+                    summarized.append(f"Toy-Kommando vorgemerkt: {command}")
+            elif action_type == "lovense_session_plan":
+                title = str(action.get("title") or "").strip() or "Session-Plan"
+                steps = action.get("steps") if isinstance(action.get("steps"), list) else []
+                summarized.append(f"Toy-Plan vorgemerkt: {title} ({len(steps)} Schritte)")
+        if summarized:
+            db.add(
+                Message(
+                    session_id=session_id,
+                    role="system",
+                    content="; ".join(summarized),
+                    message_type="session_event",
+                )
+            )
+
     db.add(user_msg)
     db.add(assistant_msg)
     db.commit()
@@ -863,6 +889,8 @@ def _persist_chat_turn(
         prompt_version=assistant_msg.prompt_version,
         prompt_templates=prompt_modules.templates_used,
     )
+    if client_actions:
+        audit_log("lovense_client_actions_queued", session_id=session_id, actions=client_actions)
     return assistant_msg, client_actions
 
 

@@ -97,6 +97,61 @@ def test_experience_assets_are_served():
         assert "xpApplyQuickStart" in js.text
 
 
+def test_profile_setup_persists_toy_preferences_and_toys_page_uses_defaults():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        profile_resp = client.post(
+            "/profile/setup",
+            data={
+                "wearer_nickname": "Nova",
+                "experience_level": "advanced",
+                "role_style": "structured",
+                "primary_goal": "Device focus",
+                "boundary_note": "No pain",
+                "hard_limits": "pain",
+                "penalty_multiplier": "1.2",
+                "gentle_mode": "false",
+                "toy_provider": "lovense",
+                "toy_control_enabled": "true",
+                "preferred_toy_name": "Edge 2",
+                "preferred_toy_id": "toy-edge-2",
+                "preferred_preset": "strict_pulse",
+                "default_intensity": "11",
+                "default_duration_seconds": "25",
+                "default_pause_seconds": "7",
+                "default_loops": "2",
+            },
+        )
+        assert profile_resp.status_code == 200
+        assert "strict_pulse" in profile_resp.text
+
+        created = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Toy Persona",
+                "player_nickname": "Nova",
+                "min_duration_seconds": 300,
+                "max_duration_seconds": 600,
+            },
+        )
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+
+        toys_resp = client.get(f"/toys/{session_id}")
+        assert toys_resp.status_code == 200
+        html = toys_resp.text
+        assert 'data-toy-provider="lovense"' in html
+        assert 'data-toy-enabled="1"' in html
+        assert 'data-toy-preferred-name="Edge 2"' in html
+        assert 'data-toy-preferred-id="toy-edge-2"' in html
+        assert 'data-toy-preferred-preset="strict_pulse"' in html
+        assert 'data-toy-default-intensity="11"' in html
+        assert 'data-toy-default-duration="25"' in html
+        assert 'data-toy-default-pause="7"' in html
+        assert 'data-toy-default-loops="2"' in html
+
+
 def test_experience_onboarding_allows_persona_and_scenario_crud_for_normal_user():
     with TestClient(app) as client:
         _register_and_finish_setup(client)
@@ -372,7 +427,7 @@ def test_play_page_uses_versioned_play_script_url():
         assert '/static/js/play.js?v=' in play.text
         assert 'href="/dashboard/' in play.text
         assert 'id="play-focus-toggle"' in play.text
-        assert 'data-app-version="0.4.0"' in play.text
+        assert 'data-app-version="0.4.1"' in play.text
         assert "Regenerate" not in play.text
         assert "Verlauf" not in play.text
 

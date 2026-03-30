@@ -18,9 +18,13 @@ class LovenseGatewayError(RuntimeError):
 
 def lovense_status_payload() -> dict:
     platform = str(settings.lovense_platform or "").strip()
+    simulator_enabled = bool(settings.lovense_simulator_enabled)
+    effective_enabled = bool(settings.lovense_enabled or simulator_enabled)
+    effective_configured = bool(simulator_enabled or (settings.lovense_enabled and platform and str(settings.lovense_developer_token or "").strip()))
     return {
-        "enabled": bool(settings.lovense_enabled),
-        "configured": bool(settings.lovense_enabled and platform and str(settings.lovense_developer_token or "").strip()),
+        "enabled": effective_enabled,
+        "configured": effective_configured,
+        "simulator_enabled": simulator_enabled,
         "platform": platform,
         "app_type": _normalized_app_type(),
         "sdk_url": settings.lovense_sdk_url,
