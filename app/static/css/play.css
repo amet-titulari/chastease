@@ -1871,6 +1871,7 @@
 }
 
 .play-tasks-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2167,5 +2168,45 @@
     right: 0.5rem;
     width: min(300px, calc(100vw - 1rem));
     max-height: 140px;
+  }
+}
+
+@media (max-width: 560px) {
+  .play-header {
+    align-items: flex-start;
+  }
+
+  .play-header-left,
+  .play-header-right {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .play-header-right {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin-left: 0;
+    row-gap: 0.35rem;
+  }
+
+  .play-head-link,
+  .play-roleplay-toggle,
+  .play-tasks-toggle,
+  .play-safety-toggle {
+    flex: 0 0 auto;
+  }
+
+  .play-persona {
+    max-width: calc(100vw - 7rem);
+  }
+
+  .play-action-cards {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .action-card {
+    width: 100%;
+    max-width: 100%;
   }
 }
