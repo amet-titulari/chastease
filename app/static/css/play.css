@@ -1066,6 +1066,8 @@
   border-radius: 10px;
   padding: 0.5rem 0.65rem;
   font-size: 0.83rem;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .task-card.is-done {
@@ -1081,6 +1083,8 @@
   font-weight: 600;
   color: var(--ink);
   margin-bottom: 0.25rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .task-card-actions {
@@ -1389,6 +1393,10 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.6rem 0 0.7rem;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   /* No background/border — floats naturally in the timeline */
 }
 
@@ -1493,6 +1501,7 @@
   display: flex;
   gap: 0.4rem;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .ac-btn {
@@ -1503,6 +1512,11 @@
   cursor: pointer;
   font-weight: 600;
   transition: background 0.12s, color 0.12s;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ac-btn--done {
@@ -1546,6 +1560,7 @@
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
+  min-width: 0;
 }
 
 .ac-file-label input[type="file"] {
@@ -1563,6 +1578,11 @@
   color: var(--muted);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ac-file-label span:hover,
@@ -1582,6 +1602,10 @@
   font-weight: 600;
   transition: background 0.12s;
   align-self: flex-start;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ac-submit-btn:hover {
@@ -2106,11 +2130,14 @@
 
   .ac-actions {
     gap: 0.3rem;
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .ac-btn,
   .ac-submit-btn {
     min-height: 34px;
+    width: 100%;
   }
 
   .play-chat-footer {
