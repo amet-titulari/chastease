@@ -52,6 +52,23 @@ def test_scenarios_page_contains_edit_flow_hooks():
         assert "/api/inventory/scenarios/" in resp.text
 
 
+def test_scenarios_page_contains_phase_target_editor_fields():
+    with TestClient(app) as client:
+        _register_admin(client)
+        resp = client.get("/scenarios", follow_redirects=False)
+        assert resp.status_code == 200
+        html = resp.text
+        assert "phase-weight" in html
+        assert "phase-min-hours" in html
+        assert "phase-score-trust" in html
+        assert "phase-score-obedience" in html
+        assert "phase-score-resistance" in html
+        assert "phase-score-favor" in html
+        assert "phase-score-strictness" in html
+        assert "phase-score-frustration" in html
+        assert "phase-score-attachment" in html
+
+
 def test_scenarios_partial_uses_delegated_actions_instead_of_inline_onclick():
     with TestClient(app) as client:
         _register_admin(client)

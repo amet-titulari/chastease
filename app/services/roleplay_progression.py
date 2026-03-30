@@ -107,11 +107,16 @@ def _resolve_phase_targets(session_obj: SessionModel, active_phase: dict[str, An
         return targets
 
     scale = _phase_duration_scale(session_obj)
+    try:
+        weight = float(active_phase.get("phase_weight") or 1.0)
+    except (TypeError, ValueError, AttributeError):
+        weight = 1.0
+    weight = max(0.6, min(2.4, weight))
     targets: dict[str, int] = {}
     for key in _PHASE_SCORE_KEYS:
         defaults = _PHASE_TARGET_DEFAULTS.get(key) or [4]
         base = defaults[min(current_index, len(defaults) - 1)]
-        targets[key] = max(1, int(round(float(base) * scale)))
+        targets[key] = max(1, int(round(float(base) * scale * weight)))
     return targets
 
 

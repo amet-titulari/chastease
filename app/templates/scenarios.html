@@ -116,6 +116,31 @@
   .phase-block-remove { background: none !important; border: none !important; color: #7d9db8; font-size: 1rem; cursor: pointer; padding: 0 !important; width: auto !important; }
   .phase-block label { margin-bottom: 0.3rem; font-size: 0.82rem; }
   .phase-block input, .phase-block textarea { font-size: 0.85rem; }
+  .phase-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.6rem;
+  }
+  .phase-score-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.1rem;
+  }
+  .phase-score-title {
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-muted, #8899aa);
+  }
+  .phase-score-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.5rem;
+  }
+  .phase-score-grid label {
+    margin: 0;
+  }
 
   .empty-hint { text-align: center; color: var(--color-text-muted, #8899aa); padding: 1.5rem 0; font-size: 0.9rem; }
   .sm-notice { font-size: 0.82rem; color: var(--color-text-muted, #8899aa); margin-top: 0.3rem; }
@@ -460,7 +485,41 @@ function smAddPhase(data = {}) {
     </label>
     <label>Führungshinweis <span style="font-weight:400;font-size:0.75rem;color:#7d8da1;">(KI-Anweisung)</span>
       <textarea class="phase-guidance" rows="3" maxlength="2000" placeholder="Wie soll die KI in dieser Phase vorgehen?">${escHtml(data.guidance || "")}</textarea>
-    </label>`;
+    </label>
+    <div class="phase-meta-grid">
+      <label>Gewichtung
+        <input class="phase-weight" type="number" min="0.1" step="0.05" value="${Number.isFinite(Number(data.phase_weight)) ? escHtml(String(data.phase_weight)) : ""}" placeholder="z.B. 1.25" />
+      </label>
+      <label>Mindestdauer (Stunden)
+        <input class="phase-min-hours" type="number" min="1" step="1" value="${Number.isFinite(Number(data.min_phase_duration_hours)) ? escHtml(String(data.min_phase_duration_hours)) : ""}" placeholder="z.B. 72" />
+      </label>
+    </div>
+    <div class="phase-score-section">
+      <span class="phase-score-title">Phasen-Zielwerte</span>
+      <div class="phase-score-grid">
+        <label>Trust
+          <input class="phase-score-trust" type="number" min="0" step="1" value="${Number.isFinite(Number(data.score_targets?.trust)) ? escHtml(String(data.score_targets.trust)) : ""}" placeholder="0" />
+        </label>
+        <label>Obedience
+          <input class="phase-score-obedience" type="number" min="0" step="1" value="${Number.isFinite(Number(data.score_targets?.obedience)) ? escHtml(String(data.score_targets.obedience)) : ""}" placeholder="0" />
+        </label>
+        <label>Resistance
+          <input class="phase-score-resistance" type="number" min="0" step="1" value="${Number.isFinite(Number(data.score_targets?.resistance)) ? escHtml(String(data.score_targets.resistance)) : ""}" placeholder="0" />
+        </label>
+        <label>Favor
+          <input class="phase-score-favor" type="number" min="0" step="1" value="${Number.isFinite(Number(data.score_targets?.favor)) ? escHtml(String(data.score_targets.favor)) : ""}" placeholder="0" />
+        </label>
+        <label>Strictness
+          <input class="phase-score-strictness" type="number" min="0" step="1" value="${Number.isFinite(Number(data.score_targets?.strictness)) ? escHtml(String(data.score_targets.strictness)) : ""}" placeholder="0" />
+        </label>
+        <label>Frustration
+          <input class="phase-score-frustration" type="number" min="0" step="1" value="${Number.isFinite(Number(data.score_targets?.frustration)) ? escHtml(String(data.score_targets.frustration)) : ""}" placeholder="0" />
+        </label>
+        <label>Attachment
+          <input class="phase-score-attachment" type="number" min="0" step="1" value="${Number.isFinite(Number(data.score_targets?.attachment)) ? escHtml(String(data.score_targets.attachment)) : ""}" placeholder="0" />
+        </label>
+      </div>
+    </div>`;
   container.appendChild(block);
 }
 
@@ -470,12 +529,33 @@ function smRemovePhase(idx) {
 }
 
 function smCollectPhases() {
-  return Array.from(document.querySelectorAll(".phase-block")).map((block, i) => ({
-    phase_id: `phase_${i + 1}`,
-    title: block.querySelector(".phase-title").value.trim(),
-    objective: block.querySelector(".phase-objective").value.trim(),
-    guidance: block.querySelector(".phase-guidance").value.trim(),
-  })).filter(p => p.title || p.objective);
+  return Array.from(document.querySelectorAll(".phase-block")).map((block, i) => {
+    const scoreTargets = {};
+    for (const key of ["trust", "obedience", "resistance", "favor", "strictness", "frustration", "attachment"]) {
+      const raw = block.querySelector(`.phase-score-${key}`)?.value?.trim();
+      if (raw !== "") {
+        scoreTargets[key] = Math.max(0, Math.trunc(Number(raw) || 0));
+      }
+    }
+    const phaseWeightRaw = block.querySelector(".phase-weight")?.value?.trim() || "";
+    const minHoursRaw = block.querySelector(".phase-min-hours")?.value?.trim() || "";
+    const payload = {
+      phase_id: `phase_${i + 1}`,
+      title: block.querySelector(".phase-title").value.trim(),
+      objective: block.querySelector(".phase-objective").value.trim(),
+      guidance: block.querySelector(".phase-guidance").value.trim(),
+    };
+    if (phaseWeightRaw !== "") {
+      payload.phase_weight = Math.max(0.1, Number(phaseWeightRaw) || 1);
+    }
+    if (minHoursRaw !== "") {
+      payload.min_phase_duration_hours = Math.max(1, Math.trunc(Number(minHoursRaw) || 1));
+    }
+    if (Object.keys(scoreTargets).length) {
+      payload.score_targets = scoreTargets;
+    }
+    return payload;
+  }).filter(p => p.title || p.objective);
 }
 
 function smSetPhases(phases) {
