@@ -16,6 +16,9 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Moderne Passwort-Hashes via `pwdlib` mit Argon2-Backend fuer neue Accounts.
 - Login-Migrationspfad: bestehende Legacy-SHA-256-Salt-Hashes werden beim erfolgreichen Login automatisch auf das neue Format umgestellt.
 - Erste Lovense-Integration fuer `0.4.0`: serverseitiger Bootstrap fuer das Lovense Standard JS SDK, Dashboard-Panel mit QR-/App-Connect, Toy-Liste und Basisbefehlen fuer Vibrate/Pulse/Wave/Stop.
+- Separater Phasen-Session-State (`phase_state_json`) fuer echte Phasenpunkte je Kriterium statt Ableitung aus der Gesamtbeurteilung.
+- Scenario-Editor kann Phasen-Zielwerte, Gewichtung und Mindestdauer jetzt direkt pro Phase bearbeiten.
+- Alembic-History auf eine Baseline `0031` plus Folge-Migrationen `0032` und `0033` komprimiert.
 
 ### Geaendert
 
@@ -27,6 +30,7 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Authentifizierte Seiten verwenden jetzt konsistent dieselbe Hauptnavigation; Landing/Login bleiben bewusst ohne volles App-Menue.
 - App-Branding vereinheitlicht: Logo im Header ersetzt den reinen Texttitel und wird auch als Favicon verwendet.
 - Dashboard- und Play-Metriken visualisieren jetzt Basiswert, Entwicklung seit Start, naechste Zielphase und Zielmarker direkt auf der Skala.
+- Dashboard und Play trennen jetzt langfristige Beziehungsmetriken von kurzfristigem Phasenfortschritt; jede Phase startet mit eigenen Zielwerten wieder bei `0`.
 - Resistance wird in der Fortschrittsanzeige als negative Entwicklung dargestellt; fallende Werte werden rot markiert und als `Punkte weniger` beschrieben.
 - Chat-Antworten koennen Roleplay-State-Aenderungen jetzt notfalls aus freiem Antworttext ableiten, wenn die KI keine strukturierte `update_roleplay_state`-Action mitsendet.
 - Chat-Fehler beim Nachrichtensenden werden serverseitig abgefangen und als sichtbare System-/Fallback-Antwort protokolliert statt als roher 500er im Frontend zu enden.
@@ -56,6 +60,7 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Seitenbreiten werden jetzt zentral ueber gemeinsame Layout-Klassen gesteuert statt pro Template mit lokalen `max-width`-Werten.
 - Mobile Breakpoints fuer Header und Keyholder-Verwaltung nachgeschaerft, damit Brand-Zeile, Toolbar und Karten auf kleinen Displays wieder sauber umbrechen.
 - Roadmap neu geschnitten: Device-/Toy-Fundament priorisiert vor Gamification.
+- KI-erzeugte Tasks werden gegen offene, aehnliche Tasks dedupliziert; Fail-/Overdue-Ereignisse bremsen die Phasenprogression wieder korrekt.
 
 ## [0.3.5] - 2026-03-25
 

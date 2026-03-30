@@ -1,5 +1,7 @@
 # Chastease 🔒
 
+Aktueller App-Stand: `0.4.1`
+
 Eine immersive, datenschutzfreundliche Web-Applikation für KI-gestützte Chastity-Sessions mit realistischer Keyholder-Persona.
 
 ## Projektübersicht
@@ -20,7 +22,9 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 - **Task-Eventlogging** – `task_reward`/`task_penalty`/`task_failed` werden als Session-Events dokumentiert
 - **Persona-Presets** – Vordefinierte Keyholder-Personas mit individuellen Charakterzügen
 - **Szenischer Roleplay-State** – Beziehung, Szene und Protokollregeln werden pro Session getrennt geführt; Vorlagen starten mit frischem State
-- **Beziehungsmetriken mit Progress-Overlay** – Dashboard und Play visualisieren Basiswerte, Entwicklung seit Start, naechste Phasen-Ziele und Zielmarker direkt auf der Skala
+- **Getrennte Langzeit- und Phasenwerte** – Dashboard und Play trennen langfristige Beziehungsmetriken von kurzfristigen Phasenpunkten; jede Phase startet pro Kriterium wieder bei `0`
+- **Phasenbasierte Dramaturgie** – Phasenfortschritt wird separat in der Session gehalten (`phase_state_json`) und an expliziten `score_targets` pro Phase gemessen
+- **Scenario-Editor mit Phasenwerten** – Admin-/Owner-UI kann pro Phase jetzt `score_targets`, `phase_weight` und `min_phase_duration_hours` direkt bearbeiten
 - **Sicherheitssystem** – Ampelsystem, Safeword, Emergency Release
 - **Safety-Override im Chat** – Gelb aktiviert Fürsorge-Modus, Rot pausiert mit deeskalierenden Antworten
 - **Hygiene-Öffnungen** – Zeitlich begrenzte Entsperrungen mit Protokollierung
@@ -76,6 +80,8 @@ Falls bereits eine lokale `data/chastease.db` aus einer frueheren Version existi
 ```bash
 alembic stamp head
 ```
+
+Das ist nur fuer Datenbanken sinnvoll, die bereits exakt dem aktuellen Schema entsprechen und nur alembic-seitig abgestempelt werden muessen. Seit `0.4.1` ist die Migrationshistorie auf eine Baseline (`0031`) plus Folge-Migrationen (`0032`, `0033`) verdichtet.
 
 App: `http://127.0.0.1:8000`
 
@@ -133,6 +139,12 @@ Sicherheitsrelevante Laufzeitoptionen:
 - `CHASTEASE_COOKIE_SECURE=true|false` – setzt Auth- und CSRF-Cookies auf `Secure` für HTTPS-nahe Setups
 - `CHASTEASE_SECRET_ENCRYPTION_KEY=<secret>` – zusätzlicher Schlüssel für die Verschlüsselung gespeicherter API-Keys
 
+Hinweis zur DB-Sicht:
+
+- Verschluesselte Textspalten werden roh als `enc::...` gespeichert.
+- Im ORM werden diese Felder ueber `EncryptedText` automatisch entschluesselt.
+- Direkt in `sqlite3` ist nur der Ciphertext sichtbar.
+
 Automatischer Task-Overdue-Sweep:
 
 - Hintergrundjob (APScheduler) prueft periodisch alle aktiven Sessions auf ueberfaellige Tasks.
@@ -173,9 +185,9 @@ Tests ausführen:
 
 ```bash
 python -m pytest -q
+```
 
 Die Tests verwenden ein separates Arbeitsverzeichnis `data-tests/` fuer SQLite, Medien und Audit-Logs. Unter `data/` bleiben nur Laufzeitdaten der echten App.
-```
 
 Fehlerformat (API):
 

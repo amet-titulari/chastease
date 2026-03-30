@@ -6,9 +6,10 @@ Abgeschlossene Punkte wurden nach [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md) a
 
 - Rollen-/Identity-Konzept weiter schärfen
 - Session-State für Roleplay dramaturgisch weiter nutzen
+- Szenario-/Phasen-Tools weiter verfeinern
 - Rate-Limits und Abuse-Protection ergänzen
 - Offene API-/Games-Nacharbeiten bei Postures bereinigen
-- Device-Integrationen vorbereiten
+- Device-Integration stabilisieren und erweitern
 - Gamification aufbauen
 - Remote-Keyholder-Funktionen konzipieren
 

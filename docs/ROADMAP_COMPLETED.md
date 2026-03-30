@@ -2,10 +2,10 @@
 
 Archiv der bereits erledigten Roadmap-Punkte. Die offene Planung liegt in [ROADMAP.md](ROADMAP.md).
 
-## Umgesetzter Stand (v0.3.1+, März 2026)
+## Umgesetzter Stand (v0.4.1+, März 2026)
 
-- FastAPI-Backend mit 14 Routern, 16 Services, 20 DB-Modellen
-- Alembic-Migrationen `0001`–`0014`, alle idempotent
+- FastAPI-Backend mit 18 Routern, 36 Services und 25 Model-Dateien
+- Alembic-Stand konsolidiert: Baseline `0031`, danach `0032` (`phase_state_json`) und `0033` (Phasen-Targets-Backfill)
 - Session-Lifecycle: Erstellen, Vertrag, Timer, Events, Export (PDF/JSON)
 - KI-Provider: xAI/Grok, OpenRouter, Ollama, Stub – inkl. Action-Normalisierung
 - Modularer System-Prompt (Persona, Wearer, Safety, Session, Style, Scenario) mit externen Prompt-Dateien und Versions-Logging
@@ -26,9 +26,11 @@ Archiv der bereits erledigten Roadmap-Punkte. Die offene Planung liegt in [ROADM
 - Persona-/Scenario-Verwaltung: CRUD, Presets, SillyTavern-Import/Export
 - Inventar: Items, Scenario-Links, Session-Items
 - Persistenter Roleplay-State pro Session: Relationship, Protocol und Scene inkl. Prompt-Integration
+- Persistenter Phasen-State pro Session: eigene Phasenpunkte und Zielwerte getrennt von der Gesamtbeurteilung
 - Director-Schicht im Prompting ergänzt, getrennt von Persona-/Session-Kontext
 - Session-Status im Play-UI als diskretes Popup statt als großer Chat-Block
 - HTMX-Partials für Profil-Sessionübersicht sowie Listen in Personas, Scenarios und Inventory
+- Scenario-Editor mit editierbaren Phasen-Zielwerten, Gewichtung und Mindestdauer
 - Media: Avatar-Upload, Content-Serving
 - Browser Push Notifications (Web Push + VAPID)
 - Auth: Register/Login, moderne Passwort-Hashes via `pwdlib`/Argon2, httpOnly-Cookie, Multi-Device-Support

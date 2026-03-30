@@ -30,8 +30,9 @@ Diese Anleitung erklärt Schritt für Schritt, wie du Chastease einrichtest und 
   - [11. Dashboard und Schnellaktionen](#11-dashboard-und-schnellaktionen)
   - [12. Session History \& Export](#12-session-history--export)
   - [13. Verträge](#13-verträge)
-  - [14. Multi-Device-Nutzung](#14-multi-device-nutzung)
-  - [15. Posture-Import/Export (ZIP)](#15-posture-importexport-zip)
+  - [14. Scenarios und Phasen bearbeiten](#14-scenarios-und-phasen-bearbeiten)
+  - [15. Multi-Device-Nutzung](#15-multi-device-nutzung)
+  - [16. Posture-Import/Export (ZIP)](#16-posture-importexport-zip)
   - [Datenschutz \& Sicherheit](#datenschutz--sicherheit)
 
 ---
@@ -72,9 +73,10 @@ Klicke „Weiter" – die Einstellungen werden gespeichert und stehen der KI sof
 Das Dashboard (`/dashboard` bzw. `/dashboard/{session_id}`) ist die zentrale Spieleroberflaeche nach dem Login.
 
 - **Aktive Session**: Status, verbleibende Zeit, Session-Rahmen und direkte Navigation zur Play-Ansicht.
-- **Beziehungswerte**: Trust, Obedience, Resistance, Favor, Strictness, Frustration und Attachment werden als Balken visualisiert.
-- **Fortschritt seit Start**: Der blaue Bereich zeigt den Startwert, der gruene Bereich die Entwicklung seit Session-Beginn.
-- **Naechste Phase**: Heller Marker und Text zeigen das naechste Ziel auf der Skala.
+- **Beziehungswerte**: Trust, Obedience, Resistance, Favor, Strictness, Frustration und Attachment bleiben als langfristige Session-Gesamtbeurteilung sichtbar.
+- **Seit Start**: Der blaue Bereich zeigt den Startwert, der gruene Bereich die Entwicklung seit Session-Beginn.
+- **Phasenfortschritt**: Rechts daneben gibt es eine eigene Karte fuer die aktive Phase. Dort starten alle Phasenpunkte je Kriterium wieder bei `0` und laufen bis zu den Zielwerten dieser Phase.
+- **Phasenwechsel**: Beim Wechsel in die naechste Phase werden die Phasenpunkte zurueckgesetzt; die langfristigen Beziehungswerte bleiben erhalten.
 - **Safety/Hygiene**: Ampelaktionen, Safeword, Hygiene-Kontingente und Oeffnungen sind direkt im Dashboard gebuendelt.
 - **Navigation**: Auf allen authentifizierten Seiten ist dasselbe Hauptmenue sichtbar; Landing und Login bleiben absichtlich reduziert.
 
@@ -86,6 +88,7 @@ Das Dashboard (`/dashboard` bzw. `/dashboard/{session_id}`) ist die zentrale Spi
    Für einen schnelleren Solo-Einstieg kannst du dort auch **Quick Start** wählen und direkt zur Session-Erstellung springen.
 2. Wähle oder bestätige die Persona-Auswahl.
 3. Wähle oder bearbeite das Scenario direkt im Onboarding.
+   Im Scenario koennen Phasen mit Titel, Ziel, Guidance sowie optionalen Zielwerten (`score_targets`), Gewichtung und Mindestdauer gepflegt werden.
 4. Wähle die Sperrdauer:
    Trägst du nur eine Mindest-Freigabe ein, arbeitet die Session effektiv mit dieser festen Dauer.
    Wenn zusätzlich eine Max-Freigabe gesetzt ist, wird die tatsächliche Laufzeit beim Vertragsstart zufällig innerhalb dieser Spanne festgelegt.
@@ -263,18 +266,37 @@ Unter `/contracts` findest du alle unterzeichneten Verträge.
 
 ---
 
-## 14. Multi-Device-Nutzung
+## 14. Scenarios und Phasen bearbeiten
+
+Unter `/scenarios` kannst du Scenarios anlegen, importieren, bearbeiten und exportieren.
+
+- **Phasen**: Jede Phase besitzt Titel, Ziel und Guidance fuer die KI.
+- **Phasen-Zielwerte**: Optional koennen pro Phase explizite Werte fuer `Trust`, `Obedience`, `Resistance`, `Favor`, `Strictness`, `Frustration` und `Attachment` gesetzt werden.
+- **Gewichtung**: `phase_weight` bestimmt, wie stark eine Phase im Fallback gegenueber anderen Phasen gewichtet wird.
+- **Mindestdauer**: `min_phase_duration_hours` dokumentiert, wie lange eine Phase mindestens tragen soll, bevor ein Wechsel dramaturgisch sinnvoll ist.
+- **Fallback**: Wenn keine expliziten Zielwerte gesetzt sind, berechnet das Backend konservative Ziele aus Phase, Gewichtung und erwarteter Sessiondauer.
+
+Praxis:
+
+1. `/scenarios` oeffnen.
+2. Scenario neu anlegen oder bestehendes Scenario bearbeiten.
+3. In der Phasenliste pro Phase die Zielwerte pflegen.
+4. Speichern und das Scenario anschliessend im Onboarding oder in einer neuen Session verwenden.
+
+---
+
+## 15. Multi-Device-Nutzung
 
 Du kannst dich auf mehreren Geräten (z.B. Handy + Tablet) gleichzeitig einloggen. Beide Geräte nutzen dasselbe Session-Token und bleiben verbunden – ein neues Login meldet dich **nicht** auf anderen Geräten aus.
 
 **Empfehlung:** Nutze denselben Browser-Tab nicht auf zwei Geräten gleichzeitig, da der WebSocket-Stream pro Tab verwaltet wird.
 
 Wenn du eine abgeschlossene Session als Vorlage lädst, werden Konfiguration und LLM-Profil übernommen, aber Beziehung, Szene und Protokoll starten neu für die neue Session.
-Proaktive Erinnerungen orientieren sich dabei an der aktuellen Szene und den aktiven Protokollregeln der neuen Session.
+Proaktive Erinnerungen orientieren sich dabei an der aktuellen Szene, den aktiven Protokollregeln und dem frischen Phasenstand der neuen Session.
 
 ---
 
-## 15. Posture-Import/Export (ZIP)
+## 16. Posture-Import/Export (ZIP)
 
 Du kannst alle Postures des Moduls gemeinsam als ZIP sichern und wieder einspielen.
 

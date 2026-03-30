@@ -5,6 +5,8 @@
 Die Gesamtbeurteilung (`relationship_state_json`) bleibt langfristig bestehen.
 Jede Phase besitzt zusaetzlich eigene, kurzfristige Phasenpunkte, die pro Kriterium wieder bei `0` starten.
 
+Die Pflege dieser Werte ist direkt im Scenario-Editor unter `/scenarios` moeglich.
+
 ## Datenmodell
 
 Pro Phase koennen direkt in `scenarios.phases_json` folgende Felder definiert werden:
@@ -32,6 +34,25 @@ Beispiel:
   }
 }
 ```
+
+Zur Laufzeit werden die Daten getrennt gehalten:
+
+- `player_profiles.preferences_json`
+  - `scenario_phase_id`
+  - kompakter Fortschritt fuer die aktive Phase
+- `sessions.phase_state_json`
+  - aktive Phase
+  - aktuelle Punkte pro Kriterium
+  - Zielwerte der Phase
+  - Startzeit der Phase
+- `sessions.relationship_state_json`
+  - langfristige Session-Gesamtbeurteilung
+
+Wichtig:
+
+- Die Gesamtbeurteilung beeinflusst Ton und Kontext weiterhin langfristig.
+- Der Phasenfortschritt wird nicht mehr aus den Gesamtwerten abgeleitet.
+- Jede Phase beginnt datenlogisch pro Kriterium bei `0`.
 
 ## Berechnungsvorschlag
 
@@ -104,3 +125,10 @@ Aktuelle Empfehlung fuer `ametara_titulari_devotion_protocol`:
 
 Fuer produktive Szenarien sollten `score_targets` explizit an den Phasen gepflegt werden.
 Die Berechnungslogik sollte nur als Fallback dienen, nicht als primäre Quelle.
+
+## UI-Stand
+
+Im Dashboard und in `/play` werden die beiden Ebenen getrennt dargestellt:
+
+- **Beziehung**: langfristige Werte, Entwicklung seit Start
+- **Phasenfortschritt**: nur Punkte der aktuellen Phase, jeweils `0 -> Ziel`

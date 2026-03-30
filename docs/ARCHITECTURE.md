@@ -25,18 +25,19 @@ Deployment-Empfehlung:
   - `app/routers/health.py`: Health-Check (`/health`), LLM-Verbindungstest.
   - `app/routers/sessions.py`: Session-Lifecycle, Blueprints, Contract/Addenda/Consent, Player-Profile, Seal-History, Timer (add/remove/freeze/unfreeze), WS-Token-Rotation, Event-Log/Export.
   - `app/routers/chat.py`: REST-Chat (GET/POST), Media-/Bild-Messages, Regenerate, WebSocket-Endpoint inkl. Token-Absicherung; KI-Actions-Dispatch.
-  - `app/routers/tasks.py`: Task-CRUD, Status-Updates, Overdue-Evaluation.
-  - `app/routers/safety.py`: Ampelsystem, Resume, Safeword, Emergency Release, Safety-Logs.
-  - `app/routers/verification.py`: Verifikations-Request, Bild-Upload mit Analyse, Verifikations-Liste.
-  - `app/routers/hygiene.py`: Hygiene-Quota, Öffnungen erstellen/abrufen, Relock.
-  - `app/routers/personas.py`: Persona-CRUD, Presets, Scenario-Presets, Card-Schema, externe Card-Imports (SillyTavern-kompatibel), Export/Import.
-  - `app/routers/scenarios.py`: Scenario-CRUD, Presets, Export/Import.
-  - `app/routers/inventory.py`: Items-CRUD, Export/Import, Scenario-Item-Links, Session-Items.
-  - `app/routers/inventory_postures.py`: modulbezogene Posture-Verwaltung und Matrix-Endpunkte im Inventar-Kontext.
-  - `app/routers/media.py`: Avatar-Upload, Media-CRUD, Content-Serving.
-  - `app/routers/push.py`: Web-Push-Config, Subscriptions, Test-Push.
-  - `app/routers/voice.py`: Realtime-Voice-Status, Client-Secret (Ephemeral Key), TTS.
-  - `app/routers/web.py`: Auth (Register/Login/Logout), Setup-Wizard, Profile (LLM, Audio, Restart-Setup), Experience-Onboarding, Play-Seite, History, Contracts, Personas, Scenarios, Inventory, Settings-Summary.
+- `app/routers/tasks.py`: Task-CRUD, Status-Updates, Overdue-Evaluation.
+- `app/routers/safety.py`: Ampelsystem, Resume, Safeword, Emergency Release, Safety-Logs.
+- `app/routers/verification.py`: Verifikations-Request, Bild-Upload mit Analyse, Verifikations-Liste.
+- `app/routers/hygiene.py`: Hygiene-Quota, Öffnungen erstellen/abrufen, Relock.
+- `app/routers/personas.py`: Persona-CRUD, Presets, Scenario-Presets, Card-Schema, externe Card-Imports (SillyTavern-kompatibel), Export/Import.
+- `app/routers/scenarios.py`: Scenario-CRUD, Presets, Export/Import; Phasen inklusive `score_targets`, `phase_weight` und `min_phase_duration_hours`.
+- `app/routers/lovense.py`: Toy-Provider-/Preset-API, Lovense-Connect, Preset-Ausloesung und Simulator-Zugriff.
+- `app/routers/inventory.py`: Items-CRUD, Export/Import, Scenario-Item-Links, Session-Items.
+- `app/routers/inventory_postures.py`: modulbezogene Posture-Verwaltung und Matrix-Endpunkte im Inventar-Kontext.
+- `app/routers/media.py`: Avatar-Upload, Media-CRUD, Content-Serving.
+- `app/routers/push.py`: Web-Push-Config, Subscriptions, Test-Push.
+- `app/routers/voice.py`: Realtime-Voice-Status, Client-Secret (Ephemeral Key), TTS.
+- `app/routers/web.py`: Auth (Register/Login/Logout), Setup-Wizard, Profile (LLM, Audio, Restart-Setup), Experience-Onboarding, Play-Seite, History, Contracts, Personas, Scenarios, Inventory, Settings-Summary.
 
 ### Domain-/Service-Layer
 
@@ -53,6 +54,7 @@ Deployment-Empfehlung:
 - `app/services/session_service.py`: Session-Lifecycle (Vertrag signieren, lock_start/lock_end, Aktivierung).
 - `app/services/session_timer_sweeper.py`: automatisches Session-Ende bei Timer-Ablauf (APScheduler-Job).
 - `app/services/proactive_messaging.py`: proaktive Assistant-Nachrichten mit Cooldown/Burst-Limits (APScheduler-Job).
+- `app/services/roleplay_progression.py`: Phasenlogik, Phasenpunkte je Session, Snapshot fuer Dashboard/Play.
 - `app/services/contract_service.py`: KI-generierte Vertragstexte.
 - `app/services/hygiene_service.py`: Hygiene-Logik (Due-Back-Zeiten, Overrun, Perioden-Berechnung).
 - `app/services/verification_analysis.py`: Verifikationsfotos: heuristische Plomben-Prüfung + OpenAI-kompatible Vision-API-Analyse.
@@ -61,6 +63,7 @@ Deployment-Empfehlung:
 - `app/services/web_push_service.py`: Web-Push-Dispatch via pywebpush + VAPID-Keys.
 - `app/services/pdf_export.py`: PDF-Erzeugung (Raw PDF 1.4, keine externe Lib).
 - `app/services/audit_logger.py`: JSON-Lines Audit-Log (opt-in via `CHASTEASE_AUDIT_LOG_ENABLED`).
+- `app/services/toy_profile.py` / `app/services/toy_presets.py`: Wearer-Default-Toys, Presets und Session-/Persona-Zuordnung.
 
 ### KI-Actions-Flow
 
@@ -113,20 +116,25 @@ Offene (pending) Tasks werden bei jedem Chat-Request als Kontext-Block in den Sy
 - **Tasks-Dropdown** im Header zeigt interaktive Action Cards (nicht read-only).
 - **Persona-Avatar** neben KI-Nachrichten (wenn Avatar in Persona hinterlegt).
 - Session-Steuerung ist zwischen Dashboard und Play verteilt: Dashboard fuer Rahmen, Hygiene, Safety und Resultate; Play fuer Chat, Tasks und schnelle Safety-Aktionen.
+- Relationship-Metriken und Phasenfortschritt sind bewusst getrennt:
+  - `relationship_state_json`: langfristige Session-Gesamtbeurteilung
+  - `phase_state_json`: aktuelle Phasenpunkte und Zielwerte der laufenden Phase
 
 ### Persistenz
 
-- Alembic-Migrationen: `0001` (Initial Schema) bis `0014` (Drop Scenarios Character Ref).
-  - Alle Migrationen sind idempotent gestaltet (Existenz von Tabellen/Spalten/Indizes wird geprüft).
-- Entitäten (20 Tabellen): `AuthUser`, `Session`, `Message`, `Task`, `Contract`, `ContractAddendum`, `SafetyLog`, `Verification`, `HygieneOpening`, `SealHistory`, `PlayerProfile`, `LlmProfile`, `Persona`, `Scenario`, `Item`, `ScenarioItem`, `SessionItem`, `MediaAsset`, `PushSubscription`.
+- Alembic-Stand: konsolidierte Baseline `0031`, danach `0032` (`phase_state_json`) und `0033` (Backfill der Phasen-Zielwerte fuer das Ametara-Szenario).
+- Entitäten (projektweit 25 Model-Dateien, Kernpersistenz u. a. fuer `AuthUser`, `Session`, `Message`, `Task`, `Contract`, `ContractAddendum`, `SafetyLog`, `Verification`, `HygieneOpening`, `SealHistory`, `PlayerProfile`, `LlmProfile`, `Persona`, `Scenario`, `Item`, `ScenarioItem`, `SessionItem`, `MediaAsset`, `PushSubscription`, Games-Run-Modelle).
 - `AuthUser.session_token`: dauerhaftes Auth-Token (httpOnly-Cookie `chastease_auth`, 30 Tage).
 - `AuthUser.password_hash`: moderner Passwort-Hash via `pwdlib`/Argon2; ältere SHA-256-Salt-Hashes werden beim Login migriert.
 - `AuthUser.active_session_id`: FK zu aktiver Session (Play-Redirect nach Login).
 - `AuthUser.default_player_profile_id`: FK zu Standard-Spielerprofil.
-- `PlayerProfile.preferences_json`: enthält `wearer_boundary`, `wearer_style`, `wearer_goal`, `scenario_preset` – direkt in den AI-Prompt übertragen.
+- `PlayerProfile.preferences_json`: enthält u. a. `wearer_boundary`, `wearer_style`, `wearer_goal`, `scenario_preset`, `scenario_phase_id`, Toy-Defaults und aktive Szenario-Prefs.
 - `Persona.avatar_media_id`: FK zu `MediaAsset` (Avatar-Bild).
 - `Session`: enthält pro-Session LLM-Config (`llm_provider`, `llm_api_url`, `llm_chat_model`, `llm_vision_model`).
+- `Session.relationship_state_json`: langfristige Beziehungsmetriken der Session.
+- `Session.phase_state_json`: aktuelle Phasenpunkte, Zielwerte und Startzeit der aktiven Phase.
 - `Session.llm_api_key` und `LlmProfile.api_key`: verschluesselt via `EncryptedText`.
+- Roh in SQLite sichtbare `enc::...`-Werte werden erst im ORM automatisch entschluesselt.
 
 ## Security-by-Design (aktueller Stand)
 
@@ -150,15 +158,15 @@ chastease/
 │   ├── config.py
 │   ├── database.py
 │   ├── security.py
-│   ├── routers/          # 14 Router-Module
-│   ├── services/         # 16 Service-Module
-│   ├── models/           # 20 SQLAlchemy-Modelle
-│   ├── templates/        # 13 Jinja2-Templates
-│   └── static/           # JS (8), CSS (7), SW
+│   ├── routers/          # 18 Router-Module
+│   ├── services/         # 36 Service-Module
+│   ├── models/           # 25 Model-Dateien
+│   ├── templates/        # 21 Jinja2-Templates
+│   └── static/           # JS (9), CSS (8), SW
 ├── alembic/
-│   └── versions/         # 14 Migrationen (0001–0014)
+│   └── versions/         # 3 Migrationen (0031–0033, squashed baseline + deltas)
 ├── docs/
-├── tests/                # 31 Testmodule + conftest
+├── tests/                # 46 Testmodule + conftest
 ├── scripts/              # Hilfs- und Remote-Volume-Skripte
 ├── data/                 # lokal, gitignored
 ├── README.md
