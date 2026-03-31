@@ -2,7 +2,7 @@
 
 Archiv der bereits erledigten Roadmap-Punkte. Die offene Planung liegt in [ROADMAP.md](ROADMAP.md).
 
-## Umgesetzter Stand (v0.4.1+, März 2026)
+## Umgesetzter Stand (v0.5.0+, März 2026)
 
 - FastAPI-Backend mit 18 Routern, 36 Services und 25 Model-Dateien
 - Alembic-Stand konsolidiert: Baseline `0031`, danach `0032` (`phase_state_json`) und `0033` (Phasen-Targets-Backfill)

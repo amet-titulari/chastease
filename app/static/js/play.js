@@ -1,4 +1,4 @@
-/* play.js – Play Mode (v0.4.1) */
+/* play.js – Play Mode (v0.5.0) */
 "use strict";
 
 // -- State from server-rendered dataset --
@@ -8,7 +8,7 @@ const WS_TOKEN = _shell?.dataset.wsToken || "";
 const LOCK_END = _shell?.dataset.lockEnd || "";
 const PERSONA_NAME = _shell?.dataset.personaName || "Keyholderin";
 const PLAYER_NAME = _shell?.dataset.playerName || "Du";
-const APP_VERSION = _shell?.dataset.appVersion || "0.4.1";
+const APP_VERSION = _shell?.dataset.appVersion || "0.5.0";
 const FOCUS_STORAGE_KEY = `chastease.play.focus.${SESSION_ID || "default"}.${APP_VERSION}`;
 const plLovenseEnabled = String(_shell?.dataset.lovenseEnabled || "") === "1";
 const plLovenseConfigured = String(_shell?.dataset.lovenseConfigured || "") === "1";
