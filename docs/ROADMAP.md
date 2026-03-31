@@ -8,6 +8,7 @@ Abgeschlossene Punkte wurden nach [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md) a
 - Session-State für Roleplay dramaturgisch weiter nutzen
 - Szenario-/Phasen-Tools weiter verfeinern
 - Rate-Limits und Abuse-Protection ergänzen
+- At-Rest-Verschluesselung fuer Session-State und gespeicherte API-Keys vor Beta wieder einfuehren
 - Offene API-/Games-Nacharbeiten bei Postures bereinigen
 - Device-Integration stabilisieren und erweitern
 - Gamification vorerst nach hinten schieben
@@ -26,6 +27,11 @@ Abgeschlossene Punkte wurden nach [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md) a
 ### v0.6.x – Weitere Schnittstellen
 - [ ] Extensions TTLock für Tresor
 - [ ] Extensions Chaster für Session
+
+### Alpha-Hardening Rueckbau
+- [ ] Temporär entfernte At-Rest-Verschluesselung fuer `Session.llm_api_key`, `LlmProfile.api_key` sowie Session-State-JSONs vor Beta wieder einfuehren
+- [ ] Migrationsstrategie fuer bestehende Klartextdaten nach Rueckkehr der Verschluesselung festlegen
+- [ ] Betriebsdoku fuer Key-Rotation und Secret-Recovery nach Wiedereinbau der Verschluesselung aktualisieren
 
 ### v0.7 – Remote Keyholder
 - [ ] Optionaler Sync-Mechanismus (verschlüsselt, opt-in)

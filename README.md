@@ -54,6 +54,8 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 | [SECURITY.md](docs/SECURITY.md) | Endpoint-Schutzmatrix & Sicherheitsregeln |
 | [BENUTZERANLEITUNG.md](docs/BENUTZERANLEITUNG.md) | Schritt-für-Schritt Bedienungsanleitung |
 | [CHANGELOG.md](docs/CHANGELOG.md) | Versionshistorie |
+| [OPERATIONS.md](docs/OPERATIONS.md) | Upgrade, Backup/Restore, Secrets, Rollback |
+| [ALPHA_READINESS.md](docs/ALPHA_READINESS.md) | Alpha-Grenzen, Blocker und Smoke-Test |
 
 ## Tech-Stack
 
@@ -81,7 +83,7 @@ Falls bereits eine lokale `data/chastease.db` aus einer frueheren Version existi
 alembic stamp head
 ```
 
-Das ist nur fuer Datenbanken sinnvoll, die bereits exakt dem aktuellen Schema entsprechen und nur alembic-seitig abgestempelt werden muessen. Seit `0.4.1` ist die Migrationshistorie auf eine Baseline (`0031`) plus Folge-Migrationen (`0032`, `0033`) verdichtet.
+Das ist nur fuer Datenbanken sinnvoll, die bereits exakt dem aktuellen Schema entsprechen und nur alembic-seitig abgestempelt werden muessen. Seit `0.5.0` startet die Alembic-Historie wieder mit genau einer frischen Initialmigration auf Basis des aktuellen Schemas.
 
 App: `http://127.0.0.1:8000`
 
@@ -137,13 +139,12 @@ Wichtige API-Endpunkte:
 Sicherheitsrelevante Laufzeitoptionen:
 
 - `CHASTEASE_COOKIE_SECURE=true|false` – setzt Auth- und CSRF-Cookies auf `Secure` für HTTPS-nahe Setups
-- `CHASTEASE_SECRET_ENCRYPTION_KEY=<secret>` – zusätzlicher Schlüssel für die Verschlüsselung gespeicherter API-Keys
+- `CHASTEASE_SECRET_ENCRYPTION_KEY=<secret>` – aktuell optional; kann fuer Secret-Ableitungen einzelner Integrationen genutzt werden, wird aber vorerst nicht mehr fuer DB-Feldverschluesselung erzwungen
 
 Hinweis zur DB-Sicht:
 
-- Verschluesselte Textspalten werden roh als `enc::...` gespeichert.
-- Im ORM werden diese Felder ueber `EncryptedText` automatisch entschluesselt.
-- Direkt in `sqlite3` ist nur der Ciphertext sichtbar.
+- Session-State und gespeicherte API-Keys liegen im aktuellen Alpha-Stand absichtlich im Klartext in SQLite, damit Debugging und Usability-Tests einfacher bleiben.
+- Diese vereinfachte Speicherung ist temporaer und muss vor Beta wieder durch echte At-Rest-Verschluesselung ersetzt werden.
 
 Automatischer Task-Overdue-Sweep:
 
@@ -212,6 +213,7 @@ Operations-Hinweise:
 - DB-Migrationen vor Start auf aktuellen Stand bringen: `alembic upgrade head`
 - Tests im Projekt-Interpreter ausfuehren: `python -m pytest -q`
 - Scheduler-Feature-Flags in `.env` setzen (Task-Sweep, Proactive Messages, Timer-Sweeper)
+- Repo-/Image-Referenzen fuer Releases zeigen auf `amet-titulari/chastesae`; Details in `docs/OPERATIONS.md`
 
 Ollama-Provider (optional):
 

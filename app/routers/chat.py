@@ -276,6 +276,47 @@ def _infer_task_action_from_reply(reply_text: str) -> dict | None:
     return action
 
 
+def _infer_task_action_from_user_text(user_text: str) -> dict | None:
+    text = str(user_text or "").strip()
+    if not text or not user_requested_task(text):
+        return None
+
+    lowered = text.lower()
+    deadline_minutes = None
+    minutes_match = re.search(r"\b(\d+)\s*(?:minuten|min|minutes?)\b", lowered)
+    if minutes_match:
+        deadline_minutes = int(minutes_match.group(1))
+
+    title = ""
+    after_marker = re.split(r"\b(?:aufgabe|task|challenge|uebung|übung)\b\s*:?", text, maxsplit=1, flags=re.IGNORECASE)
+    if len(after_marker) == 2:
+        title = after_marker[1].strip(" .:-")
+    if not title:
+        quantity_match = re.search(r"(\d+\s+[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9_-]*)", text)
+        if quantity_match:
+            title = quantity_match.group(1).strip()
+    if not title:
+        title = "Neue Aufgabe"
+
+    title = re.split(r"\b(?:in|innerhalb)\s+\d+\s*(?:minuten|min|minutes?)\b", title, maxsplit=1, flags=re.IGNORECASE)[0]
+    title = re.sub(r"\s+", " ", title).strip(" .,-:;")
+    if not title:
+        title = "Neue Aufgabe"
+    if len(title) > 200:
+        title = title[:197].rstrip() + "..."
+
+    action: dict[str, Any] = {
+        "type": "create_task",
+        "title": title,
+        "description": text[:2000],
+    }
+    if deadline_minutes:
+        action["deadline_minutes"] = deadline_minutes
+    if any(marker in lowered for marker in _VERIFICATION_MARKERS):
+        action["requires_verification"] = True
+    return action
+
+
 def _clamp_score(value: int) -> int:
     return max(0, min(100, int(value)))
 
@@ -670,6 +711,10 @@ def _persist_chat_turn(
         selected_template = select_task_template(template_rows, user_text)
         if selected_template is not None:
             actions.append(build_template_task_action(selected_template))
+        else:
+            inferred_from_request = _infer_task_action_from_user_text(user_text)
+            if inferred_from_request is not None:
+                actions.append(inferred_from_request)
     if (
         not structured.degraded
         and not any(isinstance(action, dict) and action.get("type") == "create_task" for action in actions)

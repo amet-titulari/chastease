@@ -154,6 +154,7 @@ async def upload_verification(
     db: Session = Depends(get_db),
 ) -> dict:
     session_obj = get_owned_session(request, db, session_id)
+    task: Task | None = None
     record = (
         db.query(Verification)
         .filter(Verification.id == verification_id, Verification.session_id == session_id)

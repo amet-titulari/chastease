@@ -29,6 +29,8 @@ def _register_user(client: TestClient, prefix: str, make_admin: bool) -> None:
 
 def test_non_admin_is_redirected_from_admin_pages():
     with TestClient(app) as client:
+        _register_user(client, prefix="seed-admin-web", make_admin=True)
+        client.post("/auth/logout", follow_redirects=False)
         _register_user(client, prefix="nonadmin-web", make_admin=False)
         resp = client.get("/admin", follow_redirects=False)
         assert resp.status_code == 303
@@ -40,6 +42,8 @@ def test_persona_api_requires_admin_authentication():
         unauth = client.get("/api/personas")
         assert unauth.status_code == 401
 
+        _register_user(client, prefix="seed-admin-api-persona", make_admin=True)
+        client.post("/auth/logout", follow_redirects=False)
         _register_user(client, prefix="nonadmin-api-persona", make_admin=False)
         forbidden = client.get("/api/personas")
         assert forbidden.status_code == 403
@@ -50,6 +54,8 @@ def test_scenario_api_requires_admin_authentication():
         unauth = client.get("/api/scenarios")
         assert unauth.status_code == 401
 
+        _register_user(client, prefix="seed-admin-api-scenario", make_admin=True)
+        client.post("/auth/logout", follow_redirects=False)
         _register_user(client, prefix="nonadmin-api-scenario", make_admin=False)
         forbidden = client.get("/api/scenarios")
         assert forbidden.status_code == 403
@@ -60,6 +66,8 @@ def test_game_posture_matrix_api_requires_admin_authentication():
         unauth = client.get("/api/inventory/postures/matrix")
         assert unauth.status_code == 401
 
+        _register_user(client, prefix="seed-admin-api-games", make_admin=True)
+        client.post("/auth/logout", follow_redirects=False)
         _register_user(client, prefix="nonadmin-api-games", make_admin=False)
         forbidden = client.get("/api/inventory/postures/matrix")
         assert forbidden.status_code == 403

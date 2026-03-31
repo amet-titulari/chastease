@@ -105,14 +105,14 @@ def test_completed_blueprints_are_scoped_to_owner():
         assert all(item["session_id"] != session_id for item in other_list.json()["items"])
 
 
-def test_session_and_llm_profile_api_keys_are_persisted_encrypted():
+def test_session_and_llm_profile_api_keys_are_persisted_plaintext_for_alpha_debugging():
     secret_value = "super-secret-token"
 
     with TestClient(app) as client:
         create_resp = client.post(
             "/api/sessions",
             json={
-                "persona_name": "Encrypted Persona",
+                "persona_name": "Debug Persona",
                 "player_nickname": "Wearer",
                 "min_duration_seconds": 300,
                 "llm_api_key": secret_value,
@@ -127,15 +127,14 @@ def test_session_and_llm_profile_api_keys_are_persisted_encrypted():
             text("SELECT llm_api_key FROM sessions WHERE id = :session_id"),
             {"session_id": session_id},
         ).scalar_one()
-        assert raw_session_key != secret_value
-        assert str(raw_session_key).startswith("enc::")
+        assert raw_session_key == secret_value
 
         session_obj = db.query(Session).filter(Session.id == session_id).first()
         assert session_obj is not None
         assert session_obj.llm_api_key == secret_value
 
         profile = LlmProfile(
-            profile_key=f"enc-{uuid4().hex[:8]}",
+            profile_key=f"debug-{uuid4().hex[:8]}",
             provider="custom",
             api_url="https://example.test/v1/chat/completions",
             api_key=secret_value,
@@ -150,8 +149,7 @@ def test_session_and_llm_profile_api_keys_are_persisted_encrypted():
             text("SELECT api_key FROM llm_profiles WHERE id = :profile_id"),
             {"profile_id": profile.id},
         ).scalar_one()
-        assert raw_profile_key != secret_value
-        assert str(raw_profile_key).startswith("enc::")
+        assert raw_profile_key == secret_value
 
         loaded_profile = db.query(LlmProfile).filter(LlmProfile.id == profile.id).first()
         assert loaded_profile is not None

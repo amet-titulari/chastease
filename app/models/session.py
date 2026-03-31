@@ -1,7 +1,6 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, func
 
 from app.database import Base
-from app.services.secret_crypto import EncryptedText
 
 
 class Session(Base):
@@ -24,14 +23,14 @@ class Session(Base):
     hygiene_opening_max_duration_seconds = Column(Integer, nullable=True)
     llm_provider = Column(String(50), nullable=True)
     llm_api_url = Column(String(500), nullable=True)
-    llm_api_key = Column(EncryptedText(), nullable=True)
+    llm_api_key = Column(Text, nullable=True)
     llm_chat_model = Column(String(120), nullable=True)
     llm_vision_model = Column(String(120), nullable=True)
     llm_profile_active = Column(Boolean, default=False, nullable=False)
-    relationship_state_json = Column(EncryptedText(), nullable=True)
-    protocol_state_json = Column(EncryptedText(), nullable=True)
-    scene_state_json = Column(EncryptedText(), nullable=True)
-    phase_state_json = Column(EncryptedText(), nullable=True)
+    relationship_state_json = Column(Text, nullable=True)
+    protocol_state_json = Column(Text, nullable=True)
+    scene_state_json = Column(Text, nullable=True)
+    phase_state_json = Column(Text, nullable=True)
     ws_auth_token = Column(String(80), nullable=True, unique=True)
     ws_auth_token_created_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -8,7 +8,6 @@ This conftest snapshots existing IDs before the test session and removes
 all newly created rows afterwards in a FK-safe deletion order.
 """
 import os
-import shutil
 from pathlib import Path
 
 import pytest
@@ -16,7 +15,6 @@ import pytest
 # Must be configured before importing app modules that build SQLAlchemy engine.
 TEST_DATA_DIR = Path("data-tests")
 TEST_DB_PATH = TEST_DATA_DIR / "chastease-test.db"
-PROD_DB_PATH = Path("data/chastease.db")
 TEST_MEDIA_DIR = TEST_DATA_DIR / "media"
 TEST_AUDIT_LOG_PATH = TEST_DATA_DIR / "audit.log"
 
@@ -27,9 +25,6 @@ os.environ.setdefault("CHASTEASE_DEBUG", "true")
 os.environ.setdefault("CHASTEASE_SECRET_ENCRYPTION_KEY", "test-secret-key")
 
 TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-if PROD_DB_PATH.exists() and not TEST_DB_PATH.exists():
-    shutil.copy2(PROD_DB_PATH, TEST_DB_PATH)
 
 from app.database import SessionLocal
 from app.models.auth_user import AuthUser

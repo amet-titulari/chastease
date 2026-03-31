@@ -202,7 +202,7 @@ Hinweis: Session-bezogene Endpunkte sind auf den Session-Eigentuemer gescoped. L
 
 - `CHASTEASE_ADMIN_SECRET` in produktionsnahen Setups setzen.
 - `CHASTEASE_COOKIE_SECURE=true` setzen, sobald der Zugriff ueber HTTPS oder einen sicheren Reverse Proxy erfolgt.
-- `CHASTEASE_SECRET_ENCRYPTION_KEY` explizit setzen, damit verschluesselte API-Keys nicht nur auf abgeleiteten Defaults beruhen.
 - Secret nur ueber sichere Umgebungskonfiguration verteilen (nicht in VCS).
 - Regelmaessige Rotation des Admin-Secrets einplanen.
 - Reverse-Proxy/VPN-Setup so konfigurieren, dass der Server nicht direkt im Internet exponiert ist.
+- Achtung: gespeicherte API-Keys und Session-State liegen im aktuellen Alpha-Stand bewusst im Klartext in SQLite; vor Beta muss At-Rest-Verschluesselung wieder aktiviert werden.

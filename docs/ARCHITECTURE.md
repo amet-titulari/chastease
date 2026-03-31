@@ -46,7 +46,6 @@ Deployment-Empfehlung:
 - `app/services/prompt_builder.py`: Modularer System-Prompt (Persona, Wearer, Safety, Session, Style, Scenario); Strictness-Level-basierte deutsche Stil-Direktiven.
 - `app/services/context_window.py`: Kontextfenster-Management (Nachrichtenhistorie, Trunkierung, Zusammenfassung älterer Nachrichten).
 - `app/services/session_access.py`: zentrale Session-Ownership-Pruefungen fuer benutzergebundene APIs.
-- `app/services/secret_crypto.py`: verschluesselte Speicherung sensibler API-Keys via `EncryptedText`.
 - `app/services/task_template_pool.py`: reproduzierbare Task-Auswahl fuer persona-spezifische Fallbacks im Chat.
 - `app/services/task_service.py`: Task-Logik inkl. Konsequenzen (Zeitstrafe, Zeitbonus), Psychogramm-basierte Multiplikatoren.
 - `app/services/task_sweeper.py`: automatische Overdue-Auswertung für aktive Sessions (APScheduler-Job).
@@ -126,7 +125,7 @@ Offene (pending) Tasks werden bei jedem Chat-Request als Kontext-Block in den Sy
 
 ### Persistenz
 
-- Alembic-Stand: konsolidierte Baseline `0031`, danach `0032` (`phase_state_json`) und `0033` (Backfill der Phasen-Zielwerte fuer das Ametara-Szenario).
+- Alembic-Stand: eine frische Initialmigration fuer den kompletten aktuellen Schema-Stand; leere Datenbanken koennen direkt mit `alembic upgrade head` aufgebaut werden.
 - Entitäten (projektweit 25 Model-Dateien, Kernpersistenz u. a. fuer `AuthUser`, `Session`, `Message`, `Task`, `Contract`, `ContractAddendum`, `SafetyLog`, `Verification`, `HygieneOpening`, `SealHistory`, `PlayerProfile`, `LlmProfile`, `Persona`, `Scenario`, `Item`, `ScenarioItem`, `SessionItem`, `MediaAsset`, `PushSubscription`, Games-Run-Modelle).
 - `AuthUser.session_token`: dauerhaftes Auth-Token (httpOnly-Cookie `chastease_auth`, 30 Tage).
 - `AuthUser.password_hash`: moderner Passwort-Hash via `pwdlib`/Argon2; ältere SHA-256-Salt-Hashes werden beim Login migriert.
@@ -137,8 +136,8 @@ Offene (pending) Tasks werden bei jedem Chat-Request als Kontext-Block in den Sy
 - `Session`: enthält pro-Session LLM-Config (`llm_provider`, `llm_api_url`, `llm_chat_model`, `llm_vision_model`).
 - `Session.relationship_state_json`: langfristige Beziehungsmetriken der Session.
 - `Session.phase_state_json`: aktuelle Phasenpunkte, Zielwerte und Startzeit der aktiven Phase.
-- `Session.llm_api_key` und `LlmProfile.api_key`: verschluesselt via `EncryptedText`.
-- Roh in SQLite sichtbare `enc::...`-Werte werden erst im ORM automatisch entschluesselt.
+- `Session.llm_api_key`, `LlmProfile.api_key` und die Session-State-JSON-Felder liegen im aktuellen Alpha-Stand bewusst als Klartext in SQLite, um Debugging und Usability-Tests zu vereinfachen.
+- Diese temporaere Vereinfachung ist ein bekannter Hardening-Rueckschritt und muss vor Beta wieder durch At-Rest-Verschluesselung ersetzt werden.
 
 ## Security-by-Design (aktueller Stand)
 
@@ -168,7 +167,7 @@ chastease/
 │   ├── templates/        # 21 Jinja2-Templates
 │   └── static/           # JS (34), CSS (9), SW
 ├── alembic/
-│   └── versions/         # 3 Migrationen (0031–0033, squashed baseline + deltas)
+│   └── versions/         # 1 Initialmigration fuer den aktuellen Schema-Stand
 ├── docs/
 ├── tests/                # 46 Testmodule + conftest
 ├── scripts/              # Hilfs- und Remote-Volume-Skripte

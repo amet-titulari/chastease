@@ -1,6 +1,6 @@
 services:
   chastease:
-    image: ghcr.io/amet-titulari/chastease-v3:latest
+    image: ghcr.io/amet-titulari/chastesae:latest
     restart: unless-stopped
     ports:
       - "3000:8000"

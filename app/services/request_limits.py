@@ -17,6 +17,20 @@ class RequestLimitRule:
 
 _RULES: tuple[RequestLimitRule, ...] = (
     RequestLimitRule(
+        key="auth_login",
+        methods=("POST",),
+        path_prefix="/auth/login",
+        max_requests=8,
+        window_seconds=60,
+    ),
+    RequestLimitRule(
+        key="chat_message",
+        methods=("POST",),
+        path_prefix="/api/sessions/",
+        max_requests=20,
+        window_seconds=60,
+    ),
+    RequestLimitRule(
         key="chat_media_upload",
         methods=("POST",),
         path_prefix="/api/sessions/",
@@ -24,10 +38,24 @@ _RULES: tuple[RequestLimitRule, ...] = (
         window_seconds=60,
     ),
     RequestLimitRule(
+        key="verification_request",
+        methods=("POST",),
+        path_prefix="/api/sessions/",
+        max_requests=12,
+        window_seconds=60,
+    ),
+    RequestLimitRule(
         key="verification_upload",
         methods=("POST",),
         path_prefix="/api/sessions/",
         max_requests=12,
+        window_seconds=60,
+    ),
+    RequestLimitRule(
+        key="push_test",
+        methods=("POST",),
+        path_prefix="/api/sessions/",
+        max_requests=6,
         window_seconds=60,
     ),
     RequestLimitRule(
@@ -45,12 +73,20 @@ _LOCK = Lock()
 def _match_rule(method: str, path: str) -> RequestLimitRule | None:
     if method != "POST":
         return None
-    if path.startswith("/api/sessions/") and path.endswith("/messages/media"):
+    if path == "/auth/login":
         return _RULES[0]
-    if path.startswith("/api/sessions/") and "/verifications/" in path and path.endswith("/upload"):
+    if path.startswith("/api/sessions/") and path.endswith("/messages"):
         return _RULES[1]
-    if path.startswith("/api/voice/realtime/") and path.endswith("/client-secret"):
+    if path.startswith("/api/sessions/") and path.endswith("/messages/media"):
         return _RULES[2]
+    if path.startswith("/api/sessions/") and path.endswith("/verifications/request"):
+        return _RULES[3]
+    if path.startswith("/api/sessions/") and "/verifications/" in path and path.endswith("/upload"):
+        return _RULES[4]
+    if path.startswith("/api/sessions/") and path.endswith("/push/test"):
+        return _RULES[5]
+    if path.startswith("/api/voice/realtime/") and path.endswith("/client-secret"):
+        return _RULES[6]
     return None
 
 

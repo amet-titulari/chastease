@@ -7,6 +7,17 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ## [Unreleased]
 
+### Geaendert
+
+- DB-Feldverschluesselung fuer Session-State und gespeicherte API-Keys temporaer entfernt, damit Alpha-Debugging und Usability-Tests direkt in SQLite moeglich sind.
+- Runtime-Start ausserhalb des Dev-Modus verlangt vorerst keinen `CHASTEASE_SECRET_ENCRYPTION_KEY` mehr.
+
+### Hinweise
+
+- Dieser Rueckbau ist ausdruecklich temporaer. At-Rest-Verschluesselung fuer Session-State und API-Keys bleibt ein Beta-Blocker und ist in der Roadmap festgehalten.
+
+## [0.5.0] - 2026-03-31
+
 ### Hinzugefuegt
 
 - Frontend-Helfer `roleplay_ui.js` fuer gemeinsame Roleplay-/Phasen-Meter in Dashboard und Play.
@@ -45,11 +56,15 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Erste Lovense-Integration fuer `0.4.0`: serverseitiger Bootstrap fuer das Lovense Standard JS SDK, Dashboard-Panel mit QR-/App-Connect, Toy-Liste und Basisbefehlen fuer Vibrate/Pulse/Wave/Stop.
 - Separater Phasen-Session-State (`phase_state_json`) fuer echte Phasenpunkte je Kriterium statt Ableitung aus der Gesamtbeurteilung.
 - Scenario-Editor kann Phasen-Zielwerte, Gewichtung und Mindestdauer jetzt direkt pro Phase bearbeiten.
-- Alembic-History auf eine Baseline `0031` plus Folge-Migrationen `0032` und `0033` komprimiert.
+- Alembic-History fuer `0.5.0` erneut auf genau eine frische Initialmigration des aktuellen Schemas zurueckgesetzt.
+- Automatische CI-Pipeline fuer `push` und Pull Requests mit Python-Setup, `alembic upgrade head` und vollem `pytest`-Lauf.
+- Betriebsdokumentation fuer `0.5.0` inklusive Upgrade-Hinweisen, Backup/Restore, Secret-Handling und Rollback.
+- Alpha-Readiness-Dokument mit klaren Release-Grenzen, Blockern und manuellem Smoke-Test.
+- Gezielte End-to-End-Smokes fuer einen zentralen Happy Path und einen Safety-Abbruch.
 
 ### Geaendert
 
-- Release-Stand auf `0.4.0` angehoben.
+- Release-Stand auf `0.5.0` angehoben.
 - Produktive Defaults gehaertet: `debug` und Play-WS-Debug sind jetzt standardmaessig deaktiviert; ohne `CHASTEASE_SECRET_ENCRYPTION_KEY` startet die App ausserhalb eines expliziten Dev-Modus nicht mehr.
 - Rollenlogik fuer `owner`/`admin` zentralisiert, um das spaetere Identity-Konzept sauberer vorzubereiten.
 - Auth- und CSRF-Cookies koennen jetzt ueber `CHASTEASE_COOKIE_SECURE` fuer HTTPS-nahe Setups auf `Secure` gesetzt werden.
@@ -104,6 +119,20 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Mobile Breakpoints fuer Header und Keyholder-Verwaltung nachgeschaerft, damit Brand-Zeile, Toolbar und Karten auf kleinen Displays wieder sauber umbrechen.
 - Roadmap neu geschnitten: Device-/Toy-Fundament priorisiert vor Gamification.
 - KI-erzeugte Tasks werden gegen offene, aehnliche Tasks dedupliziert; Fail-/Overdue-Ereignisse bremsen die Phasenprogression wieder korrekt.
+- Release-/Deploy-Referenzen auf den umbenannten GitHub-/GHCR-Pfad `amet-titulari/chastesae` ausgerichtet.
+
+### Behoben
+
+- Standalone-Verifikationen crashen nicht mehr bei Roleplay-Fortschritt ohne verknuepften Task.
+- Persona- und Scenario-DB-Endpunkte sind wieder konsistent admin-geschuetzt.
+- Request-Limits decken jetzt auch Login, Chat-Nachrichten, Verifikationsanforderungen und Push-Test-Dispatch ab.
+- Explizite Aufgabenanforderungen im Chat erzeugen jetzt auch bei degradierten LLM-Antworten verlaesslich eine Task-Aktion.
+
+### Upgrade-Hinweise
+
+- GitHub-Repository und GHCR-Image laufen jetzt unter `amet-titulari/chastesae`; lokale Remotes, Portainer-Stacks und externe Pull-Skripte muessen auf den neuen Namen zeigen.
+- Beim Upgrade produktiver Instanzen zuerst ein Backup von `data/chastease.db` und `data/media/` erstellen.
+- Datenbanken mit aktuellem Schema normal per `alembic upgrade head` migrieren; `alembic stamp head` bleibt nur fuer bereits schema-identische Bestandsdatenbanken gedacht.
 
 ## [0.3.5] - 2026-03-25
 

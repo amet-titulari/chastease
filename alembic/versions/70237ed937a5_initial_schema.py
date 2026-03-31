@@ -1,16 +1,15 @@
-"""baseline_schema_squash
+"""initial_schema
 
-Revision ID: 0031
-Revises:
-Create Date: 2026-03-30 17:48:11.634091
+Revision ID: 70237ed937a5
+Revises: 
+Create Date: 2026-03-31 20:25:40.075024
 """
 from alembic import op
 import sqlalchemy as sa
-from app.services.secret_crypto import EncryptedText
 
 
 # revision identifiers, used by Alembic.
-revision = '0031'
+revision = '70237ed937a5'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -84,7 +83,7 @@ def upgrade() -> None:
     sa.Column('profile_key', sa.String(length=80), nullable=False),
     sa.Column('provider', sa.String(length=50), nullable=False),
     sa.Column('api_url', sa.String(length=500), nullable=True),
-    sa.Column('api_key', EncryptedText(), nullable=True),
+    sa.Column('api_key', sa.Text(), nullable=True),
     sa.Column('chat_model', sa.String(length=120), nullable=True),
     sa.Column('vision_model', sa.String(length=120), nullable=True),
     sa.Column('profile_active', sa.Boolean(), nullable=False),
@@ -177,13 +176,14 @@ def upgrade() -> None:
     sa.Column('hygiene_opening_max_duration_seconds', sa.Integer(), nullable=True),
     sa.Column('llm_provider', sa.String(length=50), nullable=True),
     sa.Column('llm_api_url', sa.String(length=500), nullable=True),
-    sa.Column('llm_api_key', EncryptedText(), nullable=True),
+    sa.Column('llm_api_key', sa.Text(), nullable=True),
     sa.Column('llm_chat_model', sa.String(length=120), nullable=True),
     sa.Column('llm_vision_model', sa.String(length=120), nullable=True),
     sa.Column('llm_profile_active', sa.Boolean(), nullable=False),
-    sa.Column('relationship_state_json', EncryptedText(), nullable=True),
-    sa.Column('protocol_state_json', EncryptedText(), nullable=True),
-    sa.Column('scene_state_json', EncryptedText(), nullable=True),
+    sa.Column('relationship_state_json', sa.Text(), nullable=True),
+    sa.Column('protocol_state_json', sa.Text(), nullable=True),
+    sa.Column('scene_state_json', sa.Text(), nullable=True),
+    sa.Column('phase_state_json', sa.Text(), nullable=True),
     sa.Column('ws_auth_token', sa.String(length=80), nullable=True),
     sa.Column('ws_auth_token_created_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),

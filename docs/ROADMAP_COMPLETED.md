@@ -5,7 +5,7 @@ Archiv der bereits erledigten Roadmap-Punkte. Die offene Planung liegt in [ROADM
 ## Umgesetzter Stand (v0.5.0+, März 2026)
 
 - FastAPI-Backend mit 18 Routern, 36 Services und 25 Model-Dateien
-- Alembic-Stand konsolidiert: Baseline `0031`, danach `0032` (`phase_state_json`) und `0033` (Phasen-Targets-Backfill)
+- Alembic-Stand auf eine neue Initialmigration fuer den aktuellen Gesamtschema-Stand zurueckgesetzt
 - Session-Lifecycle: Erstellen, Vertrag, Timer, Events, Export (PDF/JSON)
 - KI-Provider: xAI/Grok, OpenRouter, Ollama, Stub – inkl. Action-Normalisierung
 - Modularer System-Prompt (Persona, Wearer, Safety, Session, Style, Scenario) mit externen Prompt-Dateien und Versions-Logging

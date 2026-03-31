@@ -40,16 +40,12 @@ def _register_and_finish_setup(client: TestClient, email: str = "hardening@examp
     assert setup_resp.status_code == 200
 
 
-def test_runtime_validation_requires_encryption_key_outside_dev_mode(monkeypatch):
+def test_runtime_validation_allows_plaintext_secret_storage_for_alpha(monkeypatch):
     monkeypatch.setattr(settings, "debug", False)
     monkeypatch.setattr(settings, "allow_insecure_dev_mode", False)
     monkeypatch.setattr(settings, "secret_encryption_key", None)
 
-    try:
-        validate_runtime_configuration()
-        raise AssertionError("validate_runtime_configuration should have raised")
-    except RuntimeError as exc:
-        assert "CHASTEASE_SECRET_ENCRYPTION_KEY" in str(exc)
+    validate_runtime_configuration()
 
 
 def test_media_upload_endpoint_is_rate_limited():
@@ -84,6 +80,90 @@ def test_media_upload_endpoint_is_rate_limited():
         assert limited.status_code == 429
         payload = limited.json()
         assert payload["error"]["code"] == "rate_limited"
+
+
+def test_chat_message_endpoint_is_rate_limited():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        created = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Chat Limit Persona",
+                "player_nickname": "Limit Player",
+                "min_duration_seconds": 300,
+            },
+        )
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+
+        signed = client.post(f"/api/sessions/{session_id}/sign-contract")
+        assert signed.status_code == 200
+
+        for idx in range(20):
+            resp = client.post(
+                f"/api/sessions/{session_id}/messages",
+                json={"content": f"ping {idx}"},
+            )
+            assert resp.status_code == 200
+
+        limited = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "one more"},
+        )
+        assert limited.status_code == 429
+        assert limited.json()["error"]["code"] == "rate_limited"
+
+
+def test_push_test_endpoint_is_rate_limited():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        created = client.post(
+            "/api/sessions",
+            json={
+                "persona_name": "Push Limit Persona",
+                "player_nickname": "Limit Player",
+                "min_duration_seconds": 300,
+            },
+        )
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+
+        sub_resp = client.post(
+            f"/api/sessions/{session_id}/push/subscriptions",
+            json={
+                "endpoint": "https://example.invalid/push/limit",
+                "keys": {"p256dh": "abc", "auth": "def"},
+                "user_agent": "pytest",
+            },
+        )
+        assert sub_resp.status_code == 200
+
+        for _ in range(6):
+            resp = client.post(f"/api/sessions/{session_id}/push/test", json={})
+            assert resp.status_code == 200
+
+        limited = client.post(f"/api/sessions/{session_id}/push/test", json={})
+        assert limited.status_code == 429
+        assert limited.json()["error"]["code"] == "rate_limited"
+
+
+def test_login_endpoint_is_rate_limited():
+    with TestClient(app) as client:
+        for _ in range(8):
+            resp = client.post(
+                "/auth/login",
+                data={"username": "unknown-user", "password": "wrong-password"},
+            )
+            assert resp.status_code == 401
+
+        limited = client.post(
+            "/auth/login",
+            data={"username": "unknown-user", "password": "wrong-password"},
+        )
+        assert limited.status_code == 429
+        assert limited.json()["error"]["code"] == "rate_limited"
 
 
 def test_verification_media_retention_prunes_old_files():

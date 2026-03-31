@@ -54,13 +54,8 @@ logger = logging.getLogger("uvicorn.error")
 
 
 def validate_runtime_configuration() -> None:
-    if settings.debug or settings.allow_insecure_dev_mode:
-        return
-    if not str(settings.secret_encryption_key or "").strip():
-        raise RuntimeError(
-            "CHASTEASE_SECRET_ENCRYPTION_KEY is required unless CHASTEASE_DEBUG=true "
-            "or CHASTEASE_ALLOW_INSECURE_DEV_MODE=true is set."
-        )
+    _ = settings
+    return
 
 
 @asynccontextmanager
