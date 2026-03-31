@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 from uuid import uuid4
@@ -12,6 +13,7 @@ from app.models.persona_task_template import PersonaTaskTemplate
 from app.models.player_profile import PlayerProfile
 from app.models.session import Session as SessionModel
 from app.models.task import Task
+from app.services.roleplay_progression import advance_roleplay_state_from_event, build_phase_task_key
 from app.services.transcription_service import TranscriptionResult
 
 
@@ -518,6 +520,153 @@ def test_chat_fail_task_resets_phase_progress(monkeypatch):
             assert prefs["scenario_phase_progress"] == 0
             failed = db.query(Task).filter(Task.id == task_id).first()
             assert failed.status == "failed"
+
+
+def test_phase_progress_ignores_tasks_created_before_phase_start():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        with SessionLocal() as db:
+            session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+            prefs = json.loads(profile.preferences_json or "{}")
+            prefs["scenario_preset"] = "ametara_titulari_devotion_protocol"
+            prefs["scenario_phase_id"] = "phase_3"
+            prefs["scenario_phase_progress"] = 0
+            profile.preferences_json = json.dumps(prefs)
+            phase_started_at = datetime.now(timezone.utc)
+            session_obj.phase_state_json = json.dumps(
+                {
+                    "phase_id": "phase_3",
+                    "phase_index": 3,
+                    "started_at": phase_started_at.isoformat(timespec="seconds"),
+                    "targets": {
+                        "trust": 6,
+                        "obedience": 8,
+                        "resistance": 5,
+                        "favor": 5,
+                        "strictness": 5,
+                        "frustration": 6,
+                        "attachment": 5,
+                    },
+                    "scores": {key: 0 for key in ["trust", "obedience", "resistance", "favor", "strictness", "frustration", "attachment"]},
+                    "rewarded_task_keys": [],
+                }
+            )
+            old_task = Task(
+                session_id=session_id,
+                title="Altes Morgenritual",
+                description="Vor dem Phasenwechsel angelegt",
+                status="completed",
+                requires_verification=True,
+                verification_criteria="Foto",
+                created_at=phase_started_at - timedelta(minutes=10),
+            )
+            db.add(profile)
+            db.add(session_obj)
+            db.add(old_task)
+            db.commit()
+            db.refresh(old_task)
+
+            advance_roleplay_state_from_event(
+                db,
+                session_obj,
+                event_type="verification_confirmed",
+                task_created_at=old_task.created_at,
+                task_fingerprint=build_phase_task_key(
+                    task_id=old_task.id,
+                    title=old_task.title,
+                    description=old_task.description,
+                    verification_criteria=old_task.verification_criteria,
+                ),
+            )
+            db.commit()
+            db.refresh(session_obj)
+
+            phase_state = json.loads(session_obj.phase_state_json or "{}")
+            assert phase_state["scores"] == {
+                "trust": 0,
+                "obedience": 0,
+                "resistance": 0,
+                "favor": 0,
+                "strictness": 0,
+                "frustration": 0,
+                "attachment": 0,
+            }
+
+
+def test_phase_progress_rewards_same_task_only_once_per_phase():
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        with SessionLocal() as db:
+            session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+            prefs = json.loads(profile.preferences_json or "{}")
+            prefs["scenario_preset"] = "ametara_titulari_devotion_protocol"
+            prefs["scenario_phase_id"] = "phase_3"
+            prefs["scenario_phase_progress"] = 0
+            profile.preferences_json = json.dumps(prefs)
+            phase_started_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+            session_obj.phase_state_json = json.dumps(
+                {
+                    "phase_id": "phase_3",
+                    "phase_index": 3,
+                    "started_at": phase_started_at.isoformat(timespec="seconds"),
+                    "targets": {
+                        "trust": 6,
+                        "obedience": 8,
+                        "resistance": 5,
+                        "favor": 5,
+                        "strictness": 5,
+                        "frustration": 6,
+                        "attachment": 5,
+                    },
+                    "scores": {key: 0 for key in ["trust", "obedience", "resistance", "favor", "strictness", "frustration", "attachment"]},
+                    "rewarded_task_keys": [],
+                }
+            )
+            task = Task(
+                session_id=session_id,
+                title="Diskretes Morgenritual",
+                description="Einmal sauber melden",
+                status="completed",
+                requires_verification=True,
+                verification_criteria="Foto",
+                created_at=phase_started_at + timedelta(seconds=10),
+            )
+            db.add(profile)
+            db.add(session_obj)
+            db.add(task)
+            db.commit()
+            db.refresh(task)
+
+            task_key = build_phase_task_key(
+                task_id=task.id,
+                title=task.title,
+                description=task.description,
+                verification_criteria=task.verification_criteria,
+            )
+            advance_roleplay_state_from_event(
+                db,
+                session_obj,
+                event_type="verification_confirmed",
+                task_created_at=task.created_at,
+                task_fingerprint=task_key,
+            )
+            advance_roleplay_state_from_event(
+                db,
+                session_obj,
+                event_type="verification_confirmed",
+                task_created_at=task.created_at,
+                task_fingerprint=task_key,
+            )
+            db.commit()
+            db.refresh(session_obj)
+
+            phase_state = json.loads(session_obj.phase_state_json or "{}")
+            assert phase_state["scores"]["trust"] == 3
+            assert phase_state["scores"]["obedience"] == 2
+            assert phase_state["scores"]["resistance"] == 1
+            assert phase_state["scores"]["favor"] == 1
 
 
 def test_chat_returns_lovense_client_actions(monkeypatch):

@@ -53,6 +53,8 @@ Wichtig:
 - Die Gesamtbeurteilung beeinflusst Ton und Kontext weiterhin langfristig.
 - Der Phasenfortschritt wird nicht mehr aus den Gesamtwerten abgeleitet.
 - Jede Phase beginnt datenlogisch pro Kriterium bei `0`.
+- Fuer die aktive Phase zaehlen nur Tasks/Verifikationen, deren zugrundeliegender Task nach dem Start dieser Phase erzeugt wurde.
+- Derselbe Task-Zweck soll innerhalb einer Phase keine doppelten Punkte geben.
 
 ## Berechnungsvorschlag
 

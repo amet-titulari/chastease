@@ -77,6 +77,7 @@ Das Dashboard (`/dashboard` bzw. `/dashboard/{session_id}`) ist die zentrale Spi
 - **Seit Start**: Der blaue Bereich zeigt den Startwert, der gruene Bereich die Entwicklung seit Session-Beginn.
 - **Phasenfortschritt**: Rechts daneben gibt es eine eigene Karte fuer die aktive Phase. Dort starten alle Phasenpunkte je Kriterium wieder bei `0` und laufen bis zu den Zielwerten dieser Phase.
 - **Phasenwechsel**: Beim Wechsel in die naechste Phase werden die Phasenpunkte zurueckgesetzt; die langfristigen Beziehungswerte bleiben erhalten.
+- **Wichtig**: Fuer diese Punkte zaehlen nur Aufgaben, die in der aktuellen Phase entstanden sind; alte oder doppelte Tasks sollen die neue Phase nicht kuenstlich beschleunigen.
 - **Safety/Hygiene**: Ampelaktionen, Safeword, Hygiene-Kontingente und Oeffnungen sind direkt im Dashboard gebuendelt.
 - **Navigation**: Auf allen authentifizierten Seiten ist dasselbe Hauptmenue sichtbar; Landing und Login bleiben absichtlich reduziert.
 

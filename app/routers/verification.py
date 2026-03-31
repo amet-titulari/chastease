@@ -13,7 +13,7 @@ from app.models.task import Task
 from app.models.message import Message
 from app.models.verification import Verification
 from app.services.image_stamp import stamp_verification_proof
-from app.services.roleplay_progression import advance_roleplay_state_from_event
+from app.services.roleplay_progression import advance_roleplay_state_from_event, build_phase_task_key
 from app.services.session_access import get_owned_session
 from app.services.task_service import TaskService
 from app.services.verification_analysis import analyze_verification
@@ -236,16 +236,32 @@ async def upload_verification(
         ))
 
     if status == "confirmed":
+        task_fingerprint = build_phase_task_key(
+            task_id=task.id if task else None,
+            title=task.title if task else None,
+            description=task.description if task else None,
+            verification_criteria=task.verification_criteria if task else record.verification_criteria,
+        )
         advance_roleplay_state_from_event(
             db,
             session_obj,
             event_type="verification_confirmed",
+            task_created_at=task.created_at if task else None,
+            task_fingerprint=task_fingerprint,
         )
     elif status == "suspicious":
+        task_fingerprint = build_phase_task_key(
+            task_id=task.id if task else None,
+            title=task.title if task else None,
+            description=task.description if task else None,
+            verification_criteria=task.verification_criteria if task else record.verification_criteria,
+        )
         advance_roleplay_state_from_event(
             db,
             session_obj,
             event_type="verification_suspicious",
+            task_created_at=task.created_at if task else None,
+            task_fingerprint=task_fingerprint,
         )
 
     db.add(record)

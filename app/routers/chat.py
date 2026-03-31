@@ -37,7 +37,7 @@ from app.services.behavior_profile import (
 from app.services.context_window import build_context_window
 from app.services.prompt_builder import build_prompt_modules
 from app.services.relationship_memory import build_relationship_memory
-from app.services.roleplay_progression import advance_roleplay_state_from_event
+from app.services.roleplay_progression import advance_roleplay_state_from_event, build_phase_task_key
 from app.services.roleplay_state import build_roleplay_state, merge_roleplay_state, serialize_roleplay_state, summarize_roleplay_state_changes
 from app.services.session_access import get_owned_session
 from app.services.task_template_pool import build_template_task_action, select_task_template, user_requested_task
@@ -92,6 +92,13 @@ def _task_fingerprint(*, title: str, description: str | None = None, verificatio
     return re.sub(r"\s+", " ", raw).strip()
 
 
+def _task_title_key(title: str) -> str:
+    raw = str(title or "").strip().lower()
+    raw = re.sub(r"#\d+", " ", raw)
+    raw = re.sub(r"[^a-z0-9]+", " ", raw)
+    return re.sub(r"\s+", " ", raw).strip()
+
+
 def _find_duplicate_open_task(
     db: Session,
     *,
@@ -99,8 +106,10 @@ def _find_duplicate_open_task(
     title: str,
     description: str | None,
     verification_criteria: str | None,
+    requires_verification: bool = False,
 ) -> Task | None:
     fingerprint = _task_fingerprint(title=title, description=description, verification_criteria=verification_criteria)
+    title_key = _task_title_key(title)
     if not fingerprint:
         return None
     rows = (
@@ -116,7 +125,11 @@ def _find_duplicate_open_task(
             description=str(row.description or ""),
             verification_criteria=str(row.verification_criteria or ""),
         )
+        candidate_title = _task_title_key(str(row.title or ""))
+        same_verification_mode = bool(row.requires_verification) == bool(requires_verification)
         if candidate and candidate == fingerprint:
+            return row
+        if title_key and candidate_title and title_key == candidate_title and same_verification_mode:
             return row
     return None
 
@@ -717,6 +730,13 @@ def _persist_chat_turn(
                             session_obj,
                             event_type="task_failed",
                             task_title=fail_task.title,
+                            task_created_at=fail_task.created_at,
+                            task_fingerprint=build_phase_task_key(
+                                task_id=fail_task.id,
+                                title=fail_task.title,
+                                description=fail_task.description,
+                                verification_criteria=fail_task.verification_criteria,
+                            ),
                         )
                 continue
 
@@ -836,6 +856,7 @@ def _persist_chat_turn(
                 title=title,
                 description=description_value[:2000] if description_value else None,
                 verification_criteria=verification_criteria_value,
+                requires_verification=requires_verification,
             )
             if duplicate_task:
                 if deadline_at is not None:

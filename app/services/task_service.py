@@ -8,7 +8,7 @@ from app.models.message import Message
 from app.models.player_profile import PlayerProfile
 from app.models.session import Session as SessionModel
 from app.models.task import Task
-from app.services.roleplay_progression import advance_roleplay_state_from_event
+from app.services.roleplay_progression import advance_roleplay_state_from_event, build_phase_task_key
 
 
 class TaskService:
@@ -133,6 +133,13 @@ class TaskService:
                 session_obj,
                 event_type="task_overdue",
                 task_title=row.title,
+                task_created_at=row.created_at,
+                task_fingerprint=build_phase_task_key(
+                    task_id=row.id,
+                    title=row.title,
+                    description=row.description,
+                    verification_criteria=row.verification_criteria,
+                ),
             )
             overdue_ids.append(row.id)
         if changed > 0:

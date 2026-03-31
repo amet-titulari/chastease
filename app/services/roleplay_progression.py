@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import json
+import re
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -29,6 +30,33 @@ _PHASE_TARGET_DEFAULTS = {
     "frustration": [3, 4, 6, 7, 8, 9],
     "attachment": [3, 4, 5, 6, 7, 8],
 }
+
+
+def build_phase_task_key(*, task_id: int | None = None, title: str | None = None, description: str | None = None, verification_criteria: str | None = None) -> str:
+    if isinstance(task_id, int) and task_id > 0:
+        return f"task:{task_id}"
+    raw = " ".join(
+        part.strip().lower()
+        for part in [title or "", description or "", verification_criteria or ""]
+        if str(part or "").strip()
+    )
+    raw = re.sub(r"#\d+", " ", raw)
+    raw = re.sub(r"[^a-z0-9]+", " ", raw)
+    raw = re.sub(r"\s+", " ", raw).strip()
+    return raw[:240]
+
+
+def _parse_phase_timestamp(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _scenario_title_for_session(db: Session, session_obj: SessionModel) -> str | None:
@@ -128,6 +156,7 @@ def _initialize_phase_state(session_obj: SessionModel, active_phase: dict[str, A
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "targets": targets,
         "scores": {key: 0 for key in _PHASE_SCORE_KEYS},
+        "rewarded_task_keys": [],
     }
 
 
@@ -251,6 +280,8 @@ def _advance_phase_for_event(
     session_obj: SessionModel,
     *,
     event_type: str,
+    task_created_at: datetime | None = None,
+    task_fingerprint: str | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     phases, prefs = _scenario_phases_for_session(db, session_obj)
     profile, _ = _scenario_profile_and_prefs(db, session_obj)
@@ -277,21 +308,41 @@ def _advance_phase_for_event(
     phase_state = _ensure_phase_state_for_phase(db, session_obj, active_phase=current_phase, current_index=current_index)
     scores = dict(phase_state.get("scores") or {})
     targets = dict(phase_state.get("targets") or {})
+    rewarded_task_keys = [
+        str(value).strip()
+        for value in (phase_state.get("rewarded_task_keys") or [])
+        if str(value).strip()
+    ]
+    phase_started_at = _parse_phase_timestamp(phase_state.get("started_at"))
+    normalized_fingerprint = str(task_fingerprint or "").strip()
+    phase_event_eligible = True
+    if task_created_at is not None and phase_started_at is not None:
+        created_at_utc = task_created_at if task_created_at.tzinfo else task_created_at.replace(tzinfo=timezone.utc)
+        created_at_utc = created_at_utc.astimezone(timezone.utc)
+        if created_at_utc < phase_started_at:
+            phase_event_eligible = False
+    if normalized_fingerprint and normalized_fingerprint in rewarded_task_keys:
+        phase_event_eligible = False
     changed = False
-    for key in _PHASE_SCORE_KEYS:
-        target_value = max(0, int(targets.get(key) or 0))
-        current_value = max(0, min(target_value, int(scores.get(key) or 0)))
-        try:
-            delta = int(relationship_deltas.get(key) or 0)
-        except (TypeError, ValueError):
-            delta = 0
-        progress_delta = (-delta) if key == "resistance" else delta
-        next_value = max(0, min(target_value, current_value + progress_delta))
-        if next_value != current_value:
-            scores[key] = next_value
+    if phase_event_eligible:
+        for key in _PHASE_SCORE_KEYS:
+            target_value = max(0, int(targets.get(key) or 0))
+            current_value = max(0, min(target_value, int(scores.get(key) or 0)))
+            try:
+                delta = int(relationship_deltas.get(key) or 0)
+            except (TypeError, ValueError):
+                delta = 0
+            progress_delta = (-delta) if key == "resistance" else delta
+            next_value = max(0, min(target_value, current_value + progress_delta))
+            if next_value != current_value:
+                scores[key] = next_value
+                changed = True
+        if normalized_fingerprint and normalized in {"task_completed", "verification_confirmed"} and normalized_fingerprint not in rewarded_task_keys:
+            rewarded_task_keys.append(normalized_fingerprint)
             changed = True
     if changed:
         phase_state["scores"] = scores
+        phase_state["rewarded_task_keys"] = rewarded_task_keys
         session_obj.phase_state_json = json.dumps(phase_state, ensure_ascii=False)
         db.add(session_obj)
 
@@ -473,7 +524,13 @@ def advance_roleplay_state_from_event(
         behavior_profile=behavior_profile,
     )
     patch = roleplay_patch_for_event(current_state, event_type=event_type, behavior_profile=behavior_profile, **kwargs)
-    phase_after_event, phase_message = _advance_phase_for_event(db, session_obj, event_type=event_type)
+    phase_after_event, phase_message = _advance_phase_for_event(
+        db,
+        session_obj,
+        event_type=event_type,
+        task_created_at=kwargs.get("task_created_at"),
+        task_fingerprint=kwargs.get("task_fingerprint"),
+    )
     if not patch and phase_after_event is None:
         return False
     if patch is None:
