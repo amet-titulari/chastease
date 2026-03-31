@@ -210,7 +210,8 @@ def phase_progress_snapshot(
             {
                 "key": key,
                 "label": label,
-                "current_value": current_value,
+                "current_value": score_value,
+                "relationship_value": current_value,
                 "goal_value": target_value,
                 "progress_value": score_value,
                 "progress_total": max(1, target_value),

@@ -498,7 +498,6 @@ function dashRenderRoleplayState(roleplayState, phaseProgress = {}) {
       const total = Math.max(1, Number(item?.progress_total) || 1);
       const value = Math.max(0, Math.min(total, Number(item?.progress_value) || 0));
       const percent = Math.max(0, Math.min(100, (value / total) * 100));
-      const currentValue = Math.max(0, Math.min(100, Number(item?.current_value) || 0));
       const goalValue = Math.max(0, Math.min(100, Number(item?.goal_value) || 0));
       const status = item?.goal_reached ? "Ziel erreicht" : `Noch ${item?.remaining ?? 0} Punkte`;
       return `
@@ -512,7 +511,7 @@ function dashRenderRoleplayState(roleplayState, phaseProgress = {}) {
           </div>
           <div class="dash-meter-meta">
             <span class="dash-meter-delta">Phase startet bei 0 · Ziel ${goalValue}</span>
-            <span class="dash-meter-phase">${dashEsc(status)} · Aktuell ${currentValue}</span>
+            <span class="dash-meter-phase">${dashEsc(status)} · Phasenpunkte ${value}</span>
           </div>
         </div>
       `;

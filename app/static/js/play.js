@@ -1315,7 +1315,6 @@ function plRenderRoleplayState(roleplayState, relationshipMemory = {}, phaseProg
     const total = Math.max(1, Number(item?.progress_total) || 1);
     const value = Math.max(0, Math.min(total, Number(item?.progress_value) || 0));
     const percent = Math.max(0, Math.min(100, (value / total) * 100));
-    const currentValue = Math.max(0, Math.min(100, Number(item?.current_value) || 0));
     const goalValue = Math.max(0, Math.min(100, Number(item?.goal_value) || 0));
     const label = item?.label || "Wert";
     const status = item?.goal_reached ? "Ziel erreicht" : `Noch ${item?.remaining ?? 0} Punkte`;
@@ -1330,7 +1329,7 @@ function plRenderRoleplayState(roleplayState, relationshipMemory = {}, phaseProg
         </div>
         <div class="roleplay-meter-meta">
           <span class="roleplay-meter-delta">Phase startet bei 0 · Ziel ${goalValue}</span>
-          <span class="roleplay-meter-phase">${plEscapeHtml(status)} · Aktuell ${currentValue}</span>
+          <span class="roleplay-meter-phase">${plEscapeHtml(status)} · Phasenpunkte ${value}</span>
         </div>
       </div>
     `;
