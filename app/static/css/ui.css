@@ -1,0 +1,75 @@
+.ui-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.18rem 0.6rem;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: rgba(76, 175, 130, 0.12);
+  color: #4caf82;
+  border: 1px solid rgba(76, 175, 130, 0.3);
+}
+
+.status-pill::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.status-pill.is-degraded {
+  background: rgba(208, 96, 96, 0.14);
+  color: #ffb4b4;
+  border-color: rgba(208, 96, 96, 0.34);
+}
+
+.ui-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  margin-top: 0.42rem;
+}
+
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.56rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.76rem;
+  line-height: 1.2;
+}
+
+.ui-empty {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.ok {
+  color: #9de2bf;
+}
+
+.warn {
+  color: #ffb4b4;
+}
+
+.ui-copy--warn {
+  color: #ffb7ae;
+}

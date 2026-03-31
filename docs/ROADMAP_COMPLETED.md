@@ -53,6 +53,17 @@ Archiv der bereits erledigten Roadmap-Punkte. Die offene Planung liegt in [ROADM
 - [x] Admin-Programm-/Pattern-Editor fuer Lovense anbieten, wenn im Wearer-Profil Lovense/Toys aktiviert sind
 - [x] KI darf in der Session freigegebene Toy-Presets ausloesen
 
+### v0.5 – UI Refactoring
+
+- [x] `play.js` und `dashboard.js` in kleinere Module zerlegen
+- [x] Wiederverwendbare UI-Bausteine fuer Meter, Cards, Badges und Panels vereinheitlichen
+- [x] HTMX fuer weitere Admin-Flaechen gezielt ausbauen (`scenarios`, `personas`, `inventory`)
+- [x] Mobile Breakpoints und Formular-Layouts systematisch vereinheitlichen
+- [x] UI-State zwischen Chat, Dashboard und Admin-Flaechen klarer trennen
+- [x] CSS-Tokens, Komponentenklassen und Seitenspezifika konsolidieren
+- [x] Grosse Template-Monolithen in `play`, `dashboard`, `inventory`, `personas`, `scenarios`, `profile`, `game_module_settings`, `admin_posture_matrix`, `game_posture_manage` und `game_posture` in Seitenskripte ausgelagert
+- [x] Clientseitig erzeugte Inline-Handler aus neuen Renderern entfernt; Events laufen ueber delegierte Listener
+
 ---
 
 ## Phase 0: Fundament

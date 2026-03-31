@@ -31,7 +31,9 @@ def test_inventory_page_loads_htmx_partial_container():
         assert resp.status_code == 200
         assert "https://unpkg.com/htmx.org@1.9.12" in resp.text
         assert 'hx-get="/inventory/partials/list"' in resp.text
-        assert 'data-im-inline-form' in resp.text
+        assert '/static/js/ui_common.js' in resp.text
+        assert '/static/js/ui_runtime.js' in resp.text
+        assert '/static/js/inventory.js' in resp.text
 
 
 def test_inventory_partial_renders_for_admin():
@@ -43,7 +45,7 @@ def test_inventory_partial_renders_for_admin():
         assert 'hx-get="/inventory/partials/list"' not in resp.text
 
 
-def test_inventory_partial_escapes_item_name_inside_onclick_actions():
+def test_inventory_partial_uses_resilient_action_hooks():
     with TestClient(app) as client:
         _register_admin(client)
         created = client.post(
@@ -65,7 +67,8 @@ def test_inventory_partial_escapes_item_name_inside_onclick_actions():
         assert f'data-im-action="export"' in resp.text
         assert f'data-item-id="{item_id}"' in resp.text
         assert f'href="/api/inventory/items/{item_id}/export"' in resp.text
-        assert 'window.imStartEdit && window.imStartEdit' in resp.text
+        assert 'onclick=' not in resp.text
+        assert 'data-im-action="edit"' in resp.text
         assert 'Foo &#34;Bar&#34;' in resp.text or 'Foo "Bar"' in resp.text
 
 

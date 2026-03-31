@@ -8,6 +8,7 @@ from app.database import SessionLocal
 from app.main import app
 from app.models.auth_user import AuthUser
 from app.models.session import Session as SessionModel
+from app.release import APP_VERSION
 
 
 def _register_and_finish_setup(client: TestClient, email: str = "xp-user@example.com"):
@@ -83,6 +84,14 @@ def test_contract_view_uses_authenticated_main_menu():
         assert ">Chat<" in html
         assert ">Dashboard<" in html
         assert ">Games<" in html
+        assert '/static/js/contract_view.js' in html
+
+        play_resp = client.get(f"/play/{session_id}")
+        assert play_resp.status_code == 200
+        assert '/static/js/ui_common.js' in play_resp.text
+        assert '/static/js/ui_runtime.js' in play_resp.text
+        assert '/static/js/play_shell_ui.js' in play_resp.text
+        assert '/static/js/play_lovense_controller.js' in play_resp.text
 
 
 def test_experience_assets_are_served():
@@ -209,14 +218,21 @@ def test_experience_onboarding_allows_persona_and_scenario_crud_for_normal_user(
         # play.js handles the live chat/task/regenerate functionality
         play_js = client.get("/static/js/play.js")
         assert play_js.status_code == 200
-        assert "play-safety-yellow" in play_js.text
         assert "play-ops-banner" in play_js.text
         assert "/api/sessions/${SESSION_ID}/messages" in play_js.text
+
+        play_session_js = client.get("/static/js/play_session_ui.js")
+        assert play_session_js.status_code == 200
+        assert "play-safety-yellow" in play_session_js.text
+        assert "play-request-verify" in play_session_js.text
 
         dashboard_js = client.get("/static/js/dashboard.js")
         assert dashboard_js.status_code == 200
         assert "dashLoadRunHistory" in dashboard_js.text
-        assert "dash-hygiene-open" in dashboard_js.text
+
+        dashboard_safety_js = client.get("/static/js/dashboard_safety_ui.js")
+        assert dashboard_safety_js.status_code == 200
+        assert "dash-hygiene-open" in dashboard_safety_js.text
 
         css = client.get("/static/css/experience.css")
         assert css.status_code == 200
@@ -425,9 +441,16 @@ def test_play_page_uses_versioned_play_script_url():
         play = client.get(f"/play/{session_id}", follow_redirects=False)
         assert play.status_code == 200
         assert '/static/js/play.js?v=' in play.text
+        assert '/static/js/play_chat_ui.js' in play.text
+        assert '/static/js/play_lovense_ui.js' in play.text
+        assert '/static/js/play_voice_ui.js' in play.text
+        assert '/static/js/play_roleplay_state_ui.js' in play.text
+        assert '/static/js/play_session_ui.js' in play.text
+        assert '/static/js/play_tasks_ui.js' in play.text
+        assert '/static/js/roleplay_ui.js' in play.text
         assert 'href="/dashboard/' in play.text
         assert 'id="play-focus-toggle"' in play.text
-        assert 'data-app-version="0.4.1"' in play.text
+        assert f'data-app-version="{APP_VERSION}"' in play.text
         assert "Regenerate" not in play.text
         assert "Verlauf" not in play.text
 
@@ -556,6 +579,22 @@ def test_games_postures_management_page_renders():
         assert "Postures verwalten" in html
         assert "ZIP importieren (ersetzt alle)" in html
         assert "Alle Postures als ZIP exportieren" in html
+        assert "/static/js/ui_runtime.js" in html
+        assert "/static/js/game_posture_manage.js" in html
+        assert "window.GAME_POSTURE_MODULE_KEY" in html
+
+
+def test_game_module_settings_page_loads_shared_runtime_and_page_script():
+    with TestClient(app) as client:
+        _register_and_finish_setup(client)
+
+        resp = client.get("/games/module-settings?module_key=dont_move")
+        assert resp.status_code == 200
+        html = resp.text
+        assert "Spielekonfiguration" in html
+        assert "/static/js/ui_runtime.js" in html
+        assert "/static/js/game_module_settings.js" in html
+        assert "window.GAME_MODULES" in html
 
 
 def test_admin_center_page_renders():
@@ -587,7 +626,8 @@ def test_admin_posture_matrix_page_renders():
         assert "Matrix speichern" in html
         assert "Sichtbare im Modul aktivieren" in html
         assert "Suche" in html
-        assert "/api/inventory/postures/matrix" in html
+        assert "/static/js/ui_runtime.js" in html
+        assert "/static/js/admin_posture_matrix.js" in html
 
 
 def test_admin_operations_page_renders():
@@ -641,4 +681,6 @@ def test_game_page_prefills_setup_from_latest_run_values():
         assert 'id="gm-session-penalty-days" type="number" min="0" max="365" value="1"' in html
         assert 'id="gm-session-penalty-hours" type="number" min="0" max="23" value="0"' in html
         assert 'id="gm-session-penalty-minutes" type="number" min="0" max="59" value="0"' in html
-        assert 'const initialDifficulty = "hard";' in html
+        assert 'initialDifficulty: "hard"' in html
+        assert '/static/js/game_posture.js' in html
+        assert 'onclick=' not in html

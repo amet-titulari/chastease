@@ -9,6 +9,33 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ### Hinzugefuegt
 
+- Frontend-Helfer `roleplay_ui.js` fuer gemeinsame Roleplay-/Phasen-Meter in Dashboard und Play.
+- Frontend-Helfer `dashboard_session_ui.js` fuer Session-Rahmen, Persona-Auswahl und Profilzusammenfassung im Dashboard.
+- Frontend-Helfer `dashboard_roleplay_ui.js` fuer Dashboard-Szene, Beziehungswerte, Phasenfortschritt und Langzeitdynamik.
+- Frontend-Helfer `dashboard_hygiene_ui.js` fuer Hygiene-Kontingent und Open/Relock-UI im Dashboard.
+- Frontend-Helfer `dashboard_runs_ui.js` fuer Run-History und Run-Report-Rendering im Dashboard.
+- Frontend-Helfer `dashboard_safety_ui.js` fuer Hygiene-/Safety-Event-Handling im Dashboard.
+- Frontend-Helfer `play_chat_ui.js` fuer Chat-Timeline, Bubble-Rendering und Warnbanner im Play-Modus.
+- Frontend-Helfer `play_lovense_ui.js` fuer Toy-Status, Console-Rendering und KI-Plan-Anzeige im Play-Modus.
+- Frontend-Helfer `play_lovense_controller.js` fuer Lovense-Bootstrap, Planverarbeitung und Toy-Steuerung im Play-Modus.
+- Frontend-Helfer `play_shell_ui.js` fuer wiederverwendbare Dropdown-/Header-Menues im Play-Modus.
+- Frontend-Helfer `play_voice_ui.js` fuer Realtime-Voice-Status, Audio-Streaming und Toggle-Verhalten im Play-Modus.
+- Frontend-Helfer `play_roleplay_state_ui.js` fuer Szene-, Phasen-, Beziehungs- und Langzeitdynamik-Panel im Play-Modus.
+- Frontend-Helfer `play_session_ui.js` fuer Safety-, Hygiene- und Verifikations-Interaktionen im Play-Modus.
+- Frontend-Helfer `play_tasks_ui.js` fuer Task-Dropdown, Inline-Action-Cards und Verifikations-Handler im Play-Modus.
+- Frontend-Helfer `inventory.js` fuer Import/Export-, Formular- und Inline-Edit-Logik der Inventarverwaltung.
+- Frontend-Helfer `personas.js` fuer Persona-Formular, Avatar-Upload, Import/Export und Task-Bibliothek.
+- Frontend-Helfer `scenarios.js` fuer Scenario-Presets, Phasen-/Lore-Editor, Import/Export und Inventar-Zuordnung.
+- Frontend-Helfer `game_module_settings.js` fuer Spielekonfiguration, Schwellenwerte, Modul-Cards und Masken-Upload.
+- Frontend-Helfer `contract_view.js` fuer Markdown-/Tabellen-Rendering der Vertragsdetailseite.
+- Frontend-Helfer `profile.js` fuer LLM-/Audio-Tests und Audio-Preset-Aktionen im Wearer-Profil.
+- Frontend-Helfer `admin_posture_matrix.js` fuer Filter, Bulk-Aktionen und Vorschau-Modal der Posture-Matrix.
+- Frontend-Helfer `game_posture_manage.js` fuer ZIP-Import/Export, Karten-CRUD und Referenz-Skelett-Bearbeitung der Posture-Verwaltung.
+- Frontend-Helfer `game_posture.js` fuer Kamera, Pose-/Movement-Analyse, Overlay-Rendering und Run-Steuerung im Live-Spielbildschirm.
+- Gemeinsame Frontend-Basis `ui_common.js` und `ui.css` fuer DOM-Helfer, Pill-Listen und wiederkehrende Panel-Muster.
+- Gemeinsame Frontend-Runtime `ui_runtime.js` fuer JSON-Requests und Polling-Helper.
+- Gemeinsame Format-Helfer in `ui_runtime.js` fuer Datums-, Dauer- und Countdown-Anzeigen.
+- Gemeinsame UI-Utilities in `ui.css` fuer `hidden`, `ok` und `warn`.
 - Fokusmodus fuer `/play`, der die Sessionflaeche auf Chat, Tasks und Safety reduziert und sekundaere UI-Elemente ausblendet.
 - In-Memory-Rate-Limits fuer teure Endpunkte wie Medien-Uploads, Verifikations-Uploads und Voice-Session-Bootstrap.
 - Automatische Bereinigung alter Verifikationsbilder per Retention-Job (`CHASTEASE_VERIFICATION_MEDIA_RETENTION_*`).
@@ -27,6 +54,22 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Rollenlogik fuer `owner`/`admin` zentralisiert, um das spaetere Identity-Konzept sauberer vorzubereiten.
 - Auth- und CSRF-Cookies koennen jetzt ueber `CHASTEASE_COOKIE_SECURE` fuer HTTPS-nahe Setups auf `Secure` gesetzt werden.
 - Dokumentation (README, Architektur, Security) auf den aktuellen Sicherheits- und Feature-Stand synchronisiert.
+- `v0.5` UI-Refactoring gestartet: erste Browserlogik aus `play.js` und `dashboard.js` in wiederverwendbare UI-Helfer ausgelagert.
+- `play.js` weiter entkoppelt: die verbleibende Lovense-Steuer- und Planlogik laeuft jetzt ueber einen separaten Controller statt im Seitenskript selbst.
+- `play.js` weiter entkoppelt: Safety-, Hygiene- und Verifikationslogik liegen jetzt ebenfalls in einem separaten UI-Helfer; `play.js` ist dadurch unter 1000 Zeilen gefallen.
+- Wiederkehrende Pill-/Card-Header-/Warnstil-Muster zwischen Dashboard und Play ueber gemeinsame UI-Klassen und DOM-Helfer zusammengefuehrt.
+- `play.js` und `dashboard.js` weiter auf Bootstrapping reduziert: gemeinsame Runtime- und Menu-Helfer uebernehmen Fetch-/Polling- und Dropdown-Standardverhalten.
+- Die Inventarverwaltung nutzt keine grosse Inline-Template-Logik mehr, sondern ein eigenes Seitenskript mit denselben gemeinsamen UI-/Runtime-Helfern.
+- Die Persona-Verwaltung nutzt ebenfalls kein grosses Inline-Template-Skript mehr, sondern ein eigenes Seitenskript mit denselben gemeinsamen UI-/Runtime-Helfern.
+- Die Scenario-Verwaltung nutzt ebenfalls kein grosses Inline-Template-Skript mehr, sondern ein eigenes Seitenskript mit denselben gemeinsamen UI-/Runtime-Helfern.
+- Die Spielekonfiguration nutzt ebenfalls kein grosses Inline-Template-Skript mehr, sondern ein eigenes Seitenskript mit denselben gemeinsamen Runtime-Helfern.
+- Die Vertragsdetailseite rendert Markdown jetzt ebenfalls ueber ein eigenes Seitenskript statt ueber Inline-JavaScript im Template.
+- Das Wearer-Profil nutzt fuer LLM-/Audio-Testaktionen jetzt ebenfalls ein eigenes Seitenskript statt Inline-JavaScript.
+- Die Admin-Posture-Matrix nutzt fuer Filter, Bulk-Aktionen und Vorschau jetzt ebenfalls ein eigenes Seitenskript statt Inline-JavaScript.
+- Die Posture-Verwaltung nutzt fuer ZIP-Import/Export, Karten-CRUD und Referenz-Skelett-Bearbeitung jetzt ebenfalls ein eigenes Seitenskript statt Inline-JavaScript.
+- Der Live-Spielbildschirm nutzt jetzt ebenfalls ein eigenes Seitenskript statt eines grossen Template-Monolithen; im Template bleibt nur noch der Bootstrap fuer Session/Modul/Run-Startwerte.
+- Die neuen Frontend-Renderer (`scenarios.js`, `personas.js`, `dashboard_runs_ui.js`, `game_posture.js`) nutzen keine generierten Inline-`onclick`-Handler mehr, sondern delegierte Events.
+- Veraltete Lovense-Dashboard-Altlogik entfernt; die Toy-Steuerung liegt jetzt konsistent nur noch im dedizierten Toys-Hub statt doppelt im Dashboard.
 - Authentifizierte Seiten verwenden jetzt konsistent dieselbe Hauptnavigation; Landing/Login bleiben bewusst ohne volles App-Menue.
 - App-Branding vereinheitlicht: Logo im Header ersetzt den reinen Texttitel und wird auch als Favicon verwendet.
 - Dashboard- und Play-Metriken visualisieren jetzt Basiswert, Entwicklung seit Start, naechste Zielphase und Zielmarker direkt auf der Skala.

@@ -21,10 +21,10 @@
     </div>
     <div class="persona-card-actions">
       {% if p.is_system %}
-      <button type="button" data-pm-action="edit-system" data-system-key="{{ p.system_key }}" onclick="window.pmStartEditSystem && window.pmStartEditSystem('{{ p.system_key }}')" class="ghost">Anzeigen</button>
+      <button type="button" data-pm-action="edit-system" data-system-key="{{ p.system_key }}" class="ghost">Anzeigen</button>
       <a href="/api/personas/system/{{ p.system_key }}/export" data-pm-action="export-system" data-system-key="{{ p.system_key }}" data-persona-name="{{ p.name|e }}" download>&#8659; Export</a>
       {% else %}
-      <button type="button" data-pm-action="edit" data-persona-id="{{ p.id }}" onclick="window.pmStartEdit && window.pmStartEdit({{ p.id }})" class="ghost">Bearbeiten</button>
+      <button type="button" data-pm-action="edit" data-persona-id="{{ p.id }}" class="ghost">Bearbeiten</button>
       <a href="/api/personas/{{ p.id }}/export" data-pm-action="export" data-persona-id="{{ p.id }}" data-persona-name="{{ p.name|e }}" download>&#8659; Export</a>
       <button type="button" data-pm-action="delete" data-persona-id="{{ p.id }}" data-persona-name="{{ p.name|e }}" class="warn">L&ouml;schen</button>
       {% endif %}

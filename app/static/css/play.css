@@ -51,41 +51,6 @@
   color: var(--muted);
 }
 
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-  padding: 0.18rem 0.6rem;
-  border-radius: 20px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  background: rgba(76, 175, 130, 0.12);
-  color: #4caf82;
-  border: 1px solid rgba(76, 175, 130, 0.3);
-}
-
-.status-pill::before {
-  content: '';
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #4caf82;
-  flex-shrink: 0;
-}
-
-.status-pill.is-degraded {
-  background: rgba(208, 96, 96, 0.14);
-  color: #ffb4b4;
-  border-color: rgba(208, 96, 96, 0.34);
-}
-
-.status-pill.is-degraded::before {
-  background: #ff8d8d;
-}
-
 .play-header-right {
   display: flex;
   align-items: center;
@@ -260,10 +225,6 @@
 }
 
 .roleplay-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
   margin-bottom: 0.45rem;
 }
 
@@ -408,28 +369,14 @@
   margin-top: 0.75rem;
 }
 
-.roleplay-pill-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-top: 0.42rem;
-}
-
 .roleplay-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.26rem 0.55rem;
-  border-radius: 999px;
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
   color: rgba(245, 235, 224, 0.86);
-  font-size: 0.76rem;
   line-height: 1.2;
 }
 
 .roleplay-empty {
   color: var(--muted);
-  font-size: 0.76rem;
 }
 
 .play-chat-timeline {

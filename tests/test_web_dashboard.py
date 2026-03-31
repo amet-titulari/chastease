@@ -87,6 +87,24 @@ def test_dashboard_renders():
         assert 'id="admin-menu"' in html
 
 
+def test_dashboard_page_includes_roleplay_helpers():
+    with TestClient(app) as client:
+        session_id = _register_user_and_create_session(client)
+        signed = client.post(f"/api/sessions/{session_id}/sign-contract")
+        assert signed.status_code == 200
+
+        resp = client.get(f"/dashboard/{session_id}")
+        assert resp.status_code == 200
+        assert '/static/js/ui_common.js' in resp.text
+        assert '/static/js/ui_runtime.js' in resp.text
+        assert '/static/js/roleplay_ui.js' in resp.text
+        assert '/static/js/dashboard_session_ui.js' in resp.text
+        assert '/static/js/dashboard_roleplay_ui.js' in resp.text
+        assert '/static/js/dashboard_hygiene_ui.js' in resp.text
+        assert '/static/js/dashboard_runs_ui.js' in resp.text
+        assert '/static/js/dashboard_safety_ui.js' in resp.text
+
+
 def test_landing_has_no_testconsole_shortcut():
     with TestClient(app) as client:
         resp = client.get("/")

@@ -29,6 +29,9 @@ def test_scenarios_page_loads_htmx_partial_container():
         _register_admin(client)
         resp = client.get("/scenarios", follow_redirects=False)
         assert resp.status_code == 200
+        assert "/static/js/ui_common.js" in resp.text
+        assert "/static/js/ui_runtime.js" in resp.text
+        assert "/static/js/scenarios.js" in resp.text
         assert "https://unpkg.com/htmx.org@1.9.12" in resp.text
         assert 'hx-get="/scenarios/partials/list"' in resp.text
 
@@ -47,9 +50,11 @@ def test_scenarios_page_contains_edit_flow_hooks():
         _register_admin(client)
         resp = client.get("/scenarios", follow_redirects=False)
         assert resp.status_code == 200
-        assert 'data-sm-action' in resp.text
-        assert "/api/scenarios/" in resp.text
-        assert "/api/inventory/scenarios/" in resp.text
+        assert 'id="sm-form-panel"' in resp.text
+        assert 'id="sm-title"' in resp.text
+        assert 'id="sm-key"' in resp.text
+        assert "/static/js/ui_runtime.js" in resp.text
+        assert "/static/js/scenarios.js" in resp.text
 
 
 def test_scenarios_page_contains_phase_target_editor_fields():
@@ -58,15 +63,10 @@ def test_scenarios_page_contains_phase_target_editor_fields():
         resp = client.get("/scenarios", follow_redirects=False)
         assert resp.status_code == 200
         html = resp.text
-        assert "phase-weight" in html
-        assert "phase-min-hours" in html
-        assert "phase-score-trust" in html
-        assert "phase-score-obedience" in html
-        assert "phase-score-resistance" in html
-        assert "phase-score-favor" in html
-        assert "phase-score-strictness" in html
-        assert "phase-score-frustration" in html
-        assert "phase-score-attachment" in html
+        assert 'id="sm-phases-editor"' in html
+        assert 'id="sm-add-phase-btn"' in html
+        assert 'id="sm-add-lore-btn"' in html
+        assert "/static/js/scenarios.js" in html
 
 
 def test_scenarios_partial_uses_delegated_actions_instead_of_inline_onclick():

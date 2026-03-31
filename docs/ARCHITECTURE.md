@@ -104,21 +104,25 @@ Offene (pending) Tasks werden bei jedem Chat-Request als Kontext-Block in den Sy
 | `scenarios.html` | Scenario-Verwaltung |
 | `inventory.html` | Inventar-Verwaltung |
 
-**JavaScript**: Zentrale Browserlogik liegt in `play.js`, `experience.js`, `history.js`, `landing.js` und `setup.js`; weitere Admin-/Games-Skripte sind direkt in Templates eingebettet.
+**JavaScript**: Die Seitenskripte liegen weiter in `play.js`, `dashboard.js`, `experience.js`, `history.js`, `landing.js` und `setup.js`, werden in `v0.5` aber schrittweise entkoppelt. Gemeinsame UI-Helfer wie `ui_common.js` (DOM-Helfer und Pill-Listen), `ui_runtime.js` (JSON-Requests, Polling sowie gemeinsame Datums-/Dauer-/Countdown-Formatierung), `roleplay_ui.js` (Roleplay-/Phasen-Meter), `dashboard_session_ui.js` (Session-Rahmen, Persona-Auswahl und Profilzusammenfassung im Dashboard), `dashboard_roleplay_ui.js` (Dashboard-Szene, Beziehung, Phase und Langzeitdynamik), `dashboard_hygiene_ui.js` (Hygiene-Kontingent und Open/Relock-UI im Dashboard), `dashboard_runs_ui.js` (Run-History und Run-Report-Rendering im Dashboard), `dashboard_safety_ui.js` (Hygiene-/Safety-Event-Handling im Dashboard), `play_chat_ui.js` (Chat-Timeline, Bubble-Render, Warnbanner), `play_lovense_ui.js` (Toy-Status, Console-Rendering und KI-Plan-Anzeige), `play_lovense_controller.js` (Lovense-Bootstrap, Planverarbeitung und Toy-Steuerung), `play_shell_ui.js` (Dropdown-/Header-Menues im Play-Modus), `play_voice_ui.js` (Realtime-Voice-Status, Audio-Streaming und Toggle-Verhalten), `play_roleplay_state_ui.js` (Roleplay-Panel mit Szene, Phase, Beziehung und Langzeitdynamik), `play_session_ui.js` (Safety-, Hygiene- und Verifikations-Interaktionen im Play-Modus), `play_tasks_ui.js` (Task- und Action-Card-Rendering im Play-Modus), `inventory.js` (Inventarverwaltung mit Import/Export, Formularen und Inline-Edit), `personas.js` (Persona-Verwaltung mit Formular, Avatar-Upload, Import/Export und Task-Bibliothek), `scenarios.js` (Scenario-Verwaltung mit Presets, Phasen-/Lore-Editor und Inventar-Zuordnung), `game_module_settings.js` (Spielekonfiguration mit Modul-Cards, Schwellenwerten und Masken-Upload), `contract_view.js` (Markdown-/Tabellen-Rendering für Vertragsdetails), `profile.js` (LLM-/Audio-Testaktionen und Provider-Presets im Wearer-Profil), `admin_posture_matrix.js` (Posture-Matrix mit Filter, Bulk-Aktionen und Vorschau-Modal), `game_posture_manage.js` (Posture-Management mit ZIP-Import/Export, Karten-CRUD und Referenz-Skelett-Bearbeitung) und `game_posture.js` (Live-Spielbildschirm mit Kamera, Pose-/Movement-Analyse, Overlay-Rendering und Run-Steuerung) ziehen wiederverwendbare Render- und Handler-Logik aus den großen Seitendateien heraus; nur kleine Bootstrap-Datenblöcke bleiben direkt in einzelnen Templates eingebettet. Inline-Handler wie `onclick` in dynamisch gerenderten Listen wurden dabei auf delegierte Event-Listener umgestellt. Veraltete Lovense-Dashboard-Altlogik wurde entfernt, weil die Toy-Steuerung inzwischen ueber `/toys/{session_id}` laeuft.
 
-**CSS**: Globale Tokens in `theme.css`, Layout/Navigation in `style.css`, modulbezogene Styles in `play.css`, `experience.css`, `profile.css`, `landing.css`, `setup.css`.
+**CSS**: Globale Tokens in `theme.css`, gemeinsame UI-Bausteine in `ui.css`, Layout/Navigation in `style.css`, modulbezogene Styles in `play.css`, `dashboard.css`, `experience.css`, `profile.css`, `landing.css`, `setup.css`. `ui.css` traegt inzwischen auch einfache Utility-Klassen wie `hidden`, `ok` und `warn`, damit sie nicht in mehreren Templates dupliziert werden.
 
 **Play-Modus (play.html / play.js)**:
 - Single-Column-Layout, vollständig responsive (`100dvh`).
 - **Aktionskarten** inline nach `task_assigned`-Nachrichten in der Chat-Timeline.
   - Jede Karte zeigt Task-Nummer, Titel, Deadline (rechtsbündig mit Farb-Codierung) und kontextabhängige Buttons (Bestätigung + Fail oder Fotoverifikation + Fail).
   - Verifikation läuft komplett inline (Foto-Upload → Analyse → Ergebnis-Pill).
+  - Render- und Handler-Logik fuer Dropdown- und Inline-Task-Cards liegt seit `v0.5` nicht mehr direkt in `play.js`, sondern in `play_tasks_ui.js`.
+- Timeline-, Bubble- und Warnbanner-Rendering liegen seit `v0.5` nicht mehr direkt in `play.js`, sondern in `play_chat_ui.js`.
+- Die Befuellung des Roleplay-Sidepanels liegt seit `v0.5` nicht mehr direkt in `play.js`, sondern in `play_roleplay_state_ui.js`.
 - **Tasks-Dropdown** im Header zeigt interaktive Action Cards (nicht read-only).
 - **Persona-Avatar** neben KI-Nachrichten (wenn Avatar in Persona hinterlegt).
 - Session-Steuerung ist zwischen Dashboard und Play verteilt: Dashboard fuer Rahmen, Hygiene, Safety und Resultate; Play fuer Chat, Tasks und schnelle Safety-Aktionen.
 - Relationship-Metriken und Phasenfortschritt sind bewusst getrennt:
   - `relationship_state_json`: langfristige Session-Gesamtbeurteilung
   - `phase_state_json`: aktuelle Phasenpunkte und Zielwerte der laufenden Phase
+  - die gemeinsame Darstellung dieser Metriken wird in `roleplay_ui.js` fuer Dashboard und Play geteilt
 
 ### Persistenz
 
@@ -162,7 +166,7 @@ chastease/
 │   ├── services/         # 36 Service-Module
 │   ├── models/           # 25 Model-Dateien
 │   ├── templates/        # 21 Jinja2-Templates
-│   └── static/           # JS (9), CSS (8), SW
+│   └── static/           # JS (34), CSS (9), SW
 ├── alembic/
 │   └── versions/         # 3 Migrationen (0031–0033, squashed baseline + deltas)
 ├── docs/

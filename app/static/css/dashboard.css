@@ -93,31 +93,6 @@
   gap: 0.55rem;
 }
 
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-  padding: 0.18rem 0.6rem;
-  border-radius: 20px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  background: rgba(76, 175, 130, 0.12);
-  color: #4caf82;
-  border: 1px solid rgba(76, 175, 130, 0.3);
-}
-
-.status-pill::before {
-  content: "";
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #4caf82;
-  flex-shrink: 0;
-}
-
 .dash-link-primary,
 .dash-link-secondary,
 .dash-actions button,
@@ -234,13 +209,6 @@
 
 .dash-card--toys-column {
   align-self: start;
-}
-
-.dash-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.65rem;
 }
 
 .dash-card-head h3,
@@ -437,27 +405,13 @@
   margin-top: 0.2rem;
 }
 
-.dash-pill-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.42rem;
-  margin-top: 0.42rem;
-}
-
 .dash-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.28rem 0.56rem;
-  border-radius: 999px;
   background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
   color: #f1ece3;
-  font-size: 0.76rem;
 }
 
 .dash-empty {
   color: var(--muted);
-  font-size: 0.78rem;
 }
 
 .dash-divider {

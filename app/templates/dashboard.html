@@ -44,7 +44,7 @@
 
   <div class="dash-grid">
     <section class="dash-card dash-card--table dash-card--session">
-      <div class="dash-card-head">
+      <div class="dash-card-head ui-card-head">
         <h3>Session</h3>
       </div>
       <div class="dash-avatar-row">
@@ -80,7 +80,7 @@
     </section>
 
     <section class="dash-card dash-card--table dash-card--scene">
-      <div class="dash-card-head">
+      <div class="dash-card-head ui-card-head">
         <h3>Aktuelle Szene</h3>
         <span id="dash-scene-pressure" class="dash-chip">—</span>
       </div>
@@ -99,7 +99,7 @@
     </section>
 
     <section class="dash-card dash-card--table dash-card--relationship">
-      <div class="dash-card-head dash-subhead">
+      <div class="dash-card-head dash-subhead ui-card-head">
         <h4>Phasenfortschritt</h4>
         <span id="dash-phase-chip" class="dash-chip">—</span>
       </div>
@@ -109,7 +109,7 @@
     </section>
 
     <section class="dash-card dash-card--table dash-card--relationship">
-      <div class="dash-card-head dash-subhead">
+      <div class="dash-card-head dash-subhead ui-card-head">
         <h4>Beziehung</h4>
         <span id="dash-control-level" class="dash-chip">—</span>
       </div>
@@ -117,16 +117,16 @@
     </section>
 
     <section class="dash-card dash-card--protocol">
-      <div class="dash-card-head">
+      <div class="dash-card-head ui-card-head">
         <h3>Protokoll und Langzeitdynamik</h3>
       </div>
       <div class="dash-list-block">
         <span class="dash-label">Aktive Regeln</span>
-        <div id="dash-active-rules" class="dash-pill-list"></div>
+        <div id="dash-active-rules" class="dash-pill-list ui-pill-list"></div>
       </div>
       <div class="dash-list-block">
         <span class="dash-label">Offene Anweisungen</span>
-        <div id="dash-open-orders" class="dash-pill-list"></div>
+        <div id="dash-open-orders" class="dash-pill-list ui-pill-list"></div>
       </div>
       <div class="dash-divider"></div>
       <dl class="dash-info-grid">
@@ -138,7 +138,7 @@
     </section>
 
     <section class="dash-card dash-card--table dash-card--profile">
-      <div class="dash-card-head">
+      <div class="dash-card-head ui-card-head">
         <h3>Wearer-Profil und Policy</h3>
       </div>
       <dl class="dash-info-grid">
@@ -162,7 +162,7 @@
     </section>
 
     <section class="dash-card dash-card--safety">
-      <div class="dash-card-head">
+      <div class="dash-card-head ui-card-head">
         <h3>Hygiene und Safety</h3>
       </div>
       <p id="dash-hygiene-rules" class="dash-copy">Regeln werden geladen…</p>
@@ -173,7 +173,7 @@
         <button id="dash-hygiene-open" type="button">Oeffnung beantragen</button>
       </div>
       <div id="dash-hygiene-relock-area" class="is-hidden">
-        <p class="dash-copy dash-copy-warn">Oeffnung aktiv. Nach Hygiene sofort wiederverschliessen.</p>
+        <p class="dash-copy dash-copy-warn ui-copy--warn">Oeffnung aktiv. Nach Hygiene sofort wiederverschliessen.</p>
         <label id="dash-hygiene-seal-row" class="dash-field is-hidden">Neue Plombennummer
           <input id="dash-hygiene-new-seal" type="text" placeholder="z.B. A-456" />
         </label>
@@ -199,7 +199,7 @@
     </section>
 
     <section class="dash-card dash-card--wide">
-      <div class="dash-card-head">
+      <div class="dash-card-head ui-card-head">
         <h3>Spiele und Resultate</h3>
       </div>
       <div id="dash-runs-list"><p class="dash-copy">Wird geladen …</p></div>
@@ -209,5 +209,13 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/roleplay_ui.js"></script>
+<script src="/static/js/ui_common.js"></script>
+<script src="/static/js/ui_runtime.js"></script>
+<script src="/static/js/dashboard_session_ui.js"></script>
+<script src="/static/js/dashboard_roleplay_ui.js"></script>
+<script src="/static/js/dashboard_hygiene_ui.js"></script>
+<script src="/static/js/dashboard_runs_ui.js"></script>
+<script src="/static/js/dashboard_safety_ui.js"></script>
 <script src="/static/js/dashboard.js?v={{ dashboard_js_version }}"></script>
 {% endblock %}

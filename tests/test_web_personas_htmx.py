@@ -31,6 +31,9 @@ def test_personas_page_loads_htmx_partial_container():
         assert resp.status_code == 200
         assert "https://unpkg.com/htmx.org@1.9.12" in resp.text
         assert 'hx-get="/personas/partials/list"' in resp.text
+        assert '/static/js/ui_common.js' in resp.text
+        assert '/static/js/ui_runtime.js' in resp.text
+        assert '/static/js/personas.js' in resp.text
 
 
 def test_personas_partial_renders_for_admin():
@@ -65,7 +68,7 @@ def test_personas_partial_uses_resilient_action_hooks():
         assert 'data-pm-action="edit"' in resp.text
         assert f'data-persona-id="{persona_id}"' in resp.text
         assert f'href="/api/personas/{persona_id}/export"' in resp.text
-        assert 'window.pmStartEdit && window.pmStartEdit' in resp.text
+        assert 'onclick=' not in resp.text
 
 
 def test_system_persona_detail_endpoint_returns_builtin_profile():

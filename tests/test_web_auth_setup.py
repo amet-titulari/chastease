@@ -213,7 +213,8 @@ def test_profile_page_renders_audio_gateway_section():
         assert "Audio und Sprache" in resp.text
         assert "Dein Wearer-Profil" in resp.text
         assert "/profile/audio" in resp.text
-        assert "/profile/audio/test" in resp.text
+        assert "/static/js/profile.js" in resp.text
+        assert "/static/js/ui_runtime.js" in resp.text
         assert "Voice Modus" not in resp.text
         assert "Voice Agent ID" not in resp.text
         assert "https://unpkg.com/htmx.org@1.9.12" in resp.text

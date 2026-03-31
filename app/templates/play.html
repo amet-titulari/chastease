@@ -44,7 +44,7 @@
         </button>
         <div class="play-roleplay-dropdown" id="play-roleplay-dropdown" role="dialog" aria-label="Roleplay Status">
           <section class="roleplay-card">
-            <div class="roleplay-card-head">
+            <div class="roleplay-card-head ui-card-head">
               <span class="roleplay-label">Aktuelle Szene</span>
               <span id="play-scene-pressure" class="roleplay-pressure">—</span>
             </div>
@@ -63,7 +63,7 @@
           </section>
 
           <section class="roleplay-card">
-            <div class="roleplay-card-head">
+            <div class="roleplay-card-head ui-card-head">
               <span class="roleplay-label">Phasenfortschritt</span>
               <span id="play-phase-chip" class="roleplay-chip">—</span>
             </div>
@@ -73,7 +73,7 @@
           </section>
 
           <section class="roleplay-card">
-            <div class="roleplay-card-head">
+            <div class="roleplay-card-head ui-card-head">
               <span class="roleplay-label">Beziehung</span>
               <span id="play-control-level" class="roleplay-chip">structured</span>
             </div>
@@ -83,11 +83,11 @@
           <section class="roleplay-card">
             <div class="roleplay-list-block">
               <span class="roleplay-label">Aktive Regeln</span>
-              <div id="play-active-rules" class="roleplay-pill-list"></div>
+              <div id="play-active-rules" class="roleplay-pill-list ui-pill-list"></div>
             </div>
             <div class="roleplay-list-block">
               <span class="roleplay-label">Offene Anweisungen</span>
-              <div id="play-open-orders" class="roleplay-pill-list"></div>
+              <div id="play-open-orders" class="roleplay-pill-list ui-pill-list"></div>
             </div>
             <div class="roleplay-list-block">
               <span class="roleplay-label">Langzeitdynamik</span>
@@ -102,7 +102,7 @@
                 </div>
               </div>
               <p id="play-memory-summary" class="roleplay-scene-objective">Noch keine Langzeitdynamik verfuegbar.</p>
-              <div id="play-memory-highlights" class="roleplay-pill-list"></div>
+              <div id="play-memory-highlights" class="roleplay-pill-list ui-pill-list"></div>
             </div>
           </section>
         </div>
@@ -206,5 +206,16 @@
 {% if lovense_status.enabled and lovense_status.sdk_url %}
 <script src="{{ lovense_status.sdk_url }}"></script>
 {% endif %}
+<script src="/static/js/roleplay_ui.js"></script>
+<script src="/static/js/ui_common.js"></script>
+<script src="/static/js/ui_runtime.js"></script>
+<script src="/static/js/play_chat_ui.js"></script>
+<script src="/static/js/play_lovense_ui.js"></script>
+<script src="/static/js/play_lovense_controller.js"></script>
+<script src="/static/js/play_shell_ui.js"></script>
+<script src="/static/js/play_voice_ui.js"></script>
+<script src="/static/js/play_roleplay_state_ui.js"></script>
+<script src="/static/js/play_session_ui.js"></script>
+<script src="/static/js/play_tasks_ui.js"></script>
 <script src="/static/js/play.js?v={{ play_js_version }}"></script>
 {% endblock %}
