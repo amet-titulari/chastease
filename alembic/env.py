@@ -18,6 +18,7 @@ from app.models import (  # noqa: F401
     llm_profile,
     media_asset,
     message,
+    otc_settings,
     persona,
     player_profile,
     push_subscription,

@@ -35,6 +35,8 @@ from app.services.audit_logger import audit_log
 from app.services.pose_similarity import extract_reference_landmarks_json, pose_similarity_available, score_against_reference
 from app.services.roleplay_progression import advance_roleplay_state_from_event
 from app.services.verification_analysis import analyze_verification, generate_game_run_summary
+from app.services.otc_estim import trigger_game_estim_event
+from app.services.lovense_estim import trigger_lovense_game_event
 
 router = APIRouter(prefix="/api/games", tags=["games"])
 logger = logging.getLogger(__name__)
@@ -2653,6 +2655,8 @@ async def verify_game_step(
         nonlocal run, step
 
         run.miss_count += 1
+        trigger_game_estim_event("fail", db)
+        trigger_lovense_game_event("fail", run, db)
         disable_retry_for_module = _is_single_pose_strict_module(run.module_key)
 
         if disable_retry_for_module:
@@ -2673,6 +2677,8 @@ async def verify_game_step(
                         ),
                     )
                 )
+                trigger_game_estim_event("penalty", db)
+                trigger_lovense_game_event("penalty", run, db)
 
             db.add(
                 Message(
@@ -2718,6 +2724,8 @@ async def verify_game_step(
                     ),
                 )
             )
+            trigger_game_estim_event("penalty", db)
+            trigger_lovense_game_event("penalty", run, db)
 
     if monitor_only:
         # Monitor checks run frequently; avoid writing chat messages for every tick.
@@ -2753,6 +2761,8 @@ async def verify_game_step(
     elif status == "confirmed":
         step.status = "passed"
         step.completed_at = now
+        trigger_game_estim_event("pass", db)
+        trigger_lovense_game_event("pass", run, db)
         db.add(
             Message(
                 session_id=run.session_id,
@@ -2823,6 +2833,8 @@ def mark_hold_started(
         db.add(run)
         db.commit()
         db.refresh(run)
+        trigger_game_estim_event("continuous", db)
+        trigger_lovense_game_event("continuous", run, db)
     return {"remaining_seconds": _remaining_seconds_for_run(run)}
 
 

@@ -32,7 +32,9 @@ from app.services.access_control import is_admin_user
 from app.services.auth_password import hash_password, is_legacy_password_hash, verify_legacy_password, verify_password_and_update
 from app.services.contract_service import default_contract_preferences, normalize_contract_preferences
 from app.services.games import as_public_module_payload, get_module, list_modules
+from app.models.otc_settings import OtcSettings as OtcSettingsModel
 from app.services.lovense import lovense_status_payload
+from app.services.lovense_estim import normalize_lovense_game_settings
 from app.services.toy_profile import TOY_PRESET_CHOICES, TOY_PROVIDER_CHOICES, get_toy_profile_from_preferences, merge_toy_profile
 
 router = APIRouter(tags=["web"])
@@ -45,6 +47,42 @@ def _asset_version(relative_path: str) -> str:
         return str(int(target.stat().st_mtime))
     except OSError:
         return "dev"
+
+
+def _otc_settings_payload(db: Session) -> dict:
+    row = db.query(OtcSettingsModel).filter(OtcSettingsModel.singleton_key == "default").first()
+    if row is None:
+        return {
+            "enabled": False, "otc_url": "", "channel": "A",
+            "intensity_continuous": 30, "ticks_continuous": 50, "pattern_continuous": "经典",
+            "intensity_fail": 40, "intensity_penalty": 70, "intensity_pass": 20,
+            "ticks_fail": 20, "ticks_penalty": 40, "ticks_pass": 10,
+            "pattern_fail": "经典", "pattern_penalty": "经典", "pattern_pass": "经典",
+        }
+    return {
+        "enabled": bool(row.enabled),
+        "otc_url": str(row.otc_url or ""),
+        "channel": str(row.channel or "A"),
+        "intensity_continuous": int(getattr(row, "intensity_continuous", None) or 30),
+        "ticks_continuous": int(getattr(row, "ticks_continuous", None) or 50),
+        "pattern_continuous": str(getattr(row, "pattern_continuous", None) or "经典"),
+        "intensity_fail": int(row.intensity_fail or 40),
+        "intensity_penalty": int(row.intensity_penalty or 70),
+        "intensity_pass": int(row.intensity_pass or 20),
+        "ticks_fail": int(row.ticks_fail or 20),
+        "ticks_penalty": int(row.ticks_penalty or 40),
+        "ticks_pass": int(row.ticks_pass or 10),
+        "pattern_fail": str(row.pattern_fail or "经典"),
+        "pattern_penalty": str(row.pattern_penalty or "经典"),
+        "pattern_pass": str(row.pattern_pass or "经典"),
+    }
+
+
+def _lovense_game_settings_payload(player: "PlayerProfile | None") -> dict:
+    if not player:
+        return normalize_lovense_game_settings({})
+    prefs = _load_json_dict(player.preferences_json)
+    return normalize_lovense_game_settings(prefs.get("lovense_game") or {})
 
 
 class ExperienceDraftRequest(BaseModel):
@@ -1754,6 +1792,8 @@ def toys_page(session_id: int, request: Request, db: Session = Depends(get_db)):
             "toys_js_version": _asset_version("js/toys.js"),
             "lovense_status": lovense_status_payload(),
             "toy_profile": get_toy_profile_from_preferences(_load_json_dict(player.preferences_json) if player else {}),
+            "otc_settings": _otc_settings_payload(db),
+            "lovense_game_settings": _lovense_game_settings_payload(player),
         },
     )
 
@@ -1836,14 +1876,15 @@ def games_page(request: Request, db: Session = Depends(get_db)):
         current_session = db.query(SessionModel).order_by(SessionModel.id.desc()).first()
 
     current_session_payload = None
+    games_page_player = None
     if current_session is not None:
         persona = db.query(Persona).filter(Persona.id == current_session.persona_id).first()
-        player = db.query(PlayerProfile).filter(PlayerProfile.id == current_session.player_profile_id).first()
+        games_page_player = db.query(PlayerProfile).filter(PlayerProfile.id == current_session.player_profile_id).first()
         current_session_payload = {
             "id": current_session.id,
             "status": current_session.status,
             "persona_name": persona.name if persona else "-",
-            "player_nickname": player.nickname if player else "-",
+            "player_nickname": games_page_player.nickname if games_page_player else "-",
         }
 
     modules = [as_public_module_payload(module) for module in list_modules()]
@@ -1872,6 +1913,8 @@ def games_page(request: Request, db: Session = Depends(get_db)):
             "current_user": user,
             "modules": modules,
             "current_session": current_session_payload,
+            "otc_settings": _otc_settings_payload(db),
+            "lovense_game_settings": _lovense_game_settings_payload(games_page_player),
         },
     )
 

@@ -1,5 +1,21 @@
 from app.models.message import Message
 
+# Per-step game events are suppressed from the AI context window.
+# The AI receives only the end-of-game summary (game_report) instead.
+_GAME_STEP_INTERNAL_TYPES: frozenset[str] = frozenset(
+    {
+        "game_started",
+        "game_step_fail",
+        "game_step_sample_pass",
+        "game_step_sample_fail",
+        "game_penalty",
+    }
+)
+
+
+def _is_ai_visible(row: Message) -> bool:
+    return str(row.message_type or "") not in _GAME_STEP_INTERNAL_TYPES
+
 
 def _shorten(value: str | None, limit: int = 180) -> str:
     text = str(value or "").strip().replace("\n", " ")
@@ -47,6 +63,7 @@ def build_context_window(
                     "message_type": row.message_type,
                 }
                 for row in rows
+                if _is_ai_visible(row)
             ],
             _build_memory_summary(rows),
         )
@@ -67,6 +84,7 @@ def build_context_window(
                 "message_type": row.message_type,
             }
             for row in newer
+            if _is_ai_visible(row)
         ],
         summary,
     )

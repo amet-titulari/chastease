@@ -1,11 +1,14 @@
 import hashlib
 import hmac
+import logging
 
 import httpx
 
 from app.config import settings
 from app.models.auth_user import AuthUser
 from app.models.player_profile import PlayerProfile
+
+logger = logging.getLogger("uvicorn.error")
 
 
 class LovenseConfigError(RuntimeError):
@@ -113,3 +116,40 @@ def request_lovense_auth_token(user: AuthUser, player: PlayerProfile | None = No
         **user_payload,
         "auth_token": auth_token,
     }
+
+
+def send_lovense_server_command(uid: str, action: str, time_sec: int) -> bool:
+    """Send a command to a connected Lovense toy via the server-to-server Basic API.
+
+    Requires the user to have their toy connected via Lovense Connect or Remote app.
+    ``action`` format: ``"Vibrate:16"`` (command:intensity 0-20).
+    ``time_sec``: duration in seconds; 0 means loop until stopped.
+    Returns True if the API accepted the command.
+    """
+    token = str(settings.lovense_developer_token or "").strip()
+    if not token or not uid:
+        return False
+
+    base_url = str(settings.lovense_api_base_url or "https://api.lovense-api.com/api/basicApi").rstrip("/")
+    cmd_url = f"{base_url}/command"
+    payload: dict = {
+        "token": token,
+        "uid": uid,
+        "command": "Function",
+        "action": action,
+        "timeSec": time_sec,
+        "stopPrevious": 1,
+    }
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.post(cmd_url, json=payload, headers={"Content-Type": "application/json"})
+            resp.raise_for_status()
+            data = resp.json()
+            code = int(data.get("code", 0))
+            if code != 200:
+                logger.debug("Lovense server command rejected: code=%s msg=%s", code, data.get("message"))
+                return False
+            return True
+    except Exception as exc:
+        logger.debug("Lovense server command failed: %s", exc)
+        return False

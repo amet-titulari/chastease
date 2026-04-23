@@ -28,6 +28,7 @@ from app.models import (  # noqa: F401
     item,
     media_asset,
     message,
+    otc_settings,
     persona,
     persona_task_template,
     player_profile,
@@ -40,13 +41,14 @@ from app.models import (  # noqa: F401
     task,
     verification,
 )
-from app.routers import chat, games, health, hygiene, inventory, inventory_postures, lovense, media, personas, push, safety, scenarios, sessions, tasks, verification as verification_router, voice, web
+from app.routers import chat, games, health, hygiene, inventory, inventory_postures, lovense, lovense_game, media, otc, personas, push, safety, scenarios, sessions, tasks, verification as verification_router, voice, web
 from app.security import CSRF_COOKIE_NAME, SAFE_HTTP_METHODS, csrf_tokens_match, extract_csrf_token, generate_csrf_token, is_cookie_secure, is_same_origin_request
 from app.services.media_retention import prune_expired_verification_media
 from app.services.proactive_messaging import sweep_proactive_messages_for_active_sessions
 from app.services.request_limits import check_request_limit
 from app.services.session_timer_sweeper import sweep_expired_active_sessions
 from app.services.task_sweeper import sweep_overdue_tasks_for_active_sessions
+from app.services.otc_client import start_otc_client, stop_otc_client
 
 
 scheduler: BackgroundScheduler | None = None
@@ -102,7 +104,23 @@ async def lifespan(_: FastAPI):
             scheduler.start()
         else:
             scheduler = None
+
+    # Start OTC client if configured and enabled.
+    from app.database import SessionLocal
+    from app.models.otc_settings import OtcSettings as _OtcSettings
+    try:
+        _db = SessionLocal()
+        try:
+            _otc = _db.query(_OtcSettings).filter(_OtcSettings.singleton_key == "default").first()
+            if _otc and _otc.enabled and _otc.otc_url:
+                start_otc_client(str(_otc.otc_url).strip())
+        finally:
+            _db.close()
+    except Exception:
+        pass
+
     yield
+    stop_otc_client()
     if scheduler is not None:
         scheduler.shutdown(wait=False)
         scheduler = None
@@ -250,6 +268,8 @@ app.include_router(inventory_postures.router)
 app.include_router(media.router)
 app.include_router(voice.router)
 app.include_router(lovense.router)
+app.include_router(lovense_game.router)
+app.include_router(otc.router)
 app.include_router(web.router)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.mount("/media", StaticFiles(directory=settings.media_dir), name="media")

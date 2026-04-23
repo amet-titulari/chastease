@@ -18,7 +18,10 @@ Abgeschlossene Punkte wurden nach [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md) a
 
 ## Backlog (Post-MVP)
 
-### v0.6 – Gamification
+### v0.6.1 – Integration
+- [ ] Integration E-Stim DG-Lab Coyote 3 mit Howl
+
+### v0.6.2 – Gamification
 - [ ] Achievements / Abzeichen
 - [ ] Streak-Tracking
 - [ ] Statistiken-Dashboard (Gesamtdauer, Aufgaben-Rate, etc.)

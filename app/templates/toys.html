@@ -27,7 +27,31 @@
      data-toy-default-intensity="{{ toy_profile.default_intensity }}"
      data-toy-default-duration="{{ toy_profile.default_duration_seconds }}"
      data-toy-default-pause="{{ toy_profile.default_pause_seconds }}"
-     data-toy-default-loops="{{ toy_profile.default_loops }}">
+     data-toy-default-loops="{{ toy_profile.default_loops }}"
+     data-otc-enabled="{{ '1' if otc_settings.enabled else '0' }}"
+     data-otc-url="{{ otc_settings.otc_url or '' }}"
+     data-otc-channel="{{ otc_settings.channel or 'A' }}"
+     data-otc-intensity-continuous="{{ otc_settings.intensity_continuous }}"
+     data-otc-intensity-fail="{{ otc_settings.intensity_fail }}"
+     data-otc-intensity-penalty="{{ otc_settings.intensity_penalty }}"
+     data-otc-intensity-pass="{{ otc_settings.intensity_pass }}"
+     data-otc-ticks-continuous="{{ otc_settings.ticks_continuous }}"
+     data-otc-ticks-fail="{{ otc_settings.ticks_fail }}"
+     data-otc-ticks-penalty="{{ otc_settings.ticks_penalty }}"
+     data-otc-ticks-pass="{{ otc_settings.ticks_pass }}"
+     data-otc-pattern-continuous="{{ otc_settings.pattern_continuous }}"
+     data-otc-pattern-fail="{{ otc_settings.pattern_fail }}"
+     data-otc-pattern-penalty="{{ otc_settings.pattern_penalty }}"
+     data-otc-pattern-pass="{{ otc_settings.pattern_pass }}"
+     data-lovense-game-enabled="{{ '1' if lovense_game_settings.enabled else '0' }}"
+     data-lovense-game-intensity-continuous="{{ lovense_game_settings.intensity_continuous }}"
+     data-lovense-game-duration-continuous="{{ lovense_game_settings.duration_continuous }}"
+     data-lovense-game-intensity-fail="{{ lovense_game_settings.intensity_fail }}"
+     data-lovense-game-duration-fail="{{ lovense_game_settings.duration_fail }}"
+     data-lovense-game-intensity-penalty="{{ lovense_game_settings.intensity_penalty }}"
+     data-lovense-game-duration-penalty="{{ lovense_game_settings.duration_penalty }}"
+     data-lovense-game-intensity-pass="{{ lovense_game_settings.intensity_pass }}"
+     data-lovense-game-duration-pass="{{ lovense_game_settings.duration_pass }}">
   <section class="dash-hero">
     <div class="dash-hero-top">
       <div class="dash-hero-left">
@@ -202,93 +226,239 @@
             </div>
           </div>
         </details>
-      </div>
-    </section>
-
-    <section class="dash-card dash-card--lovense dash-card--toys-column">
-      <div class="dash-card-head">
-        <div class="dash-card-head dash-card-head--stack">
-          <div>
-            <h4>Lovense KI-Policy</h4>
-            <p class="dash-copy">Leere Felder bedeuten keine zusaetzliche Grenze. Die technischen Sicherheitsgrenzen des Systems bleiben trotzdem aktiv.</p>
+        <details class="dash-lovense-manual">
+          <summary class="dash-lovense-manual-summary">
+            <span>KI-Policy</span>
+            <span class="dash-lovense-manual-hint">Grenzen und erlaubte Kommandos f&uuml;r die KI-Steuerung</span>
+          </summary>
+          <div class="dash-lovense-manual-body">
+            <p class="dash-copy" style="margin-bottom:0.5rem">Leere Felder bedeuten keine zus&auml;tzliche Grenze. Die technischen Sicherheitsgrenzen des Systems bleiben trotzdem aktiv.</p>
+            <div class="dash-lovense-control-grid">
+              <label class="dash-field">Min Intensitaet
+                <input id="toy-policy-min-intensity" type="number" min="1" max="20" step="1" placeholder="offen" />
+              </label>
+              <label class="dash-field">Max Intensitaet
+                <input id="toy-policy-max-intensity" type="number" min="1" max="20" step="1" placeholder="offen" />
+              </label>
+              <label class="dash-field">Min Schritt (Sek.)
+                <input id="toy-policy-min-step-duration" type="number" min="1" max="180" step="1" placeholder="offen" />
+              </label>
+              <label class="dash-field">Max Schritt (Sek.)
+                <input id="toy-policy-max-step-duration" type="number" min="1" max="180" step="1" placeholder="offen" />
+              </label>
+              <label class="dash-field">Min Pause (Sek.)
+                <input id="toy-policy-min-pause" type="number" min="0" max="300" step="1" placeholder="offen" />
+              </label>
+              <label class="dash-field">Max Pause (Sek.)
+                <input id="toy-policy-max-pause" type="number" min="0" max="300" step="1" placeholder="offen" />
+              </label>
+              <label class="dash-field">Max Plan (Sek.)
+                <input id="toy-policy-max-plan-duration" type="number" min="1" max="900" step="1" placeholder="offen" />
+              </label>
+              <label class="dash-field">Max Schritte
+                <input id="toy-policy-max-plan-steps" type="number" min="1" max="24" step="1" placeholder="offen" />
+              </label>
+            </div>
+            <div class="dash-list-block">
+              <span class="dash-label">Erlaubte Kommandos</span>
+              <div class="dash-actions">
+                <label class="dash-toggle"><input id="toy-policy-allow-vibrate" type="checkbox" checked /> Vibrate</label>
+                <label class="dash-toggle"><input id="toy-policy-allow-pulse" type="checkbox" checked /> Pulse</label>
+                <label class="dash-toggle"><input id="toy-policy-allow-wave" type="checkbox" checked /> Wave</label>
+                <label class="dash-toggle"><input id="toy-policy-allow-preset" type="checkbox" checked /> Presets</label>
+                <label class="dash-toggle"><input id="toy-policy-allow-append" type="checkbox" checked /> Append-Modus</label>
+              </div>
+            </div>
+            <div class="dash-actions">
+              <button id="toy-policy-save" type="button">Policy speichern</button>
+            </div>
+            <p id="toy-policy-status" class="dash-copy">Policy wird geladen&hellip;</p>
           </div>
-        </div>
-      </div>
-      <div class="dash-lovense-console">
-        <div class="dash-lovense-control-grid">
-          <label class="dash-field">Min Intensitaet
-            <input id="toy-policy-min-intensity" type="number" min="1" max="20" step="1" placeholder="offen" />
-          </label>
-          <label class="dash-field">Max Intensitaet
-            <input id="toy-policy-max-intensity" type="number" min="1" max="20" step="1" placeholder="offen" />
-          </label>
-          <label class="dash-field">Min Schritt (Sek.)
-            <input id="toy-policy-min-step-duration" type="number" min="1" max="180" step="1" placeholder="offen" />
-          </label>
-          <label class="dash-field">Max Schritt (Sek.)
-            <input id="toy-policy-max-step-duration" type="number" min="1" max="180" step="1" placeholder="offen" />
-          </label>
-          <label class="dash-field">Min Pause (Sek.)
-            <input id="toy-policy-min-pause" type="number" min="0" max="300" step="1" placeholder="offen" />
-          </label>
-          <label class="dash-field">Max Pause (Sek.)
-            <input id="toy-policy-max-pause" type="number" min="0" max="300" step="1" placeholder="offen" />
-          </label>
-          <label class="dash-field">Max Plan (Sek.)
-            <input id="toy-policy-max-plan-duration" type="number" min="1" max="900" step="1" placeholder="offen" />
-          </label>
-          <label class="dash-field">Max Schritte
-            <input id="toy-policy-max-plan-steps" type="number" min="1" max="24" step="1" placeholder="offen" />
-          </label>
-        </div>
-        <div class="dash-list-block">
-          <span class="dash-label">Erlaubte Kommandos</span>
-          <div class="dash-actions">
-            <label class="dash-toggle"><input id="toy-policy-allow-vibrate" type="checkbox" checked /> Vibrate</label>
-            <label class="dash-toggle"><input id="toy-policy-allow-pulse" type="checkbox" checked /> Pulse</label>
-            <label class="dash-toggle"><input id="toy-policy-allow-wave" type="checkbox" checked /> Wave</label>
-            <label class="dash-toggle"><input id="toy-policy-allow-preset" type="checkbox" checked /> Presets</label>
-            <label class="dash-toggle"><input id="toy-policy-allow-append" type="checkbox" checked /> Append-Modus</label>
+        </details>
+        <details class="dash-lovense-manual">
+          <summary class="dash-lovense-manual-summary">
+            <span>Spiel-Feedback</span>
+            <span class="dash-lovense-manual-hint">Vibrationsreize bei Spielereignissen (Fehler / Penalty / Bestanden)</span>
+          </summary>
+          <div class="dash-lovense-manual-body">
+            <p class="dash-copy" style="margin-bottom:0.5rem">
+              Vibration bei Spielereignissen &uuml;ber die Lovense Connect App (Server-to-Server).
+              Intensit&auml;t 0&ndash;20, Dauer in Sekunden (0&nbsp;=&nbsp;Dauerschleife bis zum n&auml;chsten Ereignis).
+              Erfordert eine aktive Verbindung &uuml;ber die Lovense Connect App.
+            </p>
+            <div class="dash-actions" style="margin-bottom:0.75rem">
+              <label class="dash-toggle">
+                <input id="lovense-game-enabled" type="checkbox" />
+                Spiel-Feedback aktivieren
+              </label>
+            </div>
+            <div class="dash-otc-event-table" style="margin-top:0.5rem">
+              <div class="dash-otc-event-row dash-otc-event-row--header">
+                <span>Ereignis</span>
+                <span>Intensit&auml;t (0&ndash;20)</span>
+                <span>Dauer (Sek.)</span>
+              </div>
+              <div class="dash-otc-event-row">
+                <span><strong>Dauerstimulation</strong><br><small style="color:#9db1c7;font-weight:400"> &mdash; Hintergrundvibration beim Start jeder Pose. Dauer&nbsp;=&nbsp;0 bedeutet <em>Dauerschleife</em>.</small></span>
+                <input id="lovense-game-intensity-continuous" type="number" min="0" max="20" step="1" />
+                <input id="lovense-game-duration-continuous" type="number" min="0" max="300" step="1" />
+              </div>
+              <div class="dash-otc-event-row">
+                <span><strong>Fehler</strong><br><small style="color:#9db1c7;font-weight:400"> &mdash; Regel verletzt oder falsche Pose eingereicht.</small></span>
+                <input id="lovense-game-intensity-fail" type="number" min="0" max="20" step="1" />
+                <input id="lovense-game-duration-fail" type="number" min="0" max="300" step="1" />
+              </div>
+              <div class="dash-otc-event-row">
+                <span><strong>Penalty</strong><br><small style="color:#9db1c7;font-weight:400"> &mdash; Zeitstrafe wird ausgel&ouml;st.</small></span>
+                <input id="lovense-game-intensity-penalty" type="number" min="0" max="20" step="1" />
+                <input id="lovense-game-duration-penalty" type="number" min="0" max="300" step="1" />
+              </div>
+              <div class="dash-otc-event-row">
+                <span><strong>Bestanden</strong><br><small style="color:#9db1c7;font-weight:400"> &mdash; Pose korrekt eingenommen und best&auml;tigt.</small></span>
+                <input id="lovense-game-intensity-pass" type="number" min="0" max="20" step="1" />
+                <input id="lovense-game-duration-pass" type="number" min="0" max="300" step="1" />
+              </div>
+            </div>
+            <div class="dash-actions" style="margin-top:0.75rem">
+              <button id="lovense-game-save" type="button">Spielfeedback speichern</button>
+              <button id="lovense-game-test" type="button" style="background:var(--color-accent-secondary,#4a9)">Test-Impuls</button>
+            </div>
+            <p id="lovense-game-status" class="dash-copy">&nbsp;</p>
           </div>
-        </div>
-        <div class="dash-actions">
-          <button id="toy-policy-save" type="button">Policy speichern</button>
-        </div>
-        <p id="toy-policy-status" class="dash-copy">Policy wird geladen…</p>
+        </details>
       </div>
     </section>
 
     <section class="dash-card dash-card--lovense dash-card--toys-column">
       <div class="dash-card-head">
         <div>
-          <h3>Weitere Integrationen</h3>
-          <p class="dash-copy">Der Bereich bleibt provider-orientiert, damit spaetere Hardware dieselbe Struktur wie Lovense nutzen kann.</p>
+          <h3>DG-Lab Coyote 3 <small style="font-size:0.78rem;color:#9db1c7;font-weight:400">(E-Stim via OTC)</small></h3>
+          <p class="dash-copy">WebSocket-Verbindung zum open-DGLAB-controller f&uuml;r automatisches E-Stim-Feedback bei Spielereignissen.</p>
         </div>
-        <span class="dash-chip">Roadmap</span>
-      </div>
-      <div class="dash-lovense-statusbar">
-        <p class="dash-copy"><strong>TTLock</strong> ist als naechster Provider vorbereitet.</p>
-        <p class="dash-copy">Danach koennen weitere API- oder Bluetooth-Geraete in dieselbe Device- und Policy-Struktur eingehangen werden.</p>
+        <span id="otc-status-pill" class="dash-chip">--</span>
       </div>
       <div class="dash-lovense-console">
-        <div class="dash-toy-provider">
-          <div class="dash-card-head">
-            <h4>TTLock</h4>
-            <span class="dash-chip">geplant</span>
-          </div>
-          <p class="dash-copy">Schlosszuordnung, Freigaben, Aktionen und Audit fuer physische Lock-Integrationen.</p>
+        <div class="dash-lovense-control-grid">
+          <label class="dash-field">Aktiviert
+            <select id="otc-enabled">
+              <option value="false">Deaktiviert</option>
+              <option value="true">Aktiviert</option>
+            </select>
+          </label>
+          <label class="dash-field">OTC WebSocket URL
+            <input id="otc-url" type="text" maxlength="512" placeholder="ws://192.168.1.x:60536/1" />
+          </label>
+          <label class="dash-field">Kanal
+            <select id="otc-channel">
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="AB">A + B (beide)</option>
+            </select>
+          </label>
         </div>
-        <div class="dash-toy-provider">
-          <div class="dash-card-head">
-            <h4>Gemeinsame Struktur</h4>
-            <span class="dash-chip">bereit</span>
+
+        <details class="dash-lovense-manual">
+          <summary class="dash-lovense-manual-summary">
+            <span>Ereignis-Einstellungen</span>
+            <span class="dash-lovense-manual-hint">Intensit&auml;t, Dauer und Pattern pro Spielereignis</span>
+          </summary>
+          <div class="dash-lovense-manual-body">
+            <p class="dash-copy" style="margin-bottom:0.75rem">
+              1&nbsp;Tick&nbsp;=&nbsp;100&thinsp;ms &middot; Intensit&auml;t 0&ndash;100 &middot;
+              Pattern: interne DG-Lab Bezeichnung (Auswahl unten entspricht den Ger&auml;te-Namen)
+            </p>
+            {% set otc_patterns = [
+              ("经典",   "Klassisch"),
+              ("强烈",   "Intensiv"),
+              ("潮汐",   "Tide"),
+              ("交替脉冲","Wechselimpuls"),
+              ("慢降",   "Langsam"),
+              ("猛击",   "Schlag"),
+              ("随机",   "Zufällig")
+            ] %}
+            <div class="dash-lovense-control-grid">
+
+              <label class="dash-field" style="grid-column:span 3">
+                <strong style="color:#7ec8f7">&#9654; Dauerstimulation</strong>
+                <small style="color:#9db1c7;font-weight:400"> &mdash; Hintergrundreiz beim Start jeder neuen Spielrunde / Pose. Macht das Spiel schwieriger und spannender. Ticks&nbsp;=&nbsp;0 bedeutet <em>Dauerschleife</em> bis zum n&auml;chsten Ereignis.</small>
+              </label>
+              <label class="dash-field">Intensit&auml;t
+                <input id="otc-intensity-continuous" type="number" min="0" max="100" step="1" />
+              </label>
+              <label class="dash-field">Dauer (Ticks)
+                <input id="otc-ticks-continuous" type="number" min="0" max="300" step="1" />
+              </label>
+              <label class="dash-field">Pattern
+                <select id="otc-pattern-continuous">
+                  {% for val, label in otc_patterns %}
+                  <option value="{{ val }}">{{ label }} ({{ val }})</option>
+                  {% endfor %}
+                </select>
+              </label>
+
+              <label class="dash-field" style="grid-column:span 3">
+                <strong style="color:#ffb4b4">&#9888; Regelverstoß / Fehler</strong>
+                <small style="color:#9db1c7;font-weight:400"> &mdash; Bewegung erkannt (Don't-Move), Pose nicht bestanden (Posture). Bestrafung.</small>
+              </label>
+              <label class="dash-field">Intensit&auml;t
+                <input id="otc-intensity-fail" type="number" min="0" max="100" step="1" />
+              </label>
+              <label class="dash-field">Dauer (Ticks)
+                <input id="otc-ticks-fail" type="number" min="0" max="300" step="1" />
+              </label>
+              <label class="dash-field">Pattern
+                <select id="otc-pattern-fail">
+                  {% for val, label in otc_patterns %}
+                  <option value="{{ val }}">{{ label }} ({{ val }})</option>
+                  {% endfor %}
+                </select>
+              </label>
+
+              <label class="dash-field" style="grid-column:span 3">
+                <strong style="color:#ffc94a">&#9889; Straf-Verl&auml;ngerung (Penalty)</strong>
+                <small style="color:#9db1c7;font-weight:400"> &mdash; Sessionl&auml;nge wird verl&auml;ngert. Zus&auml;tzliche Bestrafung.</small>
+              </label>
+              <label class="dash-field">Intensit&auml;t
+                <input id="otc-intensity-penalty" type="number" min="0" max="100" step="1" />
+              </label>
+              <label class="dash-field">Dauer (Ticks)
+                <input id="otc-ticks-penalty" type="number" min="0" max="300" step="1" />
+              </label>
+              <label class="dash-field">Pattern
+                <select id="otc-pattern-penalty">
+                  {% for val, label in otc_patterns %}
+                  <option value="{{ val }}">{{ label }} ({{ val }})</option>
+                  {% endfor %}
+                </select>
+              </label>
+
+              <label class="dash-field" style="grid-column:span 3">
+                <strong style="color:#9de2bf">&#10003; Erfolg / Bestanden</strong>
+                <small style="color:#9db1c7;font-weight:400"> &mdash; Pose best&auml;tigt, Position gehalten. Belohnungsreiz.</small>
+              </label>
+              <label class="dash-field">Intensit&auml;t
+                <input id="otc-intensity-pass" type="number" min="0" max="100" step="1" />
+              </label>
+              <label class="dash-field">Dauer (Ticks)
+                <input id="otc-ticks-pass" type="number" min="0" max="300" step="1" />
+              </label>
+              <label class="dash-field">Pattern
+                <select id="otc-pattern-pass">
+                  {% for val, label in otc_patterns %}
+                  <option value="{{ val }}">{{ label }} ({{ val }})</option>
+                  {% endfor %}
+                </select>
+              </label>
+
+            </div>
           </div>
-          <dl class="dash-info-grid">
-            <dt>Provider</dt><dd>Lovense, TTLock, weitere APIs</dd>
-            <dt>Policies</dt><dd>Grenzen, Freigaben, erlaubte Aktionen</dd>
-            <dt>Audit</dt><dd>Verbindungs- und Steuerhistorie</dd>
-          </dl>
+        </details>
+
+        <div class="dash-actions">
+          <button id="otc-save" type="button">Einstellungen speichern</button>
+          <button id="otc-test" type="button" class="dash-link-secondary">Testimpuls senden</button>
         </div>
+        <p id="otc-status-text" class="dash-copy">Einstellungen werden geladen&hellip;</p>
       </div>
     </section>
   </div>

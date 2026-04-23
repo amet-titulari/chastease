@@ -817,4 +817,254 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (toysLovenseEnabled && (toysLovenseConfigured || toysLovenseSimulator) && toysShouldAutoInitLovense()) {
     toysInitLovense().catch(() => {});
   }
+  toysOtcInit();
+  toysLovenseGameInit();
 });
+
+// ─── OTC / Coyote 3 ──────────────────────────────────────────────────────────
+
+function toysOtcSetStatus(message, pill) {
+  const text = document.getElementById("otc-status-text");
+  const chip = document.getElementById("otc-status-pill");
+  if (text) text.textContent = message || "—";
+  if (chip && pill != null) chip.textContent = pill;
+}
+
+function toysOtcApply(settings) {
+  const s = settings || {};
+  const enabledEl = document.getElementById("otc-enabled");
+  const urlEl = document.getElementById("otc-url");
+  const channelEl = document.getElementById("otc-channel");
+  if (enabledEl) enabledEl.value = s.enabled ? "true" : "false";
+  if (urlEl) urlEl.value = String(s.otc_url || "");
+  if (channelEl) channelEl.value = String(s.channel || "A");
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value != null ? String(value) : "";
+  };
+  set("otc-intensity-continuous", s.intensity_continuous ?? 30);
+  set("otc-ticks-continuous", s.ticks_continuous ?? 50);
+  set("otc-pattern-continuous", s.pattern_continuous ?? "经典");
+  set("otc-intensity-fail", s.intensity_fail);
+  set("otc-ticks-fail", s.ticks_fail);
+  set("otc-pattern-fail", s.pattern_fail ?? "经典");
+  set("otc-intensity-penalty", s.intensity_penalty);
+  set("otc-ticks-penalty", s.ticks_penalty);
+  set("otc-pattern-penalty", s.pattern_penalty ?? "经典");
+  set("otc-intensity-pass", s.intensity_pass);
+  set("otc-ticks-pass", s.ticks_pass);
+  set("otc-pattern-pass", s.pattern_pass ?? "经典");
+}
+
+async function toysOtcLoad() {
+  try {
+    const data = await toysGet("/api/otc/settings");
+    toysOtcApply(data);
+    const status = await toysGet("/api/otc/status");
+    const connected = Boolean(status.connected);
+    const enabled = Boolean(data.enabled);
+    toysOtcSetStatus(
+      !enabled ? "OTC deaktiviert." : (connected ? "OTC verbunden." : "OTC aktiviert, Verbindung wird aufgebaut…"),
+      !enabled ? "aus" : (connected ? "verbunden" : "getrennt")
+    );
+  } catch (err) {
+    toysOtcSetStatus(`Laden fehlgeschlagen (${String(err)})`, "Fehler");
+  }
+}
+
+function toysOtcCollect() {
+  const read = (id) => {
+    const el = document.getElementById(id);
+    return el ? String(el.value || "").trim() : "";
+  };
+  const readInt = (id) => {
+    const v = read(id);
+    return v !== "" ? Number(v) : 0;
+  };
+  return {
+    enabled: read("otc-enabled") === "true",
+    otc_url: read("otc-url") || null,
+    channel: read("otc-channel") || "A",
+    intensity_continuous: readInt("otc-intensity-continuous"),
+    intensity_fail: readInt("otc-intensity-fail"),
+    intensity_penalty: readInt("otc-intensity-penalty"),
+    intensity_pass: readInt("otc-intensity-pass"),
+    ticks_continuous: readInt("otc-ticks-continuous"),
+    ticks_fail: readInt("otc-ticks-fail"),
+    ticks_penalty: readInt("otc-ticks-penalty"),
+    ticks_pass: readInt("otc-ticks-pass"),
+    pattern_continuous: read("otc-pattern-continuous") || "经典",
+    pattern_fail: read("otc-pattern-fail") || "经典",
+    pattern_penalty: read("otc-pattern-penalty") || "经典",
+    pattern_pass: read("otc-pattern-pass") || "经典",
+  };
+}
+
+async function toysOtcSave() {
+  const btn = document.getElementById("otc-save");
+  if (btn) btn.disabled = true;
+  toysOtcSetStatus("Wird gespeichert…");
+  try {
+    const resp = await fetch("/api/otc/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(toysOtcCollect()),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
+    toysOtcApply(data);
+    toysOtcSetStatus("Einstellungen gespeichert.", data.enabled ? "aktiv" : "aus");
+  } catch (err) {
+    toysOtcSetStatus(`Speichern fehlgeschlagen (${String(err)})`, "Fehler");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function toysOtcTest() {
+  toysOtcSetStatus("Testimpuls wird gesendet\u2026");
+  try {
+    const channel = String(document.getElementById("otc-channel")?.value || "A");
+    const intensity = Number(document.getElementById("otc-intensity-continuous")?.value || 30);
+    const ticks = Number(document.getElementById("otc-ticks-continuous")?.value || 15);
+    const pattern = String(document.getElementById("otc-pattern-continuous")?.value || "\u7ecf\u5178");
+    await toysPost("/api/otc/test", { channel, intensity, ticks, pattern });
+    toysOtcSetStatus(`Testimpuls gesendet (Kanal\u00a0${channel}, Intensit\u00e4t\u00a0${intensity}, ${ticks}\u00a0Ticks).`, "OK");
+  } catch (err) {
+    toysOtcSetStatus(`Testimpuls fehlgeschlagen (${String(err)})`, "Fehler");
+  }
+}
+
+function toysOtcInitFromDataset() {
+  const s = toysShell?.dataset || {};
+  toysOtcApply({
+    enabled: s.otcEnabled === "1",
+    otc_url: s.otcUrl || "",
+    channel: s.otcChannel || "A",
+    intensity_continuous: Number(s.otcIntensityContinuous || 30),
+    intensity_fail: Number(s.otcIntensityFail || 40),
+    intensity_penalty: Number(s.otcIntensityPenalty || 70),
+    intensity_pass: Number(s.otcIntensityPass || 20),
+    ticks_continuous: Number(s.otcTicksContinuous || 50),
+    ticks_fail: Number(s.otcTicksFail || 20),
+    ticks_penalty: Number(s.otcTicksPenalty || 40),
+    ticks_pass: Number(s.otcTicksPass || 10),
+    pattern_continuous: s.otcPatternContinuous || "\u7ecf\u5178",
+    pattern_fail: s.otcPatternFail || "经典",
+    pattern_penalty: s.otcPatternPenalty || "经典",
+    pattern_pass: s.otcPatternPass || "经典",
+  });
+}
+
+function toysOtcInit() {
+  toysOtcInitFromDataset();
+  document.getElementById("otc-save")?.addEventListener("click", () => {
+    toysOtcSave().catch((err) => toysOtcSetStatus(`Fehler: ${String(err)}`, "Fehler"));
+  });
+  document.getElementById("otc-test")?.addEventListener("click", () => {
+    toysOtcTest().catch((err) => toysOtcSetStatus(`Fehler: ${String(err)}`, "Fehler"));
+  });
+  // Refresh live status from server (non-blocking)
+  toysOtcLoad().catch(() => {});
+}
+
+// ─── Lovense Spiel-Feedback ───────────────────────────────────────────────────
+
+function toysLovenseGameSetStatus(msg) {
+  const el = document.getElementById("lovense-game-status");
+  if (el) el.textContent = msg || "\u00a0";
+}
+
+function toysLovenseGameApply(s) {
+  s = s || {};
+  const enabled = document.getElementById("lovense-game-enabled");
+  if (enabled) enabled.checked = Boolean(s.enabled);
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v != null ? String(v) : ""; };
+  set("lovense-game-intensity-continuous", s.intensity_continuous ?? 6);
+  set("lovense-game-duration-continuous",  s.duration_continuous  ?? 0);
+  set("lovense-game-intensity-fail",       s.intensity_fail       ?? 18);
+  set("lovense-game-duration-fail",        s.duration_fail        ?? 3);
+  set("lovense-game-intensity-penalty",    s.intensity_penalty    ?? 20);
+  set("lovense-game-duration-penalty",     s.duration_penalty     ?? 5);
+  set("lovense-game-intensity-pass",       s.intensity_pass       ?? 8);
+  set("lovense-game-duration-pass",        s.duration_pass        ?? 2);
+}
+
+function toysLovenseGameCollect() {
+  const num = (id, lo, hi) => {
+    const v = parseInt(document.getElementById(id)?.value || "0", 10);
+    return Math.max(lo, Math.min(hi, isNaN(v) ? lo : v));
+  };
+  return {
+    enabled:              Boolean(document.getElementById("lovense-game-enabled")?.checked),
+    intensity_continuous: num("lovense-game-intensity-continuous", 0, 20),
+    duration_continuous:  num("lovense-game-duration-continuous",  0, 300),
+    intensity_fail:       num("lovense-game-intensity-fail",       0, 20),
+    duration_fail:        num("lovense-game-duration-fail",        0, 300),
+    intensity_penalty:    num("lovense-game-intensity-penalty",    0, 20),
+    duration_penalty:     num("lovense-game-duration-penalty",     0, 300),
+    intensity_pass:       num("lovense-game-intensity-pass",       0, 20),
+    duration_pass:        num("lovense-game-duration-pass",        0, 300),
+  };
+}
+
+async function toysLovenseGameLoad() {
+  const data = await toysGet("/api/lovense-game/settings");
+  toysLovenseGameApply(data);
+}
+
+async function toysLovenseGameSave() {
+  toysLovenseGameSetStatus("Wird gespeichert\u2026");
+  const body = toysLovenseGameCollect();
+  const resp = await fetch("/api/lovense-game/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  toysLovenseGameSetStatus("Gespeichert.");
+}
+
+async function toysLovenseGameTest() {
+  toysLovenseGameSetStatus("Sende Test-Impuls\u2026");
+  const intensity = parseInt(document.getElementById("lovense-game-intensity-fail")?.value || "12", 10) || 12;
+  const resp = await fetch("/api/lovense-game/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ intensity: Math.max(1, Math.min(20, intensity)), duration: 2 }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (data.ok) {
+    toysLovenseGameSetStatus(`Test gesendet an ${data.uid || "Toy"} \u2013 Aktion: ${data.action || ""}.`);
+  } else {
+    toysLovenseGameSetStatus(`Fehler: ${data.error || "Unbekannt"}`);
+  }
+}
+
+function toysLovenseGameInitFromDataset() {
+  const s = toysShell?.dataset || {};
+  toysLovenseGameApply({
+    enabled:              s.lovenseGameEnabled === "1",
+    intensity_continuous: Number(s.lovenseGameIntensityContinuous ?? 6),
+    duration_continuous:  Number(s.lovenseGameDurationContinuous  ?? 0),
+    intensity_fail:       Number(s.lovenseGameIntensityFail       ?? 18),
+    duration_fail:        Number(s.lovenseGameDurationFail        ?? 3),
+    intensity_penalty:    Number(s.lovenseGameIntensityPenalty    ?? 20),
+    duration_penalty:     Number(s.lovenseGameDurationPenalty     ?? 5),
+    intensity_pass:       Number(s.lovenseGameIntensityPass       ?? 8),
+    duration_pass:        Number(s.lovenseGameDurationPass        ?? 2),
+  });
+}
+
+function toysLovenseGameInit() {
+  toysLovenseGameInitFromDataset();
+  document.getElementById("lovense-game-save")?.addEventListener("click", () => {
+    toysLovenseGameSave().catch((err) => toysLovenseGameSetStatus(`Fehler: ${String(err)}`));
+  });
+  document.getElementById("lovense-game-test")?.addEventListener("click", () => {
+    toysLovenseGameTest().catch((err) => toysLovenseGameSetStatus(`Fehler: ${String(err)}`));
+  });
+  toysLovenseGameLoad().catch(() => {});
+}

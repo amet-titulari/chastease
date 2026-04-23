@@ -9,6 +9,7 @@ from app.models.hygiene_opening import HygieneOpening
 from app.models.item import Item
 from app.models.llm_profile import LlmProfile
 from app.models.media_asset import MediaAsset
+from app.models.otc_settings import OtcSettings
 from app.models.message import Message
 from app.models.persona import Persona
 from app.models.persona_task_template import PersonaTaskTemplate
@@ -35,6 +36,7 @@ __all__ = [
     "Item",
     "MediaAsset",
     "Message",
+    "OtcSettings",
     "Persona",
     "PersonaTaskTemplate",
     "PlayerProfile",
