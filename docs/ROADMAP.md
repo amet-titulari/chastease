@@ -18,29 +18,30 @@ Abgeschlossene Punkte wurden nach [ROADMAP_COMPLETED.md](ROADMAP_COMPLETED.md) a
 
 ## Backlog (Post-MVP)
 
-### v0.6.1 – Integration
-- [ ] Integration E-Stim DG-Lab Coyote 3 mit Howl
+### v0.6.0 – Integration
+- [x] Integration E-Stim DG-Lab Coyote 3 mit Howl
 
-### v0.6.2 – Gamification
+### v0.7.0 – Gamification
 - [ ] Achievements / Abzeichen
 - [ ] Streak-Tracking
 - [ ] Statistiken-Dashboard (Gesamtdauer, Aufgaben-Rate, etc.)
 - [ ] Punkte-System
 
-### v0.6.x – Weitere Schnittstellen
+### v0.X.x – Weitere Schnittstellen
 - [ ] Extensions TTLock für Tresor
 - [ ] Extensions Chaster für Session
 
-### Alpha-Hardening Rueckbau
-- [ ] Temporär entfernte At-Rest-Verschluesselung fuer `Session.llm_api_key`, `LlmProfile.api_key` sowie Session-State-JSONs vor Beta wieder einfuehren
-- [ ] Migrationsstrategie fuer bestehende Klartextdaten nach Rueckkehr der Verschluesselung festlegen
-- [ ] Betriebsdoku fuer Key-Rotation und Secret-Recovery nach Wiedereinbau der Verschluesselung aktualisieren
-
-### v0.7 – Remote Keyholder
+### v0.8 – Remote Keyholder
 - [ ] Optionaler Sync-Mechanismus (verschlüsselt, opt-in)
 - [ ] Remote-Keyholder-Interface (separater Zugang)
 - [ ] Push-Benachrichtigungen für Remote-Keyholder
 - [ ] Echtzeit-Kollaboration: Mensch + KI als Co-Keyholder
+
+### Alpha-Hardening Rueckbau
+
+- [ ] Temporär entfernte At-Rest-Verschluesselung fuer `Session.llm_api_key`, `LlmProfile.api_key` sowie Session-State-JSONs vor Beta wieder einfuehren
+- [ ] Migrationsstrategie fuer bestehende Klartextdaten nach Rueckkehr der Verschluesselung festlegen
+- [ ] Betriebsdoku fuer Key-Rotation und Secret-Recovery nach Wiedereinbau der Verschluesselung aktualisieren
 
 ---
 
