@@ -58,6 +58,14 @@ DEFAULT_HARD_TARGET_MULTIPLIER = 1.5
 DEFAULT_TARGET_RANDOMIZATION_PERCENT = 10
 DEFAULT_STRICT_START_COUNTDOWN_SECONDS = 5
 GLOBAL_GAME_SETTINGS_KEY = "__global__"
+GAME_FEEDBACK_MODE_BOTH = "both"
+GAME_FEEDBACK_MODE_STIM_ONLY = "stim_only"
+GAME_FEEDBACK_MODE_AI_SUMMARY_ONLY = "ai_summary_only"
+GAME_FEEDBACK_MODES = {
+    GAME_FEEDBACK_MODE_BOTH,
+    GAME_FEEDBACK_MODE_STIM_ONLY,
+    GAME_FEEDBACK_MODE_AI_SUMMARY_ONLY,
+}
 POSE_SIMILARITY_THRESHOLD_BY_DIFFICULTY = {
     "easy": 62.0,
     "medium": 74.0,
@@ -125,6 +133,10 @@ class StartGameRunRequest(BaseModel):
     target_randomization_percent: int | None = Field(default=None, ge=0, le=60)
     selected_posture_key: str | None = Field(default=None, max_length=120)
     hold_seconds: int | None = Field(default=None, ge=5, le=7200)
+    game_feedback_mode: str = Field(
+        default=GAME_FEEDBACK_MODE_BOTH,
+        pattern="^(both|stim_only|ai_summary_only)$",
+    )
 
 
 class ModuleSettingsUpdateRequest(BaseModel):
@@ -148,6 +160,10 @@ class GlobalGameSettingsUpdateRequest(BaseModel):
     hard_target_multiplier: float = Field(default=DEFAULT_HARD_TARGET_MULTIPLIER, gt=0.1, le=3.0)
     target_randomization_percent: int = Field(default=DEFAULT_TARGET_RANDOMIZATION_PERCENT, ge=0, le=60)
     start_countdown_seconds: int = Field(default=DEFAULT_STRICT_START_COUNTDOWN_SECONDS, ge=0, le=60)
+    game_feedback_mode: str = Field(
+        default=GAME_FEEDBACK_MODE_BOTH,
+        pattern="^(both|stim_only|ai_summary_only)$",
+    )
 
 
 class PostureTemplateCreateRequest(BaseModel):
@@ -885,12 +901,14 @@ def _global_settings_payload(item: GameModuleSetting | None) -> dict:
             "hard_target_multiplier": DEFAULT_HARD_TARGET_MULTIPLIER,
             "target_randomization_percent": DEFAULT_TARGET_RANDOMIZATION_PERCENT,
             "start_countdown_seconds": DEFAULT_STRICT_START_COUNTDOWN_SECONDS,
+            "game_feedback_mode": GAME_FEEDBACK_MODE_BOTH,
         }
     return {
         "easy_target_multiplier": float(item.easy_target_multiplier),
         "hard_target_multiplier": float(item.hard_target_multiplier),
         "target_randomization_percent": int(item.target_randomization_percent),
         "start_countdown_seconds": int(item.start_countdown_seconds or DEFAULT_STRICT_START_COUNTDOWN_SECONDS),
+        "game_feedback_mode": _normalize_game_feedback_mode(item.game_feedback_mode),
     }
 
 
@@ -1034,6 +1052,46 @@ def _load_module_settings(db: Session, module_key: str) -> GameModuleSetting | N
 
 def _load_global_settings(db: Session) -> GameModuleSetting | None:
     return _load_module_settings(db, GLOBAL_GAME_SETTINGS_KEY)
+
+
+def _normalize_game_feedback_mode(value: str | None) -> str:
+    mode = str(value or "").strip().lower()
+    if mode in GAME_FEEDBACK_MODES:
+        return mode
+    return GAME_FEEDBACK_MODE_BOTH
+
+
+def _resolve_global_game_feedback_mode(db: Session) -> str:
+    item = _load_global_settings(db)
+    if item is None:
+        return GAME_FEEDBACK_MODE_BOTH
+    return _normalize_game_feedback_mode(item.game_feedback_mode)
+
+
+def _run_feedback_mode(run: GameRun, db: Session | None = None) -> str:
+    meta = _load_run_summary_meta(run)
+    if meta:
+        mode = _normalize_game_feedback_mode(meta.get("game_feedback_mode"))
+        if mode in GAME_FEEDBACK_MODES:
+            return mode
+    if db is not None:
+        return _resolve_global_game_feedback_mode(db)
+    return GAME_FEEDBACK_MODE_BOTH
+
+
+def _should_emit_stimulation_feedback(run: GameRun, db: Session | None = None) -> bool:
+    return _run_feedback_mode(run, db) in {GAME_FEEDBACK_MODE_BOTH, GAME_FEEDBACK_MODE_STIM_ONLY}
+
+
+def _should_emit_ai_summary_feedback(run: GameRun, db: Session | None = None) -> bool:
+    return _run_feedback_mode(run, db) in {GAME_FEEDBACK_MODE_BOTH, GAME_FEEDBACK_MODE_AI_SUMMARY_ONLY}
+
+
+def _emit_stim_event(run: GameRun, event: str, db: Session) -> None:
+    if not _should_emit_stimulation_feedback(run, db):
+        return
+    trigger_game_estim_event(event, db)
+    trigger_lovense_game_event(event, run, db)
 
 
 def _resolve_effective_settings(db: Session, payload: StartGameRunRequest) -> tuple[float, float, int]:
@@ -1255,8 +1313,10 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
     end_reason = "time_elapsed" if timed_out else "all_steps_processed"
     existing_meta = _load_run_summary_meta(run)
     checks = existing_meta.get("checks") if isinstance(existing_meta.get("checks"), list) else []
+    feedback_mode = _run_feedback_mode(run, db)
 
     report = {
+        "game_feedback_mode": feedback_mode,
         "end_reason": end_reason,
         "total_steps": played,
         "played_steps": played,
@@ -1283,31 +1343,32 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
 
     run.summary_json = json.dumps(report, ensure_ascii=True)
 
-    db.add(
-        Message(
-            session_id=run.session_id,
-            role="system",
-            message_type="game_report",
-            content=(
-                f"Spielbericht {run.module_key}: "
-                f"reason={end_reason}, played={played}, passed={passed}, failed={failed}, "
-                f"unplayed={unplayed}, misses={run.miss_count}, "
-                f"retry_extension_seconds={run.retry_extension_seconds}, "
-                f"session_penalty_applied={run.session_penalty_applied}"
-            ),
+    if _should_emit_ai_summary_feedback(run):
+        db.add(
+            Message(
+                session_id=run.session_id,
+                role="system",
+                message_type="game_report",
+                content=(
+                    f"Spielbericht {run.module_key}: "
+                    f"reason={end_reason}, played={played}, passed={passed}, failed={failed}, "
+                    f"unplayed={unplayed}, misses={run.miss_count}, "
+                    f"retry_extension_seconds={run.retry_extension_seconds}, "
+                    f"session_penalty_applied={run.session_penalty_applied}"
+                ),
+            )
         )
-    )
-    session_obj = db.query(SessionModel).filter(SessionModel.id == run.session_id).first()
-    if session_obj is not None:
-        advance_roleplay_state_from_event(
-            db,
-            session_obj,
-            event_type="game_report",
-            passed_steps=passed,
-            failed_steps=failed,
-            miss_count=run.miss_count,
-            scheduled_steps=scheduled_total,
-        )
+        session_obj = db.query(SessionModel).filter(SessionModel.id == run.session_id).first()
+        if session_obj is not None:
+            advance_roleplay_state_from_event(
+                db,
+                session_obj,
+                event_type="game_report",
+                passed_steps=passed,
+                failed_steps=failed,
+                miss_count=run.miss_count,
+                scheduled_steps=scheduled_total,
+            )
     db.add(run)
     return True
 
@@ -1352,6 +1413,7 @@ def _run_payload(db: Session, run: GameRun) -> dict:
         "module_key": run.module_key,
         "difficulty": run.difficulty_key,
         "status": run.status,
+        "game_feedback_mode": _run_feedback_mode(run, db),
         "initiated_by": run.initiated_by,
         "max_misses_before_penalty": run.max_misses_before_penalty,
         "miss_count": run.miss_count,
@@ -1415,6 +1477,7 @@ def update_global_game_settings(
     item.hard_target_multiplier = payload.hard_target_multiplier
     item.target_randomization_percent = payload.target_randomization_percent
     item.start_countdown_seconds = payload.start_countdown_seconds
+    item.game_feedback_mode = _normalize_game_feedback_mode(payload.game_feedback_mode)
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -1425,6 +1488,7 @@ def update_global_game_settings(
         hard_target_multiplier=item.hard_target_multiplier,
         target_randomization_percent=item.target_randomization_percent,
         start_countdown_seconds=item.start_countdown_seconds,
+        game_feedback_mode=item.game_feedback_mode,
     )
     return _global_settings_payload(item)
 
@@ -2346,6 +2410,13 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
         miss_count=0,
         session_penalty_seconds=payload.session_penalty_seconds,
         session_penalty_applied=False,
+        summary_json=json.dumps(
+            {
+                "game_feedback_mode": _normalize_game_feedback_mode(payload.game_feedback_mode),
+                "checks": [],
+            },
+            ensure_ascii=True,
+        ),
     )
     db.add(run)
     db.flush()
@@ -2398,27 +2469,6 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
                 verification_count=0,
             )
         )
-
-    db.add(
-        Message(
-            session_id=session_id,
-            role="system",
-            message_type="game_started",
-            content=(
-                (
-                    f"Spiel gestartet: {module.title} | difficulty={difficulty.label} | "
-                    f"duration_minutes={payload.duration_minutes} | "
-                    f"session_penalty_per_violation_seconds={payload.session_penalty_seconds}"
-                )
-                if _is_single_pose_strict_module(module.key)
-                else (
-                    f"Spiel gestartet: {module.title} | difficulty={difficulty.label} | "
-                    f"duration_minutes={payload.duration_minutes} | max_misses={effective_max_misses_before_penalty} | "
-                    f"target_multiplier={target_multiplier} | target_randomization_percent={randomization_percent}"
-                )
-            ),
-        )
-    )
 
     db.commit()
     db.refresh(run)
@@ -2655,8 +2705,7 @@ async def verify_game_step(
         nonlocal run, step
 
         run.miss_count += 1
-        trigger_game_estim_event("fail", db)
-        trigger_lovense_game_event("fail", run, db)
+        _emit_stim_event(run, "fail", db)
         disable_retry_for_module = _is_single_pose_strict_module(run.module_key)
 
         if disable_retry_for_module:
@@ -2666,42 +2715,8 @@ async def verify_game_step(
                 session_obj.lock_end = current_lock_end + timedelta(seconds=run.session_penalty_seconds)
                 run.session_penalty_applied = True
                 db.add(session_obj)
-                db.add(
-                    Message(
-                        session_id=run.session_id,
-                        role="system",
-                        message_type="game_penalty",
-                        content=(
-                            "Session-Penalty pro Verfehlung ausgeloest: "
-                            f"+{run.session_penalty_seconds}s (Verfehlung #{run.miss_count})."
-                        ),
-                    )
-                )
-                trigger_game_estim_event("penalty", db)
-                trigger_lovense_game_event("penalty", run, db)
-
-            db.add(
-                Message(
-                    session_id=run.session_id,
-                    role="system",
-                    message_type="game_step_fail",
-                    content=(
-                        f"Bewegungsverstoss erkannt: {step.posture_name}. "
-                        f"Verstoesse gesamt: {run.miss_count}."
-                    ),
-                )
-            )
+                _emit_stim_event(run, "penalty", db)
             return
-
-        # Posture Training: step simply fails, no retry.
-        db.add(
-            Message(
-                session_id=run.session_id,
-                role="system",
-                message_type="game_step_fail",
-                content=f"Posture nicht bestaetigt: {step.posture_name}.",
-            )
-        )
 
         if (
             run.session_penalty_seconds > 0
@@ -2713,64 +2728,23 @@ async def verify_game_step(
             session_obj.lock_end = current_lock_end + timedelta(seconds=run.session_penalty_seconds)
             run.session_penalty_applied = True
             db.add(session_obj)
-            db.add(
-                Message(
-                    session_id=run.session_id,
-                    role="system",
-                    message_type="game_penalty",
-                    content=(
-                        "Session-Penalty ausgeloest durch zu viele Verfehlungen: "
-                        f"+{run.session_penalty_seconds}s"
-                    ),
-                )
-            )
-            trigger_game_estim_event("penalty", db)
-            trigger_lovense_game_event("penalty", run, db)
+            _emit_stim_event(run, "penalty", db)
 
     if monitor_only:
         # Monitor checks run frequently; avoid writing chat messages for every tick.
         pass
     elif sample_only:
         if status == "confirmed":
-            db.add(
-                Message(
-                    session_id=run.session_id,
-                    role="system",
-                    message_type="game_step_sample_pass",
-                    content=f"Stichprobe bestanden: {step.posture_name}",
-                )
-            )
+            pass
         else:
             _handle_failed_step_with_retry_policy()
             if not _is_single_pose_strict_module(run.module_key):
                 step.status = "failed"
                 step.completed_at = now
-
-            db.add(
-                Message(
-                    session_id=run.session_id,
-                    role="system",
-                    message_type="game_step_sample_fail",
-                    content=(
-                        f"Stichprobe fehlgeschlagen: {step.posture_name}"
-                        if not _is_single_pose_strict_module(run.module_key)
-                        else f"Bewegungsverstoss in Stichprobe erkannt: {step.posture_name}"
-                    ),
-                )
-            )
     elif status == "confirmed":
         step.status = "passed"
         step.completed_at = now
-        trigger_game_estim_event("pass", db)
-        trigger_lovense_game_event("pass", run, db)
-        db.add(
-            Message(
-                session_id=run.session_id,
-                role="system",
-                message_type="game_step_pass",
-                content=f"Posture bestaetigt: {step.posture_name}",
-            )
-        )
+        _emit_stim_event(run, "pass", db)
     else:
         step.status = "failed"
         step.completed_at = now
@@ -2833,8 +2807,7 @@ def mark_hold_started(
         db.add(run)
         db.commit()
         db.refresh(run)
-        trigger_game_estim_event("continuous", db)
-        trigger_lovense_game_event("continuous", run, db)
+        _emit_stim_event(run, "continuous", db)
     return {"remaining_seconds": _remaining_seconds_for_run(run)}
 
 
@@ -2941,37 +2914,9 @@ async def register_movement_event(
         session_obj.lock_end = current_lock_end + timedelta(seconds=run.session_penalty_seconds)
         run.session_penalty_applied = True
         db.add(session_obj)
-        db.add(
-            Message(
-                session_id=run.session_id,
-                role="system",
-                message_type="game_penalty",
-                content=(
-                    "Session-Penalty pro Verfehlung ausgeloest: "
-                    f"+{run.session_penalty_seconds}s (Verfehlung #{run.miss_count})."
-                ),
-            )
-        )
+        _emit_stim_event(run, "penalty", db)
 
-    db.add(
-        Message(
-            session_id=run.session_id,
-            role="system",
-            message_type="game_step_fail",
-            content=(
-                f"Bewegungsverstoss erkannt: {step.posture_name}. "
-                f"Verstoesse gesamt: {run.miss_count}."
-            ),
-        )
-    )
-    db.add(
-        Message(
-            session_id=run.session_id,
-            role="system",
-            message_type="game_step_sample_fail",
-            content=f"Bewegungsverstoss in Echtzeit erkannt: {step.posture_name}",
-        )
-    )
+    _emit_stim_event(run, "fail", db)
 
     audit_log(
         "game_movement_violation_registered",
@@ -3052,14 +2997,7 @@ def complete_strict_game_step(
     step.completed_at = now
     step.last_analysis = "Haltephase ohne erkannte Bewegung abgeschlossen."
 
-    db.add(
-        Message(
-            session_id=run.session_id,
-            role="system",
-            message_type="game_step_pass",
-            content=f"Posture ohne Bewegungsverstoss abgeschlossen: {step.posture_name}",
-        )
-    )
+    _emit_stim_event(run, "pass", db)
 
     db.add(step)
     db.add(run)

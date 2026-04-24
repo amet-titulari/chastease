@@ -12,6 +12,7 @@ class GameModuleSetting(Base):
     hard_target_multiplier = Column(Float, nullable=False, default=1.25)
     target_randomization_percent = Column(Integer, nullable=False, default=10)
     start_countdown_seconds = Column(Integer, nullable=False, default=5)
+    game_feedback_mode = Column(String(32), nullable=True)
     movement_easy_pose_deviation = Column(Float, nullable=True)
     movement_easy_stillness = Column(Float, nullable=True)
     movement_medium_pose_deviation = Column(Float, nullable=True)

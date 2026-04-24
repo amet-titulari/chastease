@@ -107,6 +107,7 @@
       hard_target_multiplier: numberInputValue("gms-global-hard-mult", 1.5),
       target_randomization_percent: Math.round(numberInputValue("gms-global-random", 10)),
       start_countdown_seconds: Math.round(numberInputValue("gms-global-start-countdown", 5)),
+      game_feedback_mode: String(document.getElementById("gms-global-feedback-mode")?.value || "both"),
     };
   }
 
@@ -115,6 +116,11 @@
     document.getElementById("gms-global-hard-mult").value = String(Number(data.hard_target_multiplier ?? 1.5));
     document.getElementById("gms-global-random").value = String(Number(data.target_randomization_percent ?? 10));
     document.getElementById("gms-global-start-countdown").value = String(Number(data.start_countdown_seconds ?? 5));
+    const modeEl = document.getElementById("gms-global-feedback-mode");
+    if (modeEl) {
+      const mode = String(data.game_feedback_mode || "both");
+      modeEl.value = mode === "stim_only" || mode === "ai_summary_only" ? mode : "both";
+    }
   }
 
   async function loadGlobalSettings() {

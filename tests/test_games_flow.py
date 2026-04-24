@@ -625,9 +625,7 @@ def test_dont_move_movement_event_endpoint_registers_violation_and_capture():
                 .order_by(Message.id.asc())
                 .all()
             )
-            assert len(step_messages) == 2
-            assert "Bewegungsverstoss erkannt" in step_messages[0].content
-            assert "Echtzeit erkannt" in step_messages[1].content
+            assert step_messages == []
         finally:
             db.close()
 
@@ -2380,12 +2378,14 @@ def test_module_settings_can_be_saved_and_used_for_run_start_defaults():
                 "hard_target_multiplier": 1.4,
                 "target_randomization_percent": 0,
                 "start_countdown_seconds": 7,
+                "game_feedback_mode": "both",
             },
         )
         assert global_saved.status_code == 200
         assert global_saved.json()["easy_target_multiplier"] == 0.6
         assert global_saved.json()["hard_target_multiplier"] == 1.4
         assert global_saved.json()["target_randomization_percent"] == 0
+        assert global_saved.json()["game_feedback_mode"] == "both"
 
         saved = client.put(
             "/api/games/modules/posture_training/settings",
@@ -2410,6 +2410,7 @@ def test_module_settings_can_be_saved_and_used_for_run_start_defaults():
         assert global_read_back.json()["easy_target_multiplier"] == 0.6
         assert global_read_back.json()["hard_target_multiplier"] == 1.4
         assert global_read_back.json()["target_randomization_percent"] == 0
+        assert global_read_back.json()["game_feedback_mode"] == "both"
 
         read_back = client.get("/api/games/modules/posture_training/settings")
         assert read_back.status_code == 200
@@ -2439,6 +2440,113 @@ def test_module_settings_can_be_saved_and_used_for_run_start_defaults():
         assert easy.status_code == 200
         easy_target = easy.json()["current_step"]["target_seconds"]
         assert easy_target == max(1, int(round(base * 0.6)))
+
+
+def test_game_feedback_mode_controls_only_final_ai_summary_message():
+    with TestClient(app) as client:
+        _register_admin(client)
+
+        # stim_only: no AI game_report message at run end
+        save_stim_only = client.put(
+            "/api/games/settings/global",
+            json={
+                "easy_target_multiplier": 0.75,
+                "hard_target_multiplier": 1.5,
+                "target_randomization_percent": 0,
+                "start_countdown_seconds": 5,
+                "game_feedback_mode": "stim_only",
+            },
+        )
+        assert save_stim_only.status_code == 200
+
+        posture_key = f"test_feedback_mode_pose_{uuid4().hex[:8]}"
+        create_resp = client.post(
+            "/api/games/modules/posture_training/postures",
+            json={
+                "posture_key": posture_key,
+                "title": "Feedback Mode Pose",
+                "image_url": "/static/img/postures/stand.jpg",
+                "instruction": "No movement.",
+                "target_seconds": 90,
+                "sort_order": 6,
+                "is_active": True,
+                "allowed_module_keys": ["dont_move"],
+            },
+        )
+        assert create_resp.status_code == 200
+
+        session_id = _create_and_sign(client)
+        start_resp = client.post(
+            f"/api/games/sessions/{session_id}/runs/start",
+            json={
+                "module_key": "dont_move",
+                "difficulty": "medium",
+                "duration_minutes": 3,
+                "selected_posture_key": posture_key,
+                "session_penalty_seconds": 0,
+            },
+        )
+        assert start_resp.status_code == 200
+        assert start_resp.json()["game_feedback_mode"] == "stim_only"
+        run_id = int(start_resp.json()["id"])
+        step_id = int(start_resp.json()["current_step"]["id"])
+
+        complete_resp = client.post(f"/api/games/runs/{run_id}/steps/{step_id}/complete")
+        assert complete_resp.status_code == 200
+
+        db = SessionLocal()
+        try:
+            reports = (
+                db.query(Message)
+                .filter(Message.session_id == session_id, Message.message_type == "game_report")
+                .all()
+            )
+            assert reports == []
+        finally:
+            db.close()
+
+        # ai_summary_only: final AI game_report message exists at run end
+        save_ai_summary = client.put(
+            "/api/games/settings/global",
+            json={
+                "easy_target_multiplier": 0.75,
+                "hard_target_multiplier": 1.5,
+                "target_randomization_percent": 0,
+                "start_countdown_seconds": 5,
+                "game_feedback_mode": "ai_summary_only",
+            },
+        )
+        assert save_ai_summary.status_code == 200
+
+        session_id_2 = _create_and_sign(client)
+        start_resp_2 = client.post(
+            f"/api/games/sessions/{session_id_2}/runs/start",
+            json={
+                "module_key": "dont_move",
+                "difficulty": "medium",
+                "duration_minutes": 3,
+                "selected_posture_key": posture_key,
+                "session_penalty_seconds": 0,
+            },
+        )
+        assert start_resp_2.status_code == 200
+        assert start_resp_2.json()["game_feedback_mode"] == "ai_summary_only"
+        run_id_2 = int(start_resp_2.json()["id"])
+        step_id_2 = int(start_resp_2.json()["current_step"]["id"])
+
+        complete_resp_2 = client.post(f"/api/games/runs/{run_id_2}/steps/{step_id_2}/complete")
+        assert complete_resp_2.status_code == 200
+
+        db2 = SessionLocal()
+        try:
+            reports_2 = (
+                db2.query(Message)
+                .filter(Message.session_id == session_id_2, Message.message_type == "game_report")
+                .all()
+            )
+            assert len(reports_2) == 1
+        finally:
+            db2.close()
 
 
 def test_tiptoeing_mask_upload_and_settings_roundtrip():

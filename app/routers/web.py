@@ -17,6 +17,7 @@ from app.models.auth_user import AuthUser
 from app.models.contract import Contract
 from app.models.item import Item
 from app.models.game_posture_template import GamePostureTemplate
+from app.models.game_module_setting import GameModuleSetting
 from app.models.game_run import GameRun
 from app.models.hygiene_opening import HygieneOpening
 from app.models.llm_profile import LlmProfile
@@ -1800,6 +1801,13 @@ def toys_page(session_id: int, request: Request, db: Session = Depends(get_db)):
     )
 
 
+def _load_global_feedback_mode(db: Session) -> str:
+    item = db.query(GameModuleSetting).filter(GameModuleSetting.module_key == "__global__").first()
+    if item and item.game_feedback_mode in {"both", "stim_only", "ai_summary_only"}:
+        return item.game_feedback_mode
+    return "both"
+
+
 @router.get("/game/{session_id}", response_class=HTMLResponse)
 def game_page(
     session_id: int,
@@ -1861,6 +1869,7 @@ def game_page(
             "module_summary": module.summary,
             "latest_run_id": latest_run.id if latest_run else None,
             "initial_setup": initial_setup,
+            "initial_feedback_mode": _load_global_feedback_mode(db),
         },
     )
 

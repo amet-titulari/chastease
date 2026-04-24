@@ -1,6 +1,6 @@
 # Chastease 🔒
 
-Aktueller App-Stand: `0.6.0`
+Aktueller App-Stand: `0.7.0`
 
 Eine immersive, datenschutzfreundliche Web-Applikation für KI-gestützte Chastity-Sessions mit realistischer Keyholder-Persona.
 
@@ -44,7 +44,7 @@ Chastease ermöglicht es Nutzenden, realistische Chastity-Sessions zu erleben, i
 ## Dokumentation
 
 | Dokument | Inhalt |
-|---|---|
+| --- | --- |
 | [VISION.md](docs/VISION.md) | Projektziel, Zielgruppe, Werte |
 | [REQUIREMENTS.md](docs/REQUIREMENTS.md) | Funktionale & nicht-funktionale Anforderungen |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Tech-Stack, Systemdesign |
@@ -150,25 +150,25 @@ Automatischer Task-Overdue-Sweep:
 
 - Hintergrundjob (APScheduler) prueft periodisch alle aktiven Sessions auf ueberfaellige Tasks.
 - Konfiguration per `.env`:
-	- `CHASTEASE_TASK_OVERDUE_SWEEPER_ENABLED=true|false`
-	- `CHASTEASE_TASK_OVERDUE_SWEEPER_INTERVAL_SECONDS=60`
+  - `CHASTEASE_TASK_OVERDUE_SWEEPER_ENABLED=true|false`
+  - `CHASTEASE_TASK_OVERDUE_SWEEPER_INTERVAL_SECONDS=60`
 
 Proaktive Keyholderin-Reminder:
 
 - Hintergrundjob (APScheduler) erzeugt fuer aktive Sessions periodische Assistant-Reminder.
 - Cooldown verhindert Spam (nur wenn keine frische Assistant-Nachricht vorliegt).
 - Konfiguration per `.env`:
-	- `CHASTEASE_PROACTIVE_MESSAGES_ENABLED=true|false`
-	- `CHASTEASE_PROACTIVE_MESSAGES_INTERVAL_SECONDS=120`
-	- `CHASTEASE_PROACTIVE_MESSAGES_COOLDOWN_SECONDS=600`
+  - `CHASTEASE_PROACTIVE_MESSAGES_ENABLED=true|false`
+  - `CHASTEASE_PROACTIVE_MESSAGES_INTERVAL_SECONDS=120`
+  - `CHASTEASE_PROACTIVE_MESSAGES_COOLDOWN_SECONDS=600`
 
 Automatisches Session-Ende bei Timer-Ablauf:
 
 - Hintergrundjob (APScheduler) beendet aktive Sessions automatisch, sobald `lock_end` erreicht ist.
 - Es wird ein `session_event` im Nachrichtenverlauf hinterlegt.
 - Konfiguration per `.env`:
-	- `CHASTEASE_SESSION_TIMER_SWEEPER_ENABLED=true|false`
-	- `CHASTEASE_SESSION_TIMER_SWEEPER_INTERVAL_SECONDS=30`
+  - `CHASTEASE_SESSION_TIMER_SWEEPER_ENABLED=true|false`
+  - `CHASTEASE_SESSION_TIMER_SWEEPER_INTERVAL_SECONDS=30`
 
 WebSocket Live-Feed:
 
@@ -180,7 +180,7 @@ WebSocket Live-Feed:
 - `POST /api/sessions/{id}/chat/ws-token/rotate` erzeugt ein neues Token und invalidiert bestehende WS-Verbindungen serverseitig.
 - Optionaler Schutz: Wenn `CHASTEASE_ADMIN_SECRET` gesetzt ist, muss der Header `X-Admin-Secret` fuer Rotations-Endpunkte mitgesendet werden.
 - Der gleiche optionale Schutz gilt auch fuer sicherheitskritische Steuer-Endpunkte:
-	- `POST /api/sessions/{id}/safety/emergency-release`
+  - `POST /api/sessions/{id}/safety/emergency-release`
 
 Tests ausführen:
 
@@ -193,10 +193,10 @@ Die Tests verwenden ein separates Arbeitsverzeichnis `data-tests/` fuer SQLite, 
 Fehlerformat (API):
 
 - Einheitliches JSON fuer Fehlerantworten:
-	- `request_id`
-	- `error.code`
-	- `error.message`
-	- optional `error.details`
+  - `request_id`
+  - `error.code`
+  - `error.message`
+  - optional `error.details`
 
 Sicherheit (Kurzfassung):
 
@@ -234,9 +234,9 @@ Web Push (optional):
 Hygiene-Kontingente pro Session:
 
 - Beim Session-Create optional setzbar:
-	- `hygiene_limit_daily`
-	- `hygiene_limit_weekly`
-	- `hygiene_limit_monthly`
+  - `hygiene_limit_daily`
+  - `hygiene_limit_weekly`
+  - `hygiene_limit_monthly`
 - Quota-Status abrufbar via `GET /api/sessions/{id}/hygiene/quota`.
 - Bei erreichtem Limit blockiert `POST /api/sessions/{id}/hygiene/openings` neue Oeffnungen mit `400`.
 
@@ -256,8 +256,8 @@ KI-Bildanalyse fuer Verifikation:
 - Default: `CHASTEASE_VERIFICATION_AI_PROVIDER=heuristic`
 - Optional: `CHASTEASE_VERIFICATION_AI_PROVIDER=ollama`
 - Modell/Timeout:
-	- `CHASTEASE_VERIFICATION_OLLAMA_MODEL=llava`
-	- `CHASTEASE_VERIFICATION_OLLAMA_TIMEOUT_SECONDS=20`
+  - `CHASTEASE_VERIFICATION_OLLAMA_MODEL=llava`
+  - `CHASTEASE_VERIFICATION_OLLAMA_TIMEOUT_SECONDS=20`
 - Bei Fehlern/Nichterreichbarkeit des Ollama-Endpoints faellt die Analyse automatisch auf heuristische Auswertung zurueck.
 
 Verifikationsdateien:

@@ -8,6 +8,7 @@ let tiptoeingMaskUrl = TIPTOEING_MASK_FALLBACK_URL;
 const singlePoseModuleKeys = new Set(["dont_move", "tiptoeing"]);
 const isSinglePoseModule = singlePoseModuleKeys.has(moduleKey);
 const initialDifficulty = bootstrap.initialDifficulty ?? null;
+const initialFeedbackMode = String(bootstrap.initialFeedbackMode || "both");
 let runId = bootstrap.latestRunId ?? null;
 let activeRun = null;
 let cameraStream = null;
@@ -2932,6 +2933,12 @@ async function loadModule() {
     maskPreviewEl.style.display = "none";
     maskPreviewEl.removeAttribute("src");
   }
+
+  // Pre-select feedback mode from global setting
+  const validModes = new Set(["both", "stim_only", "ai_summary_only"]);
+  const modeToSet = validModes.has(initialFeedbackMode) ? initialFeedbackMode : "both";
+  const modeRadio = document.querySelector(`input[name="gm-feedback-mode"][value="${modeToSet}"]`);
+  if (modeRadio) modeRadio.checked = true;
 }
 
 async function loadModuleSettings() {
@@ -3348,6 +3355,8 @@ async function startRun() {
   const penaltyHours = Number(document.getElementById("gm-session-penalty-hours").value || 0);
   const penaltyMinutes = Number(document.getElementById("gm-session-penalty-minutes").value || 0);
   const sessionPenalty = Math.max(0, (penaltyDays * 86400) + (penaltyHours * 3600) + (penaltyMinutes * 60));
+  const feedbackModeChecked = document.querySelector('input[name="gm-feedback-mode"]:checked');
+  const gameFeedbackMode = feedbackModeChecked ? feedbackModeChecked.value : "both";
 
   let dontMovePostureKey = null;
   let effectiveTransitionSeconds = transitionSecondsInput;
@@ -3395,6 +3404,7 @@ async function startRun() {
         hard_target_multiplier: moduleSettings.hard_target_multiplier,
         target_randomization_percent: moduleSettings.target_randomization_percent,
         selected_posture_key: dontMovePostureKey,
+        game_feedback_mode: gameFeedbackMode,
       }),
     });
     runId = run.id;

@@ -7,6 +7,25 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-04-24
+
+### Hinzugefuegt
+
+- **Spiel-Feedback-Modus**: Neues Konfigurationsfeld `game_feedback_mode` auf dem Spielstartbildschirm — waehle pro Run zwischen: `Beides` (E-Stim + AI-Sammelreport), `Nur E-Stim`, `Nur AI-Bericht`.
+- **Feedback-Modus-Selektor auf Spielstartseite**: Pill-basierte Radiogruppe direkt im Setup-Bereich jeder Spielseite; vorbelegt mit dem globalen Admin-Standard.
+- **Datenbankfeld `game_feedback_mode`** in `game_module_settings` inklusive Alembic-Migration (`d4e5f6a7b8c9`).
+- **Globale Admin-Voreinstellung** fuer Feedback-Modus in Admin > Spiele-Einstellungen (betrifft alle Spiele als Standard).
+
+### Geaendert
+
+- `StartGameRunRequest` traegt jetzt `game_feedback_mode` (default `both`) — der per-Run gewahlte Modus wird direkt im Run-Summary gespeichert und ueberstimmt die globale Einstellung.
+- Spielstartseite (`game_posture.html`) strukturiert mit klaren Abschnitten: Spiel-Parameter · Feedback-Modus · Strafe & Ton.
+- Setup-Grid auf 4-spaltig optimiert mit Schwierigkeit als erste Option; responsiv auf 2 Spalten (Tablet) und 1 Spalte (Mobil).
+- E-Stim-Calls auf Spielseite (`verify_game_step`, `register_movement_event`, `mark_hold_started`) werden nur noch ausgefuehrt wenn Feedback-Modus E-Stim einschliesst.
+- AI-Step-Messages (`game_step_fail`, `game_step_pass`) und Sammelbericht (`game_report`) werden nur noch erstellt wenn Feedback-Modus AI einschliesst.
+- `game_started`-Message wird nur noch in AI-Modes erstellt.
+- E-Stim-Karte auf der Games-Uebersichtsseite auf Status-only reduziert (Konfigurationslink auf Toys-Seite).
+
 ## [0.6.0] - 2026-04-24
 
 ### Geaendert
@@ -31,7 +50,7 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ## [0.5.0] - 2026-03-31
 
-### Hinzugefuegt
+### Hinzugefuegt [0.5.0] - 2026-03-31
 
 - Frontend-Helfer `roleplay_ui.js` fuer gemeinsame Roleplay-/Phasen-Meter in Dashboard und Play.
 - Frontend-Helfer `dashboard_session_ui.js` fuer Session-Rahmen, Persona-Auswahl und Profilzusammenfassung im Dashboard.
@@ -75,7 +94,7 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Alpha-Readiness-Dokument mit klaren Release-Grenzen, Blockern und manuellem Smoke-Test.
 - Gezielte End-to-End-Smokes fuer einen zentralen Happy Path und einen Safety-Abbruch.
 
-### Geaendert
+### Geaendert [0.5.0] - 2026-03-31
 
 - Release-Stand auf `0.5.0` angehoben.
 - Produktive Defaults gehaertet: `debug` und Play-WS-Debug sind jetzt standardmaessig deaktiviert; ohne `CHASTEASE_SECRET_ENCRYPTION_KEY` startet die App ausserhalb eines expliziten Dev-Modus nicht mehr.
@@ -149,19 +168,19 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ## [0.3.5] - 2026-03-25
 
-### Geaendert
+### Geaendert [0.3.5] - 2026-03-25
 
 - Persona-Stilregeln sind jetzt deutlich staerker persona-gesteuert statt global fest verdrahtet: Formatstil, Ausfuehrlichkeit, Lobstil, Wiederholungsbremse und Kontextsichtbarkeit koennen pro Persona festgelegt sowie importiert/exportiert werden.
 - Chat rendert jetzt leichtes Markdown in Nachrichten (`**fett**`, `*kursiv*`, `` `code` `` und Zeilenumbrueche), waehrend Klartext-Personas weiterhin von rohen Markdown-Markern bereinigt werden.
 - Ametara Titulari wurde auf kuerzere, klarere und weniger wiederholende Antworten mit dezentem Markdown, staerkerer Wiederholungsbremse und minimalerer Meta-Rezitation neu abgestimmt.
 
-### Hinzugefuegt
+### Hinzugefuegt [0.3.5] - 2026-03-25
 
 - Neue Persona-Felder und Migration fuer `formatting_style`, `verbosity_style`, `praise_style`, `repetition_guard` und `context_exposition_style`.
 
 ## [0.3.4] - 2026-03-23
 
-### Geaendert
+### Geaendert [0.3.4] - 2026-03-23
 
 - Eingebrannte Verifikations-Overlays auf Bildern deutlich lesbarer gemacht: groessere Typografie, staerkerer Kontrast, Mindestbreite fuer Top-Boxen sowie kraeftigere Kontur und Hintergrund fuer Chat- und Game-Verifikationen.
 - Test-Artefakte von Runtime-Daten getrennt: SQLite-Testdatenbank, Test-Medien und Audit-Logs laufen jetzt unter `data-tests/`, waehrend `data/` fuer echte App-Daten reserviert bleibt.
@@ -172,7 +191,7 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ## [0.2.7] - 2026-03-16
 
-### Geaendert
+### Geaendert [0.2.7] - 2026-03-16
 
 - Spiel-Schwellwerte fuer `dont_move` neu kalibriert: Balanced als neuer Default mit hoeheren Toleranzgrenzen.
 - Preset-Logik fuer Schwellwerte auf feste Vorschlagwerte pro Button (`Tolerant`, `Balanced`, `Strict`) zurueckgestellt.
@@ -183,17 +202,17 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ## [0.2.5] - 2026-03-15
 
-### Hinzugefuegt
+### Hinzugefuegt [0.2.5] - 2026-03-15
 
 - Drittes Spielemodul `tiptoeing` ("Auf Zehenspitzen stehen") als Single-Pose-Stillhalte-Spiel mit AI-Verifikation.
 - Modul in Registry und Module-Listing integriert.
 
-### Geaendert
+### Geaendert [0.2.5] - 2026-03-15
 
 - Single-Pose-Strict-Laufzeitlogik aus `dont_move` generalisiert, damit mehrere Module dieselbe strenge Verifizierungsmechanik nutzen koennen.
 - Game-Frontend (`/game/{session_id}`) auf modulklassenbasierte Single-Pose-Logik erweitert (Auswahl, Startparameter, Monitoring).
 
-### Tests
+### Tests [0.2.5] - 2026-03-15
 
 - Games-Flow-Tests fuer Modul-Listing und Start-Flow von `tiptoeing` ergaenzt.
 
@@ -220,7 +239,7 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ## [0.2.2] – 2026-03-14
 
-### Geändert
+### Geändert [0.2.2] – 2026-03-14
 
 - Dokumentation vollständig mit aktuellem Systemstand synchronisiert (ARCHITECTURE, CHANGELOG, ROADMAP, BENUTZERANLEITUNG, SECURITY).
 
@@ -228,19 +247,19 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ## [0.2.1] – 2026-03-14
 
-### Hinzugefügt
+### Hinzugefügt [0.2.1] – 2026-03-14
 
 - Task-Nummer (#ID) in allen Action Cards und im Tasks-Dropdown sichtbar.
 - Deadline-Anzeige rechtsbündig in der Card-Titelzeile (mit Farbcodierung: normal/bald/überfällig).
 - Tasks-Dropdown zeigt jetzt interaktive Action Cards statt read-only Liste.
 - Persona-Avatar neben KI-Nachrichten im Chat (wenn Avatar in Persona hinterlegt).
 
-### Geändert
+### Geändert [0.2.1] – 2026-03-14
 
 - Dropdown-Breite auf 360 px erhöht für bessere Lesbarkeit der Action Cards.
 - Buttons kontextabhängig: Bestätigung + Fail (ohne Verifikation) oder Fotoverifikation + Fail (mit Verifikation).
 
-### Behoben
+### Behoben [0.2.1] – 2026-03-14
 
 - UTC-Fix: SQLite-naive Datetimes werden vor Serialisierung explizit als UTC markiert – Deadline-Zeiten werden im Browser korrekt in Lokalzeit angezeigt.
 - `deadline_at`-Serialisierung auf `.isoformat()` umgestellt (statt `str()`) für zuverlässiges Browser-Parsing.
@@ -249,7 +268,7 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ## [0.2.0] – 2026-03-13
 
-### Geändert
+### Geändert [0.2.0] – 2026-03-13
 
 - Experience-Onboarding schreibt Werte bei Navigation direkt als Defaults und in die aktive Session.
 - Terminologie in der UI vereinheitlicht: "Persona" in zentralen Onboarding-Stellen zu "Keyholderin" geändert.
@@ -257,7 +276,7 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 - Hygiene-Regelanzeige im Play-Drawer vereinfacht und auf Regeln aus Session/Profil abgestimmt.
 - Penalty-Felder in Experience klarer benannt ("Wert" + gemeinsame Einheit) inkl. Doku-Hinweis.
 
-### Behoben
+### Behoben [0.2.0] – 2026-03-13
 
 - Logik-/UI-Irritationen bei Scenario↔Persona-Verknüpfung im Onboarding.
 - Inkonsistenzen bei der Übernahme von Experience-Änderungen in laufende Sessions.
@@ -268,15 +287,17 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 Erste öffentliche Alpha-Version mit vollständigem Feature-Set für Solo-Nutzung im Heimnetz.
 
-### Hinzugefügt
+### Hinzugefügt [0.1.0] – 2025-01-27
 
 #### Core-Session-Mechanik
+
 - Session-Lifecycle: Erstellen, Starten, Beenden, Timer-Management (hinzufügen, entfernen, einfrieren)
 - Digitaler Vertrag mit Addenda und Consent-Workflow
 - Session-Event-Log mit PDF- und JSON-Export
 - APScheduler-Hintergrundjobs: Task-Overdue-Sweep, Timer-Ablauf-Sweep, proaktive Nachrichten
 
 #### KI-Keyholderin
+
 - Abstraktionsschicht für KI-Provider: `CustomOpenAI` (xAI/Grok-kompatibel), `Ollama`, `Stub`
 - Anpassbare Persona-Profile mit individuellen Charakterzügen und Presets
 - System-Prompt enthält Grenzen (`wearer_boundary`), Stil, Ziel und aktive Tasks
@@ -285,6 +306,7 @@ Erste öffentliche Alpha-Version mit vollständigem Feature-Set für Solo-Nutzun
 - Offene Tasks werden als Kontext-Block in jeden Chat-Request injiziert
 
 #### Aufgaben-System
+
 - Task-Modell mit `title`, `description`, `requires_verification`, `verification_criteria`, `consequence_type`/`value`
 - Status-Maschine: `pending` → `completed` / `failed`
 - Konsequenzen: Zeitstrafe (`add_time`) oder Zeitbonus (`remove_time`) bei Task-Abschluss
@@ -292,6 +314,7 @@ Erste öffentliche Alpha-Version mit vollständigem Feature-Set für Solo-Nutzun
 - `fail_task`-Action: KI kann Tasks direkt als fehlgeschlagen markieren
 
 #### Bildverifikation
+
 - Verifikations-Request mit erwarteter Plomben-Nummer
 - Foto-Upload direkt in der Aktionskarte (inline, kein Seitenwechsel)
 - KI-gestützte Bildanalyse (Plomben-Nummer-Erkennung)
@@ -299,17 +322,20 @@ Erste öffentliche Alpha-Version mit vollständigem Feature-Set für Solo-Nutzun
 - Seal-History-Protokollierung
 
 #### Sicherheitssystem
+
 - Ampelsystem (Grün/Gelb/Rot) mit Safety-Log
 - Safeword-Auslösung
 - Notfallentlassung (Emergency Release)
 - Safety-Override im Chat: Gelb → fürsorglich-sorgender Ton; Rot → Session pausiert, KI deeskaliert
 
 #### Hygiene-Öffnungen
+
 - Zeitlich begrenzte Entsperrung mit Kontingent-Management
 - Relock-Funktion (manuell oder automatisch bei Timer-Ablauf)
 - Protokollierung aller Öffnungen
 
 #### Web-UI (Jinja2 + Vanilla JS)
+
 - Play-Ansicht (`/play`): Single-Column-Layout, vollständig responsive (`100dvh`)
 - **Aktionskarten** inline in der Chat-Timeline (kein separates Panel)
   - Pro offenem Task eine Karte mit Buttons „Erledigt", „Fehlgeschlagen", „Verifizieren"
@@ -320,6 +346,7 @@ Erste öffentliche Alpha-Version mit vollständigem Feature-Set für Solo-Nutzun
 - Web Push: Browser-Subscriptions, Benachrichtigungen
 
 #### Authentifizierung & Multi-Device
+
 - Benutzerregistrierung und Login mit bcrypt-Passwort-Hashing
 - Dauerhaftes Session-Token (30 Tage, httpOnly-Cookie)
 - Multi-Device-Support: Login regeneriert Token **nicht**, wenn bereits eines existiert – kein gegenseitiges Ausloggen

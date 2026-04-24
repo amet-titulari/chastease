@@ -247,19 +247,6 @@
            style="display:grid; gap:0;"
            data-otc-enabled="{{ '1' if otc_settings.enabled else '0' }}"
            data-otc-url="{{ otc_settings.otc_url or '' }}"
-           data-otc-channel="{{ otc_settings.channel or 'A' }}"
-           data-otc-intensity-continuous="{{ otc_settings.intensity_continuous }}"
-           data-otc-intensity-fail="{{ otc_settings.intensity_fail }}"
-           data-otc-intensity-penalty="{{ otc_settings.intensity_penalty }}"
-           data-otc-intensity-pass="{{ otc_settings.intensity_pass }}"
-           data-otc-ticks-continuous="{{ otc_settings.ticks_continuous }}"
-           data-otc-ticks-fail="{{ otc_settings.ticks_fail }}"
-           data-otc-ticks-penalty="{{ otc_settings.ticks_penalty }}"
-           data-otc-ticks-pass="{{ otc_settings.ticks_pass }}"
-           data-otc-pattern-continuous="{{ otc_settings.pattern_continuous }}"
-           data-otc-pattern-fail="{{ otc_settings.pattern_fail }}"
-           data-otc-pattern-penalty="{{ otc_settings.pattern_penalty }}"
-           data-otc-pattern-pass="{{ otc_settings.pattern_pass }}"
            id="games-estim-card">
     <details id="games-estim-details">
       <summary style="cursor:pointer; padding:0.7rem 0; display:flex; align-items:center; justify-content:space-between; gap:0.6rem; list-style:none; user-select:none;">
@@ -272,77 +259,11 @@
       </summary>
 
       <div style="display:grid; gap:0.85rem; padding:0.5rem 0 0.2rem;">
-        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:0.6rem;">
-          <label style="display:grid; gap:0.25rem; font-size:0.83rem; color:#9db1c7;">Aktiviert
-            <select id="games-otc-enabled" style="background:#0d1f30; border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#e0efff; padding:0.4rem 0.6rem;">
-              <option value="false">Deaktiviert</option>
-              <option value="true">Aktiviert</option>
-            </select>
-          </label>
-          <label style="display:grid; gap:0.25rem; font-size:0.83rem; color:#9db1c7;">OTC URL
-            <input id="games-otc-url" type="text" maxlength="512" placeholder="ws://192.168.1.x:60536/1"
-                   style="background:#0d1f30; border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#e0efff; padding:0.4rem 0.6rem;" />
-          </label>
-          <label style="display:grid; gap:0.25rem; font-size:0.83rem; color:#9db1c7;">Kanal
-            <select id="games-otc-channel" style="background:#0d1f30; border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#e0efff; padding:0.4rem 0.6rem;">
-              <option value="A">A</option>
-              <option value="B">B</option>
-              <option value="AB">A + B (beide)</option>
-            </select>
-          </label>
-        </div>
-
-        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.5rem 0.7rem;">
-          <div style="grid-column:span 3; display:flex; gap:0.5rem; align-items:center; margin-bottom:0.1rem;">
-            <span style="font-size:0.78rem; font-weight:700; color:#ffb4b4;">&#9888; Fehler</span>
-            <span style="font-size:0.78rem; font-weight:700; color:#ffc94a; margin-left:1rem;">&#9889; Penalty</span>
-            <span style="font-size:0.78rem; font-weight:700; color:#9de2bf; margin-left:1rem;">&#10003; Bestanden</span>
-            <span style="margin-left:auto; font-size:0.74rem; color:#9db1c7;">1 Tick = 100&thinsp;ms</span>
-          </div>
-
-          <label style="display:grid; gap:0.2rem; font-size:0.8rem; color:#ffb4b4;">Intensit&auml;t
-            <input id="games-otc-intensity-fail" type="number" min="0" max="100"
-                   style="background:#0d1f30; border:1px solid rgba(255,107,107,0.3); border-radius:7px; color:#e0efff; padding:0.35rem 0.5rem;" />
-          </label>
-          <label style="display:grid; gap:0.2rem; font-size:0.8rem; color:#ffc94a;">Intensit&auml;t
-            <input id="games-otc-intensity-penalty" type="number" min="0" max="100"
-                   style="background:#0d1f30; border:1px solid rgba(255,193,7,0.3); border-radius:7px; color:#e0efff; padding:0.35rem 0.5rem;" />
-          </label>
-          <label style="display:grid; gap:0.2rem; font-size:0.8rem; color:#9de2bf;">Intensit&auml;t
-            <input id="games-otc-intensity-pass" type="number" min="0" max="100"
-                   style="background:#0d1f30; border:1px solid rgba(47,220,138,0.3); border-radius:7px; color:#e0efff; padding:0.35rem 0.5rem;" />
-          </label>
-
-          <label style="display:grid; gap:0.2rem; font-size:0.8rem; color:#ffb4b4;">Ticks
-            <input id="games-otc-ticks-fail" type="number" min="0" max="300"
-                   style="background:#0d1f30; border:1px solid rgba(255,107,107,0.3); border-radius:7px; color:#e0efff; padding:0.35rem 0.5rem;" />
-          </label>
-          <label style="display:grid; gap:0.2rem; font-size:0.8rem; color:#ffc94a;">Ticks
-            <input id="games-otc-ticks-penalty" type="number" min="0" max="300"
-                   style="background:#0d1f30; border:1px solid rgba(255,193,7,0.3); border-radius:7px; color:#e0efff; padding:0.35rem 0.5rem;" />
-          </label>
-          <label style="display:grid; gap:0.2rem; font-size:0.8rem; color:#9de2bf;">Ticks
-            <input id="games-otc-ticks-pass" type="number" min="0" max="300"
-                   style="background:#0d1f30; border:1px solid rgba(47,220,138,0.3); border-radius:7px; color:#e0efff; padding:0.35rem 0.5rem;" />
-          </label>
-
-          <label style="display:grid; gap:0.2rem; font-size:0.8rem; color:#ffb4b4;">Pattern
-            <input id="games-otc-pattern-fail" type="text" maxlength="120"
-                   style="background:#0d1f30; border:1px solid rgba(255,107,107,0.3); border-radius:7px; color:#e0efff; padding:0.35rem 0.5rem;" />
-          </label>
-          <label style="display:grid; gap:0.2rem; font-size:0.8rem; color:#ffc94a;">Pattern
-            <input id="games-otc-pattern-penalty" type="text" maxlength="120"
-                   style="background:#0d1f30; border:1px solid rgba(255,193,7,0.3); border-radius:7px; color:#e0efff; padding:0.35rem 0.5rem;" />
-          </label>
-          <label style="display:grid; gap:0.2rem; font-size:0.8rem; color:#9de2bf;">Pattern
-            <input id="games-otc-pattern-pass" type="text" maxlength="120"
-                   style="background:#0d1f30; border:1px solid rgba(47,220,138,0.3); border-radius:7px; color:#e0efff; padding:0.35rem 0.5rem;" />
-          </label>
-        </div>
+        <p class="games-note" style="margin:0;">Die detaillierte E-Stim-Konfiguration liegt zentral auf der Toys-Seite. Hier siehst du nur den Verbindungsstatus fuer den Spieleinsatz.</p>
+        <p class="games-note" style="margin:0;">Howl URL: <span id="games-estim-url">-</span></p>
 
         <div style="display:flex; gap:0.55rem; flex-wrap:wrap; align-items:center;">
-          <button id="games-otc-save" type="button" class="cta" style="max-width:200px; padding:0.45rem 0.9rem; font-size:0.85rem;">Speichern</button>
-          <button id="games-otc-test" type="button" class="cta secondary" style="max-width:200px; padding:0.45rem 0.9rem; font-size:0.85rem;">Testimpuls</button>
+          <button id="games-estim-connect" type="button" class="cta secondary" style="max-width:220px; padding:0.45rem 0.9rem; font-size:0.85rem;">Verbindung pruefen</button>
           <a href="/toys" class="cta secondary" style="max-width:200px; padding:0.45rem 0.9rem; font-size:0.85rem; text-align:center;">Toys-Seite &rarr;</a>
           <span id="games-estim-status" class="games-note" style="margin-left:auto;"></span>
         </div>
@@ -387,28 +308,6 @@
 
   const ds = card.dataset;
 
-  function gamesEstimSet(id, value) {
-    const el = document.getElementById(id);
-    if (el) el.value = value != null ? String(value) : "";
-  }
-
-  function gamesEstimApply(s) {
-    const enabledEl = document.getElementById("games-otc-enabled");
-    const channelEl = document.getElementById("games-otc-channel");
-    if (enabledEl) enabledEl.value = s.enabled ? "true" : "false";
-    if (channelEl) channelEl.value = String(s.channel || "A");
-    gamesEstimSet("games-otc-url", s.otc_url || "");
-    gamesEstimSet("games-otc-intensity-fail", s.intensity_fail);
-    gamesEstimSet("games-otc-ticks-fail", s.ticks_fail);
-    gamesEstimSet("games-otc-pattern-fail", s.pattern_fail != null ? s.pattern_fail : "经典");
-    gamesEstimSet("games-otc-intensity-penalty", s.intensity_penalty);
-    gamesEstimSet("games-otc-ticks-penalty", s.ticks_penalty);
-    gamesEstimSet("games-otc-pattern-penalty", s.pattern_penalty != null ? s.pattern_penalty : "经典");
-    gamesEstimSet("games-otc-intensity-pass", s.intensity_pass);
-    gamesEstimSet("games-otc-ticks-pass", s.ticks_pass);
-    gamesEstimSet("games-otc-pattern-pass", s.pattern_pass != null ? s.pattern_pass : "经典");
-  }
-
   function gamesEstimStatus(msg, pill) {
     const statusEl = document.getElementById("games-estim-status");
     if (statusEl) statusEl.textContent = msg || "";
@@ -417,6 +316,13 @@
       pillEl.textContent = pill;
       pillEl.style.display = "";
     }
+  }
+
+  function renderHowlUrl() {
+    const el = document.getElementById("games-estim-url");
+    if (!el) return;
+    const value = String(ds.otcUrl || "").trim();
+    el.textContent = value || "nicht gesetzt";
   }
 
   function gamesEstimUpdateLabel(enabled, connected) {
@@ -437,88 +343,36 @@
     }
   }
 
-  // Initialise form from server-rendered data attributes (fast, no round trip)
-  gamesEstimApply({
-    enabled: ds.otcEnabled === "1",
-    otc_url: ds.otcUrl || "",
-    channel: ds.otcChannel || "A",
-    intensity_fail: ds.otcIntensityFail,
-    intensity_penalty: ds.otcIntensityPenalty,
-    intensity_pass: ds.otcIntensityPass,
-    ticks_fail: ds.otcTicksFail,
-    ticks_penalty: ds.otcTicksPenalty,
-    ticks_pass: ds.otcTicksPass,
-    pattern_fail: ds.otcPatternFail,
-    pattern_penalty: ds.otcPatternPenalty,
-    pattern_pass: ds.otcPatternPass,
-  });
+  renderHowlUrl();
   gamesEstimUpdateLabel(ds.otcEnabled === "1", false);
 
-  // Refresh live connection status
-  fetch("/api/otc/status")
-    .then((r) => r.ok ? r.json() : Promise.reject())
-    .then((s) => {
-      gamesEstimUpdateLabel(ds.otcEnabled === "1", Boolean(s.connected));
-      if (s.connected) gamesEstimStatus("OTC verbunden.", "verbunden");
-    })
-    .catch(() => {});
-
-  function gamesEstimCollect() {
-    const r = (id) => { const e = document.getElementById(id); return e ? String(e.value || "").trim() : ""; };
-    const ri = (id) => { const v = r(id); return v !== "" ? Number(v) : 0; };
-    return {
-      enabled: r("games-otc-enabled") === "true",
-      otc_url: r("games-otc-url") || null,
-      channel: r("games-otc-channel") || "A",
-      intensity_fail: ri("games-otc-intensity-fail"),
-      intensity_penalty: ri("games-otc-intensity-penalty"),
-      intensity_pass: ri("games-otc-intensity-pass"),
-      ticks_fail: ri("games-otc-ticks-fail"),
-      ticks_penalty: ri("games-otc-ticks-penalty"),
-      ticks_pass: ri("games-otc-ticks-pass"),
-      pattern_fail: r("games-otc-pattern-fail") || "经典",
-      pattern_penalty: r("games-otc-pattern-penalty") || "经典",
-      pattern_pass: r("games-otc-pattern-pass") || "经典",
-    };
+  async function refreshConnectionStatus() {
+    const resp = await fetch("/api/howl/status");
+    if (!resp.ok) throw new Error("Statusabfrage fehlgeschlagen");
+    const s = await resp.json();
+    gamesEstimUpdateLabel(ds.otcEnabled === "1", Boolean(s.connected));
+    if (!ds.otcEnabled || ds.otcEnabled !== "1") {
+      gamesEstimStatus("Howl ist deaktiviert.", "aus");
+      return;
+    }
+    if (s.connected) {
+      gamesEstimStatus("Howl verbunden.", "verbunden");
+    } else {
+      gamesEstimStatus("Howl aktiv, aber derzeit nicht erreichbar.", "getrennt");
+    }
   }
 
-  document.getElementById("games-otc-save")?.addEventListener("click", async () => {
-    const btn = document.getElementById("games-otc-save");
-    if (btn) btn.disabled = true;
-    gamesEstimStatus("Wird gespeichert…");
-    try {
-      const resp = await fetch("/api/otc/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(gamesEstimCollect()),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
-      gamesEstimApply(data);
-      gamesEstimUpdateLabel(data.enabled, false);
-      gamesEstimStatus("Gespeichert.", data.enabled ? "aktiv" : "aus");
-    } catch (err) {
-      gamesEstimStatus(`Fehler: ${String(err)}`);
-    } finally {
-      if (btn) btn.disabled = false;
-    }
-  });
+  refreshConnectionStatus()
+    .catch(() => {
+      gamesEstimStatus("Status konnte nicht geladen werden.", "fehler");
+    });
 
-  document.getElementById("games-otc-test")?.addEventListener("click", async () => {
-    gamesEstimStatus("Testimpuls wird gesendet…");
+  document.getElementById("games-estim-connect")?.addEventListener("click", async () => {
+    gamesEstimStatus("Verbindung wird geprueft...");
     try {
-      const channel = String(document.getElementById("games-otc-channel")?.value || "A");
-      const intensity = Number(document.getElementById("games-otc-intensity-fail")?.value || 50);
-      const resp = await fetch("/api/otc/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel, intensity, ticks: 10, pattern: "经典" }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
-      gamesEstimStatus("Testimpuls gesendet.", "gesendet");
+      await refreshConnectionStatus();
     } catch (err) {
-      gamesEstimStatus(`Testimpuls fehlgeschlagen: ${String(err)}`);
+      gamesEstimStatus(`Verbindungspruefung fehlgeschlagen: ${String(err)}`);
     }
   });
 })();
