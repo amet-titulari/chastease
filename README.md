@@ -1,6 +1,6 @@
 # Chastease 🔒
 
-Aktueller App-Stand: `0.5.0`
+Aktueller App-Stand: `0.6.0`
 
 Eine immersive, datenschutzfreundliche Web-Applikation für KI-gestützte Chastity-Sessions mit realistischer Keyholder-Persona.
 

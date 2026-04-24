@@ -1,4 +1,4 @@
-"""Dispatch game events to the OTC E-Stim device.
+"""Dispatch game events to Howl Remote API.
 
 Call ``trigger_game_estim_event(event, db)`` from game handlers.
 ``event`` must be one of ``"fail"``, ``"penalty"``, ``"pass"``, or ``"continuous"``.
@@ -15,7 +15,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.models.otc_settings import OtcSettings
-from app.services.otc_client import send_otc_command
+from app.services.howl_client import send_howl_pulse
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -28,14 +28,14 @@ _EVENT_FIELDS = {
 
 
 def trigger_game_estim_event(event: str, db: Session) -> None:
-    """Load settings from DB and fire the appropriate E-Stim pulse.
+    """Load settings from DB and fire the appropriate Howl pulse.
 
-    Silently does nothing when OTC is disabled, not configured, or the
+    Silently does nothing when integration is disabled, not configured, or the
     event name is unknown.
     """
     fields = _EVENT_FIELDS.get(event)
     if fields is None:
-        logger.debug("OTC estim: unknown event %r – skipped", event)
+        logger.debug("Howl estim: unknown event %r - skipped", event)
         return
 
     try:
@@ -45,20 +45,21 @@ def trigger_game_estim_event(event: str, db: Session) -> None:
             .first()
         )
     except Exception as exc:
-        logger.warning("OTC estim: DB read failed: %s", exc)
+        logger.warning("Howl estim: DB read failed: %s", exc)
         return
 
     if settings is None or not settings.enabled:
         return
 
-    url = str(settings.otc_url or "").strip()
-    if not url:
+    base_url = str(settings.otc_url or "").strip()
+    access_key = str(getattr(settings, "howl_access_key", "") or "").strip()
+    if not base_url or not access_key:
         return
 
     intensity_field, ticks_field, pattern_field = fields
     intensity = int(getattr(settings, intensity_field, 0) or 0)
     ticks = int(getattr(settings, ticks_field, 0) or 0)
-    pattern = str(getattr(settings, pattern_field, "经典") or "经典")
+    pattern = str(getattr(settings, pattern_field, "RELENTLESS") or "RELENTLESS")
     channel = str(settings.channel or "A").strip().upper()
 
     if intensity <= 0:
@@ -68,17 +69,15 @@ def trigger_game_estim_event(event: str, db: Session) -> None:
         return
     effective_ticks = -1 if (event == "continuous" and ticks == 0) else ticks
 
-    channels = ["A", "B"] if channel == "AB" else [channel or "A"]
-    for ch in channels:
-        cmd = {
-            "cmd": "set_pattern",
-            "channel": ch,
-            "pattern_name": pattern,
-            "intensity": intensity,
-            "ticks": effective_ticks,
-        }
-        queued = send_otc_command(cmd)
-        if not queued:
-            logger.debug("OTC estim: client not running, event=%r dropped", event)
-            return
-        logger.debug("OTC estim: queued event=%r channel=%s intensity=%d ticks=%d", event, ch, intensity, ticks)
+    ok = send_howl_pulse(
+        base_url=base_url,
+        access_key=access_key,
+        channel=channel,
+        intensity=intensity,
+        ticks=effective_ticks,
+        activity=pattern,
+    )
+    if not ok:
+        logger.debug("Howl estim: event=%r dropped (request failed)", event)
+        return
+    logger.debug("Howl estim: event=%r channel=%s intensity=%d ticks=%d", event, channel, intensity, ticks)

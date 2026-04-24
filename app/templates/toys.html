@@ -30,6 +30,7 @@
      data-toy-default-loops="{{ toy_profile.default_loops }}"
      data-otc-enabled="{{ '1' if otc_settings.enabled else '0' }}"
      data-otc-url="{{ otc_settings.otc_url or '' }}"
+    data-otc-access-key="{{ otc_settings.howl_access_key or '' }}"
      data-otc-channel="{{ otc_settings.channel or 'A' }}"
      data-otc-intensity-continuous="{{ otc_settings.intensity_continuous }}"
      data-otc-intensity-fail="{{ otc_settings.intensity_fail }}"
@@ -332,8 +333,8 @@
     <section class="dash-card dash-card--lovense dash-card--toys-column">
       <div class="dash-card-head">
         <div>
-          <h3>DG-Lab Coyote 3 <small style="font-size:0.78rem;color:#9db1c7;font-weight:400">(E-Stim via OTC)</small></h3>
-          <p class="dash-copy">WebSocket-Verbindung zum open-DGLAB-controller f&uuml;r automatisches E-Stim-Feedback bei Spielereignissen.</p>
+          <h3>DG-Lab Coyote 3 <small style="font-size:0.78rem;color:#9db1c7;font-weight:400">(E-Stim via Howl Remote API)</small></h3>
+          <p class="dash-copy">Direkte HTTP-Anbindung an Howl (Remote API) f&uuml;r automatisches E-Stim-Feedback bei Spielereignissen.</p>
         </div>
         <span id="otc-status-pill" class="dash-chip">--</span>
       </div>
@@ -345,8 +346,11 @@
               <option value="true">Aktiviert</option>
             </select>
           </label>
-          <label class="dash-field">OTC WebSocket URL
-            <input id="otc-url" type="text" maxlength="512" placeholder="ws://192.168.1.x:60536/1" />
+          <label class="dash-field">Howl API URL
+            <input id="otc-url" type="text" maxlength="512" placeholder="http://192.168.1.x:4695" />
+          </label>
+          <label class="dash-field">Howl Access Key
+            <input id="otc-access-key" type="password" maxlength="512" placeholder="Bearer Key aus Howl Settings" />
           </label>
           <label class="dash-field">Kanal
             <select id="otc-channel">
@@ -365,20 +369,18 @@
           <div class="dash-lovense-manual-body">
             <p class="dash-copy" style="margin-bottom:0.75rem">
               1&nbsp;Tick&nbsp;=&nbsp;100&thinsp;ms &middot; Intensit&auml;t 0&ndash;100 &middot;
-              Pattern: interne DG-Lab Bezeichnung (Auswahl unten entspricht den Ger&auml;te-Namen)
+              Activity: Howl-Aktivit&auml;tsname (wird &uuml;ber <code>/load_activity</code> geladen)
             </p>
             {% set otc_patterns = [
-              ("经典",   "Klassisch"),
-              ("强烈",   "Intensiv"),
-              ("潮汐",   "Tide"),
-              ("交替脉冲","Wechselimpuls"),
-              ("慢降",   "Langsam"),
-              ("猛击",   "Schlag"),
-              ("随机",   "Zufällig")
+              ("RELENTLESS", "Relentless"),
+              ("CHAOS", "Chaos"),
+              ("FASTSLOW", "Fast/Slow"),
+              ("CALIBRATION1", "Calibration 1"),
+              ("CALIBRATION2", "Calibration 2")
             ] %}
             <div class="dash-lovense-control-grid">
 
-              <label class="dash-field" style="grid-column:span 3">
+              <label class="dash-field" style="grid-column:span 4">
                 <strong style="color:#7ec8f7">&#9654; Dauerstimulation</strong>
                 <small style="color:#9db1c7;font-weight:400"> &mdash; Hintergrundreiz beim Start jeder neuen Spielrunde / Pose. Macht das Spiel schwieriger und spannender. Ticks&nbsp;=&nbsp;0 bedeutet <em>Dauerschleife</em> bis zum n&auml;chsten Ereignis.</small>
               </label>
@@ -388,7 +390,7 @@
               <label class="dash-field">Dauer (Ticks)
                 <input id="otc-ticks-continuous" type="number" min="0" max="300" step="1" />
               </label>
-              <label class="dash-field">Pattern
+              <label class="dash-field">Activity
                 <select id="otc-pattern-continuous">
                   {% for val, label in otc_patterns %}
                   <option value="{{ val }}">{{ label }} ({{ val }})</option>
@@ -396,7 +398,7 @@
                 </select>
               </label>
 
-              <label class="dash-field" style="grid-column:span 3">
+              <label class="dash-field" style="grid-column:span 4">
                 <strong style="color:#ffb4b4">&#9888; Regelverstoß / Fehler</strong>
                 <small style="color:#9db1c7;font-weight:400"> &mdash; Bewegung erkannt (Don't-Move), Pose nicht bestanden (Posture). Bestrafung.</small>
               </label>
@@ -406,7 +408,7 @@
               <label class="dash-field">Dauer (Ticks)
                 <input id="otc-ticks-fail" type="number" min="0" max="300" step="1" />
               </label>
-              <label class="dash-field">Pattern
+              <label class="dash-field">Activity
                 <select id="otc-pattern-fail">
                   {% for val, label in otc_patterns %}
                   <option value="{{ val }}">{{ label }} ({{ val }})</option>
@@ -414,7 +416,7 @@
                 </select>
               </label>
 
-              <label class="dash-field" style="grid-column:span 3">
+              <label class="dash-field" style="grid-column:span 4">
                 <strong style="color:#ffc94a">&#9889; Straf-Verl&auml;ngerung (Penalty)</strong>
                 <small style="color:#9db1c7;font-weight:400"> &mdash; Sessionl&auml;nge wird verl&auml;ngert. Zus&auml;tzliche Bestrafung.</small>
               </label>
@@ -424,7 +426,7 @@
               <label class="dash-field">Dauer (Ticks)
                 <input id="otc-ticks-penalty" type="number" min="0" max="300" step="1" />
               </label>
-              <label class="dash-field">Pattern
+              <label class="dash-field">Activity
                 <select id="otc-pattern-penalty">
                   {% for val, label in otc_patterns %}
                   <option value="{{ val }}">{{ label }} ({{ val }})</option>
@@ -432,7 +434,7 @@
                 </select>
               </label>
 
-              <label class="dash-field" style="grid-column:span 3">
+              <label class="dash-field" style="grid-column:span 4">
                 <strong style="color:#9de2bf">&#10003; Erfolg / Bestanden</strong>
                 <small style="color:#9db1c7;font-weight:400"> &mdash; Pose best&auml;tigt, Position gehalten. Belohnungsreiz.</small>
               </label>
@@ -442,7 +444,7 @@
               <label class="dash-field">Dauer (Ticks)
                 <input id="otc-ticks-pass" type="number" min="0" max="300" step="1" />
               </label>
-              <label class="dash-field">Pattern
+              <label class="dash-field">Activity
                 <select id="otc-pattern-pass">
                   {% for val, label in otc_patterns %}
                   <option value="{{ val }}">{{ label }} ({{ val }})</option>

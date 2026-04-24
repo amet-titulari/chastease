@@ -7,10 +7,23 @@ Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-24
+
 ### Geaendert
 
 - DB-Feldverschluesselung fuer Session-State und gespeicherte API-Keys temporaer entfernt, damit Alpha-Debugging und Usability-Tests direkt in SQLite moeglich sind.
 - Runtime-Start ausserhalb des Dev-Modus verlangt vorerst keinen `CHASTEASE_SECRET_ENCRYPTION_KEY` mehr.
+- E-Stim-Anbindung von OTC-WebSocket auf direkte Howl Remote API HTTP-Calls umgestellt.
+- Toys- und Admin-Flow nutzen fuer Howl jetzt URL + Access Key (Bearer) statt OTC-Queue/Socket-Lifecycle.
+- Event-Dispatch (`continuous`, `fail`, `penalty`, `pass`) sendet Pulse direkt ueber Howl-Endpunkte inklusive optionalem Auto-Stop nach Tick-Dauer.
+- Pattern-Defaults fuer Howl harmonisiert (`RELENTLESS`, `CHAOS`, `FASTSLOW`, `CALIBRATION1`, `CALIBRATION2`).
+
+### Hinzugefuegt
+
+- Neues Howl-Client-Modul fuer API-Aufrufe (`/status`, `/set_power`, `/load_activity`, `/start_player`, `/stop_player`).
+- Datenbankfeld `howl_access_key` in den OTC/Howl-Settings inklusive Alembic-Migration.
+- Primare API-Routen unter `/api/howl/*` mit Legacy-Aliases fuer `/api/otc/*`.
+- Neues Access-Key-Eingabefeld in der Toys-Oberflaeche.
 
 ### Hinweise
 

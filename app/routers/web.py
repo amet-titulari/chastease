@@ -54,27 +54,29 @@ def _otc_settings_payload(db: Session) -> dict:
     if row is None:
         return {
             "enabled": False, "otc_url": "", "channel": "A",
-            "intensity_continuous": 30, "ticks_continuous": 50, "pattern_continuous": "经典",
+            "howl_access_key": "",
+            "intensity_continuous": 30, "ticks_continuous": 50, "pattern_continuous": "RELENTLESS",
             "intensity_fail": 40, "intensity_penalty": 70, "intensity_pass": 20,
             "ticks_fail": 20, "ticks_penalty": 40, "ticks_pass": 10,
-            "pattern_fail": "经典", "pattern_penalty": "经典", "pattern_pass": "经典",
+            "pattern_fail": "RELENTLESS", "pattern_penalty": "RELENTLESS", "pattern_pass": "RELENTLESS",
         }
     return {
         "enabled": bool(row.enabled),
         "otc_url": str(row.otc_url or ""),
+        "howl_access_key": str(getattr(row, "howl_access_key", "") or ""),
         "channel": str(row.channel or "A"),
         "intensity_continuous": int(getattr(row, "intensity_continuous", None) or 30),
         "ticks_continuous": int(getattr(row, "ticks_continuous", None) or 50),
-        "pattern_continuous": str(getattr(row, "pattern_continuous", None) or "经典"),
+        "pattern_continuous": str(getattr(row, "pattern_continuous", None) or "RELENTLESS"),
         "intensity_fail": int(row.intensity_fail or 40),
         "intensity_penalty": int(row.intensity_penalty or 70),
         "intensity_pass": int(row.intensity_pass or 20),
         "ticks_fail": int(row.ticks_fail or 20),
         "ticks_penalty": int(row.ticks_penalty or 40),
         "ticks_pass": int(row.ticks_pass or 10),
-        "pattern_fail": str(row.pattern_fail or "经典"),
-        "pattern_penalty": str(row.pattern_penalty or "经典"),
-        "pattern_pass": str(row.pattern_pass or "经典"),
+        "pattern_fail": str(row.pattern_fail or "RELENTLESS"),
+        "pattern_penalty": str(row.pattern_penalty or "RELENTLESS"),
+        "pattern_pass": str(row.pattern_pass or "RELENTLESS"),
     }
 
 

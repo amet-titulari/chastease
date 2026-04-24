@@ -834,9 +834,11 @@ function toysOtcApply(settings) {
   const s = settings || {};
   const enabledEl = document.getElementById("otc-enabled");
   const urlEl = document.getElementById("otc-url");
+  const accessKeyEl = document.getElementById("otc-access-key");
   const channelEl = document.getElementById("otc-channel");
   if (enabledEl) enabledEl.value = s.enabled ? "true" : "false";
   if (urlEl) urlEl.value = String(s.otc_url || "");
+  if (accessKeyEl) accessKeyEl.value = String(s.howl_access_key || "");
   if (channelEl) channelEl.value = String(s.channel || "A");
   const set = (id, value) => {
     const el = document.getElementById(id);
@@ -844,28 +846,28 @@ function toysOtcApply(settings) {
   };
   set("otc-intensity-continuous", s.intensity_continuous ?? 30);
   set("otc-ticks-continuous", s.ticks_continuous ?? 50);
-  set("otc-pattern-continuous", s.pattern_continuous ?? "经典");
+  set("otc-pattern-continuous", s.pattern_continuous ?? "RELENTLESS");
   set("otc-intensity-fail", s.intensity_fail);
   set("otc-ticks-fail", s.ticks_fail);
-  set("otc-pattern-fail", s.pattern_fail ?? "经典");
+  set("otc-pattern-fail", s.pattern_fail ?? "RELENTLESS");
   set("otc-intensity-penalty", s.intensity_penalty);
   set("otc-ticks-penalty", s.ticks_penalty);
-  set("otc-pattern-penalty", s.pattern_penalty ?? "经典");
+  set("otc-pattern-penalty", s.pattern_penalty ?? "RELENTLESS");
   set("otc-intensity-pass", s.intensity_pass);
   set("otc-ticks-pass", s.ticks_pass);
-  set("otc-pattern-pass", s.pattern_pass ?? "经典");
+  set("otc-pattern-pass", s.pattern_pass ?? "RELENTLESS");
 }
 
 async function toysOtcLoad() {
   try {
-    const data = await toysGet("/api/otc/settings");
+    const data = await toysGet("/api/howl/settings");
     toysOtcApply(data);
-    const status = await toysGet("/api/otc/status");
+    const status = await toysGet("/api/howl/status");
     const connected = Boolean(status.connected);
     const enabled = Boolean(data.enabled);
     toysOtcSetStatus(
-      !enabled ? "OTC deaktiviert." : (connected ? "OTC verbunden." : "OTC aktiviert, Verbindung wird aufgebaut…"),
-      !enabled ? "aus" : (connected ? "verbunden" : "getrennt")
+      !enabled ? "Howl deaktiviert." : (connected ? "Howl erreichbar." : "Howl aktiviert, Verbindung fehlgeschlagen."),
+      !enabled ? "aus" : (connected ? "bereit" : "offline")
     );
   } catch (err) {
     toysOtcSetStatus(`Laden fehlgeschlagen (${String(err)})`, "Fehler");
@@ -884,6 +886,7 @@ function toysOtcCollect() {
   return {
     enabled: read("otc-enabled") === "true",
     otc_url: read("otc-url") || null,
+    howl_access_key: read("otc-access-key") || null,
     channel: read("otc-channel") || "A",
     intensity_continuous: readInt("otc-intensity-continuous"),
     intensity_fail: readInt("otc-intensity-fail"),
@@ -893,10 +896,10 @@ function toysOtcCollect() {
     ticks_fail: readInt("otc-ticks-fail"),
     ticks_penalty: readInt("otc-ticks-penalty"),
     ticks_pass: readInt("otc-ticks-pass"),
-    pattern_continuous: read("otc-pattern-continuous") || "经典",
-    pattern_fail: read("otc-pattern-fail") || "经典",
-    pattern_penalty: read("otc-pattern-penalty") || "经典",
-    pattern_pass: read("otc-pattern-pass") || "经典",
+    pattern_continuous: read("otc-pattern-continuous") || "RELENTLESS",
+    pattern_fail: read("otc-pattern-fail") || "RELENTLESS",
+    pattern_penalty: read("otc-pattern-penalty") || "RELENTLESS",
+    pattern_pass: read("otc-pattern-pass") || "RELENTLESS",
   };
 }
 
@@ -905,7 +908,7 @@ async function toysOtcSave() {
   if (btn) btn.disabled = true;
   toysOtcSetStatus("Wird gespeichert…");
   try {
-    const resp = await fetch("/api/otc/settings", {
+    const resp = await fetch("/api/howl/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(toysOtcCollect()),
@@ -922,13 +925,13 @@ async function toysOtcSave() {
 }
 
 async function toysOtcTest() {
-  toysOtcSetStatus("Testimpuls wird gesendet\u2026");
+  toysOtcSetStatus("Howl-Testimpuls wird gesendet\u2026");
   try {
     const channel = String(document.getElementById("otc-channel")?.value || "A");
     const intensity = Number(document.getElementById("otc-intensity-continuous")?.value || 30);
     const ticks = Number(document.getElementById("otc-ticks-continuous")?.value || 15);
-    const pattern = String(document.getElementById("otc-pattern-continuous")?.value || "\u7ecf\u5178");
-    await toysPost("/api/otc/test", { channel, intensity, ticks, pattern });
+    const pattern = String(document.getElementById("otc-pattern-continuous")?.value || "RELENTLESS");
+    await toysPost("/api/howl/test", { channel, intensity, ticks, pattern });
     toysOtcSetStatus(`Testimpuls gesendet (Kanal\u00a0${channel}, Intensit\u00e4t\u00a0${intensity}, ${ticks}\u00a0Ticks).`, "OK");
   } catch (err) {
     toysOtcSetStatus(`Testimpuls fehlgeschlagen (${String(err)})`, "Fehler");
@@ -940,6 +943,7 @@ function toysOtcInitFromDataset() {
   toysOtcApply({
     enabled: s.otcEnabled === "1",
     otc_url: s.otcUrl || "",
+    howl_access_key: s.otcAccessKey || "",
     channel: s.otcChannel || "A",
     intensity_continuous: Number(s.otcIntensityContinuous || 30),
     intensity_fail: Number(s.otcIntensityFail || 40),
@@ -949,10 +953,10 @@ function toysOtcInitFromDataset() {
     ticks_fail: Number(s.otcTicksFail || 20),
     ticks_penalty: Number(s.otcTicksPenalty || 40),
     ticks_pass: Number(s.otcTicksPass || 10),
-    pattern_continuous: s.otcPatternContinuous || "\u7ecf\u5178",
-    pattern_fail: s.otcPatternFail || "经典",
-    pattern_penalty: s.otcPatternPenalty || "经典",
-    pattern_pass: s.otcPatternPass || "经典",
+    pattern_continuous: s.otcPatternContinuous || "RELENTLESS",
+    pattern_fail: s.otcPatternFail || "RELENTLESS",
+    pattern_penalty: s.otcPatternPenalty || "RELENTLESS",
+    pattern_pass: s.otcPatternPass || "RELENTLESS",
   });
 }
 

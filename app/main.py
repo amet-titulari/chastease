@@ -48,7 +48,6 @@ from app.services.proactive_messaging import sweep_proactive_messages_for_active
 from app.services.request_limits import check_request_limit
 from app.services.session_timer_sweeper import sweep_expired_active_sessions
 from app.services.task_sweeper import sweep_overdue_tasks_for_active_sessions
-from app.services.otc_client import start_otc_client, stop_otc_client
 
 
 scheduler: BackgroundScheduler | None = None
@@ -105,22 +104,7 @@ async def lifespan(_: FastAPI):
         else:
             scheduler = None
 
-    # Start OTC client if configured and enabled.
-    from app.database import SessionLocal
-    from app.models.otc_settings import OtcSettings as _OtcSettings
-    try:
-        _db = SessionLocal()
-        try:
-            _otc = _db.query(_OtcSettings).filter(_OtcSettings.singleton_key == "default").first()
-            if _otc and _otc.enabled and _otc.otc_url:
-                start_otc_client(str(_otc.otc_url).strip())
-        finally:
-            _db.close()
-    except Exception:
-        pass
-
     yield
-    stop_otc_client()
     if scheduler is not None:
         scheduler.shutdown(wait=False)
         scheduler = None

@@ -10,6 +10,7 @@ class OtcSettings(Base):
     singleton_key = Column(String(32), nullable=False, unique=True, default="default")
     enabled = Column(Boolean, nullable=False, default=False)
     otc_url = Column(String(512), nullable=True)
+    howl_access_key = Column(String(512), nullable=True)
     channel = Column(String(4), nullable=False, default="A")
     intensity_fail = Column(Integer, nullable=False, default=40)
     intensity_penalty = Column(Integer, nullable=False, default=70)
