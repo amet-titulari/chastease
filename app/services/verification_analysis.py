@@ -251,6 +251,86 @@ def generate_game_run_summary(summary: dict, module_title: str) -> str:
     violations = [c for c in checks if isinstance(c, dict) and c.get("violation_detected")]
     confirmations = [c for c in checks if isinstance(c, dict) and not c.get("violation_detected")]
 
+    def _short_text(value: str | None, max_chars: int = 180) -> str:
+        compact = " ".join(str(value or "").replace("\n", " ").split())
+        if len(compact) <= max_chars:
+            return compact
+        return compact[: max_chars - 3].rstrip() + "..."
+
+    reason_counts: dict[str, int] = {}
+    for entry in violations:
+        reason = _short_text(
+            str(entry.get("violation_reason") or entry.get("analysis") or "Unklare Ursache"),
+            max_chars=120,
+        )
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+
+    top_reasons = sorted(reason_counts.items(), key=lambda item: (-item[1], item[0]))[:6]
+
+    per_step: dict[int, dict] = {}
+    for entry in checks:
+        if not isinstance(entry, dict):
+            continue
+        step_id = int(entry.get("step_id") or 0)
+        if step_id <= 0:
+            continue
+        row = per_step.get(step_id)
+        if row is None:
+            row = {
+                "step_id": step_id,
+                "posture_name": str(entry.get("posture_name") or f"Step {step_id}"),
+                "attempts": 0,
+                "ok": 0,
+                "fail": 0,
+                "scores": [],
+                "last_analysis": "",
+            }
+            per_step[step_id] = row
+        row["attempts"] += 1
+        if entry.get("violation_detected"):
+            row["fail"] += 1
+        else:
+            row["ok"] += 1
+        score = entry.get("pose_score")
+        if isinstance(score, (int, float)):
+            row["scores"].append(float(score))
+        analysis = str(entry.get("analysis") or "").strip()
+        if analysis:
+            row["last_analysis"] = analysis
+
+    step_breakdown: list[str] = []
+    for step_id in sorted(per_step.keys()):
+        row = per_step[step_id]
+        score_text = ""
+        scores = row["scores"]
+        if scores:
+            best = max(scores)
+            avg = sum(scores) / len(scores)
+            score_text = f", score best/avg={best:.1f}/{avg:.1f}"
+        detail = _short_text(row["last_analysis"], max_chars=90)
+        if detail:
+            detail = f", letzter Check: {detail}"
+        step_breakdown.append(
+            f"- Step {row['step_id']} ({row['posture_name']}): Versuche={row['attempts']}, ok={row['ok']}, fail={row['fail']}{score_text}{detail}"
+        )
+
+    recent_checks = [entry for entry in checks if isinstance(entry, dict)][-8:]
+    recent_lines: list[str] = []
+    for entry in recent_checks:
+        step_id = int(entry.get("step_id") or 0)
+        posture_name = str(entry.get("posture_name") or f"Step {step_id}")
+        status_label = "FAIL" if entry.get("violation_detected") else "OK"
+        pose_score = entry.get("pose_score")
+        score_text = ""
+        if isinstance(pose_score, (int, float)):
+            threshold = entry.get("pose_threshold")
+            if isinstance(threshold, (int, float)):
+                score_text = f" (score {float(pose_score):.1f}/{float(threshold):.1f})"
+            else:
+                score_text = f" (score {float(pose_score):.1f})"
+        reason = _short_text(str(entry.get("analysis") or "-"), max_chars=110)
+        recent_lines.append(f"- {status_label} · Step {step_id} ({posture_name}){score_text}: {reason}")
+
     lines = [
         f"Spiel: {module_title}",
         f"Beendigungsgrund: {'Zeit abgelaufen' if end_reason == 'time_elapsed' else 'Alle Schritte abgeschlossen'}",
@@ -263,19 +343,22 @@ def generate_game_run_summary(summary: dict, module_title: str) -> str:
     ]
     if unplayed > 0:
         lines.append(f"Nicht mehr gespielte Schritte wegen Zeitende: {unplayed} von {scheduled}")
-    if violations:
-        reasons = [
-            str(v.get("violation_reason") or v.get("analysis") or "").strip()
-            for v in violations[:5]
-        ]
-        non_empty = [r for r in reasons if r]
-        if non_empty:
-            lines.append("Verstossgruende (Auswahl): " + "; ".join(non_empty))
+    if top_reasons:
+        lines.append("Haeufigste Verstossgruende:")
+        lines.extend([f"- {count}x {reason}" for reason, count in top_reasons])
+    if step_breakdown:
+        lines.append("Step-Analyse:")
+        lines.extend(step_breakdown[:8])
+    if recent_lines:
+        lines.append("Letzte Checks (Timeline):")
+        lines.extend(recent_lines)
 
     prompt = (
         "Du beurteilst das Ergebnis eines Koerperhaltungs-Spiels fuer eine Chastity-Session. "
-        "Erstelle eine praegnante, kritische Bewertung (2-4 Saetze) auf Deutsch. "
-        "Beziehe dich konkret auf Leistung, Verstoesze und ob Strafen verdient waren. "
+        "Erstelle eine konkrete, ausfuehrliche Bewertung (6-10 Saetze) auf Deutsch. "
+        "Nutze die Daten unten und werde spezifisch statt allgemein. "
+        "Bewerte Leistung, Verstossmuster, Disziplintrend und ob Strafen angemessen waren. "
+        "Nenne zum Schluss genau zwei klare Trainingsfoki fuer den naechsten Run. "
         "Antworte direkt mit dem Bewertungstext, keine Einleitung, kein JSON.\n\n"
         + "\n".join(lines)
     )

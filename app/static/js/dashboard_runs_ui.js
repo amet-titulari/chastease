@@ -13,6 +13,7 @@
 
   function runBadge(run) {
     if (run.status !== "completed") return ["active", run.status];
+    if (run.end_reason === "time_elapsed") return ["warn", "Zeit abgelaufen"];
     if (run.failed_steps === 0 && run.unplayed_steps === 0) return ["ok", "Bestanden"];
     if (run.unplayed_steps > 0 && run.failed_steps === 0) return ["warn", "Unvollstaendig"];
     return ["fail", "Fehler"];

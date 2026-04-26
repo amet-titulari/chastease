@@ -27,6 +27,7 @@ from app.models.scenario import Scenario
 from app.models.seal_history import SealHistory
 from app.models.session import Session as SessionModel
 from app.models.task import Task
+from app.release import APP_VERSION
 from app.routers.personas import PERSONA_PRESETS, get_system_persona_by_key
 from app.security import AUTH_COOKIE_NAME, is_cookie_secure
 from app.services.access_control import is_admin_user
@@ -1700,6 +1701,7 @@ def play_page(session_id: int, request: Request, db: Session = Depends(get_db)):
             "lovense_status": lovense_status_payload(),
             "play_js_version": _asset_version("js/play.js"),
             "play_css_version": _asset_version("css/play.css"),
+            "app_version": APP_VERSION,
         },
     )
 

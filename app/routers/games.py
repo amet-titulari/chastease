@@ -133,8 +133,8 @@ class StartGameRunRequest(BaseModel):
     target_randomization_percent: int | None = Field(default=None, ge=0, le=60)
     selected_posture_key: str | None = Field(default=None, max_length=120)
     hold_seconds: int | None = Field(default=None, ge=5, le=7200)
-    game_feedback_mode: str = Field(
-        default=GAME_FEEDBACK_MODE_BOTH,
+    game_feedback_mode: str | None = Field(
+        default=None,
         pattern="^(both|stim_only|ai_summary_only)$",
     )
 
@@ -597,7 +597,10 @@ def _evaluate_pose_similarity_for_step(
     if not reference_landmarks_json:
         return "skipped", "reference_pose_not_available", None
 
-    scored = score_against_reference(image_bytes=image_bytes, reference_landmarks_json=reference_landmarks_json)
+    try:
+        scored = score_against_reference(image_bytes=image_bytes, reference_landmarks_json=reference_landmarks_json)
+    except Exception:
+        return "skipped", "pose_runtime_unavailable", None
     if scored is None:
         return "skipped", "pose_not_detected", None
 
@@ -1278,6 +1281,130 @@ def _historical_pose_scores_for_step(run: GameRun, step_id: int) -> list[float]:
     return scores
 
 
+def _build_game_report_message_content(run: GameRun, report: dict) -> str:
+    checks = report.get("checks")
+    if not isinstance(checks, list):
+        checks = []
+
+    end_reason = str(report.get("end_reason") or "all_steps_processed")
+    played = int(report.get("played_steps") or report.get("total_steps") or 0)
+    passed = int(report.get("passed_steps") or 0)
+    failed = int(report.get("failed_steps") or 0)
+    unplayed = int(report.get("unplayed_steps") or 0)
+    misses = int(report.get("miss_count") or 0)
+    retry_extension_seconds = int(report.get("retry_extension_seconds") or 0)
+    session_penalty_applied = bool(report.get("session_penalty_applied"))
+
+    header_parts = [
+        f"Spielbericht {run.module_key}",
+        f"reason={end_reason}",
+        f"played={played}",
+        f"passed={passed}",
+        f"failed={failed}",
+        f"unplayed={unplayed}",
+        f"misses={misses}",
+        f"retry_extension_seconds={retry_extension_seconds}",
+        f"session_penalty_applied={session_penalty_applied}",
+    ]
+
+    def _safe_compact(value: str | None, max_chars: int = 120) -> str:
+        return _compact_text(str(value or "").strip(), max_chars=max_chars)
+
+    violation_entries = [
+        entry for entry in checks
+        if isinstance(entry, dict) and bool(entry.get("violation_detected"))
+    ]
+
+    reason_counts: dict[str, int] = {}
+    for entry in violation_entries:
+        reason = _safe_compact(
+            str(entry.get("violation_reason") or entry.get("analysis") or "unspecified"),
+            max_chars=90,
+        ) or "unspecified"
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+
+    top_reasons = sorted(reason_counts.items(), key=lambda item: (-item[1], item[0]))[:5]
+
+    step_stats: dict[int, dict] = {}
+    for entry in checks:
+        if not isinstance(entry, dict):
+            continue
+        step_id = int(entry.get("step_id") or 0)
+        if step_id <= 0:
+            continue
+        bucket = step_stats.get(step_id)
+        if bucket is None:
+            bucket = {
+                "step_id": step_id,
+                "posture_name": str(entry.get("posture_name") or f"Step {step_id}"),
+                "attempts": 0,
+                "ok": 0,
+                "fail": 0,
+                "scores": [],
+                "last_analysis": "",
+            }
+            step_stats[step_id] = bucket
+        bucket["attempts"] += 1
+        if bool(entry.get("violation_detected")):
+            bucket["fail"] += 1
+        else:
+            bucket["ok"] += 1
+        raw_score = entry.get("pose_score")
+        if isinstance(raw_score, (int, float)):
+            bucket["scores"].append(float(raw_score))
+        analysis = str(entry.get("analysis") or "").strip()
+        if analysis:
+            bucket["last_analysis"] = analysis
+
+    detail_parts: list[str] = ["; ".join(header_parts)]
+
+    if top_reasons:
+        detail_parts.append(
+            "top_violation_reasons=" + " | ".join([f"{count}x {reason}" for reason, count in top_reasons])
+        )
+
+    if step_stats:
+        step_lines: list[str] = []
+        for step_id in sorted(step_stats.keys())[:8]:
+            bucket = step_stats[step_id]
+            score_text = ""
+            scores = bucket["scores"]
+            if scores:
+                best_score = max(scores)
+                avg_score = sum(scores) / len(scores)
+                score_text = f", score_best={best_score:.1f}, score_avg={avg_score:.1f}"
+            analysis_text = _safe_compact(bucket["last_analysis"], max_chars=80)
+            if analysis_text:
+                analysis_text = f", last_analysis={analysis_text}"
+            step_lines.append(
+                (
+                    f"step={bucket['step_id']}({bucket['posture_name']}), "
+                    f"attempts={bucket['attempts']}, ok={bucket['ok']}, fail={bucket['fail']}"
+                    f"{score_text}{analysis_text}"
+                )
+            )
+        if step_lines:
+            detail_parts.append("step_breakdown=" + " || ".join(step_lines))
+    else:
+        detail_parts.append("step_breakdown=none")
+
+    recent_checks = [entry for entry in checks if isinstance(entry, dict)][-6:]
+    if recent_checks:
+        recent_lines: list[str] = []
+        for entry in recent_checks:
+            step_id = int(entry.get("step_id") or 0)
+            posture_name = str(entry.get("posture_name") or f"Step {step_id}")
+            status_label = "FAIL" if entry.get("violation_detected") else "OK"
+            analysis_text = _safe_compact(str(entry.get("analysis") or "-"), max_chars=80)
+            recent_lines.append(f"{status_label} step={step_id}({posture_name}): {analysis_text}")
+        detail_parts.append("recent_checks=" + " | ".join(recent_lines))
+    else:
+        detail_parts.append("recent_checks=none")
+
+    content = "\n".join(detail_parts)
+    return _safe_compact(content, max_chars=3600)
+
+
 def _finish_run_if_done(db: Session, run: GameRun) -> bool:
     now = datetime.now(timezone.utc)
     remaining_seconds = _remaining_seconds_for_run(run, now)
@@ -1297,14 +1424,6 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
     run.finished_at = now
 
     steps = db.query(GameRunStep).filter(GameRunStep.run_id == run.id).all()
-    # For single-pose modules (dont_move, tiptoeing): if time expired and the step is still
-    # pending, the user never managed to enter the required position at all → counts as failed.
-    # For multi-step modules (posture_training etc.) unplayed steps are not the user's fault.
-    if timed_out and run.module_key in SINGLE_POSE_STRICT_MODULE_KEYS:
-        for item in steps:
-            if item.status == "pending":
-                item.status = "failed"
-                db.add(item)
     passed = sum(1 for item in steps if item.status == "passed")
     failed = sum(1 for item in steps if item.status == "failed")
     unplayed = sum(1 for item in steps if item.status == "pending")
@@ -1344,18 +1463,13 @@ def _finish_run_if_done(db: Session, run: GameRun) -> bool:
     run.summary_json = json.dumps(report, ensure_ascii=True)
 
     if _should_emit_ai_summary_feedback(run):
+        report_message_content = _build_game_report_message_content(run, report)
         db.add(
             Message(
                 session_id=run.session_id,
                 role="system",
                 message_type="game_report",
-                content=(
-                    f"Spielbericht {run.module_key}: "
-                    f"reason={end_reason}, played={played}, passed={passed}, failed={failed}, "
-                    f"unplayed={unplayed}, misses={run.miss_count}, "
-                    f"retry_extension_seconds={run.retry_extension_seconds}, "
-                    f"session_penalty_applied={run.session_penalty_applied}"
-                ),
+                content=report_message_content,
             )
         )
         session_obj = db.query(SessionModel).filter(SessionModel.id == run.session_id).first()
@@ -2394,8 +2508,12 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
     effective_max_misses_before_penalty = int(payload.max_misses_before_penalty)
     if _is_single_pose_strict_module(module.key):
         effective_transition_seconds = _resolve_effective_start_countdown_seconds(db, payload)
-        # Single-pose strict modules apply penalty per violation; threshold is neutralized.
-        effective_max_misses_before_penalty = 1
+
+    requested_feedback_mode = (
+        _normalize_game_feedback_mode(payload.game_feedback_mode)
+        if payload.game_feedback_mode is not None
+        else _resolve_global_game_feedback_mode(db)
+    )
 
     run = GameRun(
         session_id=session_id,
@@ -2412,7 +2530,7 @@ def start_game_run(session_id: int, payload: StartGameRunRequest, db: Session = 
         session_penalty_applied=False,
         summary_json=json.dumps(
             {
-                "game_feedback_mode": _normalize_game_feedback_mode(payload.game_feedback_mode),
+                "game_feedback_mode": requested_feedback_mode,
                 "checks": [],
             },
             ensure_ascii=True,
@@ -2509,6 +2627,7 @@ def list_session_game_runs(session_id: int, db: Session = Depends(get_db)) -> di
                 "failed_steps": int(summary.get("failed_steps") or 0),
                 "total_steps": int(summary.get("total_steps") or 0),
                 "unplayed_steps": int(summary.get("unplayed_steps") or 0),
+                "end_reason": str(summary.get("end_reason") or "all_steps_processed"),
                 "ai_assessment": summary.get("ai_assessment") or None,
             }
         )
@@ -2706,17 +2825,6 @@ async def verify_game_step(
 
         run.miss_count += 1
         _emit_stim_event(run, "fail", db)
-        disable_retry_for_module = _is_single_pose_strict_module(run.module_key)
-
-        if disable_retry_for_module:
-            if run.session_penalty_seconds > 0:
-                session_obj = _load_session(db, run.session_id)
-                current_lock_end = _as_utc(session_obj.lock_end) or now
-                session_obj.lock_end = current_lock_end + timedelta(seconds=run.session_penalty_seconds)
-                run.session_penalty_applied = True
-                db.add(session_obj)
-                _emit_stim_event(run, "penalty", db)
-            return
 
         if (
             run.session_penalty_seconds > 0
@@ -2763,6 +2871,7 @@ async def verify_game_step(
 
     db.add(step)
     db.add(run)
+    db.flush()
     _finish_run_if_done(db, run)
     db.commit()
     db.refresh(run)
@@ -2840,7 +2949,6 @@ async def register_movement_event(
     summary = _load_run_summary_meta(run)
     allow_timeout_grace = (
         run.status == "completed"
-        and step.status == "failed"
         and summary.get("end_reason") == "time_elapsed"
     )
     if run.status != "active" and not allow_timeout_grace:
@@ -3001,6 +3109,7 @@ def complete_strict_game_step(
 
     db.add(step)
     db.add(run)
+    db.flush()
     _finish_run_if_done(db, run)
     db.commit()
     db.refresh(run)

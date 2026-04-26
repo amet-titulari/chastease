@@ -97,7 +97,7 @@ def test_start_game_run_with_dont_move_module():
         assert payload["module_key"] == "dont_move"
         assert payload["status"] == "active"
         assert payload["transition_seconds"] == 5
-        assert payload["max_misses_before_penalty"] == 1
+        assert payload["max_misses_before_penalty"] == 2
         assert payload["current_step"] is not None
         assert int(payload["current_step"]["raw_target_seconds"]) == 8 * 60
 
@@ -158,7 +158,7 @@ def test_start_game_run_with_tiptoeing_module():
         assert payload["module_key"] == "tiptoeing"
         assert payload["status"] == "active"
         assert payload["transition_seconds"] == 5
-        assert payload["max_misses_before_penalty"] == 1
+        assert payload["max_misses_before_penalty"] == 4
         assert payload["current_step"] is not None
         assert int(payload["current_step"]["raw_target_seconds"]) == 6 * 60
 
@@ -469,7 +469,7 @@ def test_dont_move_rejects_posture_not_allowed_for_module():
         assert "Selected posture" in start_resp.json()["detail"]
 
 
-def test_dont_move_counts_each_violation_and_applies_penalty_per_violation():
+def test_dont_move_applies_penalty_once_after_configured_threshold():
     with TestClient(app) as client:
         _register_admin(client)
         posture_key = f"test_dm_penalty_pose_{uuid4().hex[:8]}"
@@ -508,7 +508,7 @@ def test_dont_move_counts_each_violation_and_applies_penalty_per_violation():
                 "hold_seconds": 60,
                 "session_penalty_seconds": 3600,
                 "transition_seconds": 12,
-                "max_misses_before_penalty": 7,
+                "max_misses_before_penalty": 2,
             },
         )
         assert start_resp.status_code == 200
@@ -545,7 +545,8 @@ def test_dont_move_counts_each_violation_and_applies_penalty_per_violation():
             assert updated_session is not None
             assert baseline_lock_end is not None and updated_session.lock_end is not None
             delta_seconds = int((updated_session.lock_end - baseline_lock_end).total_seconds())
-            assert delta_seconds >= 7200
+            assert delta_seconds >= 3600
+            assert delta_seconds < 7200
         finally:
             db.close()
 
@@ -726,7 +727,10 @@ def test_dont_move_movement_event_is_still_recorded_after_timeout_completion():
         timed_out = client.get(f"/api/games/runs/{run_id}")
         assert timed_out.status_code == 200
         assert timed_out.json()["status"] == "completed"
-        assert (timed_out.json().get("summary") or {}).get("end_reason") == "time_elapsed"
+        timeout_summary = timed_out.json().get("summary") or {}
+        assert timeout_summary.get("end_reason") == "time_elapsed"
+        assert int(timeout_summary.get("failed_steps") or 0) == 0
+        assert int(timeout_summary.get("unplayed_steps") or 0) >= 1
 
         movement_resp = client.post(
             f"/api/games/runs/{run_id}/steps/{step_id}/movement-event",
@@ -2545,6 +2549,10 @@ def test_game_feedback_mode_controls_only_final_ai_summary_message():
                 .all()
             )
             assert len(reports_2) == 1
+            content = str(reports_2[0].content or "")
+            assert "step_breakdown=" in content
+            assert "recent_checks=" in content
+            assert "played=" in content
         finally:
             db2.close()
 
