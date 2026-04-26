@@ -5,19 +5,19 @@
   --xp-ink: var(--ink);
   --xp-muted: var(--muted);
   --xp-accent: var(--accent);
-  --xp-accent-2: #b95633;
+  --xp-accent-2: #3f6f9a;
   --xp-danger: #b24f45;
   --xp-border: var(--line);
-  --xp-glow: rgba(255, 145, 101, 0.17);
+  --xp-glow: rgba(124, 180, 224, 0.2);
 }
 
 .xp-shell {
   background:
-    radial-gradient(circle at 100% 0, rgba(255, 145, 101, 0.12), transparent 24%),
-    radial-gradient(circle at 0 100%, rgba(160, 54, 28, 0.14), transparent 26%),
-    linear-gradient(180deg, rgba(17, 12, 14, 0.98), rgba(10, 9, 11, 0.96));
-  border: 1px solid rgba(255, 145, 101, 0.14);
-  border-radius: 28px;
+    radial-gradient(circle at 100% 0, rgba(124, 180, 224, 0.14), transparent 24%),
+    radial-gradient(circle at 0 100%, rgba(56, 101, 145, 0.16), transparent 28%),
+    linear-gradient(180deg, rgba(8, 16, 26, 0.98), rgba(7, 13, 22, 0.96));
+  border: 1px solid rgba(124, 180, 224, 0.16);
+  border-radius: 20px;
   padding: 1.35rem;
   box-shadow: var(--shadow-lg);
   animation: xp-in 400ms ease-out;
@@ -63,9 +63,9 @@
 .xp-card {
   background: linear-gradient(180deg, var(--xp-card), var(--xp-card-soft));
   border: 1px solid var(--xp-border);
-  border-radius: 22px;
+  border-radius: 14px;
   padding: 1.15rem;
-  box-shadow: inset 0 0 0 1px rgba(255, 145, 101, 0.05), var(--shadow-md);
+  box-shadow: inset 0 0 0 1px rgba(124, 180, 224, 0.07), var(--shadow-md);
 }
 
 .xp-card.onboarding {
@@ -73,9 +73,9 @@
 }
 
 .xp-gate {
-  border: 1px solid rgba(255, 145, 101, 0.22);
+  border: 1px solid rgba(124, 180, 224, 0.24);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(30, 18, 18, 0.92), rgba(14, 11, 13, 0.82));
+  background: linear-gradient(180deg, rgba(13, 24, 37, 0.92), rgba(10, 18, 29, 0.84));
   padding: 1rem;
   margin-bottom: 1rem;
 }
@@ -105,8 +105,8 @@
   margin-bottom: 0.9rem;
   padding: 0.75rem 0.85rem;
   border-radius: 16px;
-  border: 1px solid rgba(255, 145, 101, 0.16);
-  background: linear-gradient(180deg, rgba(24, 15, 17, 0.76), rgba(14, 11, 13, 0.6));
+  border: 1px solid rgba(124, 180, 224, 0.18);
+  background: linear-gradient(180deg, rgba(13, 22, 34, 0.8), rgba(10, 17, 27, 0.64));
 }
 
 .xp-quickbar-copy {
@@ -158,10 +158,11 @@
 
 .step-title {
   margin: 0.15rem 0 0.62rem;
-  color: #d6e2ef;
-  font-weight: 640;
-  font-size: 1.14rem;
-  letter-spacing: 0.02em;
+  color: #deebf7;
+  font-weight: 760;
+  font-size: 1.06rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 #onboarding-status {
@@ -177,9 +178,9 @@
   gap: 0.4rem;
   margin-bottom: 1rem;
   padding: 0.3rem;
-  border: 1px solid rgba(255, 145, 101, 0.12);
+  border: 1px solid rgba(124, 180, 224, 0.16);
   border-radius: 18px;
-  background: rgba(14, 10, 11, 0.52);
+  background: rgba(9, 16, 25, 0.62);
   overflow-x: auto;
 }
 
@@ -190,8 +191,8 @@
   background: transparent;
   color: var(--xp-muted);
   padding: 0.58rem 0.4rem;
-  border-radius: 14px;
-  font-weight: 620;
+  border-radius: 8px;
+  font-weight: 760;
   font-size: 0.84rem;
   text-align: center;
   cursor: pointer;
@@ -202,9 +203,9 @@
 }
 
 .step-tab.is-active {
-  background: linear-gradient(120deg, #6f2d1d, #9a4428);
+  background: linear-gradient(120deg, #2f5f8a, #3f6f9a);
   color: var(--xp-ink);
-  border-color: rgba(255, 177, 109, 0.22);
+  border-color: rgba(143, 198, 235, 0.26);
   box-shadow: 0 0 0 1px var(--xp-glow);
 }
 
@@ -220,9 +221,10 @@
 
 .step-pane.is-active {
   display: block;
-  border-left: 3px solid #b95633;
-  background: linear-gradient(180deg, rgba(26, 16, 18, 0.82), rgba(15, 11, 13, 0.62));
-  border-radius: 16px;
+  border-left: 4px solid #8fc6eb;
+  background: linear-gradient(180deg, rgba(11, 20, 31, 0.84), rgba(9, 16, 24, 0.66));
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgba(124, 180, 224, 0.14);
   padding: 1rem;
 }
 
@@ -230,12 +232,12 @@
   min-height: 540px;
 }
 
-.xp-card.onboarding[data-active-step="1"] .step-pane.is-active { border-left-color: #ff7d4d; }
-.xp-card.onboarding[data-active-step="2"] .step-pane.is-active { border-left-color: #ff9a61; }
-.xp-card.onboarding[data-active-step="3"] .step-pane.is-active { border-left-color: #d99a5c; }
-.xp-card.onboarding[data-active-step="4"] .step-pane.is-active { border-left-color: #ffb16d; }
-.xp-card.onboarding[data-active-step="5"] .step-pane.is-active { border-left-color: #e27f76; }
-.xp-card.onboarding[data-active-step="6"] .step-pane.is-active { border-left-color: #ff8f6f; }
+.xp-card.onboarding[data-active-step="1"] .step-pane.is-active { border-left-color: #5d8eb9; }
+.xp-card.onboarding[data-active-step="2"] .step-pane.is-active { border-left-color: #6ea3c5; }
+.xp-card.onboarding[data-active-step="3"] .step-pane.is-active { border-left-color: #84b6d7; }
+.xp-card.onboarding[data-active-step="4"] .step-pane.is-active { border-left-color: #95c3e3; }
+.xp-card.onboarding[data-active-step="5"] .step-pane.is-active { border-left-color: #7db0d4; }
+.xp-card.onboarding[data-active-step="6"] .step-pane.is-active { border-left-color: #6b9fc6; }
 
 label {
   display: block;
@@ -255,7 +257,7 @@ textarea {
   border-radius: 12px;
   padding: 0.7rem 0.78rem;
   font: inherit;
-  background: #120d10;
+  background: #0d1620;
   color: #e8f0fa;
   font-weight: 500;
 }
@@ -266,11 +268,11 @@ textarea::placeholder {
 }
 
 button {
-  background: linear-gradient(120deg, #843620, var(--xp-accent));
+  background: linear-gradient(120deg, #315d86, var(--xp-accent));
   color: #fff;
   border: none;
   font-weight: 700;
-  box-shadow: 0 12px 28px rgba(122, 43, 20, 0.24);
+  box-shadow: 0 14px 30px rgba(31, 66, 102, 0.4);
 }
 
 .inline-actions {
@@ -343,7 +345,7 @@ button {
 }
 
 .duration-unit {
-  background: #0d1a27;
+  background: #102235;
   border: 1px solid var(--xp-border);
   border-left: none;
   border-radius: 0 10px 10px 0;
@@ -417,8 +419,8 @@ button {
 }
 
 .xp-btn-secondary {
-  background: rgba(26, 42, 58, 0.84) !important;
-  color: #7d9db8 !important;
+  background: rgba(19, 35, 51, 0.9) !important;
+  color: #9fc3df !important;
   border: 1px solid var(--xp-border) !important;
   box-shadow: none !important;
 }
@@ -588,7 +590,7 @@ button {
 
 .step-actions button {
   flex: 1;
-  background: linear-gradient(120deg, #294a63, var(--xp-accent-2));
+  background: linear-gradient(120deg, #2f5f8a, var(--xp-accent-2));
 }
 
 .play {
@@ -713,6 +715,26 @@ button {
 
 .task-actions .fail {
   background: linear-gradient(120deg, #823546, var(--xp-danger));
+}
+
+.xp-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.xp-inline-row--space {
+  gap: 0.65rem;
+}
+
+.xp-avatar-preview {
+  display: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .xp-safety-dock {

@@ -13,15 +13,15 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3em;
-  padding: 0.18rem 0.6rem;
-  border-radius: 20px;
-  font-size: 0.68rem;
-  font-weight: 700;
+  padding: 0.2rem 0.62rem;
+  border-radius: 8px;
+  font-size: 0.66rem;
+  font-weight: 760;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  background: rgba(76, 175, 130, 0.12);
-  color: #4caf82;
-  border: 1px solid rgba(76, 175, 130, 0.3);
+  letter-spacing: 0.1em;
+  background: rgba(124, 180, 224, 0.14);
+  color: #a8d0ef;
+  border: 1px solid rgba(124, 180, 224, 0.34);
 }
 
 .status-pill::before {
@@ -35,9 +35,9 @@
 }
 
 .status-pill.is-degraded {
-  background: rgba(208, 96, 96, 0.14);
-  color: #ffb4b4;
-  border-color: rgba(208, 96, 96, 0.34);
+  background: rgba(211, 95, 119, 0.16);
+  color: #f4a9ba;
+  border-color: rgba(211, 95, 119, 0.42);
 }
 
 .ui-pill-list {
@@ -51,8 +51,9 @@
   display: inline-flex;
   align-items: center;
   padding: 0.28rem 0.56rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(124, 180, 224, 0.18);
+  background: rgba(9, 19, 30, 0.78);
   font-size: 0.76rem;
   line-height: 1.2;
 }

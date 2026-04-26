@@ -7,8 +7,9 @@
   display: grid;
   gap: 0.9rem;
   padding: 0.9rem 1rem 1rem;
-  border-radius: 16px;
+  border-radius: 12px;
   border: 1px solid var(--line);
+  border-left: 4px solid rgba(143, 198, 235, 0.7);
   background:
     radial-gradient(circle at 88% 12%, rgba(124, 180, 224, 0.12), transparent 26%),
     linear-gradient(135deg, rgba(17, 27, 39, 0.98) 0%, rgba(11, 20, 30, 0.96) 100%);
@@ -50,8 +51,8 @@
 
 .dash-hero-persona {
   font-family: "Space Grotesk", "Sora", sans-serif;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 1.02rem;
+  font-weight: 760;
   color: var(--ink);
   letter-spacing: -0.01em;
 }
@@ -102,17 +103,20 @@
   justify-content: center;
   min-height: 40px;
   padding: 0.55rem 0.85rem;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid rgba(124, 180, 224, 0.18);
   text-decoration: none;
   background: rgba(255, 255, 255, 0.03);
   color: var(--ink);
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .dash-link-primary {
-  background: linear-gradient(180deg, rgba(74, 127, 176, 0.34), rgba(43, 78, 111, 0.42));
+  background: linear-gradient(180deg, rgba(74, 127, 176, 0.52), rgba(43, 78, 111, 0.6));
 }
 
 .dash-link-secondary:hover,
@@ -144,7 +148,7 @@
 
 .dash-countdown {
   font-family: "Space Mono", monospace;
-  font-size: 1.3rem;
+  font-size: 1.45rem;
   color: #dbeeff;
 }
 
@@ -163,11 +167,11 @@
   gap: 0.75rem;
   height: 100%;
   padding: 1rem;
-  border-radius: 16px;
+  border-radius: 12px;
   border: 1px solid rgba(124, 180, 224, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(124, 180, 224, 0.08), var(--shadow-md);
   background:
     linear-gradient(180deg, rgba(19, 27, 39, 0.98), rgba(13, 20, 30, 0.96));
-  box-shadow: var(--shadow-md);
 }
 
 .dash-card--wide {
@@ -230,9 +234,9 @@
   align-items: center;
   padding: 0.22rem 0.56rem;
   border-radius: 999px;
-  border: 1px solid rgba(216, 185, 140, 0.2);
-  background: rgba(216, 185, 140, 0.1);
-  color: #f2d7af;
+  border: 1px solid rgba(124, 180, 224, 0.24);
+  background: rgba(124, 180, 224, 0.12);
+  color: #c7e2f4;
   font-size: 0.76rem;
 }
 
@@ -718,11 +722,11 @@
 }
 
 .dash-run-ai {
-  color: #f2e0bf;
+  color: #bed8ee;
 }
 
 .dash-run-note {
-  color: #ffd59c;
+  color: #9fc4e1;
 }
 
 .dash-run-steps,
