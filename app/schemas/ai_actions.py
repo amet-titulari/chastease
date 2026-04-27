@@ -232,8 +232,106 @@ class LovenseSessionPlanAction(_BaseActionModel):
         return value
 
 
+class ToyControlAction(_BaseActionModel):
+    type: Literal["toy_control"]
+    command: Literal["vibrate", "pulse", "wave", "stop", "preset"]
+    intensity: int | None = None
+    duration_seconds: int | None = None
+    pause_seconds: int | None = None
+    loops: int | None = None
+    preset: str | None = Field(default=None, max_length=80)
+
+    @field_validator("intensity", mode="before")
+    @classmethod
+    def _validate_intensity(cls, value: Any) -> int | None:
+        if value in (None, ""):
+            return None
+        parsed = int(value)
+        if parsed < 1 or parsed > 20:
+            raise ValueError("intensity must be between 1 and 20")
+        return parsed
+
+    @field_validator("duration_seconds", mode="before")
+    @classmethod
+    def _validate_duration_seconds(cls, value: Any) -> int | None:
+        if value in (None, ""):
+            return None
+        parsed = int(value)
+        if parsed < 1 or parsed > 120:
+            raise ValueError("duration_seconds must be between 1 and 120")
+        return parsed
+
+    @field_validator("pause_seconds", mode="before")
+    @classmethod
+    def _validate_pause_seconds(cls, value: Any) -> int | None:
+        if value in (None, ""):
+            return None
+        parsed = int(value)
+        if parsed < 0 or parsed > 60:
+            raise ValueError("pause_seconds must be between 0 and 60")
+        return parsed
+
+    @field_validator("loops", mode="before")
+    @classmethod
+    def _validate_loops(cls, value: Any) -> int | None:
+        if value in (None, ""):
+            return None
+        parsed = int(value)
+        if parsed < 1 or parsed > 10:
+            raise ValueError("loops must be between 1 and 10")
+        return parsed
+
+
+class ToySessionPlanAction(_BaseActionModel):
+    type: Literal["toy_session_plan"]
+    title: str | None = Field(default=None, max_length=120)
+    mode: Literal["replace", "append"] = "replace"
+    steps: list[LovenseSessionStep] = Field(min_length=1, max_length=24)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def _normalize_title(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        text = str(value).strip()
+        return text[:120] if text else None
+
+    @field_validator("steps")
+    @classmethod
+    def _validate_steps(cls, value: list[LovenseSessionStep]) -> list[LovenseSessionStep]:
+        total_seconds = 0
+        for step in value:
+            command = step.command
+            if command == "pause":
+                if step.duration_seconds is None:
+                    raise ValueError("pause steps require duration_seconds")
+            elif command == "stop":
+                pass
+            elif command == "preset":
+                if step.duration_seconds is None:
+                    raise ValueError("preset steps require duration_seconds")
+                if step.preset is None:
+                    raise ValueError("preset steps require preset")
+            else:
+                if step.duration_seconds is None:
+                    raise ValueError(f"{command} steps require duration_seconds")
+                if step.intensity is None:
+                    raise ValueError(f"{command} steps require intensity")
+            total_seconds += int(step.duration_seconds or 0)
+        if total_seconds > 900:
+            raise ValueError("toy session plans must stay within 900 seconds total")
+        return value
+
+
 AIAction = Annotated[
-    CreateTaskAction | UpdateTaskAction | FailTaskAction | UpdateRoleplayStateAction | LovenseControlAction | LovenseSessionPlanAction,
+    CreateTaskAction
+    | UpdateTaskAction
+    | FailTaskAction
+    | UpdateRoleplayStateAction
+    | LovenseControlAction
+    | LovenseSessionPlanAction
+    | ToyControlAction
+    | ToySessionPlanAction,
     Field(discriminator="type"),
 ]
 
@@ -264,7 +362,15 @@ def normalize_action_payloads(value: Any) -> list[dict[str, Any]]:
             command = payload.get("command")
             if command == "preset" and not payload.get("preset"):
                 continue
+        if payload.get("type") == "toy_control":
+            command = payload.get("command")
+            if command == "preset" and not payload.get("preset"):
+                continue
         if payload.get("type") == "lovense_session_plan":
+            if not payload.get("steps"):
+                continue
+            payload.setdefault("mode", "replace")
+        if payload.get("type") == "toy_session_plan":
             if not payload.get("steps"):
                 continue
             payload.setdefault("mode", "replace")

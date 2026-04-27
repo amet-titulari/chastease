@@ -14,6 +14,7 @@ from app.models.message import Message
 from app.models.persona import Persona
 from app.models.persona_task_template import PersonaTaskTemplate
 from app.models.player_profile import PlayerProfile
+from app.models.otc_settings import OtcSettings
 from app.models.item import Item
 from app.models.safety_log import SafetyLog
 from app.models.scenario import Scenario
@@ -22,6 +23,7 @@ from app.models.session import Session as SessionModel
 from app.models.session_item import SessionItem
 from app.models.task import Task
 from app.services.ai_gateway import get_ai_gateway
+from app.services.howl_client import send_howl_pulse, stop_howl_player
 from app.services.lovense_policy import (
     apply_lovense_policy_to_control_action,
     apply_lovense_policy_to_session_plan,
@@ -42,6 +44,7 @@ from app.services.roleplay_state import build_roleplay_state, merge_roleplay_sta
 from app.services.session_access import get_owned_session
 from app.services.task_template_pool import build_template_task_action, select_task_template, user_requested_task
 from app.services.task_service import TaskService
+from app.services.toy_profile import get_toy_profile_from_preferences
 from app.services.transcription_service import transcribe_audio
 
 logger = logging.getLogger(__name__)
@@ -215,7 +218,7 @@ _RELATIONSHIP_SCORE_KEYS = (
     "frustration",
     "attachment",
 )
-_CLIENT_ACTION_TYPES = {"lovense_control", "lovense_session_plan"}
+_CLIENT_ACTION_TYPES = {"lovense_control", "lovense_session_plan", "toy_control", "toy_session_plan"}
 _LOVENSE_STIMULATION_COMMANDS = {"vibrate", "pulse", "wave", "preset"}
 
 
@@ -373,16 +376,27 @@ def _collect_client_actions(
     for action in actions:
         if not isinstance(action, dict):
             continue
-        if action.get("type") not in _CLIENT_ACTION_TYPES:
+        action_type = str(action.get("type") or "").strip().lower()
+        if action_type not in _CLIENT_ACTION_TYPES:
             continue
-        if action.get("type") == "lovense_control":
+        # Normalize generic toy actions to the established Lovense action envelope.
+        if action_type == "toy_control":
+            action = dict(action)
+            action["type"] = "lovense_control"
+            action_type = "lovense_control"
+        elif action_type == "toy_session_plan":
+            action = dict(action)
+            action["type"] = "lovense_session_plan"
+            action_type = "lovense_session_plan"
+
+        if action_type == "lovense_control":
             action = apply_lovense_policy_to_control_action(action, lovense_policy or {})
             if not action:
                 continue
             command = str(action.get("command") or "").strip().lower()
             if command in _LOVENSE_STIMULATION_COMMANDS and not allow_stimulation:
                 continue
-        if action.get("type") == "lovense_session_plan":
+        if action_type == "lovense_session_plan":
             action = apply_lovense_policy_to_session_plan(action, lovense_policy or {})
             if not action:
                 continue
@@ -406,6 +420,104 @@ def _collect_client_actions(
             continue
         client_actions.append(dict(action))
     return client_actions
+
+
+def _load_howl_chat_settings(db: Session) -> dict[str, Any] | None:
+    row = db.query(OtcSettings).filter(OtcSettings.singleton_key == "default").first()
+    if row is None or not bool(row.enabled):
+        return None
+    base_url = str(row.otc_url or "").strip()
+    access_key = str(getattr(row, "howl_access_key", "") or "").strip()
+    if not base_url or not access_key:
+        return None
+    return {
+        "base_url": base_url,
+        "access_key": access_key,
+        "channel": str(row.channel or "A"),
+        "pattern": str(getattr(row, "pattern_continuous", None) or "RELENTLESS"),
+    }
+
+
+def _dispatch_coyote_chat_actions(
+    db: Session,
+    *,
+    actions: list[dict[str, Any]],
+    allow_stimulation: bool,
+) -> list[str]:
+    howl_cfg = _load_howl_chat_settings(db)
+    if howl_cfg is None:
+        return []
+
+    summaries: list[str] = []
+    for action in actions:
+        if not isinstance(action, dict):
+            continue
+        action_type = str(action.get("type") or "").strip().lower()
+        if action_type not in {"lovense_control", "lovense_session_plan"}:
+            continue
+
+        if action_type == "lovense_control":
+            command = str(action.get("command") or "").strip().lower()
+            if command == "stop":
+                if stop_howl_player(base_url=howl_cfg["base_url"], access_key=howl_cfg["access_key"]):
+                    summaries.append("Coyote-Stop ausgefuehrt")
+                continue
+
+            if not allow_stimulation or command not in _LOVENSE_STIMULATION_COMMANDS:
+                continue
+
+            intensity = max(1, min(20, int(action.get("intensity") or 8)))
+            duration_seconds = max(1, min(120, int(action.get("duration_seconds") or 12)))
+            loops = max(1, min(4, int(action.get("loops") or 1)))
+            howl_intensity = max(1, min(100, intensity * 5))
+            ticks = max(1, min(300, duration_seconds * 10))
+
+            sent_count = 0
+            for _ in range(loops):
+                if send_howl_pulse(
+                    base_url=howl_cfg["base_url"],
+                    access_key=howl_cfg["access_key"],
+                    channel=howl_cfg["channel"],
+                    intensity=howl_intensity,
+                    ticks=ticks,
+                    activity=howl_cfg["pattern"],
+                ):
+                    sent_count += 1
+            if sent_count > 0:
+                summaries.append(f"Coyote-Impuls: {command} x{sent_count}")
+            continue
+
+        # Session plans are flattened into executable single pulses/stops for Howl.
+        steps = action.get("steps") if isinstance(action.get("steps"), list) else []
+        executed = 0
+        for step in steps[:8]:
+            if not isinstance(step, dict):
+                continue
+            step_cmd = str(step.get("command") or "").strip().lower()
+            if step_cmd == "pause":
+                continue
+            if step_cmd == "stop":
+                if stop_howl_player(base_url=howl_cfg["base_url"], access_key=howl_cfg["access_key"]):
+                    executed += 1
+                continue
+            if not allow_stimulation or step_cmd not in _LOVENSE_STIMULATION_COMMANDS:
+                continue
+            step_intensity = max(1, min(20, int(step.get("intensity") or 8)))
+            step_duration = max(1, min(120, int(step.get("duration_seconds") or 10)))
+            if send_howl_pulse(
+                base_url=howl_cfg["base_url"],
+                access_key=howl_cfg["access_key"],
+                channel=howl_cfg["channel"],
+                intensity=max(1, min(100, step_intensity * 5)),
+                ticks=max(1, min(300, step_duration * 10)),
+                activity=howl_cfg["pattern"],
+            ):
+                executed += 1
+        if executed > 0:
+            plan_title = str(action.get("title") or "Coyote Plan").strip() or "Coyote Plan"
+            summaries.append(f"{plan_title}: {executed} Coyote-Schritte ausgefuehrt")
+
+    return summaries
 
 
 def _message_prompt_templates(row: Message) -> list[str]:
@@ -973,6 +1085,12 @@ def _persist_chat_turn(
             )
         )
 
+    allow_stimulation = safety_mode not in {"yellow", "red"} and session_obj.status not in {
+        "paused",
+        "safeword_stopped",
+        "emergency_stopped",
+    }
+
     client_actions = _collect_client_actions(
         actions,
         safety_mode=safety_mode,
@@ -980,6 +1098,17 @@ def _persist_chat_turn(
         degraded=structured.degraded,
         lovense_policy=get_lovense_policy_for_profile(profile),
     )
+    toy_profile = get_toy_profile_from_preferences(prefs)
+    toy_provider = str(toy_profile.get("provider") or "none").strip().lower()
+    coyote_summaries: list[str] = []
+    if bool(toy_profile.get("enabled")) and toy_provider == "coyote":
+        coyote_summaries = _dispatch_coyote_chat_actions(
+            db,
+            actions=client_actions,
+            allow_stimulation=allow_stimulation,
+        )
+        # Coyote is server-driven; nothing to send to Lovense browser client.
+        client_actions = []
 
     if client_actions:
         summarized: list[str] = []
@@ -1007,6 +1136,16 @@ def _persist_chat_turn(
                 )
             )
 
+    if coyote_summaries:
+        db.add(
+            Message(
+                session_id=session_id,
+                role="system",
+                content="; ".join(coyote_summaries),
+                message_type="session_event",
+            )
+        )
+
     db.add(user_msg)
     db.add(assistant_msg)
     db.commit()
@@ -1021,6 +1160,8 @@ def _persist_chat_turn(
     )
     if client_actions:
         audit_log("lovense_client_actions_queued", session_id=session_id, actions=client_actions)
+    if coyote_summaries:
+        audit_log("coyote_chat_actions_executed", session_id=session_id, summaries=coyote_summaries)
     return assistant_msg, client_actions
 
 

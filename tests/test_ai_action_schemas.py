@@ -22,6 +22,15 @@ def test_normalize_action_payloads_drops_invalid_and_coerces_valid_items():
                     {"command": "preset", "preset": "warmup_edge", "duration_seconds": "20"},
                 ],
             },
+            {"type": "toy_control", "command": "pulse", "intensity": "10", "duration_seconds": "14"},
+            {
+                "type": "toy_session_plan",
+                "title": "Coyote Block",
+                "steps": [
+                    {"command": "pulse", "intensity": "6", "duration_seconds": "11"},
+                    {"command": "pause", "duration_seconds": "4"},
+                ],
+            },
         ]
     )
 
@@ -40,6 +49,16 @@ def test_normalize_action_payloads_drops_invalid_and_coerces_valid_items():
                 {"command": "pulse", "intensity": 7, "duration_seconds": 12},
                 {"command": "pause", "duration_seconds": 5},
                 {"command": "preset", "duration_seconds": 20, "preset": "warmup_edge"},
+            ],
+        },
+        {"type": "toy_control", "command": "pulse", "intensity": 10, "duration_seconds": 14},
+        {
+            "type": "toy_session_plan",
+            "title": "Coyote Block",
+            "mode": "replace",
+            "steps": [
+                {"command": "pulse", "intensity": 6, "duration_seconds": 11},
+                {"command": "pause", "duration_seconds": 4},
             ],
         },
     ]

@@ -319,8 +319,8 @@ class OllamaGateway(AIGateway):
             "Antworte als JSON mit den Feldern message, actions, mood und intensity. "
             "Wenn du eine Aufgabe vergibst oder der Nutzer explizit nach einer Aufgabe fragt, muss in actions mindestens eine create_task-Action stehen. "
             "Wenn sich Szene, Beziehungsdynamik oder Protokollregeln merklich veraendern, darfst du zusaetzlich eine update_roleplay_state-Action senden. "
-            "Fuer kurze, klar begrenzte Lovense-Impulse oder einen sofortigen Stopp darfst du lovense_control nutzen. "
-            "Fuer laenger gefuehrte Toy-Sequenzen mit kurzen Segmenten darfst du lovense_session_plan nutzen, aber nie fuer offene Dauersteuerung oder Endlosschleifen."
+            "Fuer kurze, klar begrenzte Toy-Impulse oder einen sofortigen Stopp darfst du toy_control (oder lovense_control) nutzen. "
+            "Fuer laenger gefuehrte Toy-Sequenzen mit kurzen Segmenten darfst du toy_session_plan (oder lovense_session_plan) nutzen, aber nie fuer offene Dauersteuerung oder Endlosschleifen."
         )
         prompt_parts.append(f"Persona: {persona_name}")
         prompt_parts.append(f"User: {user_text}")
@@ -510,8 +510,8 @@ class CustomOpenAIGateway(AIGateway):
                     "Antworte nur als JSON mit message, actions, mood, intensity. "
                     "Wenn du eine Aufgabe vergibst oder der Nutzer explizit nach einer Aufgabe fragt, muss in actions mindestens eine create_task-Action stehen. "
                     "Wenn sich Szene, Beziehung oder Protokollaenderungen ergeben, darfst du eine update_roleplay_state-Action mitsenden. "
-                    "Fuer kurze, klar begrenzte Lovense-Impulse oder einen sofortigen Stopp darfst du lovense_control mitsenden. "
-                    "Fuer laenger gefuehrte Toy-Sequenzen mit kurzen Segmenten darfst du lovense_session_plan mitsenden, aber nie fuer offene Dauersteuerung oder Endlosschleifen."
+                    "Fuer kurze, klar begrenzte Toy-Impulse oder einen sofortigen Stopp darfst du toy_control (oder lovense_control) mitsenden. "
+                    "Fuer laenger gefuehrte Toy-Sequenzen mit kurzen Segmenten darfst du toy_session_plan (oder lovense_session_plan) mitsenden, aber nie fuer offene Dauersteuerung oder Endlosschleifen."
                 ),
             }
         )

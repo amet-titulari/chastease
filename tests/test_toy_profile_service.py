@@ -45,3 +45,9 @@ def test_get_toy_profile_from_preferences_returns_clamped_defaults():
     assert profile["default_duration_seconds"] == 1
     assert profile["default_pause_seconds"] == 300
     assert profile["default_loops"] == 1
+
+
+def test_get_toy_profile_accepts_coyote_aliases():
+    profile = get_toy_profile_from_preferences({"toys": {"provider": "howl", "enabled": True}})
+    assert profile["provider"] == "coyote"
+    assert profile["enabled"] is True

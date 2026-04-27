@@ -11,6 +11,7 @@ from app.models.message import Message
 from app.models.persona import Persona
 from app.models.persona_task_template import PersonaTaskTemplate
 from app.models.player_profile import PlayerProfile
+from app.models.otc_settings import OtcSettings
 from app.models.session import Session as SessionModel
 from app.models.task import Task
 from app.services.roleplay_progression import advance_roleplay_state_from_event, build_phase_task_key
@@ -934,6 +935,70 @@ def test_chat_clamps_lovense_actions_to_saved_policy(monkeypatch):
                 ],
             },
         ]
+
+
+def test_chat_routes_toy_actions_to_coyote_server_side(monkeypatch):
+    class _DummyAI:
+        def generate_chat_response(self, **kwargs):
+            from app.services.ai_gateway import AIResponse
+
+            _ = kwargs
+            return AIResponse(
+                message="Coyote-Impuls jetzt.",
+                actions=[
+                    {
+                        "type": "toy_control",
+                        "command": "pulse",
+                        "intensity": 9,
+                        "duration_seconds": 12,
+                    }
+                ],
+                mood="strict",
+                intensity=4,
+            )
+
+    monkeypatch.setattr("app.routers.chat.get_ai_gateway", lambda session_obj: _DummyAI())
+
+    sent_calls: list[tuple[int, int]] = []
+
+    def _fake_send_howl_pulse(**kwargs):
+        sent_calls.append((int(kwargs.get("intensity") or 0), int(kwargs.get("ticks") or 0)))
+        return True
+
+    monkeypatch.setattr("app.routers.chat.send_howl_pulse", _fake_send_howl_pulse)
+    monkeypatch.setattr("app.routers.chat.stop_howl_player", lambda **kwargs: True)
+
+    with TestClient(app) as client:
+        session_id = _create_and_sign(client)
+        with SessionLocal() as db:
+            session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            assert session_obj is not None
+            profile = db.query(PlayerProfile).filter(PlayerProfile.id == session_obj.player_profile_id).first()
+            assert profile is not None
+            prefs = json.loads(profile.preferences_json or "{}")
+            toys = prefs.get("toys") if isinstance(prefs.get("toys"), dict) else {}
+            toys.update({"provider": "coyote", "enabled": True})
+            prefs["toys"] = toys
+            profile.preferences_json = json.dumps(prefs)
+            db.add(profile)
+
+            otc = OtcSettings(
+                singleton_key="default",
+                enabled=True,
+                otc_url="http://127.0.0.1:4695",
+                howl_access_key="test-key",
+                channel="A",
+            )
+            db.merge(otc)
+            db.commit()
+
+        send_resp = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"content": "Steuere den Coyote."},
+        )
+        assert send_resp.status_code == 200
+        assert send_resp.json()["client_actions"] == []
+        assert sent_calls == [(45, 120)]
 
 
 def test_chat_infers_roleplay_update_from_reply_text(monkeypatch):

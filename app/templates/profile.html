@@ -65,7 +65,7 @@
               <select name="toy_provider">
                 {% for provider in toy_provider_options %}
                 <option value="{{ provider }}" {% if setup.toy_profile.provider == provider %}selected{% endif %}>
-                  {% if provider == "none" %}Kein Device{% elif provider == "lovense" %}Lovense{% elif provider == "ttlock" %}TTLock{% else %}Custom{% endif %}
+                  {% if provider == "none" %}Kein Device{% elif provider == "lovense" %}Lovense{% elif provider == "coyote" %}DG-Lab Coyote (Howl){% elif provider == "ttlock" %}TTLock{% else %}Custom{% endif %}
                 </option>
                 {% endfor %}
               </select>

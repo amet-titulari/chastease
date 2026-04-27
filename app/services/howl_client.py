@@ -121,3 +121,9 @@ def send_howl_pulse(
         _schedule_stop(base, token, float(ticks) / 10.0)
 
     return True
+
+
+def stop_howl_player(*, base_url: str, access_key: str) -> bool:
+    """Best-effort stop command for an active Howl player."""
+    ok, _ = _post(base_url, access_key, "/stop_player", {}, timeout=4.0)
+    return bool(ok)

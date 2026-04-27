@@ -1,7 +1,7 @@
 from typing import Any
 
 
-TOY_PROVIDER_CHOICES = ("none", "lovense", "ttlock", "custom")
+TOY_PROVIDER_CHOICES = ("none", "lovense", "coyote", "ttlock", "custom")
 TOY_PRESET_CHOICES = ("", "tease_ramp", "strict_pulse", "wave_ladder", "deny_spikes")
 
 DEFAULT_TOY_PROFILE = {
@@ -46,6 +46,8 @@ def _parse_bool(value: Any, *, default: bool = False) -> bool:
 def normalize_toy_profile(value: Any) -> dict[str, Any]:
     source = value if isinstance(value, dict) else {}
     provider = str(source.get("provider") or DEFAULT_TOY_PROFILE["provider"]).strip().lower()
+    if provider in {"howl", "dg-lab", "dg_lab", "dg-lab-coyote", "dg_lab_coyote"}:
+        provider = "coyote"
     if provider not in TOY_PROVIDER_CHOICES:
         provider = DEFAULT_TOY_PROFILE["provider"]
     preferred_preset = str(source.get("preferred_preset") or "").strip().lower()
